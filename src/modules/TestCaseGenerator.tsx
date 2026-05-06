@@ -1,0 +1,189 @@
+import React, { useState } from 'react'
+import { cn } from "@/lib/utils"
+import { motion, AnimatePresence } from "framer-motion"
+import { GlassCard } from "@/components/ui/GlassCard"
+import { FloatingButton } from "@/components/ui/FloatingButton"
+import { CinematicHeading } from "@/components/ui/CinematicHeading"
+import { AIService } from "@/services/ai/ai-service"
+import { 
+  FileText, 
+  Sparkles, 
+  Download, 
+  Plus,
+  Search,
+  Filter,
+  CheckCircle2,
+  AlertTriangle,
+  Code
+} from "lucide-react"
+import { toast } from "@/hooks/use-toast"
+import { Badge } from "@/components/ui/badge"
+
+interface TestCase {
+  title: string;
+  priority: 'High' | 'Medium' | 'Low';
+  status: 'Draft' | 'Ready' | 'Automated';
+}
+
+export const TestCaseGenerator = () => {
+  const [input, setInput] = useState('')
+  const [testCases, setTestCases] = useState<TestCase[]>([])
+  const [isGenerating, setIsGenerating] = useState(false)
+
+  const handleGenerate = async () => {
+    if (!input.trim()) {
+      toast({
+        title: "Input Required",
+        description: "Please enter a requirement or feature description.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsGenerating(true)
+    
+    try {
+      const response = await AIService.callAI({
+        provider: 'mock',
+        prompt: input,
+        options: { module: 'testSuite' }
+      })
+      
+      const parsed = JSON.parse(response)
+      setTestCases(parsed)
+      
+      toast({
+        title: "Test Cases Generated!",
+        description: `Created ${parsed.length} professional test cases.`
+      })
+    } catch (error: any) {
+      toast({
+        title: "Generation Failed",
+        description: error.message,
+        variant: "destructive"
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="py-12"
+    >
+      <CinematicHeading 
+        title="Test Architect" 
+        subtitle="Generate comprehensive test suites with intelligent edge cases, risk analysis, and automation scripts."
+        align="left"
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="lg:col-span-4 flex flex-col gap-6">
+          <GlassCard hoverEffect={false} className="sticky top-28">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-accent-gold" />
+              Requirements
+            </h3>
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Enter feature description or requirement document..."
+              className="w-full h-64 bg-transparent border-none focus:ring-0 text-text-primary placeholder:text-text-muted resize-none font-montreal leading-relaxed"
+            />
+            <div className="mt-6 flex flex-col gap-3">
+              <FloatingButton 
+                onClick={handleGenerate}
+                disabled={isGenerating}
+              >
+                {isGenerating ? "Analyzing..." : "Generate Test Suite"}
+              </FloatingButton>
+              <button className="flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-white/5 hover:bg-white/10 text-xs font-bold uppercase tracking-widest transition-all">
+                <Download className="w-4 h-4" /> Import Document
+              </button>
+            </div>
+          </GlassCard>
+        </div>
+
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex gap-4">
+              <div className="glass-panel px-4 py-2 flex items-center gap-2">
+                <Search className="w-4 h-4 text-text-muted" />
+                <input type="text" placeholder="Search tests..." className="bg-transparent border-none focus:ring-0 text-xs w-32" />
+              </div>
+              <div className="glass-panel px-4 py-2 flex items-center gap-2 cursor-pointer hover:bg-white/10 transition-colors">
+                <Filter className="w-4 h-4 text-text-muted" />
+                <span className="text-xs font-bold uppercase tracking-widest text-text-muted">Filter</span>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <Badge variant="outline" className="bg-white/5 border-white/10 text-text-muted">Total: {testCases.length}</Badge>
+              <button className="p-2 glass-panel hover:bg-white/10 transition-all">
+                <Download className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <AnimatePresence mode="popLayout">
+            {testCases.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4">
+                {testCases.map((tc, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.05 }}
+                  >
+                    <GlassCard className="flex items-center justify-between group">
+                      <div className="flex items-center gap-6">
+                        <div className="w-2 h-2 rounded-full bg-accent-gold shadow-[0_0_8px_rgba(212,175,55,0.4)]" />
+                        <div>
+                          <h4 className="text-lg font-bold text-white group-hover:text-accent-gold transition-colors">{tc.title}</h4>
+                          <div className="flex items-center gap-4 mt-2">
+                            <span className={cn(
+                              "text-[10px] font-black uppercase tracking-widest",
+                              tc.priority === 'High' ? "text-red-400" : tc.priority === 'Medium' ? "text-amber-400" : "text-blue-400"
+                            )}>
+                              {tc.priority} Priority
+                            </span>
+                            <span className="text-[10px] text-text-muted font-bold uppercase tracking-widest">
+                              ID: TC-{1000 + idx}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <button className="p-2 rounded-lg hover:bg-white/5 text-text-muted hover:text-accent-gold transition-all">
+                          <Code className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 rounded-lg hover:bg-white/5 text-text-muted hover:text-white transition-all">
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </GlassCard>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-[500px] flex flex-col items-center justify-center text-center p-12 glass-panel border-dashed border-white/10">
+                <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6 relative">
+                  <FileText className="w-10 h-10 text-text-muted" />
+                  <div className="absolute inset-0 bg-accent-gold/5 blur-2xl rounded-full" />
+                </div>
+                <h3 className="text-2xl font-bold text-white mb-2">Architect Your Suite</h3>
+                <p className="text-text-secondary max-w-md">
+                  Enter your requirements on the left to generate a structured test suite with professional coverage.
+                </p>
+              </div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
