@@ -11,6 +11,7 @@ export type Permission =
   | 'access:settings'
   | 'access:admin'
   | 'manage:ai-providers'
+  | 'manage:system-prompts'
   | 'export:jira'
   | 'export:slack'
   | 'ai:unlimited'
@@ -43,6 +44,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'access:settings',
     'access:admin',
     'manage:ai-providers',
+    'manage:system-prompts',
     'export:jira',
     'export:slack',
     'ai:unlimited',

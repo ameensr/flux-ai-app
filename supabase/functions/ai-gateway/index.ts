@@ -159,6 +159,22 @@ async function dispatchToProvider(providerName: string, r: ProviderRequest): Pro
   }
 }
 
+// ── Module prompt loader ─────────────────────────────────────────────────────
+
+async function loadModuleSystemPrompt(
+  supabase: ReturnType<typeof createClient>,
+  moduleKey: string | undefined
+): Promise<string | undefined> {
+  if (!moduleKey) return undefined
+  const { data } = await supabase
+    .from('ai_module_prompts')
+    .select('system_prompt')
+    .eq('module_key', moduleKey)
+    .eq('is_active', true)
+    .single()
+  return data?.system_prompt || undefined
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 function json(body: unknown, status = 200) {
@@ -185,7 +201,8 @@ Deno.serve(async (req) => {
 
   try {
     const { user, supabase } = await requireAuth(req)
-    const { prompt, systemPrompt, module: mod, _test_provider_id } = await req.json()
+    // systemPrompt from client is intentionally ignored — loaded server-side only
+    const { prompt, module: mod, _test_provider_id } = await req.json()
 
     if (!prompt?.trim()) return json({ error: 'prompt required' }, 400)
 
@@ -196,6 +213,9 @@ Deno.serve(async (req) => {
       : await query.eq('is_active', true).single()
 
     if (cfgErr || !config) return json({ error: 'No active AI provider configured. Please contact your administrator.' }, 503)
+
+    // Load admin-defined system prompt for this module (server-side only, never from client)
+    const systemPrompt = await loadModuleSystemPrompt(supabase, mod)
 
     // Decrypt API key server-side
     const apiKey = await decrypt(config.encrypted_api_key)

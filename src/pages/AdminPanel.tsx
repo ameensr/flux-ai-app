@@ -7,9 +7,10 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { RoleGuard } from '@/components/ui/RoleGuard'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
 import { AdminAISettings } from '@/pages/AdminAISettings'
+import { AdminPromptSettings } from '@/pages/AdminPromptSettings'
 import { useToast } from '@/hooks/use-toast'
 import type { Role } from '@/lib/rbac'
-import { Shield, Users, Crown, User, Cpu } from 'lucide-react'
+import { Shield, Users, Crown, User, Cpu, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface UserRow {
@@ -32,7 +33,7 @@ const ROLE_ICONS: Record<Role, React.ElementType> = {
   free: User,
 }
 
-type Tab = 'users' | 'ai-providers'
+type Tab = 'users' | 'ai-providers' | 'prompt-settings'
 
 export const AdminPanel = () => {
   const { toast } = useToast()
@@ -84,6 +85,7 @@ export const AdminPanel = () => {
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'users', label: 'User Management', icon: Users },
     { id: 'ai-providers', label: 'AI Providers', icon: Cpu },
+    { id: 'prompt-settings', label: 'Prompt Settings', icon: MessageSquare },
   ]
 
   return (
@@ -199,6 +201,7 @@ export const AdminPanel = () => {
         )}
 
         {tab === 'ai-providers' && <AdminAISettings />}
+        {tab === 'prompt-settings' && <AdminPromptSettings />}
       </motion.div>
     </RoleGuard>
   )
