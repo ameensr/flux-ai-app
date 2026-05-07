@@ -1,12 +1,15 @@
+// src/pages/AdminPanel.tsx
+
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { RoleGuard } from '@/components/ui/RoleGuard'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
+import { AdminAISettings } from '@/pages/AdminAISettings'
 import { useToast } from '@/hooks/use-toast'
 import type { Role } from '@/lib/rbac'
-import { Shield, Users, Crown, User } from 'lucide-react'
+import { Shield, Users, Crown, User, Cpu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface UserRow {
@@ -29,15 +32,16 @@ const ROLE_ICONS: Record<Role, React.ElementType> = {
   free: User,
 }
 
+type Tab = 'users' | 'ai-providers'
+
 export const AdminPanel = () => {
   const { toast } = useToast()
+  const [tab, setTab] = useState<Tab>('users')
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchUsers()
-  }, [])
+  useEffect(() => { fetchUsers() }, [])
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -77,6 +81,11 @@ export const AdminPanel = () => {
     free: users.filter((u) => u.role === 'free').length,
   }
 
+  const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+    { id: 'users', label: 'User Management', icon: Users },
+    { id: 'ai-providers', label: 'AI Providers', icon: Cpu },
+  ]
+
   return (
     <RoleGuard permission="access:admin">
       <motion.div
@@ -87,86 +96,109 @@ export const AdminPanel = () => {
       >
         <CinematicHeading
           title="Admin Panel"
-          subtitle="Manage users, assign roles, and control access across the platform."
+          subtitle="Manage users, roles, and centralized AI provider configuration."
           align="left"
         />
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-          {[
-            { label: 'Total Users', value: stats.total, icon: Users, color: 'text-white' },
-            { label: 'Admins', value: stats.admin, icon: Shield, color: 'text-red-400' },
-            { label: 'Pro Users', value: stats.pro, icon: Crown, color: 'text-accent-gold' },
-            { label: 'Free Users', value: stats.free, icon: User, color: 'text-text-muted' },
-          ].map((stat) => (
-            <GlassCard key={stat.label} hoverEffect={false} className="py-6 flex flex-col items-center gap-2">
-              <stat.icon className={cn('w-5 h-5', stat.color)} />
-              <span className="text-3xl font-bold text-white">{stat.value}</span>
-              <span className="text-[10px] uppercase tracking-widest text-text-muted">{stat.label}</span>
-            </GlassCard>
+        {/* Tabs */}
+        <div className="flex gap-2 mb-10 p-1 bg-white/5 rounded-2xl w-fit">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                'flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all',
+                tab === t.id
+                  ? 'bg-accent-gold text-background'
+                  : 'text-text-muted hover:text-white'
+              )}
+            >
+              <t.icon className="w-3.5 h-3.5" />
+              {t.label}
+            </button>
           ))}
         </div>
 
-        {/* Users Table */}
-        <GlassCard hoverEffect={false}>
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              <Users className="w-5 h-5 text-accent-gold" />
-              User Management
-            </h2>
-            <button
-              onClick={fetchUsers}
-              className="text-xs text-text-muted hover:text-accent-gold transition-colors font-bold uppercase tracking-widest"
-            >
-              Refresh
-            </button>
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
+        {tab === 'users' && (
+          <>
+            {/* Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+              {[
+                { label: 'Total Users', value: stats.total, icon: Users, color: 'text-white' },
+                { label: 'Admins', value: stats.admin, icon: Shield, color: 'text-red-400' },
+                { label: 'Pro Users', value: stats.pro, icon: Crown, color: 'text-accent-gold' },
+                { label: 'Free Users', value: stats.free, icon: User, color: 'text-text-muted' },
+              ].map((stat) => (
+                <GlassCard key={stat.label} hoverEffect={false} className="py-6 flex flex-col items-center gap-2">
+                  <stat.icon className={cn('w-5 h-5', stat.color)} />
+                  <span className="text-3xl font-bold text-white">{stat.value}</span>
+                  <span className="text-[10px] uppercase tracking-widest text-text-muted">{stat.label}</span>
+                </GlassCard>
+              ))}
             </div>
-          ) : (
-            <div className="space-y-3">
-              {users.map((user) => {
-                const RoleIcon = ROLE_ICONS[user.role]
-                return (
-                  <div
-                    key={user.id}
-                    className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-                        <RoleIcon className="w-5 h-5 text-text-secondary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-white">{user.full_name || 'No name'}</p>
-                        <p className="text-xs text-text-muted">{user.email}</p>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-3">
-                      <span className={cn('px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest', ROLE_STYLES[user.role])}>
-                        {user.role}
-                      </span>
+            <GlassCard hoverEffect={false}>
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <Users className="w-5 h-5 text-accent-gold" />
+                  User Management
+                </h2>
+                <button
+                  onClick={fetchUsers}
+                  className="text-xs text-text-muted hover:text-accent-gold transition-colors font-bold uppercase tracking-widest"
+                >
+                  Refresh
+                </button>
+              </div>
 
-                      <select
-                        value={user.role}
-                        disabled={updating === user.id}
-                        onChange={(e) => updateRole(user.id, e.target.value as Role)}
-                        className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-accent-gold transition-all cursor-pointer disabled:opacity-50"
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {users.map((user) => {
+                    const RoleIcon = ROLE_ICONS[user.role]
+                    return (
+                      <div
+                        key={user.id}
+                        className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all"
                       >
-                        <option value="free">Free</option>
-                        <option value="pro">Pro</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </GlassCard>
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                            <RoleIcon className="w-5 h-5 text-text-secondary" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-white">{user.full_name || 'No name'}</p>
+                            <p className="text-xs text-text-muted">{user.email}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <span className={cn('px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest', ROLE_STYLES[user.role])}>
+                            {user.role}
+                          </span>
+                          <select
+                            value={user.role}
+                            disabled={updating === user.id}
+                            onChange={(e) => updateRole(user.id, e.target.value as Role)}
+                            className="bg-[#141414] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-accent-gold transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            <option value="free">Free</option>
+                            <option value="pro">Pro</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </GlassCard>
+          </>
+        )}
+
+        {tab === 'ai-providers' && <AdminAISettings />}
       </motion.div>
     </RoleGuard>
   )

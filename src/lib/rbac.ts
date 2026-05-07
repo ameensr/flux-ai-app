@@ -1,3 +1,5 @@
+// src/lib/rbac.ts
+
 export type Role = 'free' | 'pro' | 'admin'
 
 export type Permission =
@@ -8,6 +10,7 @@ export type Permission =
   | 'access:history'
   | 'access:settings'
   | 'access:admin'
+  | 'manage:ai-providers'
   | 'export:jira'
   | 'export:slack'
   | 'ai:unlimited'
@@ -39,6 +42,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'access:history',
     'access:settings',
     'access:admin',
+    'manage:ai-providers',
     'export:jira',
     'export:slack',
     'ai:unlimited',

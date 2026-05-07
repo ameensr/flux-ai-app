@@ -1,44 +1,14 @@
-import React, { useState } from 'react'
-import { motion } from "framer-motion"
-import { CinematicHeading } from "@/components/ui/CinematicHeading"
-import { GlassCard } from "@/components/ui/GlassCard"
-import { FloatingButton } from "@/components/ui/FloatingButton"
-import { 
-  Shield, 
-  Key, 
-  Database, 
-  Cpu, 
-  Globe, 
-  Save,
-  CheckCircle2,
-  AlertTriangle,
-  Sparkles
-} from "lucide-react"
-import { cn } from "@/lib/utils"
-import { useToast } from "@/hooks/use-toast"
+// src/pages/Settings.tsx
+// User settings — AI is platform-managed; no API key inputs for normal users.
 
-const providers = [
-  { id: 'openai', name: 'OpenAI (GPT-4o)', icon: Globe },
-  { id: 'gemini', name: 'Google Gemini Pro', icon: Sparkles },
-  { id: 'anthropic', name: 'Anthropic Claude 3.5', icon: Shield },
-  { id: 'mock', name: 'Flux AI (Mock Mode)', icon: Cpu },
-]
+import React from 'react'
+import { motion } from 'framer-motion'
+import { CinematicHeading } from '@/components/ui/CinematicHeading'
+import { GlassCard } from '@/components/ui/GlassCard'
+import { Shield, Database, Sparkles, CheckCircle2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export const Settings = () => {
-  const { toast } = useToast()
-  const [activeProvider, setActiveProvider] = useState('mock')
-  const [apiKey, setApiKey] = useState('')
-
-  const handleSave = () => {
-    localStorage.setItem('flux_ai_provider', activeProvider)
-    if (apiKey) localStorage.setItem(`flux_api_key_${activeProvider}`, apiKey)
-    
-    toast({
-      title: "Settings Saved",
-      description: "Your AI configuration has been updated successfully."
-    })
-  }
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -46,90 +16,50 @@ export const Settings = () => {
       exit={{ opacity: 0, y: -20 }}
       className="py-12"
     >
-      <CinematicHeading 
-        title="Settings" 
-        subtitle="Configure your AI models, API keys, and workspace preferences."
+      <CinematicHeading
+        title="Settings"
+        subtitle="Manage your workspace preferences."
         align="left"
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 flex flex-col gap-6">
+
+          {/* Platform-managed AI notice */}
           <GlassCard hoverEffect={false}>
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 rounded-xl bg-accent-gold/10 flex items-center justify-center">
-                <Key className="w-5 h-5 text-accent-gold" />
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-green-400" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white">AI Configuration</h3>
-                <p className="text-sm text-text-muted">Choose your preferred intelligence provider.</p>
+                <h3 className="text-xl font-bold text-white">AI — Platform Managed</h3>
+                <p className="text-sm text-text-muted">No configuration needed.</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-              {providers.map((provider) => (
-                <button
-                  key={provider.id}
-                  onClick={() => setActiveProvider(provider.id)}
-                  className={cn(
-                    "flex items-center justify-between p-4 rounded-2xl border transition-all duration-300",
-                    activeProvider === provider.id 
-                      ? "bg-accent-gold/5 border-accent-gold" 
-                      : "bg-white/5 border-white/5 hover:border-white/10"
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <provider.icon className={cn(
-                      "w-5 h-5",
-                      activeProvider === provider.id ? "text-accent-gold" : "text-text-muted"
-                    )} />
-                    <span className={cn(
-                      "text-sm font-bold",
-                      activeProvider === provider.id ? "text-white" : "text-text-secondary"
-                    )}>{provider.name}</span>
-                  </div>
-                  {activeProvider === provider.id && (
-                    <CheckCircle2 className="w-4 h-4 text-accent-gold" />
-                  )}
-                </button>
+            <div className="p-5 rounded-2xl bg-green-500/5 border border-green-500/15 space-y-3">
+              {[
+                'AI providers are configured centrally by your administrator',
+                'Your requests are processed through a secure backend gateway',
+                'API keys are never stored in your browser or exposed to clients',
+                'Provider switching and upgrades happen automatically',
+              ].map(item => (
+                <div key={item} className="flex items-start gap-3">
+                  <CheckCircle2 className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
+                  <p className="text-sm text-green-400/80">{item}</p>
+                </div>
               ))}
             </div>
 
-            {activeProvider !== 'mock' && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="space-y-4"
-              >
-                <label className="text-[10px] font-black uppercase tracking-widest text-text-muted">API Key for {activeProvider}</label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="sk-..."
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-sm focus:outline-none focus:border-accent-gold transition-all font-mono"
-                  />
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                    <Shield className="w-4 h-4 text-text-muted" />
-                  </div>
-                </div>
-                <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 flex items-start gap-3">
-                  <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5" />
-                  <p className="text-[11px] text-amber-500/80 leading-relaxed">
-                    API keys are stored locally in your browser and never sent to our servers. Usage costs are billed directly by the provider.
-                  </p>
-                </div>
-              </motion.div>
-            )}
-
-            <div className="mt-12 pt-8 border-t border-white/5 flex justify-end">
-              <FloatingButton onClick={handleSave}>
-                <Save className="w-4 h-4 mr-2" />
-                Save Preferences
-              </FloatingButton>
+            <div className="mt-6 p-4 rounded-xl bg-white/[0.02] border border-white/5 flex items-center gap-3">
+              <Shield className="w-4 h-4 text-accent-gold shrink-0" />
+              <p className="text-xs text-text-muted leading-relaxed">
+                This platform operates like Cursor AI or ChatGPT Teams — AI infrastructure is managed for you. Contact your admin if you experience any AI issues.
+              </p>
             </div>
           </GlassCard>
 
+          {/* Workspace Storage */}
           <GlassCard hoverEffect={false}>
             <div className="flex items-center gap-3 mb-8">
               <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
@@ -140,8 +70,8 @@ export const Settings = () => {
                 <p className="text-sm text-text-muted">Manage your local and cloud data.</p>
               </div>
             </div>
-            
-            <div className="space-y-6">
+
+            <div className="space-y-4">
               <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5">
                 <div>
                   <h4 className="text-sm font-bold text-white">Cloud Sync</h4>

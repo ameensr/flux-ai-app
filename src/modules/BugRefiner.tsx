@@ -38,9 +38,19 @@ export const BugRefiner = () => {
     
     try {
       const response = await AIService.callAI({
-        provider: 'mock', // Default to mock for now, can be configured later
         prompt: input,
-        options: { module: 'bugReport' }
+        options: {
+          module: 'bugReport',
+          systemPrompt: `You are a professional QA engineer. Convert the user's rough bug notes into a structured bug report with these sections:
+**Title:** (concise summary)
+**Severity:** (Critical/High/Medium/Low)
+**Environment:** (infer if possible)
+**Steps to Reproduce:**
+**Expected Result:**
+**Actual Result:**
+**Possible Cause:** (optional)
+Be concise and professional. Output only the report, no preamble.`
+        }
       })
       
       // Simulate AI typing effect for cinematic feel
@@ -68,6 +78,16 @@ export const BugRefiner = () => {
       title: "Copied!",
       description: "Result copied to clipboard."
     })
+  }
+
+  const downloadReport = (text: string) => {
+    const blob = new Blob([text], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'bug-report.txt'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -143,7 +163,10 @@ export const BugRefiner = () => {
                       >
                         <Copy className="w-4 h-4" />
                       </button>
-                      <button className="p-2 hover:bg-white/5 rounded-lg text-text-secondary hover:text-white transition-all">
+                      <button
+                        onClick={() => downloadReport(result)}
+                        className="p-2 hover:bg-white/5 rounded-lg text-text-secondary hover:text-white transition-all"
+                      >
                         <Download className="w-4 h-4" />
                       </button>
                     </div>

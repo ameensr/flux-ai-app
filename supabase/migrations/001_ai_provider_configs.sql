@@ -32,6 +32,7 @@ returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end;
 $$;
 
+drop trigger if exists ai_provider_configs_updated_at on public.ai_provider_configs;
 create trigger ai_provider_configs_updated_at
   before update on public.ai_provider_configs
   for each row execute function public.set_updated_at();
@@ -39,6 +40,7 @@ create trigger ai_provider_configs_updated_at
 -- RLS: only admins can read/write; service_role bypasses for edge functions
 alter table public.ai_provider_configs enable row level security;
 
+drop policy if exists "admins_all" on public.ai_provider_configs;
 create policy "admins_all" on public.ai_provider_configs
   for all
   using (
@@ -63,6 +65,7 @@ create table if not exists public.ai_usage_logs (
 
 alter table public.ai_usage_logs enable row level security;
 
+drop policy if exists "admins_read_logs" on public.ai_usage_logs;
 create policy "admins_read_logs" on public.ai_usage_logs
   for select
   using (
@@ -73,5 +76,6 @@ create policy "admins_read_logs" on public.ai_usage_logs
   );
 
 -- Users can only see their own logs
+drop policy if exists "users_own_logs" on public.ai_usage_logs;
 create policy "users_own_logs" on public.ai_usage_logs
   for select using (user_id = auth.uid());

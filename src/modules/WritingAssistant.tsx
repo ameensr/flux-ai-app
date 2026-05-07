@@ -45,7 +45,6 @@ export const WritingAssistant = () => {
     
     try {
       const response = await AIService.callAI({
-        provider: 'mock',
         prompt: `Rewrite this text in ${activeTone} tone: ${input}`,
         options: { module: 'writingAssistant' }
       })

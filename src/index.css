@@ -39,6 +39,28 @@
   .cinematic-reveal {
     animation: reveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
+
+  /* Shared form field styles */
+  .field-input {
+    @apply w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-accent-gold transition-all;
+  }
+
+  /* Native select fix for dark theme */
+  select.field-input,
+  select.field-input option {
+    @apply bg-[#1a1a1a] text-white;
+  }
+
+  select.field-input option:hover,
+  select.field-input option:focus,
+  select.field-input option:checked {
+    background-color: #D4AF37 !important;
+    color: #0B0B0B !important;
+  }
+
+  .label-xs {
+    @apply block text-[10px] font-black uppercase tracking-widest text-text-muted;
+  }
 }
 
 .noise-overlay {

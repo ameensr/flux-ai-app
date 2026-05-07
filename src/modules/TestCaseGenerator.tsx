@@ -1,4 +1,8 @@
 import React, { useState } from 'react'
+import mammoth from 'mammoth'
+import * as pdfjsLib from 'pdfjs-dist'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { GlassCard } from "@/components/ui/GlassCard"
@@ -29,6 +33,39 @@ export const TestCaseGenerator = () => {
   const [input, setInput] = useState('')
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase()
+      let text = ''
+
+      if (ext === 'pdf') {
+        const arrayBuffer = await file.arrayBuffer()
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+        const pages = await Promise.all(
+          Array.from({ length: pdf.numPages }, (_, i) =>
+            pdf.getPage(i + 1).then(p => p.getTextContent()).then(tc => tc.items.map((it: any) => it.str).join(' '))
+          )
+        )
+        text = pages.join('\n')
+      } else if (ext === 'docx') {
+        const arrayBuffer = await file.arrayBuffer()
+        const { value } = await mammoth.extractRawText({ arrayBuffer })
+        text = value
+      } else {
+        text = await file.text()
+      }
+
+      setInput(text)
+      toast({ title: 'Document Imported', description: file.name })
+    } catch {
+      toast({ title: 'Import Failed', description: 'Could not read file.', variant: 'destructive' })
+    }
+  }
 
   const handleGenerate = async () => {
     if (!input.trim()) {
@@ -44,12 +81,17 @@ export const TestCaseGenerator = () => {
     
     try {
       const response = await AIService.callAI({
-        provider: 'mock',
         prompt: input,
-        options: { module: 'testSuite' }
+        options: {
+          module: 'testSuite',
+          systemPrompt:
+            'You are a QA engineer. Given a requirement, return ONLY a valid JSON array (no markdown, no explanation) of test case objects. Each object must have exactly these fields: "title" (string), "priority" ("High" | "Medium" | "Low"), "status" ("Draft" | "Ready" | "Automated"). Example: [{"title":"...","priority":"High","status":"Draft"}]'
+        }
       })
-      
-      const parsed = JSON.parse(response)
+
+      // Strip markdown code fences if the model wraps the JSON
+      const jsonStr = response.replace(/^```[\w]*\n?|\n?```$/g, '').trim()
+      const parsed = JSON.parse(jsonStr)
       setTestCases(parsed)
       
       toast({
@@ -100,9 +142,24 @@ export const TestCaseGenerator = () => {
               >
                 {isGenerating ? "Analyzing..." : "Generate Test Suite"}
               </FloatingButton>
-              <button className="flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-white/5 hover:bg-white/10 text-xs font-bold uppercase tracking-widest transition-all">
-                <Download className="w-4 h-4" /> Import Document
-              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt,.md,.csv,.json"
+                className="hidden"
+                onChange={handleImport}
+              />
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-white/5 hover:bg-white/10 text-xs font-bold uppercase tracking-widest transition-all"
+                >
+                  <Download className="w-4 h-4" /> Import Document
+                </button>
+                <p className="text-center text-[10px] text-text-muted tracking-wider">
+                  PDF, DOCX, TXT, MD, CSV, JSON
+                </p>
+              </div>
             </div>
           </GlassCard>
         </div>

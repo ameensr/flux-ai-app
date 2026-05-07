@@ -19,31 +19,23 @@ function App() {
   const { activeModule, showLanding, setShowLanding, isAuthenticated, setUser, setProfile } = useAppStore()
 
   React.useEffect(() => {
-    const fetchProfile = async (userId: string) => {
-      const { data } = await supabase
+    const handleSession = async (user: any) => {
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', userId)
+        .eq('id', user.id)
         .single()
+      console.log('[profile fetch]', { data, error, userId: user.id })
       if (data) setProfile(data as Profile)
+      setUser(user)
     }
 
-    // Check initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
-        setShowLanding(false)
-      }
-    })
-
-    // Listen for changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
       if (session?.user) {
-        fetchProfile(session.user.id)
+        handleSession(session.user)
         setShowLanding(false)
       } else {
+        setUser(null)
         setProfile(null)
       }
     })

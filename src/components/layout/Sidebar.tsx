@@ -37,7 +37,8 @@ export const Sidebar = () => {
     setProfile(null)
   }
 
-  const visibleItems = menuItems.filter((item) => hasPermission(role as Role, item.permission))
+  const effectiveRole = (profile?.role ?? role ?? 'free') as Role
+  const visibleItems = menuItems.filter((item) => hasPermission(effectiveRole, item.permission))
 
   return (
     <motion.aside
