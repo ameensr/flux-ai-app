@@ -14,7 +14,7 @@ export const Settings = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="py-12"
+      className="py-6 sm:py-12"
     >
       <CinematicHeading
         title="Settings"
@@ -22,7 +22,7 @@ export const Settings = () => {
         align="left"
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
         <div className="lg:col-span-8 flex flex-col gap-6">
 
           {/* Platform-managed AI notice */}

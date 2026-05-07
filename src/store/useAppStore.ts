@@ -30,7 +30,7 @@ interface AppState {
 export const useAppStore = create<AppState>((set) => ({
   activeModule: 'dashboard',
   setActiveModule: (module) => set({ activeModule: module }),
-  isSidebarOpen: true,
+  isSidebarOpen: typeof window !== 'undefined' ? window.innerWidth >= 1024 : true,
   setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
   showLanding: true,
   setShowLanding: (show) => set({ showLanding: show }),

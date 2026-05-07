@@ -283,8 +283,8 @@ export const AdminPromptSettings = () => {
 
   return (
     <RoleGuard permission="manage:ai-providers">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="py-12">
-        <div className="flex items-start justify-between mb-10">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="py-6 sm:py-12">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8 sm:mb-10">
           <CinematicHeading
             title="Prompt Settings"
             subtitle="Define server-side system prompts per module. These are injected at the Edge Function level — users never see them."

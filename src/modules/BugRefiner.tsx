@@ -95,7 +95,7 @@ Be concise and professional. Output only the report, no preamble.`
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="py-12"
+      className="py-6 sm:py-12"
     >
       <CinematicHeading 
         title="Bug Refiner" 
@@ -103,7 +103,7 @@ Be concise and professional. Output only the report, no preamble.`
         align="left"
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 items-start">
         <div className="flex flex-col gap-6">
           <GlassCard hoverEffect={false} className="relative">
             <div className="flex items-center justify-between mb-4">
@@ -116,13 +116,13 @@ Be concise and professional. Output only the report, no preamble.`
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Paste your rough notes here... e.g., 'the app crashed when i clicked save on profile page. i had a long name.'"
-              className="w-full h-[400px] bg-transparent border-none focus:ring-0 text-text-primary placeholder:text-text-muted resize-none font-montreal leading-relaxed text-lg"
+              className="w-full h-48 sm:h-64 lg:h-[400px] bg-transparent border-none focus:ring-0 text-text-primary placeholder:text-text-muted resize-none font-montreal leading-relaxed text-base sm:text-lg"
             />
-            <div className="absolute bottom-6 right-6">
+            <div className="mt-4 sm:absolute sm:bottom-6 sm:right-6">
               <FloatingButton 
                 onClick={handleGenerate}
                 disabled={isGenerating}
-                className="w-full"
+                className="w-full sm:w-auto"
               >
                 {isGenerating ? (
                   <RefreshCw className="w-5 h-5 animate-spin" />
@@ -200,7 +200,7 @@ Be concise and professional. Output only the report, no preamble.`
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="h-[460px] flex flex-col items-center justify-center text-center p-12 glass-panel border-dashed"
+                className="h-[300px] sm:h-[460px] flex flex-col items-center justify-center text-center p-8 sm:p-12 glass-panel border-dashed"
               >
                 <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-6">
                   <Zap className="w-8 h-8 text-text-muted" />

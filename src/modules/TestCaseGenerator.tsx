@@ -114,7 +114,7 @@ export const TestCaseGenerator = () => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="py-12"
+      className="py-6 sm:py-12"
     >
       <CinematicHeading 
         title="Test Architect" 
@@ -122,9 +122,9 @@ export const TestCaseGenerator = () => {
         align="left"
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start">
         <div className="lg:col-span-4 flex flex-col gap-6">
-          <GlassCard hoverEffect={false} className="sticky top-28">
+          <GlassCard hoverEffect={false} className="lg:sticky lg:top-28">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-accent-gold" />
               Requirements
@@ -133,7 +133,7 @@ export const TestCaseGenerator = () => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Enter feature description or requirement document..."
-              className="w-full h-64 bg-transparent border-none focus:ring-0 text-text-primary placeholder:text-text-muted resize-none font-montreal leading-relaxed"
+              className="w-full h-48 sm:h-64 bg-transparent border-none focus:ring-0 text-text-primary placeholder:text-text-muted resize-none font-montreal leading-relaxed"
             />
             <div className="mt-6 flex flex-col gap-3">
               <FloatingButton 
@@ -165,11 +165,11 @@ export const TestCaseGenerator = () => {
         </div>
 
         <div className="lg:col-span-8 flex flex-col gap-6">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex gap-4">
-              <div className="glass-panel px-4 py-2 flex items-center gap-2">
-                <Search className="w-4 h-4 text-text-muted" />
-                <input type="text" placeholder="Search tests..." className="bg-transparent border-none focus:ring-0 text-xs w-32" />
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+            <div className="flex gap-2 sm:gap-4">
+              <div className="glass-panel px-3 sm:px-4 py-2 flex items-center gap-2">
+                <Search className="w-4 h-4 text-text-muted shrink-0" />
+                <input type="text" placeholder="Search tests..." className="bg-transparent border-none focus:ring-0 text-xs w-20 sm:w-32 min-w-0" />
               </div>
               <div className="glass-panel px-4 py-2 flex items-center gap-2 cursor-pointer hover:bg-white/10 transition-colors">
                 <Filter className="w-4 h-4 text-text-muted" />
@@ -195,12 +195,12 @@ export const TestCaseGenerator = () => {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: idx * 0.05 }}
                   >
-                    <GlassCard className="flex items-center justify-between group">
-                      <div className="flex items-center gap-6">
-                        <div className="w-2 h-2 rounded-full bg-accent-gold shadow-[0_0_8px_rgba(212,175,55,0.4)]" />
-                        <div>
-                          <h4 className="text-lg font-bold text-white group-hover:text-accent-gold transition-colors">{tc.title}</h4>
-                          <div className="flex items-center gap-4 mt-2">
+                    <GlassCard className="flex items-center justify-between gap-3 group">
+                      <div className="flex items-center gap-3 sm:gap-6 min-w-0">
+                        <div className="w-2 h-2 rounded-full bg-accent-gold shadow-[0_0_8px_rgba(212,175,55,0.4)] shrink-0" />
+                        <div className="min-w-0">
+                          <h4 className="text-base sm:text-lg font-bold text-white group-hover:text-accent-gold transition-colors truncate">{tc.title}</h4>
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1 sm:mt-2">
                             <span className={cn(
                               "text-[10px] font-black uppercase tracking-widest",
                               tc.priority === 'High' ? "text-red-400" : tc.priority === 'Medium' ? "text-amber-400" : "text-blue-400"
@@ -227,7 +227,7 @@ export const TestCaseGenerator = () => {
                 ))}
               </div>
             ) : (
-              <div className="h-[500px] flex flex-col items-center justify-center text-center p-12 glass-panel border-dashed border-white/10">
+              <div className="h-[300px] sm:h-[500px] flex flex-col items-center justify-center text-center p-8 sm:p-12 glass-panel border-dashed border-white/10">
                 <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6 relative">
                   <FileText className="w-10 h-10 text-text-muted" />
                   <div className="absolute inset-0 bg-accent-gold/5 blur-2xl rounded-full" />

@@ -271,8 +271,8 @@ export const AdminAISettings = () => {
 
   return (
     <RoleGuard permission="manage:ai-providers">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="py-12">
-        <div className="flex items-start justify-between mb-10">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="py-6 sm:py-12">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8 sm:mb-10">
           <CinematicHeading
             title="AI Providers"
             subtitle="Centrally manage AI provider API keys and models. Users never see or configure these."
@@ -414,7 +414,7 @@ export const AdminAISettings = () => {
                         transition={{ duration: 0.25 }}
                         className="overflow-hidden"
                       >
-                        <div className="px-5 pb-5 pt-0 border-t border-white/5 grid grid-cols-2 md:grid-cols-4 gap-4 mt-0 pt-4">
+                        <div className="px-5 pb-5 pt-0 border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-4 mt-0 pt-4">
                           {[
                             { label: 'Max Tokens', value: cfg.max_tokens.toLocaleString() },
                             { label: 'Temperature', value: cfg.temperature },
@@ -461,7 +461,7 @@ export const AdminAISettings = () => {
                     {/* Provider select */}
                     <div>
                       <label className="label-xs">Provider</label>
-                      <div className="grid grid-cols-3 gap-2 mt-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
                         {PROVIDERS.map(p => (
                           <button
                             key={p.id}

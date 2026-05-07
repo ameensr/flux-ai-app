@@ -11,7 +11,7 @@ export const GlassCard = React.forwardRef<HTMLDivElement, GlassCardProps>(
   ({ children, className, hoverEffect = true, ...props }, ref) => {
     return (
       <motion.div
-        whileHover={hoverEffect ? { y: -8, scale: 1.01 } : {}}
+        whileHover={hoverEffect ? { y: -4, scale: 1.005 } : {}}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
           "glass-panel p-6 relative overflow-hidden group",

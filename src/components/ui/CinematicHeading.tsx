@@ -17,7 +17,7 @@ export const CinematicHeading: React.FC<CinematicHeadingProps> = ({
 }) => {
   return (
     <div className={cn(
-      "flex flex-col gap-4 mb-12",
+      "flex flex-col gap-3 sm:gap-4 mb-8 sm:mb-12",
       align === 'center' ? "items-center text-center" : align === 'right' ? "items-end text-right" : "items-start text-left",
       className
     )}>
@@ -25,7 +25,7 @@ export const CinematicHeading: React.FC<CinematicHeadingProps> = ({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-        className="text-5xl md:text-7xl font-clash font-bold tracking-tight text-white"
+        className="text-[clamp(2rem,7vw,4.5rem)] font-clash font-bold tracking-tight text-white leading-tight"
       >
         {title}
       </motion.h1>
@@ -34,7 +34,7 @@ export const CinematicHeading: React.FC<CinematicHeadingProps> = ({
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          className="text-xl text-text-secondary max-w-2xl font-montreal"
+          className="text-base sm:text-xl text-text-secondary max-w-2xl font-montreal"
         >
           {subtitle}
         </motion.p>

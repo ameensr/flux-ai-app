@@ -71,7 +71,7 @@ export const WritingAssistant = () => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="py-12"
+      className="py-6 sm:py-12"
     >
       <CinematicHeading 
         title="Writing Assistant" 
@@ -79,12 +79,12 @@ export const WritingAssistant = () => {
         align="left"
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 items-start">
         <div className="flex flex-col gap-6">
           <GlassCard hoverEffect={false}>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
               <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Editor</span>
-              <div className="flex gap-2">
+              <div className="flex gap-1.5 sm:gap-2 flex-wrap">
                 {tones.map((tone) => (
                   <button
                     key={tone.id}
@@ -105,7 +105,7 @@ export const WritingAssistant = () => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Type or paste your text here..."
-              className="w-full h-80 bg-transparent border-none focus:ring-0 text-text-primary placeholder:text-text-muted resize-none font-montreal leading-relaxed text-xl"
+              className="w-full h-48 sm:h-64 lg:h-80 bg-transparent border-none focus:ring-0 text-text-primary placeholder:text-text-muted resize-none font-montreal leading-relaxed text-base sm:text-xl"
             />
             <div className="mt-8 flex justify-end">
               <FloatingButton 
@@ -174,7 +174,7 @@ export const WritingAssistant = () => {
                 </GlassCard>
               </motion.div>
             ) : (
-              <div className="h-[460px] flex flex-col items-center justify-center text-center p-12 glass-panel border-dashed border-white/10 opacity-50">
+              <div className="h-[280px] sm:h-[460px] flex flex-col items-center justify-center text-center p-8 sm:p-12 glass-panel border-dashed border-white/10 opacity-50">
                 <AlignLeft className="w-12 h-12 text-text-muted mb-4" />
                 <h3 className="text-lg font-bold text-white mb-2">Awaiting Content</h3>
                 <p className="text-text-muted text-sm">

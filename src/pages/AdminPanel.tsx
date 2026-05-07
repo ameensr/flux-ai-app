@@ -94,7 +94,7 @@ export const AdminPanel = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
-        className="py-12"
+        className="py-6 sm:py-12"
       >
         <CinematicHeading
           title="Admin Panel"
@@ -103,19 +103,19 @@ export const AdminPanel = () => {
         />
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-10 p-1 bg-white/5 rounded-2xl w-fit">
+        <div className="flex gap-1 sm:gap-2 mb-8 sm:mb-10 p-1 bg-white/5 rounded-2xl w-full sm:w-fit overflow-x-auto scrollbar-none">
           {TABS.map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               className={cn(
-                'flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all',
+                'flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap shrink-0',
                 tab === t.id
                   ? 'bg-accent-gold text-background'
                   : 'text-text-muted hover:text-white'
               )}
             >
-              <t.icon className="w-3.5 h-3.5" />
+              <t.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               {t.label}
             </button>
           ))}
@@ -166,25 +166,25 @@ export const AdminPanel = () => {
                         key={user.id}
                         className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all"
                       >
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-                            <RoleIcon className="w-5 h-5 text-text-secondary" />
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
+                            <RoleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-text-secondary" />
                           </div>
-                          <div>
-                            <p className="text-sm font-bold text-white">{user.full_name || 'No name'}</p>
-                            <p className="text-xs text-text-muted">{user.email}</p>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-white truncate">{user.full_name || 'No name'}</p>
+                            <p className="text-xs text-text-muted truncate">{user.email}</p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                          <span className={cn('px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest', ROLE_STYLES[user.role])}>
+                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                          <span className={cn('hidden sm:inline-flex px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest', ROLE_STYLES[user.role])}>
                             {user.role}
                           </span>
                           <select
                             value={user.role}
                             disabled={updating === user.id}
                             onChange={(e) => updateRole(user.id, e.target.value as Role)}
-                            className="bg-[#141414] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-accent-gold transition-all cursor-pointer disabled:opacity-50"
+                            className="bg-[#141414] border border-white/10 rounded-xl px-2 sm:px-3 py-2 text-xs text-white focus:outline-none focus:border-accent-gold transition-all cursor-pointer disabled:opacity-50"
                           >
                             <option value="free">Free</option>
                             <option value="pro">Pro</option>

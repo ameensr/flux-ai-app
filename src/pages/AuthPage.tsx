@@ -115,7 +115,7 @@ export const AuthPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden flex items-center justify-center px-6 py-20">
+    <div className="min-h-screen bg-background relative overflow-hidden flex items-center justify-center px-4 sm:px-6 py-12 sm:py-20">
       {/* Cinematic Background */}
       <AmbientGlow size="xl" color="accent-gold" className="top-[-20%] left-[-10%] opacity-[0.08]" />
       <AmbientGlow size="lg" color="white" className="bottom-[-10%] right-[-10%] opacity-[0.03]" />
@@ -139,7 +139,7 @@ export const AuthPage = () => {
           Back to Terminal
         </button>
 
-        <GlassCard hoverEffect={false} className="p-10 border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)]">
+        <GlassCard hoverEffect={false} className="p-6 sm:p-10 border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)]">
           {/* Header */}
           <div className="flex flex-col items-center text-center mb-10">
             <Logo size="lg" className="mb-8" />
@@ -333,7 +333,7 @@ export const AuthPage = () => {
         </GlassCard>
 
         {/* Security Footer */}
-        <div className="mt-12 flex items-center justify-center gap-6 text-[10px] font-black uppercase tracking-[0.2em] text-text-muted opacity-40">
+        <div className="mt-8 sm:mt-12 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-[10px] font-black uppercase tracking-[0.2em] text-text-muted opacity-40">
           <div className="flex items-center gap-2"><ShieldCheck className="w-3 h-3" /> SOC2 COMPLIANT</div>
           <div className="h-4 w-px bg-white/10" />
           <div className="flex items-center gap-2">AES-256 ENCRYPTED</div>
