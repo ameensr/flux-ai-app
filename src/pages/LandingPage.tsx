@@ -2,7 +2,7 @@ import React from 'react'
 import { motion } from "framer-motion"
 import { FloatingButton } from "@/components/ui/FloatingButton"
 import { AmbientGlow } from "@/components/ui/AmbientGlow"
-import { Zap, Shield, Globe, ChevronRight, Play } from "lucide-react"
+import { Zap, Shield, Globe, ChevronRight } from "lucide-react"
 import { Logo } from "@/components/ui/Logo"
 
 export const LandingPage = ({ onStart }: { onStart: () => void }) => {
@@ -54,12 +54,7 @@ export const LandingPage = ({ onStart }: { onStart: () => void }) => {
             <FloatingButton onClick={onStart} className="h-16 px-12 text-sm">
               Get Started for Free <ChevronRight className="w-4 h-4 ml-2" />
             </FloatingButton>
-            <button className="flex items-center gap-3 px-8 py-4 rounded-full bg-white/5 hover:bg-white/10 text-xs font-bold uppercase tracking-widest transition-all text-white">
-              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                <Play className="w-3 h-3 fill-white" />
-              </div>
-              Watch Film
-            </button>
+
           </div>
         </motion.div>
       </div>
