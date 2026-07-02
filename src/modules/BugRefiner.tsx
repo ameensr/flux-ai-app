@@ -5,6 +5,7 @@ import { FloatingButton } from "@/components/ui/FloatingButton"
 import { CinematicHeading } from "@/components/ui/CinematicHeading"
 import { RoleGuard } from "@/components/ui/RoleGuard"
 import { AIService } from "@/services/ai/ai-service"
+import { BUG_PROMPT } from "@/ai/prompts/bugPrompt"
 import { 
   Bug, 
   Sparkles, 
@@ -39,18 +40,7 @@ export const BugRefiner = () => {
     try {
       const response = await AIService.callAI({
         prompt: input,
-        options: {
-          module: 'bugReport',
-          systemPrompt: `You are a professional QA engineer. Convert the user's rough bug notes into a structured bug report with these sections:
-**Title:** (concise summary)
-**Severity:** (Critical/High/Medium/Low)
-**Environment:** (infer if possible)
-**Steps to Reproduce:**
-**Expected Result:**
-**Actual Result:**
-**Possible Cause:** (optional)
-Be concise and professional. Output only the report, no preamble.`
-        }
+        options: { module: 'bug-refiner', systemPrompt: BUG_PROMPT }
       })
       
       // Simulate AI typing effect for cinematic feel
@@ -172,19 +162,19 @@ Be concise and professional. Output only the report, no preamble.`
                     </div>
                   </div>
 
-                  <div className="prose prose-invert max-w-none font-montreal text-text-primary">
-                    <div dangerouslySetInnerHTML={{ __html: result.replace(/\n/g, '<br/>') }} />
+                  <div className="font-montreal text-text-primary whitespace-pre-wrap leading-relaxed">
+                    {result}
                   </div>
                   
                   <div className="mt-12 pt-8 border-t border-white/5 flex gap-4">
-                    <RoleGuard permission="export:jira" fallback={
+                    <RoleGuard permission={{ module: 'bug-refiner', key: 'can_export' }} fallback={
                       <button disabled className="flex-1 px-4 py-3 rounded-xl bg-white/5 text-xs font-bold uppercase tracking-widest opacity-30 cursor-not-allowed">Export to Jira 🔒</button>
                     }>
                       <button className="flex-1 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold uppercase tracking-widest transition-all">
                         Export to Jira
                       </button>
                     </RoleGuard>
-                    <RoleGuard permission="export:slack" fallback={
+                    <RoleGuard permission={{ module: 'bug-refiner', key: 'can_export' }} fallback={
                       <button disabled className="flex-1 px-4 py-3 rounded-xl bg-white/5 text-xs font-bold uppercase tracking-widest opacity-30 cursor-not-allowed">Push to Slack 🔒</button>
                     }>
                       <button className="flex-1 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold uppercase tracking-widest transition-all">

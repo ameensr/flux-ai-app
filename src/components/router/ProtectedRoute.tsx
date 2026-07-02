@@ -1,0 +1,61 @@
+// src/components/router/ProtectedRoute.tsx
+import React from 'react'
+import { Navigate, useLocation } from 'react-router-dom'
+import { useAppStore } from '@/store/useAppStore'
+import { usePermissions } from '@/hooks/usePermissions'
+import { ROUTES, ROUTE_MODULE_KEY, type AppRoute } from '@/lib/routes'
+import { GlassCard } from '@/components/ui/GlassCard'
+import { Lock } from 'lucide-react'
+
+interface Props {
+  children: React.ReactNode
+  /** Require admin role */
+  adminOnly?: boolean
+}
+
+export function ProtectedRoute({ children, adminOnly = false }: Props) {
+  const { isAuthenticated, role } = useAppStore()
+  const { canView, permissionsLoaded } = usePermissions()
+  const location = useLocation()
+
+  // Not logged in → send to login, preserve intended destination
+  if (!isAuthenticated) {
+    return <Navigate to={ROUTES.login} state={{ from: location }} replace />
+  }
+
+  // Permissions still loading → show spinner (prevents flash of AccessDenied)
+  if (!permissionsLoaded) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  // Admin-only routes
+  if (adminOnly && role !== 'admin') {
+    return <AccessDenied />
+  }
+
+  // Module-level RBAC check
+  const moduleKey = ROUTE_MODULE_KEY[location.pathname as AppRoute]
+  if (moduleKey && role !== 'admin' && !canView(moduleKey)) {
+    return <AccessDenied />
+  }
+
+  return <>{children}</>
+}
+
+function AccessDenied() {
+  return (
+    <GlassCard hoverEffect={false} className="flex flex-col items-center justify-center py-32 text-center">
+      <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-6">
+        <Lock className="w-7 h-7 text-accent-gold" />
+      </div>
+      <h3 className="text-2xl font-bold text-white mb-2">Access Denied</h3>
+      <p className="text-text-secondary max-w-sm">
+        You don't have permission to access this page. Upgrade your plan or contact an admin.
+      </p>
+    </GlassCard>
+  )
+}

@@ -40,7 +40,7 @@ const mapAuthError = (message: string): { field: 'email' | 'password' | 'general
 }
 
 export const AuthPage = () => {
-  const { setUser, setShowLanding, setProfile } = useAppStore()
+  const { setShowLanding } = useAppStore()
   const { toast } = useToast()
   const [isLogin, setIsLogin] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
@@ -62,27 +62,17 @@ export const AuthPage = () => {
 
     setIsLoading(true)
     try {
-      const fetchAndSetProfile = async (userId: string) => {
-        const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
-        if (data) setProfile(data)
-      }
-
       if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+        const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        await fetchAndSetProfile(data.user.id)
-        setUser(data.user)
-        setShowLanding(false)
+        // onAuthStateChange in App.tsx handles initSession — no manual setUser needed
         toast({ title: 'Welcome back', description: 'Authenticated successfully.' })
       } else {
         const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
         if (data.user && data.session) {
-          // Upsert profile for new users so fetchAndSetProfile always finds a row
+          // Upsert profile for new users so the profile row exists before onAuthStateChange fires
           await supabase.from('profiles').upsert({ id: data.user.id, email }, { onConflict: 'id' })
-          await fetchAndSetProfile(data.user.id)
-          setUser(data.user)
-          setShowLanding(false)
           toast({ title: 'Account created', description: 'Welcome! You are now logged in.' })
         } else {
           toast({ title: 'Verify your email', description: 'Check your inbox to confirm your account.' })

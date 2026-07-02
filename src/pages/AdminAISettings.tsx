@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { FloatingButton } from '@/components/ui/FloatingButton'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
-import { RoleGuard } from '@/components/ui/RoleGuard'
 import { useToast } from '@/hooks/use-toast'
 import { aiProviderService, type AIProviderConfig, type CreateProviderPayload } from '@/services/ai/aiProviderService'
 import {
@@ -270,8 +269,7 @@ export const AdminAISettings = () => {
   const selectedProviderMeta = PROVIDERS.find(p => p.id === form.provider_name)
 
   return (
-    <RoleGuard permission="manage:ai-providers">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="py-6 sm:py-12">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="py-6 sm:py-12">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8 sm:mb-10">
           <CinematicHeading
             title="AI Providers"
@@ -605,6 +603,5 @@ export const AdminAISettings = () => {
           )}
         </AnimatePresence>
       </motion.div>
-    </RoleGuard>
   )
 }

@@ -2,18 +2,21 @@ import React from 'react'
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
 import { GlassCard } from "@/components/ui/GlassCard"
-import { FloatingButton } from "@/components/ui/FloatingButton"
+import { useNavigate } from 'react-router-dom'
 import { useAppStore } from "@/store/useAppStore"
-import { 
-  Bug, 
-  FileText, 
-  PenTool, 
+import { usePermissions } from "@/hooks/usePermissions"
+import { ROUTES } from '@/lib/routes'
+import {
+  Bug,
+  FileText,
+  PenTool,
   ArrowRight,
   Sparkles,
   Zap,
   Shield,
   Clock,
-  History
+  History,
+  Lock
 } from "lucide-react"
 
 const modules = [
@@ -40,8 +43,16 @@ const modules = [
   }
 ]
 
+const MODULE_ROUTES: Record<string, string> = {
+  'bug-refiner':       ROUTES.bugRefiner,
+  'test-generator':    ROUTES.testGenerator,
+  'writing-assistant': ROUTES.writingAssistant,
+}
+
 export const Dashboard = () => {
-  const { setActiveModule, profile, user } = useAppStore()
+  const navigate = useNavigate()
+  const { profile, user } = useAppStore()
+  const { canView } = usePermissions()
   const displayName = profile?.full_name || user?.email?.split('@')[0] || 'there'
 
   return (
@@ -62,7 +73,7 @@ export const Dashboard = () => {
             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent-gold">System Operational</span>
           </div>
         </motion.div>
-        
+
         <div className="flex flex-col gap-6 sm:gap-8 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
             <h1 className="text-[clamp(1.75rem,6vw,3.5rem)] font-clash font-bold text-white mb-3 leading-tight break-words">
@@ -72,7 +83,7 @@ export const Dashboard = () => {
               Your AI-powered QA command center is ready. What would you like to build today?
             </p>
           </div>
-          
+
           <div className="flex gap-3 sm:gap-4 shrink-0">
             <div className="glass-panel px-4 sm:px-6 py-3 sm:py-4 flex flex-col items-center justify-center gap-1">
               <span className="text-xl sm:text-2xl font-bold text-white">128</span>
@@ -87,40 +98,58 @@ export const Dashboard = () => {
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-10 sm:mb-16">
-        {modules.map((module, index) => (
-          <motion.div
-            key={module.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <GlassCard 
-              onClick={() => setActiveModule(module.id as any)}
-              className="h-full cursor-pointer group"
+        {modules.map((module, index) => {
+          const accessible = canView(module.id)
+          return (
+            <motion.div
+              key={module.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
             >
-              <div className={cn(
-                "absolute top-0 right-0 w-32 h-32 bg-gradient-to-br blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700",
-                module.color
-              )} />
-              
-              <div className="relative z-10">
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-5 sm:mb-6 group-hover:bg-accent-gold group-hover:text-background transition-colors duration-500">
-                  <module.icon className="w-5 h-5 sm:w-6 sm:h-6" />
+              <GlassCard
+                onClick={() => accessible && navigate(MODULE_ROUTES[module.id])}
+                className={cn('h-full group', accessible ? 'cursor-pointer' : 'cursor-not-allowed opacity-60')}
+              >
+                <div className={cn(
+                  "absolute top-0 right-0 w-32 h-32 bg-gradient-to-br blur-3xl opacity-0 transition-opacity duration-700",
+                  accessible && "group-hover:opacity-100",
+                  module.color
+                )} />
+                <div className="relative z-10">
+                  <div className={cn(
+                    "w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-5 sm:mb-6 transition-colors duration-500",
+                    accessible && "group-hover:bg-accent-gold group-hover:text-background"
+                  )}>
+                    {accessible
+                      ? <module.icon className="w-5 h-5 sm:w-6 sm:h-6" />
+                      : <Lock className="w-5 h-5 sm:w-6 sm:h-6 text-text-muted" />
+                    }
+                  </div>
+                  <h3 className={cn(
+                    "text-xl sm:text-2xl font-bold text-white mb-2 sm:mb-3 transition-colors",
+                    accessible && "group-hover:text-accent-gold"
+                  )}>
+                    {module.title}
+                  </h3>
+                  <p className="text-text-secondary mb-6 sm:mb-8 leading-relaxed text-sm sm:text-base">
+                    {module.description}
+                  </p>
+                  <div className={cn(
+                    "flex items-center gap-2 font-bold text-xs sm:text-sm",
+                    accessible ? "text-accent-gold" : "text-text-muted"
+                  )}>
+                    <span>{accessible ? 'LAUNCH MODULE' : 'UPGRADE TO UNLOCK'}</span>
+                    {accessible
+                      ? <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      : <Lock className="w-3 h-3" />
+                    }
+                  </div>
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-white mb-2 sm:mb-3 group-hover:text-accent-gold transition-colors">
-                  {module.title}
-                </h3>
-                <p className="text-text-secondary mb-6 sm:mb-8 leading-relaxed text-sm sm:text-base group-hover:text-text-primary transition-colors">
-                  {module.description}
-                </p>
-                <div className="flex items-center gap-2 text-accent-gold font-bold text-xs sm:text-sm">
-                  <span>LAUNCH MODULE</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-            </GlassCard>
-          </motion.div>
-        ))}
+              </GlassCard>
+            </motion.div>
+          )
+        })}
       </div>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
@@ -132,7 +161,6 @@ export const Dashboard = () => {
             </h2>
             <button className="text-xs text-text-muted hover:text-accent-gold transition-colors">VIEW ALL</button>
           </div>
-          
           <div className="space-y-4 sm:space-y-6">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-center gap-3 sm:gap-4 p-3 rounded-2xl hover:bg-white/5 transition-colors group cursor-pointer">

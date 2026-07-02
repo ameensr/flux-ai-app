@@ -9,6 +9,7 @@ import { GlassCard } from "@/components/ui/GlassCard"
 import { FloatingButton } from "@/components/ui/FloatingButton"
 import { CinematicHeading } from "@/components/ui/CinematicHeading"
 import { AIService } from "@/services/ai/ai-service"
+import { TEST_CASE_PROMPT } from "@/ai/prompts/testCasePrompt"
 import { 
   FileText, 
   Sparkles, 
@@ -33,6 +34,7 @@ export const TestCaseGenerator = () => {
   const [input, setInput] = useState('')
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
+  const [streamingOutput, setStreamingOutput] = useState('')
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,41 +71,45 @@ export const TestCaseGenerator = () => {
 
   const handleGenerate = async () => {
     if (!input.trim()) {
-      toast({
-        title: "Input Required",
-        description: "Please enter a requirement or feature description.",
-        variant: "destructive"
-      })
+      toast({ title: "Input Required", description: "Please enter a requirement or feature description.", variant: "destructive" })
       return
     }
 
     setIsGenerating(true)
-    
-    try {
-      const response = await AIService.callAI({
-        prompt: input,
-        options: {
-          module: 'testSuite',
-          systemPrompt:
-            'You are a QA engineer. Given a requirement, return ONLY a valid JSON array (no markdown, no explanation) of test case objects. Each object must have exactly these fields: "title" (string), "priority" ("High" | "Medium" | "Low"), "status" ("Draft" | "Ready" | "Automated"). Example: [{"title":"...","priority":"High","status":"Draft"}]'
-        }
-      })
+    setStreamingOutput('')
+    setTestCases([])
 
-      // Strip markdown code fences if the model wraps the JSON
-      const jsonStr = response.replace(/^```[\w]*\n?|\n?```$/g, '').trim()
-      const parsed = JSON.parse(jsonStr)
+    let fullText = ''
+    try {
+      await AIService.streamAI(
+        {
+          prompt: input,
+          options: {
+            module: 'test-case-generator',
+            systemPrompt: TEST_CASE_PROMPT
+          }
+        },
+        (chunk) => {
+          fullText += chunk
+          setStreamingOutput(fullText)
+        }
+      )
+
+      const jsonStr = fullText.replace(/^```[\w]*\n?|\n?```$/g, '').trim()
+      let parsed: TestCase[]
+      try {
+        parsed = JSON.parse(jsonStr)
+        if (!Array.isArray(parsed)) throw new Error('Expected an array')
+      } catch {
+        const match = jsonStr.match(/\[\s*\{[\s\S]*\}\s*\]/)
+        if (!match) throw new Error('AI returned an unexpected format. Please try again.')
+        parsed = JSON.parse(match[0])
+      }
       setTestCases(parsed)
-      
-      toast({
-        title: "Test Cases Generated!",
-        description: `Created ${parsed.length} professional test cases.`
-      })
+      setStreamingOutput('')
+      toast({ title: "Test Cases Generated!", description: `Created ${parsed.length} professional test cases.` })
     } catch (error: any) {
-      toast({
-        title: "Generation Failed",
-        description: error.message,
-        variant: "destructive"
-      })
+      toast({ title: "Generation Failed", description: error.message, variant: "destructive" })
     } finally {
       setIsGenerating(false)
     }
@@ -226,6 +232,18 @@ export const TestCaseGenerator = () => {
                   </motion.div>
                 ))}
               </div>
+            ) : streamingOutput ? (
+              <motion.div
+                key="streaming"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="glass-panel p-6 rounded-xl"
+              >
+                <p className="text-xs font-bold uppercase tracking-widest text-accent-gold mb-3 flex items-center gap-2">
+                  <Sparkles className="w-3 h-3 animate-pulse" /> Generating...
+                </p>
+                <pre className="text-sm text-text-secondary whitespace-pre-wrap font-montreal leading-relaxed">{streamingOutput}</pre>
+              </motion.div>
             ) : (
               <div className="h-[300px] sm:h-[500px] flex flex-col items-center justify-center text-center p-8 sm:p-12 glass-panel border-dashed border-white/10">
                 <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6 relative">

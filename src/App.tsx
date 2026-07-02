@@ -1,51 +1,226 @@
-import React from 'react'
-import { motion, AnimatePresence } from "framer-motion"
-import { useAppStore } from "@/store/useAppStore"
-import type { Profile } from "@/store/useAppStore"
-import { DashboardLayout } from "@/components/layout/DashboardLayout"
-import { Dashboard } from "@/pages/Dashboard"
-import { BugRefiner } from "@/modules/BugRefiner"
-import { TestCaseGenerator } from "@/modules/TestCaseGenerator"
-import { WritingAssistant } from "@/modules/WritingAssistant"
-import { Settings } from "@/pages/Settings"
-import { LandingPage } from "@/pages/LandingPage"
-import { AuthPage } from "@/pages/AuthPage"
-import { AICopilot } from "@/components/ai/AICopilot"
-import { AdminPanel } from "@/pages/AdminPanel"
-import { supabase } from "@/lib/supabase"
-import { Toaster } from "@/components/ui/toaster"
+import React, { Suspense, lazy } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useAppStore } from '@/store/useAppStore'
+import type { Profile } from '@/store/useAppStore'
+import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import { LandingPage } from '@/pages/LandingPage'
+import { AuthPage } from '@/pages/AuthPage'
+import { supabase } from '@/lib/supabase'
+import { Toaster } from '@/components/ui/toaster'
+import { loadPermissionsForRole, FALLBACK_MAPS } from '@/lib/rbac'
+import { ProtectedRoute } from '@/components/router/ProtectedRoute'
+import { ErrorBoundary, SilentBoundary } from '@/components/ErrorBoundary'
+import { GlassCard } from '@/components/ui/GlassCard'
+import { ROUTES } from '@/lib/routes'
 
-function App() {
-  const { activeModule, showLanding, setShowLanding, isAuthenticated, setUser, setProfile } = useAppStore()
+// ── Lazy-loaded page modules ──────────────────────────────────────────────────
+const Dashboard        = lazy(() => import('@/pages/Dashboard').then(m => ({ default: m.Dashboard })))
+const BugRefiner       = lazy(() => import('@/modules/BugRefiner').then(m => ({ default: m.BugRefiner })))
+const TestCaseGenerator = lazy(() => import('@/modules/TestCaseGenerator').then(m => ({ default: m.TestCaseGenerator })))
+const WritingAssistant = lazy(() => import('@/modules/WritingAssistant').then(m => ({ default: m.WritingAssistant })))
+const QAWeeklyReport  = lazy(() => import('@/modules/QAWeeklyReport').then(m => ({ default: m.QAWeeklyReport })))
+const ReportPreviewDashboard = lazy(() => import('@/modules/QAWeeklyReport/components/ReportPreviewDashboard').then(m => ({ default: m.ReportPreviewDashboard })))
+const Settings         = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })))
+const History          = lazy(() => import('@/pages/History').then(m => ({ default: m.History })))
+const AdminPanel       = lazy(() => import('@/pages/AdminPanel').then(m => ({ default: m.AdminPanel })))
+const AICopilot        = lazy(() => import('@/components/ai/AICopilot').then(m => ({ default: m.AICopilot })))
+
+// ── Route-level loading skeleton ─────────────────────────────────────────────
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-[60vh]">
+      <div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
+    </div>
+  )
+}
+
+function ModuleErrorFallback() {
+  return (
+    <GlassCard hoverEffect={false} className="flex flex-col items-center justify-center py-32 text-center">
+      <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6">
+        <span className="text-2xl">⚠️</span>
+      </div>
+      <h3 className="text-2xl font-bold text-white mb-2">Module Failed to Load</h3>
+      <p className="text-text-secondary max-w-sm mb-6">Something went wrong rendering this module.</p>
+      <button
+        onClick={() => window.location.reload()}
+        className="px-6 py-3 rounded-xl bg-accent-gold text-background font-bold text-sm hover:opacity-90 transition-opacity"
+      >
+        Reload
+      </button>
+    </GlassCard>
+  )
+}
+
+// ── Animated route wrapper ────────────────────────────────────────────────────
+function AnimatedPage({ children }: { children: React.ReactNode }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.25 }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+// ── Authenticated app shell with animated routes ──────────────────────────────
+function AppShell() {
+  const location = useLocation()
+  const isReportPreview = location.pathname.startsWith('/report-preview')
+
+  if (isReportPreview) {
+    return (
+      <ErrorBoundary>
+        <AnimatePresence mode="wait">
+          <AnimatedPage key={location.pathname}>
+            <SilentBoundary fallback={<ModuleErrorFallback />}>
+              <Suspense fallback={<PageLoader />}>
+                <Routes location={location}>
+                  <Route path={ROUTES.reportPreview} element={
+                    <ProtectedRoute><ReportPreviewDashboard /></ProtectedRoute>
+                  } />
+                  <Route path="*" element={<Navigate to={ROUTES.reportPreview} replace />} />
+                </Routes>
+              </Suspense>
+            </SilentBoundary>
+          </AnimatedPage>
+        </AnimatePresence>
+        <Toaster />
+      </ErrorBoundary>
+    )
+  }
+
+  return (
+    <ErrorBoundary>
+      <DashboardLayout>
+        <AnimatePresence mode="wait">
+          <AnimatedPage key={location.pathname}>
+            <SilentBoundary fallback={<ModuleErrorFallback />}>
+              <Suspense fallback={<PageLoader />}>
+                <Routes location={location}>
+                  <Route index element={<Navigate to={ROUTES.dashboard} replace />} />
+
+                  <Route path={ROUTES.dashboard} element={
+                    <ProtectedRoute><Dashboard /></ProtectedRoute>
+                  } />
+
+                  <Route path={ROUTES.bugRefiner} element={
+                    <ProtectedRoute><BugRefiner /></ProtectedRoute>
+                  } />
+
+                  <Route path={ROUTES.testGenerator} element={
+                    <ProtectedRoute><TestCaseGenerator /></ProtectedRoute>
+                  } />
+
+                  <Route path={ROUTES.writingAssistant} element={
+                    <ProtectedRoute><WritingAssistant /></ProtectedRoute>
+                  } />
+
+                  <Route path={ROUTES.qaReport} element={
+                    <ProtectedRoute><QAWeeklyReport /></ProtectedRoute>
+                  } />
+
+                  <Route path={ROUTES.history} element={
+                    <ProtectedRoute><History /></ProtectedRoute>
+                  } />
+
+                  <Route path={ROUTES.settings} element={
+                    <ProtectedRoute><Settings /></ProtectedRoute>
+                  } />
+
+                  {/* Admin routes — all require adminOnly */}
+                  <Route path={ROUTES.admin} element={
+                    <ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>
+                  } />
+                  <Route path={`${ROUTES.admin}/*`} element={
+                    <ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>
+                  } />
+
+                  {/* Catch-all inside shell → back to dashboard */}
+                  <Route path="*" element={<Navigate to={ROUTES.dashboard} replace />} />
+                </Routes>
+              </Suspense>
+            </SilentBoundary>
+          </AnimatedPage>
+        </AnimatePresence>
+
+        <SilentBoundary>
+          <Suspense fallback={null}>
+            <AICopilot />
+          </Suspense>
+        </SilentBoundary>
+
+        <Toaster />
+      </DashboardLayout>
+    </ErrorBoundary>
+  )
+}
+
+// ── Root auth bootstrap ───────────────────────────────────────────────────────
+function AuthBootstrap() {
+  const {
+    showLanding, setShowLanding,
+    isAuthenticated, setUser, setProfile,
+    setPermissionMap, setPermissionsLoaded, initSession,
+  } = useAppStore()
+
+  const [authChecking, setAuthChecking] = React.useState(true)
+  const initializedUidRef = React.useRef<string | null>(null)
 
   React.useEffect(() => {
     const handleSession = async (user: any) => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-      console.log('[profile fetch]', { data, error, userId: user.id })
-      if (data) setProfile(data as Profile)
-      setUser(user)
+      if (initializedUidRef.current === user.id) return
+      initializedUidRef.current = user.id
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+
+        const role = data?.role ?? 'free'
+        if (data) setProfile(data as Profile)
+
+        const map = await loadPermissionsForRole(role)
+        initSession(user, map)
+      } catch (e) {
+        console.warn('[App] session setup error:', e)
+        initSession(user, FALLBACK_MAPS.free)
+      }
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        handleSession(session.user)
+        handleSession(session.user).finally(() => setAuthChecking(false))
         setShowLanding(false)
       } else {
-        setUser(null)
-        setProfile(null)
+        if (event === 'SIGNED_OUT' || !session) {
+          initializedUidRef.current = null
+          setUser(null)
+          setProfile(null)
+          setPermissionMap({})
+          setPermissionsLoaded(false)
+        }
+        setAuthChecking(false)
       }
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  if (showLanding) {
-    return <LandingPage onStart={() => setShowLanding(false)} />
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
+      </div>
+    )
   }
+
+  if (showLanding) return <LandingPage onStart={() => setShowLanding(false)} />
 
   if (!isAuthenticated) {
     return (
@@ -56,47 +231,14 @@ function App() {
     )
   }
 
-  const renderModule = () => {
-    switch (activeModule) {
-      case 'dashboard':
-        return <Dashboard />
-      case 'bug-refiner':
-        return <BugRefiner />
-      case 'test-generator':
-        return <TestCaseGenerator />
-      case 'writing-assistant':
-        return <WritingAssistant />
-      case 'settings':
-        return <Settings />
-      case 'admin':
-        return <AdminPanel />
-      default:
-        return (
-          <div className="flex flex-col items-center justify-center h-[60vh]">
-            <h2 className="text-4xl font-clash font-bold text-white mb-4">Module Under Construction</h2>
-            <p className="text-text-secondary text-xl font-montreal">We are polishing this module for you.</p>
-          </div>
-        )
-    }
-  }
-
-  return (
-    <DashboardLayout>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeModule}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          transition={{ duration: 0.3 }}
-        >
-          {renderModule()}
-        </motion.div>
-      </AnimatePresence>
-      <AICopilot />
-      <Toaster />
-    </DashboardLayout>
-  )
+  return <AppShell />
 }
 
-export default App
+// ── App root — BrowserRouter lives here ──────────────────────────────────────
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthBootstrap />
+    </BrowserRouter>
+  )
+}

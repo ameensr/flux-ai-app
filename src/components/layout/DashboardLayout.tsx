@@ -1,5 +1,4 @@
 import React from 'react'
-import { motion } from "framer-motion"
 import { useAppStore } from "@/store/useAppStore"
 import { Sidebar } from "./Sidebar"
 import { AmbientGlow } from "../ui/AmbientGlow"
@@ -31,18 +30,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
         <span className="text-sm font-bold text-white tracking-wide">Flux AI</span>
       </div>
 
-      {/* Main content — responsive left margin based on sidebar state */}
-      <motion.main
-        animate={{ 
-          marginLeft: isSidebarOpen ? 296 : 96,
-        }}
-        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        className="min-h-screen px-4 pt-20 pb-8 lg:px-6 lg:pt-6 lg:pb-6 max-lg:!ml-0"
+      {/* Main content — CSS transition for smooth sidebar animation, no framer-motion conflict */}
+      <main
+        className="min-h-screen px-4 pt-20 pb-8 lg:px-6 lg:pt-6 lg:pb-6 transition-[margin-left] duration-400"
+        style={{ marginLeft: isSidebarOpen ? 296 : 96 }}
       >
         <div className="max-w-7xl mx-auto">
           {children}
         </div>
-      </motion.main>
+      </main>
       
       {/* Cinematic Top Blur */}
       <div className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none" />

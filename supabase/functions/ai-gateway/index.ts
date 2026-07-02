@@ -42,6 +42,72 @@ interface ProviderRequest {
   temperature: number
 }
 
+// ── Streaming adapters ────────────────────────────────────────────────────────
+
+function streamOpenAICompat(baseUrl: string, r: ProviderRequest): Promise<Response> {
+  return fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${r.apiKey}` },
+    body: JSON.stringify({
+      model: r.model,
+      messages: [
+        ...(r.systemPrompt ? [{ role: 'system', content: r.systemPrompt }] : []),
+        { role: 'user', content: r.prompt }
+      ],
+      max_tokens: r.maxTokens,
+      temperature: r.temperature,
+      stream: true
+    })
+  })
+}
+
+function streamAnthropic(r: ProviderRequest): Promise<Response> {
+  return fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': r.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'messages-2023-06-01'
+    },
+    body: JSON.stringify({
+      model: r.model,
+      max_tokens: r.maxTokens,
+      ...(r.systemPrompt ? { system: r.systemPrompt } : {}),
+      messages: [{ role: 'user', content: r.prompt }],
+      stream: true
+    })
+  })
+}
+
+function streamGemini(r: ProviderRequest): Promise<Response> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${r.model}:streamGenerateContent?key=${r.apiKey}&alt=sse`
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: r.prompt }] }],
+      generationConfig: { maxOutputTokens: r.maxTokens, temperature: r.temperature }
+    })
+  })
+}
+
+const STREAMING_BASE_URLS: Record<string, string> = {
+  openai: 'https://api.openai.com/v1',
+  groq: 'https://api.groq.com/openai/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+  deepseek: 'https://api.deepseek.com/v1',
+  nvidia: 'https://integrate.api.nvidia.com/v1',
+}
+
+async function dispatchStream(providerName: string, r: ProviderRequest): Promise<Response> {
+  if (providerName === 'anthropic') return streamAnthropic(r)
+  if (providerName === 'gemini') return streamGemini(r)
+  const baseUrl = STREAMING_BASE_URLS[providerName]
+  if (!baseUrl) throw new Error(`Streaming not supported for provider: ${providerName}`)
+  return streamOpenAICompat(baseUrl, r)
+}
+
 async function callOpenAI(r: ProviderRequest): Promise<{ content: string; usage: any }> {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -159,22 +225,6 @@ async function dispatchToProvider(providerName: string, r: ProviderRequest): Pro
   }
 }
 
-// ── Module prompt loader ─────────────────────────────────────────────────────
-
-async function loadModuleSystemPrompt(
-  supabase: ReturnType<typeof createClient>,
-  moduleKey: string | undefined
-): Promise<string | undefined> {
-  if (!moduleKey) return undefined
-  const { data } = await supabase
-    .from('ai_module_prompts')
-    .select('system_prompt')
-    .eq('module_key', moduleKey)
-    .eq('is_active', true)
-    .single()
-  return data?.system_prompt || undefined
-}
-
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 function json(body: unknown, status = 200) {
@@ -201,10 +251,26 @@ Deno.serve(async (req) => {
 
   try {
     const { user, supabase } = await requireAuth(req)
-    // systemPrompt from client is intentionally ignored — loaded server-side only
-    const { prompt, module: mod, _test_provider_id } = await req.json()
+    const { prompt, module: mod, _test_provider_id, stream = false, systemPrompt } = await req.json()
 
     if (!prompt?.trim()) return json({ error: 'prompt required' }, 400)
+
+    // ── Backend permission enforcement ────────────────────────
+    const { data: profile } = await supabase
+      .from('profiles').select('role').eq('id', user.id).single()
+    const userRole = profile?.role ?? 'free'
+
+    if (userRole !== 'admin' && mod) {
+      const { data: access } = await supabase.rpc('check_module_permission', {
+        p_role_key: userRole,
+        p_module_key: mod,
+        p_permission_key: 'can_generate_ai'
+      })
+      if (!access) {
+        return json({ error: 'Access denied: insufficient permissions for this module.' }, 403)
+      }
+    }
+
 
     // Load provider — use specific id for test, otherwise active provider
     const query = supabase.from('ai_provider_configs').select('*').eq('is_enabled', true)
@@ -214,21 +280,34 @@ Deno.serve(async (req) => {
 
     if (cfgErr || !config) return json({ error: 'No active AI provider configured. Please contact your administrator.' }, 503)
 
-    // Load admin-defined system prompt for this module (server-side only, never from client)
-    const systemPrompt = await loadModuleSystemPrompt(supabase, mod)
-
     // Decrypt API key server-side
     const apiKey = await decrypt(config.encrypted_api_key)
 
-    // Call provider
-    const { content, usage } = await dispatchToProvider(config.provider_name, {
+    const providerReq: ProviderRequest = {
       apiKey,
       model: config.model_name,
       prompt,
       systemPrompt,
       maxTokens: config.max_tokens,
       temperature: Number(config.temperature)
-    })
+    }
+
+    // ── Streaming path ────────────────────────────────────────────────────────
+    if (stream) {
+      const upstream = await dispatchStream(config.provider_name, providerReq)
+      if (!upstream.ok) throw new Error(`Provider stream error: ${await upstream.text()}`)
+      if (!upstream.body) throw new Error('No stream body from provider')
+      return new Response(upstream.body, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
+    }
+
+    // ── Non-streaming path ────────────────────────────────────────────────────
+    const { content, usage } = await dispatchToProvider(config.provider_name, providerReq)
 
     // Log usage (non-blocking)
     supabase.from('ai_usage_logs').insert({

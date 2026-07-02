@@ -7,6 +7,7 @@ import { MessageSquare, X, Send, Terminal, Code, Cpu, RefreshCw } from 'lucide-r
 import { cn } from '@/lib/utils'
 import { Logo } from '../ui/Logo'
 import { callAIGateway } from '@/services/ai/aiProviderService'
+import { COPILOT_PROMPT } from '@/ai/prompts/copilotPrompt'
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -40,8 +41,8 @@ export const AICopilot = () => {
     try {
       const content = await callAIGateway({
         prompt: trimmed,
-        systemPrompt: 'You are Flux AI Copilot, an expert QA and software engineering assistant. Be concise and practical.',
-        module: 'copilot'
+        systemPrompt: COPILOT_PROMPT,
+        module: 'ai-copilot'
       })
       setMessages(prev => [...prev, { role: 'assistant', content }])
     } catch (err: any) {
@@ -57,7 +58,7 @@ export const AICopilot = () => {
         onClick={() => setIsOpen(true)}
         whileHover={{ scale: 1.1, rotate: 5 }}
         whileTap={{ scale: 0.9 }}
-        className="fixed bottom-8 right-8 w-16 h-16 rounded-full bg-accent-gold shadow-[0_0_20px_rgba(212,175,55,0.4)] flex items-center justify-center z-50"
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-accent-gold shadow-[0_0_20px_rgba(212,175,55,0.4)] flex items-center justify-center z-50"
       >
         <Logo size="sm" collapsed={true} />
       </motion.button>
@@ -68,7 +69,7 @@ export const AICopilot = () => {
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="fixed bottom-28 right-8 w-[400px] h-[600px] z-50"
+            className="fixed bottom-24 right-4 left-4 sm:left-auto sm:right-6 sm:w-[400px] h-[70vh] sm:h-[580px] z-50"
           >
             <GlassCard hoverEffect={false} className="h-full flex flex-col p-0 bg-background/80 backdrop-blur-2xl border-white/10 shadow-2xl">
               {/* Header */}

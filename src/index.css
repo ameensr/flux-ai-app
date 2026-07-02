@@ -84,6 +84,10 @@
     .max-lg\:\!ml-0 {
       margin-left: 0 !important;
     }
+    /* Override the inline sidebar margin on mobile */
+    main.transition-\[margin-left\] {
+      margin-left: 0 !important;
+    }
   }
 }
 

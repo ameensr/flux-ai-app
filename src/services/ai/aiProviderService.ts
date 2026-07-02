@@ -93,16 +93,33 @@ export const aiProviderService = {
         body: JSON.stringify({ prompt: 'Reply with: OK', module: 'connection_test', _test_provider_id: id })
       })
       const data = await res.json()
-      console.log('[testConnection]', { ok: res.ok, status: res.status, data })
       return { ok: res.ok, latency: Date.now() - start, error: data.error }
     } catch (e: any) {
-      console.log('[testConnection] fetch error', e.message)
       return { ok: false, latency: Date.now() - start, error: e.message }
     }
   }
 }
 
-// ── User-facing gateway call ──────────────────────────────────────────────────
+// ── User-facing gateway calls ───────────────────────────────────────────────
+
+export async function callAIGatewayStream(payload: {
+  prompt: string
+  module?: string
+  systemPrompt?: string
+}): Promise<ReadableStream<Uint8Array>> {
+  const headers = await authHeaders()
+  const res = await fetch(`${FUNCTIONS_URL}/ai-gateway`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ...payload, stream: true }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'AI stream request failed' }))
+    throw new Error(err.error || 'AI stream request failed')
+  }
+  if (!res.body) throw new Error('No stream body received')
+  return res.body
+}
 
 export async function callAIGateway(payload: {
   prompt: string
@@ -110,15 +127,26 @@ export async function callAIGateway(payload: {
   module?: string
 }): Promise<string> {
   const headers = await authHeaders()
-  const res = await fetch(`${FUNCTIONS_URL}/ai-gateway`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload)
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'AI request failed' }))
-    throw new Error(err.error || 'AI request failed')
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 60_000)
+  try {
+    const res = await fetch(`${FUNCTIONS_URL}/ai-gateway`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'AI request failed' }))
+      throw new Error(err.error || 'AI request failed')
+    }
+    const data = await res.json()
+    if (!data.content) throw new Error('AI returned empty response. Please try again.')
+    return data.content
+  } catch (e: any) {
+    if (e.name === 'AbortError') throw new Error('AI request timed out. Please try again.')
+    throw e
+  } finally {
+    clearTimeout(timeoutId)
   }
-  const data = await res.json()
-  return data.content
 }

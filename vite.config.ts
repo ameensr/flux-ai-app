@@ -9,4 +9,12 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    // Serve index.html for all routes so React Router handles them
+    historyApiFallback: true,
+  },
+  preview: {
+    // Same for `vite preview` (production preview)
+    historyApiFallback: true,
+  },
 })
