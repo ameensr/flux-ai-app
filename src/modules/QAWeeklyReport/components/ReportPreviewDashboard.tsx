@@ -18,85 +18,7 @@ import { useQAReportStore } from '../store'
 import { ensureFormData } from '../types'
 import type { QAReportForm, SupportTicket, ReleaseItem, HistoricalDefect } from '../types'
 
-// ── Fallback High-Fidelity Data for Direct Visitors (When History is Empty) ──
-const getMockHistory = (): any[] => [
-  {
-    id: 'h1',
-    projectName: 'E-Commerce Phoenix Platform',
-    reportTitle: 'Weekly QA Status & Defect Analytics',
-    weekStart: '2026-05-25', weekEnd: '2026-05-31',
-    generatedDate: '2026-05-31T18:00:00.000Z',
-    form: {
-      projectName: 'E-Commerce Phoenix Platform',
-      weekStart: '2026-05-25', weekEnd: '2026-05-31',
-      supportEmails: 45, newFeatures: 8, codeFixes: 15,
-      lastWeek: { codeFix: 10, support: 5, changeRequest: 4, dataIssue: 2, backendUpdation: 4 },
-      monthToDate: { codeFix: 10, support: 5, changeRequest: 4, completedCR: 2, dataIssue: 2, backendUpdation: 4 },
-      newFeatureTeam: ['Sarah', 'Alex'], supportTeam: ['Elena'], automationTeam: ['Marcus'],
-      supportTickets: [], releaseItems: [{ id: '1', status: 'Pass' }, { id: '2', status: 'Pass' }, { id: '3', status: 'Fail' }],
-      defectsLastWeek: { reported: 22, open: 8, fixed: 14, closed: 12 },
-      defectsMTD: { reported: 22, open: 8, fixed: 14, closed: 12 },
-      historicalDefects: [], nextPriorities: []
-    }
-  },
-  {
-    id: 'h2',
-    projectName: 'E-Commerce Phoenix Platform',
-    reportTitle: 'Weekly QA Status & Defect Analytics',
-    weekStart: '2026-06-01', weekEnd: '2026-06-07',
-    generatedDate: '2026-06-07T18:00:00.000Z',
-    form: {
-      projectName: 'E-Commerce Phoenix Platform',
-      weekStart: '2026-06-01', weekEnd: '2026-06-07',
-      supportEmails: 42, newFeatures: 10, codeFixes: 18,
-      lastWeek: { codeFix: 9, support: 4, changeRequest: 3, dataIssue: 1, backendUpdation: 3 },
-      monthToDate: { codeFix: 19, support: 9, changeRequest: 7, completedCR: 4, dataIssue: 3, backendUpdation: 7 },
-      newFeatureTeam: ['Sarah', 'Alex', 'Devon'], supportTeam: ['Elena'], automationTeam: ['Marcus'],
-      supportTickets: [], releaseItems: [{ id: '1', status: 'Pass' }, { id: '2', status: 'Pass' }, { id: '3', status: 'Pass' }],
-      defectsLastWeek: { reported: 15, open: 6, fixed: 9, closed: 11 },
-      defectsMTD: { reported: 37, open: 14, fixed: 23, closed: 23 },
-      historicalDefects: [], nextPriorities: []
-    }
-  },
-  {
-    id: 'h3',
-    projectName: 'E-Commerce Phoenix Platform',
-    reportTitle: 'Weekly QA Status & Defect Analytics',
-    weekStart: '2026-06-08', weekEnd: '2026-06-14',
-    generatedDate: '2026-06-14T18:00:00.000Z',
-    form: {
-      projectName: 'E-Commerce Phoenix Platform',
-      weekStart: '2026-06-08', weekEnd: '2026-06-14',
-      supportEmails: 35, newFeatures: 14, codeFixes: 20,
-      lastWeek: { codeFix: 7, support: 3, changeRequest: 2, dataIssue: 2, backendUpdation: 2 },
-      monthToDate: { codeFix: 26, support: 12, changeRequest: 9, completedCR: 6, dataIssue: 5, backendUpdation: 9 },
-      newFeatureTeam: ['Sarah', 'Alex', 'Devon'], supportTeam: ['Elena', 'James'], automationTeam: ['Marcus'],
-      supportTickets: [], releaseItems: [{ id: '1', status: 'Pass' }, { id: '2', status: 'Pass' }, { id: '3', status: 'Fail' }, { id: '4', status: 'Pass' }],
-      defectsLastWeek: { reported: 19, open: 5, fixed: 14, closed: 15 },
-      defectsMTD: { reported: 56, open: 19, fixed: 37, closed: 38 },
-      historicalDefects: [], nextPriorities: []
-    }
-  },
-  {
-    id: 'h4',
-    projectName: 'E-Commerce Phoenix Platform',
-    reportTitle: 'Weekly QA Status & Defect Analytics',
-    weekStart: '2026-06-15', weekEnd: '2026-06-21',
-    generatedDate: '2026-06-21T18:00:00.000Z',
-    form: {
-      projectName: 'E-Commerce Phoenix Platform',
-      weekStart: '2026-06-15', weekEnd: '2026-06-21',
-      supportEmails: 38, newFeatures: 12, codeFixes: 22,
-      lastWeek: { codeFix: 8, support: 4, changeRequest: 2, dataIssue: 1, backendUpdation: 3 },
-      monthToDate: { codeFix: 34, support: 16, changeRequest: 11, completedCR: 8, dataIssue: 6, backendUpdation: 12 },
-      newFeatureTeam: ['Sarah (Lead)', 'Alex', 'Devon'], supportTeam: ['Elena', 'James'], automationTeam: ['Marcus', 'Tariq'],
-      supportTickets: [], releaseItems: [{ id: '1', status: 'Pass' }, { id: '2', status: 'Pass' }, { id: '3', status: 'Fail' }, { id: '4', status: 'Pass' }],
-      defectsLastWeek: { reported: 18, open: 4, fixed: 12, closed: 14 },
-      defectsMTD: { reported: 74, open: 23, fixed: 49, closed: 52 },
-      historicalDefects: [], nextPriorities: []
-    }
-  }
-]
+// No mock/dummy data — historical analytics use only the user's real saved reports
 
 // ── KPI Sparkline Helpers ────────────────────────────────────────────────────
 interface SparklineProps {
@@ -150,8 +72,12 @@ const ReportPreviewDashboardContent: React.FC = () => {
     form: ensureFormData(r.form)
   }))
 
-  const [data, setData] = useState<QAReportForm>(() => ensureFormData(null))
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [data, setData] = useState<QAReportForm>(() => {
+    const raw = localStorage.getItem('current-qa-report-data')
+    if (raw) { try { return ensureFormData(JSON.parse(raw)) } catch {} }
+    return ensureFormData(null)
+  })
+  const [isLoaded, setIsLoaded] = useState(() => !!localStorage.getItem('current-qa-report-data'))
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [themeGallery, setThemeGallery] = useState<'default' | 'fabric' | 'github' | 'apple' | 'material' | 'cred' | 'powerbi' | 'cyber' | 'glassmorphism'>(
     (localStorage.getItem('flux-report-theme-gallery') as any) || 'glassmorphism'
@@ -203,81 +129,16 @@ const ReportPreviewDashboardContent: React.FC = () => {
     roadmap: useRef<HTMLDivElement>(null)
   }
 
-  // Watch activeHistory to set initial data if no active preview report is set
+  // Once reports are fetched from Supabase, hydrate data if not already loaded from localStorage
   useEffect(() => {
     if (!isLoaded) {
       if (activeHistory.length > 0) {
         setData(ensureFormData(activeHistory[0].form))
-        setIsLoaded(true)
-      } else {
-        setIsLoaded(true)
       }
+      setIsLoaded(true)
     }
   }, [activeHistory, isLoaded])
 
-  // ── Development Debug Logging Hooks (Top-Level) ──
-  useEffect(() => {
-    console.log('[ReportPreviewDashboard] Module loaded and initialized.')
-  }, [])
-
-  useEffect(() => {
-    if (data) {
-      console.log('[ReportPreviewDashboard] Report passed to dashboard:', data)
-      console.log('[ReportPreviewDashboard] Selected Report ID:', data.weekStart || 'Preview')
-    }
-  }, [data])
-
-  useEffect(() => {
-    console.log('[ReportPreviewDashboard] Report History updated:', activeHistory)
-  }, [activeHistory])
-
-  useEffect(() => {
-    const chartsData = activeHistory.map(h => {
-      const passCount = h.form.releaseItems.filter((i: any) => i?.status === 'Pass').length
-      const failCount = h.form.releaseItems.filter((i: any) => i?.status === 'Fail').length
-      const blockedCount = h.form.releaseItems.filter((i: any) => i?.status === 'Blocked').length
-      const passRate = h.form.releaseItems.length ? Math.round((passCount / h.form.releaseItems.length) * 100) : 0
-      return {
-        name: h.week?.split('–')[0]?.trim() || h.form.weekStart,
-        emails: h.form.supportEmails,
-        features: h.form.newFeatures,
-        fixes: h.form.codeFixes,
-        reportedDefects: h.form.defectsLastWeek.reported,
-        closedDefects: h.form.defectsLastWeek.closed,
-        healthScore: passRate,
-        codeFixProd: h.form.lastWeek.codeFix,
-        supportProd: h.form.lastWeek.support,
-        changeRequestProd: h.form.lastWeek.changeRequest,
-        dataIssueProd: h.form.lastWeek.dataIssue,
-        backendUpdationProd: h.form.lastWeek.backendUpdation,
-        teamSize: h.form.newFeatureTeam.length + h.form.supportTeam.length + h.form.automationTeam.length,
-        passFeatures: passCount,
-        failFeatures: failCount,
-        blockedFeatures: blockedCount
-      }
-    })
-    console.log('[ReportPreviewDashboard] Chart dataset initialized:', chartsData)
-  }, [activeHistory])
-
-  useEffect(() => {
-    if (data) {
-      console.log('[ReportPreviewDashboard] AI summary prompt stats inputs:', {
-        projectName: data.projectName,
-        weekStart: data.weekStart,
-        supportEmails: data.supportEmails,
-        newFeatures: data.newFeatures,
-        codeFixes: data.codeFixes,
-        defects: data.defectsLastWeek,
-        releaseItemsCount: data.releaseItems.length
-      })
-    }
-  }, [data])
-
-  useEffect(() => {
-    if (data) {
-      console.log('[ReportPreviewDashboard] Rendering sequence completed for:', data.projectName)
-    }
-  })
 
 
 
@@ -587,7 +448,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
       setConfetti(particles)
       toast({ title: 'Quality Goal Achieved! 🏆', description: 'QA Health score has exceeded 90% this week.' })
     }
-  }, [data, passRate])
+  }, [passRate, qualityStats.score])
 
   useEffect(() => {
     if (confetti.length === 0) return
@@ -610,35 +471,11 @@ const ReportPreviewDashboardContent: React.FC = () => {
     return () => cancelAnimationFrame(animationFrameId)
   }, [confetti.length])
 
-  // ── Silent Retention Clean-up during Mount ──
+  // ── Mount: fetch remote reports + apply persisted theme ──
   useEffect(() => {
     fetchReports()
-    const raw = localStorage.getItem('current-qa-report-data')
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw)
-        setData(ensureFormData(parsed))
-        setIsLoaded(true)
-      } catch (e) {}
-    }
-
     const savedTheme = localStorage.getItem('flux-report-theme') as 'dark' | 'light'
-    if (savedTheme) {
-      setTheme(savedTheme)
-    }
-
-    // Trigger silent cleanup on startup: Ensure only latest 10 reports, older than 2 months removed.
-    const now = new Date()
-    const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate())
-    const filteredReports = savedReports.filter(r => {
-      const generated = new Date(r.generatedDate)
-      return generated >= twoMonthsAgo
-    }).slice(0, 10)
-
-    if (filteredReports.length !== savedReports.length) {
-      // Trigger update back to local storage silently
-      localStorage.setItem('qa-report-store', JSON.stringify({ state: { savedReports: filteredReports } }))
-    }
+    if (savedTheme) setTheme(savedTheme)
   }, [])
 
   // ── Canvas Particle System ──
@@ -837,7 +674,7 @@ Do not return markdown wraps, only raw JSON text.
         throw new Error('Incomplete JSON schema returned')
       }
     } catch (e: any) {
-      console.warn('AI summary generation failed. Using default.', e)
+      console.warn('AI summary generation failed. Using default.', String(e?.message ?? '').replace(/[\r\n]/g, ' '))
       toast({
         title: 'Refinement Offline',
         description: 'Using pre-calculated QA analytics summary.',
@@ -955,7 +792,8 @@ Do not return markdown wraps, only raw JSON text.
   }
 
   const downloadHTML = () => {
-    const htmlString = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>QA Dashboard - ${data.projectName}</title></head><body><h1>${data.projectName}</h1></body></html>`
+    const safeProjectName = data.projectName.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c] ?? c))
+    const htmlString = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>QA Dashboard - ${safeProjectName}</title></head><body><h1>${safeProjectName}</h1></body></html>`
     const blob = new Blob([htmlString], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -2149,7 +1987,7 @@ Do not return markdown wraps, only raw JSON text.
         </section>
 
         {/* ── SECTION 7: DATA TABLES ── */}
-        <section ref={sectionsRef.details} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <section ref={sectionsRef.details} className="flex flex-col gap-8">
           
           {/* Release Testing Table */}
           <div className="flex flex-col gap-4">
@@ -2351,7 +2189,9 @@ class DashboardErrorBoundary extends React.Component<{ children: React.ReactNode
     return { hasError: true, error }
   }
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('[DashboardErrorBoundary] caught crash:', error, errorInfo)
+    const safeMsg = String(error?.message ?? '').replace(/[\r\n]/g, ' ')
+    const safeStack = String(errorInfo.componentStack ?? '').replace(/[\r\n]/g, ' ')
+    console.error('[DashboardErrorBoundary] caught crash:', safeMsg, safeStack)
   }
   render() {
     if (this.state.hasError) {

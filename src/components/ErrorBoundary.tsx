@@ -11,7 +11,9 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[ErrorBoundary]', error, info.componentStack)
+    const safeMsg = String(error?.message ?? '').replace(/[\r\n]/g, ' ')
+    const safeStack = String(info.componentStack ?? '').replace(/[\r\n]/g, ' ')
+    console.error('[ErrorBoundary]', safeMsg, safeStack)
   }
 
   render() {
@@ -43,6 +45,9 @@ export class ErrorBoundary extends React.Component<Props, State> {
 export class SilentBoundary extends React.Component<Props, State> {
   state: State = { hasError: false, error: null }
   static getDerivedStateFromError(error: Error): State { return { hasError: true, error } }
-  componentDidCatch(error: Error) { console.error('[SilentBoundary]', error) }
+  componentDidCatch(error: Error) {
+    const safeMsg = String(error?.message ?? '').replace(/[\r\n]/g, ' ')
+    console.error('[SilentBoundary]', safeMsg)
+  }
   render() { return this.state.hasError ? (this.props.fallback ?? null) : this.props.children }
 }

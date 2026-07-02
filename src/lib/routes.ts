@@ -23,6 +23,13 @@ export const ROUTES = {
   adminUsers:       '/admin/users',
   adminAI:          '/admin/ai-providers',
   adminPermissions: '/admin/permissions',
+
+  // Enterprise RBAC
+  enterprise:           '/admin/enterprise',
+  enterpriseUsers:      '/admin/enterprise/users',
+  enterpriseRoles:      '/admin/enterprise/roles',
+  enterpriseTemplates:  '/admin/enterprise/templates',
+  enterpriseAudit:      '/admin/enterprise/audit',
 } as const
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES]
@@ -40,6 +47,11 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.admin]:            'admin',
   [ROUTES.adminUsers]:       'admin',
   [ROUTES.adminAI]:          'admin',
-  [ROUTES.adminPermissions]: 'admin',
+  [ROUTES.adminPermissions]:  'admin',
+  [ROUTES.enterprise]:         'admin',
+  [ROUTES.enterpriseUsers]:    'admin',
+  [ROUTES.enterpriseRoles]:    'admin',
+  [ROUTES.enterpriseTemplates]:'admin',
+  [ROUTES.enterpriseAudit]:    'admin',
 }
 

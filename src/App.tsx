@@ -24,6 +24,7 @@ const ReportPreviewDashboard = lazy(() => import('@/modules/QAWeeklyReport/compo
 const Settings         = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })))
 const History          = lazy(() => import('@/pages/History').then(m => ({ default: m.History })))
 const AdminPanel       = lazy(() => import('@/pages/AdminPanel').then(m => ({ default: m.AdminPanel })))
+const EnterpriseAdmin  = lazy(() => import('@/pages/EnterpriseAdmin').then(m => ({ default: m.EnterpriseAdmin })))
 const AICopilot        = lazy(() => import('@/components/ai/AICopilot').then(m => ({ default: m.AICopilot })))
 
 // ── Route-level loading skeleton ─────────────────────────────────────────────
@@ -138,6 +139,11 @@ function AppShell() {
                   } />
                   <Route path={`${ROUTES.admin}/*`} element={
                     <ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>
+                  } />
+
+                  {/* Enterprise RBAC routes */}
+                  <Route path={`${ROUTES.enterprise}/*`} element={
+                    <ProtectedRoute adminOnly><EnterpriseAdmin /></ProtectedRoute>
                   } />
 
                   {/* Catch-all inside shell → back to dashboard */}

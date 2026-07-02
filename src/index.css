@@ -2,72 +2,126 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 11 11 11;
-    --foreground: 245 245 245;
-    --primary: 212 175 55;
-    --primary-foreground: 11 11 11;
-  }
+/* ── Default theme tokens (dark) — overridden by applyTheme() at runtime ── */
+:root {
+  --bg:                #0B0B0B;
+  --surface:           #111111;
+  --surface-secondary: #161616;
+  --surface-elevated:  #1a1a1a;
+  --text-primary:      #F5F5F5;
+  --text-secondary:    #8B8B8B;
+  --text-muted:        #555555;
+  --accent:            #D4AF37;
+  --accent-fg:         #0B0B0B;
+  --border:            rgba(255,255,255,0.07);
+  --divider:           rgba(255,255,255,0.05);
+  --card-bg:           rgba(255,255,255,0.02);
+  --sidebar-bg:        rgba(255,255,255,0.03);
+  --nav-bg:            rgba(11,11,11,0.85);
+  --input-bg:          rgba(255,255,255,0.05);
+  --modal-bg:          #111111;
+  --overlay:           rgba(0,0,0,0.6);
+  --hover:             rgba(255,255,255,0.05);
+  --chart-grid:        rgba(255,255,255,0.05);
+  --chart-text:        #555555;
+  --chart-tooltip-bg:  #111111;
+  --shadow:            0 8px 32px rgba(0,0,0,0.4);
+  --radius:            24px;
+  --glass-border:      rgba(255,255,255,0.06);
+}
 
+@layer base {
   html {
-    /* Prevent horizontal overflow globally */
     overflow-x: hidden;
   }
 
   body {
-    @apply bg-background text-text-primary font-satoshi antialiased;
-    background-image: 
-      radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.05) 0%, transparent 50%),
-      radial-gradient(circle at 0% 100%, rgba(192, 192, 192, 0.03) 0%, transparent 40%);
-    background-attachment: fixed;
-    /* Safe area for notched phones */
+    background-color: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Satoshi', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.25s ease, color 0.25s ease;
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
 
   /* Custom Scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    @apply bg-background;
-  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb {
-    @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+    background: var(--border);
+    border-radius: 9999px;
+    transition: background 0.2s;
   }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 }
 
 @layer components {
+  /* ── Glass panel — uses CSS vars so it adapts to every theme ── */
   .glass-panel {
-    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    background: var(--card-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    transition: background 0.25s ease, border-color 0.25s ease;
   }
 
-  .cinematic-reveal {
-    animation: reveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  }
-
-  /* Shared form field styles */
+  /* ── Form inputs ── */
   .field-input {
-    @apply w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-accent-gold transition-all;
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .field-input:focus {
+    border-color: var(--accent);
+  }
+  .field-input::placeholder {
+    color: var(--text-muted);
   }
 
-  /* Native select fix for dark theme */
+  /* Native select fix */
   select.field-input,
   select.field-input option {
-    @apply bg-[#1a1a1a] text-white;
+    background: var(--surface-elevated);
+    color: var(--text-primary);
   }
-
-  select.field-input option:hover,
-  select.field-input option:focus,
   select.field-input option:checked {
-    background-color: #D4AF37 !important;
-    color: #0B0B0B !important;
+    background-color: var(--accent) !important;
+    color: var(--accent-fg) !important;
   }
 
   .label-xs {
-    @apply block text-[10px] font-black uppercase tracking-widest text-text-muted;
+    display: block;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--text-muted);
+  }
+
+  /* ── Theme transition on all elements ── */
+  *,
+  *::before,
+  *::after {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-duration: 0.25s;
+    transition-timing-function: ease;
+  }
+  /* Exclude animation-heavy elements from the blanket transition */
+  .animate-spin,
+  .animate-pulse,
+  canvas,
+  [data-no-transition] {
+    transition: none !important;
   }
 }
 
@@ -76,37 +130,66 @@
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
-  .scrollbar-none::-webkit-scrollbar {
-    display: none;
-  }
-  /* Force no margin on mobile for main content */
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+
   @media (max-width: 1023px) {
-    .max-lg\:\!ml-0 {
-      margin-left: 0 !important;
-    }
-    /* Override the inline sidebar margin on mobile */
     main.transition-\[margin-left\] {
       margin-left: 0 !important;
     }
   }
 }
 
+/* ── Light theme: force readable text on all muted/secondary utilities ── */
+.light .text-text-muted,
+.theme-light .text-text-muted,
+.theme-fabric .text-text-muted,
+.theme-apple .text-text-muted,
+.theme-material .text-text-muted,
+.theme-powerbi .text-text-muted {
+  color: var(--text-muted) !important;
+}
+.light .text-text-secondary,
+.theme-light .text-text-secondary,
+.theme-fabric .text-text-secondary,
+.theme-apple .text-text-secondary,
+.theme-material .text-text-secondary,
+.theme-powerbi .text-text-secondary {
+  color: var(--text-secondary) !important;
+}
+/* Ensure select options are readable in light themes */
+.light select option,
+.theme-light select option,
+.theme-fabric select option,
+.theme-apple select option,
+.theme-material select option,
+.theme-powerbi select option {
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+@keyframes reveal {
+  0%   { opacity: 0; transform: translateY(20px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.cinematic-reveal {
+  animation: reveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* ── Noise overlay ── */
 .noise-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   pointer-events: none;
   opacity: 0.03;
   z-index: 50;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
+/* ── Mesh gradient ── */
 .mesh-gradient {
-  background-image: 
-    radial-gradient(at 0% 0%, hsla(45, 60%, 53%, 0.1) 0, transparent 50%), 
-    radial-gradient(at 100% 0%, hsla(0, 0%, 75%, 0.1) 0, transparent 50%), 
-    radial-gradient(at 100% 100%, hsla(45, 60%, 53%, 0.1) 0, transparent 50%), 
-    radial-gradient(at 0% 100%, hsla(0, 0%, 75%, 0.1) 0, transparent 50%);
+  background-image:
+    radial-gradient(at 0% 0%,   hsla(45,60%,53%,0.1) 0, transparent 50%),
+    radial-gradient(at 100% 0%, hsla(0,0%,75%,0.1)   0, transparent 50%),
+    radial-gradient(at 100% 100%, hsla(45,60%,53%,0.1) 0, transparent 50%),
+    radial-gradient(at 0% 100%, hsla(0,0%,75%,0.1)   0, transparent 50%);
 }

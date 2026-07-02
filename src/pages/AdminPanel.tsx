@@ -1,18 +1,19 @@
 // src/pages/AdminPanel.tsx
 
-import React, { useEffect, useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import React, { useEffect, useState, Suspense, lazy } from 'react'
+import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
-import { AdminAISettings } from '@/pages/AdminAISettings'
-import { AdminPermissions } from '@/pages/AdminPermissions'
 import { useToast } from '@/hooks/use-toast'
 import type { Role } from '@/lib/rbac'
 import { ROUTES } from '@/lib/routes'
-import { Shield, Users, Crown, User, Cpu, Lock } from 'lucide-react'
+import { Shield, Users, Crown, User, Cpu, Lock, ShieldCheck, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+const AdminAISettings  = lazy(() => import('@/pages/AdminAISettings').then(m => ({ default: m.AdminAISettings })))
+const AdminPermissions = lazy(() => import('@/pages/AdminPermissions').then(m => ({ default: m.AdminPermissions })))
 
 interface UserRow {
   id: string
@@ -38,6 +39,7 @@ const TABS = [
   { path: ROUTES.adminUsers,        label: 'User Management', icon: Users },
   { path: ROUTES.adminPermissions,  label: 'Permissions',     icon: Lock },
   { path: ROUTES.adminAI,           label: 'AI Providers',    icon: Cpu },
+  { path: ROUTES.enterprise,        label: 'Enterprise RBAC', icon: ShieldCheck },
 ] as const
 
 export const AdminPanel = () => {
@@ -50,7 +52,10 @@ export const AdminPanel = () => {
   const [updating, setUpdating] = useState<string | null>(null)
 
   // Derive active tab from URL; default to users
-  const activeTab = TABS.find(t => pathname === t.path)?.path ?? ROUTES.adminUsers
+  // Enterprise sub-routes all map to the enterprise tab
+  const activeTab = pathname.startsWith(ROUTES.enterprise)
+    ? ROUTES.enterprise
+    : (TABS.find(t => pathname === t.path)?.path ?? ROUTES.adminUsers)
 
   // Redirect bare /admin → /admin/users
   useEffect(() => {
@@ -168,7 +173,7 @@ export const AdminPanel = () => {
             ) : (
               <div className="space-y-3">
                 {users.map((user) => {
-                  const RoleIcon = ROLE_ICONS[user.role]
+                  const RoleIcon = ROLE_ICONS[user.role] ?? Shield
                   return (
                     <div
                       key={user.id}
@@ -176,7 +181,7 @@ export const AdminPanel = () => {
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
-                          <RoleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-text-secondary" />
+                          {React.createElement(ROLE_ICONS[user.role] ?? Shield, { className: 'w-4 h-4 sm:w-5 sm:h-5 text-text-secondary' })}
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-white truncate">{user.full_name || 'No name'}</p>
@@ -185,7 +190,7 @@ export const AdminPanel = () => {
                       </div>
 
                       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                        <span className={cn('hidden sm:inline-flex px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest', ROLE_STYLES[user.role])}>
+                        <span className={cn('hidden sm:inline-flex px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest', ROLE_STYLES[user.role] ?? 'bg-white/5 text-text-muted border-white/10')}>
                           {user.role}
                         </span>
                         <select
@@ -208,8 +213,17 @@ export const AdminPanel = () => {
         </>
       )}
 
-      {activeTab === ROUTES.adminAI          && <AdminAISettings />}
-      {activeTab === ROUTES.adminPermissions && <AdminPermissions />}
+      {activeTab === ROUTES.adminAI && (
+        <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" /></div>}>
+          <AdminAISettings />
+        </Suspense>
+      )}
+      {activeTab === ROUTES.adminPermissions && (
+        <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" /></div>}>
+          <AdminPermissions />
+        </Suspense>
+      )}
+      {activeTab === ROUTES.enterprise && <Navigate to={ROUTES.enterpriseUsers} replace />}
     </motion.div>
   )
 }

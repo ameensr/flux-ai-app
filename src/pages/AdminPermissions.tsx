@@ -1,6 +1,4 @@
 // src/pages/AdminPermissions.tsx
-// Premium CRED-style permission matrix panel.
-
 import React, { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
@@ -10,22 +8,13 @@ import { invalidatePermissionCache } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
 import { Shield, Crown, User, RefreshCw, Check, X } from 'lucide-react'
 
-interface RoleRow     { id: string; role_key: string; role_name: string; description: string }
-interface ModuleRow   { id: string; module_key: string; module_name: string; sort_order: number }
-interface PermRow     { id: string; permission_key: string; permission_name: string }
-interface RMPRow      { id: string; role_id: string; module_id: string; permission_id: string; is_enabled: boolean }
-
-interface MatrixData {
-  roles: RoleRow[]
-  modules: ModuleRow[]
-  permissions: PermRow[]
-  matrix: RMPRow[]
-}
+interface RoleRow   { id: string; role_key: string; role_name: string; description: string }
+interface ModuleRow { id: string; module_key: string; module_name: string; sort_order: number }
+interface PermRow   { id: string; permission_key: string; permission_name: string }
+interface RMPRow    { id: string; role_id: string; module_id: string; permission_id: string; is_enabled: boolean }
 
 const ROLE_ICONS: Record<string, React.ElementType> = {
-  admin: Shield,
-  pro: Crown,
-  free: User,
+  admin: Shield, pro: Crown, free: User,
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -34,46 +23,50 @@ const ROLE_COLORS: Record<string, string> = {
   free:  'text-text-muted border-white/10 bg-white/5',
 }
 
-// Short display labels for permission keys
 const PERM_LABELS: Record<string, string> = {
-  can_view:            'View',
-  can_create:          'Create',
-  can_edit:            'Edit',
-  can_delete:          'Delete',
-  can_export:          'Export',
-  can_generate_ai:     'AI Gen',
-  can_manage:          'Manage',
-  can_use_advanced_ai: 'Adv AI',
+  can_view: 'View', can_create: 'Create', can_edit: 'Edit',
+  can_delete: 'Delete', can_export: 'Export', can_generate_ai: 'AI Gen',
+  can_manage: 'Manage', can_use_advanced_ai: 'Adv AI',
 }
 
 export const AdminPermissions: React.FC = () => {
   const { toast } = useToast()
-  const [data, setData] = useState<MatrixData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState<string | null>(null)
+  const [roles, setRoles]       = useState<RoleRow[]>([])
+  const [modules, setModules]   = useState<ModuleRow[]>([])
+  const [perms, setPerms]       = useState<PermRow[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [saving, setSaving]     = useState<string | null>(null)
   const [selectedRole, setSelectedRole] = useState<string | null>(null)
-
-  // Local optimistic state: key = `${role_id}:${module_id}:${perm_id}` -> boolean
-  const [localState, setLocalState] = useState<Record<string, boolean>>({})
+  const [localState, setLocalState]     = useState<Record<string, boolean>>({})
 
   const fetchMatrix = useCallback(async () => {
     setLoading(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-permissions?action=matrix`,
-        { headers: { Authorization: `Bearer ${session.access_token}` } }
-      )
-      if (!res.ok) throw new Error('Failed to load permissions')
-      const json: MatrixData = await res.json()
-      setData(json)
+      const [
+        { data: rolesData,   error: e1 },
+        { data: modulesData, error: e2 },
+        { data: permsData,   error: e3 },
+        { data: rmpData,     error: e4 },
+      ] = await Promise.all([
+        supabase.from('roles').select('id,role_key,role_name,description').order('priority'),
+        supabase.from('modules').select('id,module_key,module_name,sort_order').eq('is_active', true).order('sort_order'),
+        supabase.from('permissions').select('id,permission_key,permission_name').order('permission_key'),
+        supabase.from('role_module_permissions').select('id,role_id,module_id,permission_id,is_enabled'),
+      ])
+
+      const err = e1 || e2 || e3 || e4
+      if (err) throw new Error(err.message)
+
+      setRoles(rolesData ?? [])
+      setModules(modulesData ?? [])
+      setPerms(permsData ?? [])
+
       const init: Record<string, boolean> = {}
-      for (const row of json.matrix) {
+      for (const row of (rmpData ?? [])) {
         init[`${row.role_id}:${row.module_id}:${row.permission_id}`] = row.is_enabled
       }
       setLocalState(init)
-      setSelectedRole(prev => prev ?? (json.roles[0]?.id ?? null))
+      setSelectedRole(prev => prev ?? (rolesData?.[0]?.id ?? null))
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Failed to load permissions', description: e.message })
     } finally {
@@ -87,38 +80,33 @@ export const AdminPermissions: React.FC = () => {
     const key = `${role_id}:${module_id}:${permission_id}`
     const current = localState[key] ?? false
     const next = !current
-
-    setLocalState((prev) => ({ ...prev, [key]: next }))
+    setLocalState(prev => ({ ...prev, [key]: next }))
     setSaving(key)
-
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-permissions?action=toggle`,
-        {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role_id, module_id, permission_id, is_enabled: next }),
-        }
-      )
-      if (!res.ok) throw new Error('Failed to update permission')
-      invalidatePermissionCache(data?.roles.find(r => r.id === role_id)?.role_key)
-    } catch {
-      setLocalState((prev) => ({ ...prev, [key]: current }))
-      toast({ variant: 'destructive', title: 'Failed to update permission' })
+      const { error } = await supabase
+        .from('role_module_permissions')
+        .upsert(
+          { role_id, module_id, permission_id, is_enabled: next },
+          { onConflict: 'role_id,module_id,permission_id' }
+        )
+      if (error) throw error
+      invalidatePermissionCache(roles.find(r => r.id === role_id)?.role_key)
+    } catch (e: any) {
+      setLocalState(prev => ({ ...prev, [key]: current }))
+      toast({ variant: 'destructive', title: 'Failed to update permission', description: e.message })
     } finally {
       setSaving(null)
     }
   }
 
-  const activeRole = data?.roles.find((r) => r.id === selectedRole)
+  const activeRole = roles.find(r => r.id === selectedRole)
+  const isAdminRole = activeRole?.role_key === 'admin' || activeRole?.role_key === 'super_admin'
 
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
       {/* Role selector */}
       <div className="flex flex-wrap gap-3">
-        {data?.roles.map((role) => {
+        {roles.map(role => {
           const Icon = ROLE_ICONS[role.role_key] ?? Shield
           const isActive = selectedRole === role.id
           return (
@@ -143,7 +131,7 @@ export const AdminPermissions: React.FC = () => {
         <div className="flex items-center justify-center py-32">
           <div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
         </div>
-      ) : data && activeRole ? (
+      ) : activeRole ? (
         <GlassCard hoverEffect={false} className="overflow-x-auto">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -153,11 +141,7 @@ export const AdminPermissions: React.FC = () => {
               </h3>
               <p className="text-xs text-text-muted mt-1">{activeRole.description}</p>
             </div>
-            <button
-              onClick={fetchMatrix}
-              className="p-2 rounded-xl hover:bg-white/5 text-text-muted hover:text-white transition-all"
-              title="Refresh"
-            >
+            <button onClick={fetchMatrix} className="p-2 rounded-xl hover:bg-white/5 text-text-muted hover:text-white transition-all">
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
@@ -165,10 +149,8 @@ export const AdminPermissions: React.FC = () => {
           <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="border-b border-white/5">
-                <th className="text-left py-3 pr-6 text-text-muted font-semibold text-xs uppercase tracking-widest w-48">
-                  Module
-                </th>
-                {data.permissions.map((p) => (
+                <th className="text-left py-3 pr-6 text-text-muted font-semibold text-xs uppercase tracking-widest w-48">Module</th>
+                {perms.map(p => (
                   <th key={p.id} className="text-center py-3 px-2 text-text-muted font-semibold text-xs uppercase tracking-widest">
                     {PERM_LABELS[p.permission_key] ?? p.permission_name}
                   </th>
@@ -176,19 +158,16 @@ export const AdminPermissions: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.03]">
-              {data.modules.map((mod) => (
+              {modules.map(mod => (
                 <tr key={mod.id} className="group hover:bg-white/[0.02] transition-colors">
                   <td className="py-4 pr-6">
                     <span className="text-white font-medium">{mod.module_name}</span>
                     <span className="block text-[10px] text-text-muted mt-0.5">{mod.module_key}</span>
                   </td>
-                  {data.permissions.map((perm) => {
+                  {perms.map(perm => {
                     const key = `${activeRole.id}:${mod.id}:${perm.id}`
                     const enabled = localState[key] ?? false
                     const isSavingThis = saving === key
-                    // Admin role — always locked on
-                    const isAdminRole = activeRole.role_key === 'admin'
-
                     return (
                       <td key={perm.id} className="text-center py-4 px-2">
                         <button
@@ -197,9 +176,7 @@ export const AdminPermissions: React.FC = () => {
                           className={cn(
                             'w-9 h-5 rounded-full relative transition-all duration-300 mx-auto block',
                             enabled
-                              ? isAdminRole
-                                ? 'bg-accent-gold/40 cursor-not-allowed'
-                                : 'bg-accent-gold hover:bg-accent-gold/80'
+                              ? isAdminRole ? 'bg-accent-gold/40 cursor-not-allowed' : 'bg-accent-gold hover:bg-accent-gold/80'
                               : 'bg-white/10 hover:bg-white/20',
                             isSavingThis && 'opacity-50 cursor-wait',
                             isAdminRole && 'cursor-not-allowed'
@@ -209,10 +186,7 @@ export const AdminPermissions: React.FC = () => {
                           <motion.div
                             animate={{ x: enabled ? 16 : 2 }}
                             transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                            className={cn(
-                              'absolute top-0.5 w-4 h-4 rounded-full flex items-center justify-center',
-                              enabled ? 'bg-background' : 'bg-white/40'
-                            )}
+                            className={cn('absolute top-0.5 w-4 h-4 rounded-full flex items-center justify-center', enabled ? 'bg-background' : 'bg-white/40')}
                           >
                             {enabled
                               ? <Check className="w-2.5 h-2.5 text-accent-gold" />
@@ -228,7 +202,12 @@ export const AdminPermissions: React.FC = () => {
             </tbody>
           </table>
         </GlassCard>
-      ) : null}
+      ) : (
+        <GlassCard hoverEffect={false} className="flex flex-col items-center justify-center py-20 text-center">
+          <Shield className="w-10 h-10 text-text-muted mb-3 opacity-30" />
+          <p className="text-text-muted text-sm">No roles found. Run the RBAC migrations first.</p>
+        </GlassCard>
+      )}
     </motion.div>
   )
 }

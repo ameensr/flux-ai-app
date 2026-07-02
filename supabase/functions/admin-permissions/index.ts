@@ -20,7 +20,7 @@ async function requireAdmin(req: Request) {
   const { data: { user }, error } = await supabase.auth.getUser(jwt)
   if (error || !user) throw new Error('Unauthorized')
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') throw new Error('Forbidden')
+  if (!profile || !['admin', 'super_admin'].includes(profile.role)) throw new Error('Forbidden')
   return { userId: user.id, supabase }
 }
 
@@ -67,6 +67,30 @@ Deno.serve(async (req) => {
         .single()
       if (error) throw error
       return json(data)
+    }
+
+    // PUT update a user's role (uses service role — bypasses RLS)
+    if (req.method === 'PUT' && action === 'update_user_role') {
+      const { user_id, role } = await req.json()
+      if (!user_id || !role) return json({ error: 'Missing fields' }, 400)
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role })
+        .eq('id', user_id)
+      if (error) throw error
+      return json({ success: true })
+    }
+
+    // PUT update a user's status (uses service role — bypasses RLS)
+    if (req.method === 'PUT' && action === 'update_user_status') {
+      const { user_id, status } = await req.json()
+      if (!user_id || !status) return json({ error: 'Missing fields' }, 400)
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status })
+        .eq('id', user_id)
+      if (error) throw error
+      return json({ success: true })
     }
 
     // PUT bulk update

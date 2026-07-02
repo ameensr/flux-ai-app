@@ -59,7 +59,7 @@ export const useQAReportStore = create<QAReportStore>()(
               })
             if (error) throw error
           } catch (e) {
-            console.error('Error saving report to Supabase:', e)
+            console.error('Error saving report to Supabase:', String(e).replace(/[\r\n]/g, ' '))
           }
         }
 
@@ -81,7 +81,7 @@ export const useQAReportStore = create<QAReportStore>()(
               .eq('user_id', user.id)
               .lt('generated_date', oldestDate)
               .then(({ error }) => {
-                if (error) console.error('Error cleaning up Supabase reports:', error)
+                if (error) console.error('Error cleaning up Supabase reports:', String(error).replace(/[\r\n]/g, ' '))
               })
           }
 
@@ -98,7 +98,7 @@ export const useQAReportStore = create<QAReportStore>()(
               .eq('id', id)
             if (error) throw error
           } catch (e) {
-            console.error('Error deleting report from Supabase:', e)
+            console.error('Error deleting report from Supabase:', String(e).replace(/[\r\n]/g, ' '))
           }
         }
         set((s) => ({ savedReports: s.savedReports.filter(r => r.id !== id) }))
@@ -127,7 +127,7 @@ export const useQAReportStore = create<QAReportStore>()(
             set({ savedReports: mapped })
           }
         } catch (e) {
-          console.error('Error fetching reports from Supabase:', e)
+          console.error('Error fetching reports from Supabase:', String(e).replace(/[\r\n]/g, ' '))
         }
       },
       historySearch: '',
