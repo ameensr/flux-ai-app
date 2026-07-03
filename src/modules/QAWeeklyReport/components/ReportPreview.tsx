@@ -6,8 +6,8 @@ import { useAppStore } from '@/store/useAppStore'
 import { toast } from '@/hooks/use-toast'
 import type { QAReportForm } from '../types'
 import {
-  Copy, Download, Printer, Maximize2, Minimize2, Moon, Sun,
-  FileText, Code, Save, CheckCircle2
+  Printer, Maximize2, Minimize2,
+  Code, Save, CheckCircle2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -61,18 +61,18 @@ function applyInline(text: string): string {
 }
 
 const mdStyles = `
-  .md-h1{font-size:1.6rem;font-weight:800;color:#F5F5F5;margin:1.2rem 0 0.6rem;line-height:1.2}
-  .md-h2{font-size:1.2rem;font-weight:700;color:#D4AF37;margin:1.2rem 0 0.4rem;padding-bottom:0.3rem;border-bottom:1px solid rgba(212,175,55,0.2)}
-  .md-h3{font-size:1rem;font-weight:700;color:#F5F5F5;margin:0.8rem 0 0.3rem}
-  .md-p{color:#8B8B8B;line-height:1.7;margin:0.4rem 0}
-  .md-hr{border:none;border-top:1px solid rgba(255,255,255,0.08);margin:1rem 0}
+  .md-h1{font-size:1.6rem;font-weight:800;color:var(--text-primary);margin:1.2rem 0 0.6rem;line-height:1.2}
+  .md-h2{font-size:1.2rem;font-weight:700;color:var(--accent);margin:1.2rem 0 0.4rem;padding-bottom:0.3rem;border-bottom:1px solid var(--border)}
+  .md-h3{font-size:1rem;font-weight:700;color:var(--text-primary);margin:0.8rem 0 0.3rem}
+  .md-p{color:var(--text-secondary);line-height:1.7;margin:0.4rem 0}
+  .md-hr{border:none;border-top:1px solid var(--divider);margin:1rem 0}
   .md-table{width:100%;border-collapse:collapse;margin:0.8rem 0;font-size:0.85rem}
-  .md-td{padding:0.5rem 0.75rem;border:1px solid rgba(255,255,255,0.08);color:#F5F5F5}
+  .md-td{padding:0.5rem 0.75rem;border:1px solid var(--border);color:var(--text-primary)}
   .md-ul{list-style:none;padding:0;margin:0.4rem 0}
-  .md-li{padding:0.2rem 0 0.2rem 1.2rem;color:#8B8B8B;position:relative}
-  .md-li::before{content:"•";position:absolute;left:0.3rem;color:#D4AF37}
-  strong{color:#F5F5F5;font-weight:700}
-  em{color:#C0C0C0;font-style:italic}
+  .md-li{padding:0.2rem 0 0.2rem 1.2rem;color:var(--text-secondary);position:relative}
+  .md-li::before{content:"•";position:absolute;left:0.3rem;color:var(--accent)}
+  strong{color:var(--text-primary);font-weight:700}
+  em{color:var(--text-secondary);font-style:italic}
 `
 
 function downloadBlob(content: string, name: string, type: string) {
@@ -260,36 +260,11 @@ ${bodyContent}
 }
 
 export const ReportPreview: React.FC = () => {
-  const { generatedReport, form, setGeneratedReport, saveReport } = useQAReportStore()
+  const { generatedReport, form, saveReport } = useQAReportStore()
   const { profile } = useAppStore()
-  const [darkMode, setDarkMode] = useState(true)
   const [fullscreen, setFullscreen] = useState(false)
   const [viewRaw, setViewRaw] = useState(false)
   const [saved, setSaved] = useState(false)
-
-  const copyMarkdown = useCallback(() => {
-    navigator.clipboard.writeText(generatedReport)
-    toast({ title: 'Copied!', description: 'Markdown copied to clipboard.' })
-  }, [generatedReport])
-
-  const copyHTML = useCallback(() => {
-    navigator.clipboard.writeText(mdToHtml(generatedReport))
-    toast({ title: 'Copied!', description: 'HTML copied to clipboard.' })
-  }, [generatedReport])
-
-  const downloadMD = () => downloadBlob(generatedReport, `${form.projectName || 'qa'}-report.md`, 'text/markdown')
-
-  const downloadHTML = () => {
-    const html = buildFullHTML(mdToHtml(generatedReport), mdStyles, buildMetricsSection(form), buildDefectDistributionSection(form), form.projectName || 'QA Report')
-    downloadBlob(html, `${form.projectName || 'qa'}-report.html`, 'text/html')
-  }
-
-  const downloadDOCX = () => {
-    // Simple RTF fallback since mammoth is read-only; produce a clean plain text
-    const text = generatedReport.replace(/[#*`|_~]/g, '')
-    downloadBlob(text, `${form.projectName || 'qa'}-report.txt`, 'text/plain')
-    toast({ title: 'Downloaded', description: 'Exported as plain text (DOCX requires server-side conversion).' })
-  }
 
   const handlePrint = () => {
     const win = window.open('', '_blank')!
@@ -320,31 +295,23 @@ export const ReportPreview: React.FC = () => {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <div className="px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-[10px] font-bold text-green-500 uppercase tracking-widest">Report Ready</div>
-          <button onClick={() => setViewRaw(!viewRaw)} className={cn('flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all', viewRaw ? 'bg-accent-gold/10 border-accent-gold/20 text-accent-gold' : 'bg-white/5 border-white/10 text-text-secondary hover:text-white')}>
+          <button onClick={() => setViewRaw(!viewRaw)} className={cn('flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all', viewRaw ? 'bg-accent/10 border-accent/20 text-accent' : 'bg-input border-border text-text-secondary hover:text-text-primary hover:bg-hover')}>
             <Code className="w-3 h-3" /> Raw
           </button>
-          <button onClick={() => setDarkMode(!darkMode)} className="p-2 rounded-xl bg-white/5 border border-white/10 text-text-secondary hover:text-white transition-all">
-            {darkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-          </button>
-          <button onClick={() => setFullscreen(!fullscreen)} className="p-2 rounded-xl bg-white/5 border border-white/10 text-text-secondary hover:text-white transition-all">
+          <button onClick={() => setFullscreen(!fullscreen)} className="p-2 rounded-xl bg-input border border-border text-text-secondary hover:text-text-primary hover:bg-hover transition-all">
             {fullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={copyMarkdown} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all"><Copy className="w-3 h-3" /> MD</button>
-          <button onClick={copyHTML} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all"><Copy className="w-3 h-3" /> HTML</button>
-          <button onClick={downloadMD} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all"><Download className="w-3 h-3" /> .md</button>
-          <button onClick={downloadHTML} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all"><Download className="w-3 h-3" /> .html</button>
-          <button onClick={downloadDOCX} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all"><FileText className="w-3 h-3" /> .docx</button>
-          <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all"><Printer className="w-3 h-3" /> Print</button>
-          <button onClick={handleSave} className={cn('flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all', saved ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-accent-gold/10 border-accent-gold/20 text-accent-gold hover:bg-accent-gold/20')}>
+          <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-input border border-border text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-hover transition-all"><Printer className="w-3 h-3" /> Print</button>
+          <button onClick={handleSave} className={cn('flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all', saved ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-accent/10 border-accent/20 text-accent hover:bg-accent/20')}>
             {saved ? <CheckCircle2 className="w-3 h-3" /> : <Save className="w-3 h-3" />} {saved ? 'Saved' : 'Save'}
           </button>
         </div>
       </div>
 
       {/* Preview */}
-      <GlassCard hoverEffect={false} className={cn('min-h-[500px]', !darkMode && 'bg-white text-gray-900')}>
+      <GlassCard hoverEffect={false} className="min-h-[500px]">
         {viewRaw ? (
           <pre className="text-xs text-text-secondary whitespace-pre-wrap font-mono leading-relaxed overflow-auto">{generatedReport}</pre>
         ) : (

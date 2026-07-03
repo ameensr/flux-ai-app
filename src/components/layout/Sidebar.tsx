@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
   LayoutDashboard, Bug, FileText, PenTool, Settings,
-  History, ChevronLeft, Shield, LogOut, ClipboardList,
+  History, ChevronLeft, Shield, LogOut, ClipboardList, ClipboardCheck,
 } from 'lucide-react'
 import { Logo } from '../ui/Logo'
 import { supabase } from '@/lib/supabase'
@@ -18,6 +18,7 @@ const ALL_MENU_ITEMS = [
   { path: ROUTES.testGenerator,    label: 'Test Case Gen',     icon: FileText,        moduleKey: 'test-generator' },
   { path: ROUTES.writingAssistant, label: 'Writing Assistant', icon: PenTool,         moduleKey: 'writing-assistant' },
   { path: ROUTES.qaReport,         label: 'QA Weekly Report',  icon: ClipboardList,   moduleKey: 'qa-report' },
+  { path: ROUTES.dailyReport,      label: 'Daily Update Report',icon: ClipboardCheck,  moduleKey: 'daily-report' },
   { path: ROUTES.history,          label: 'History',           icon: History,         moduleKey: 'history' },
   { path: ROUTES.settings,         label: 'Settings',          icon: Settings,        moduleKey: 'settings' },
   { path: ROUTES.admin,            label: 'Admin Panel',       icon: Shield,          moduleKey: 'admin' },

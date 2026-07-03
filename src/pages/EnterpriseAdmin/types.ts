@@ -110,6 +110,7 @@ export const TEMPLATE_PRESETS: Record<string, Record<string, string[]>> = {
     history: ['can_view','can_delete','can_export'],
     settings: ['can_view','can_edit','can_manage'],
     'qa-report': ['can_view','can_create','can_edit','can_delete','can_export','can_generate_ai'],
+    'daily-report': ['can_view','can_create','can_edit','can_delete','can_export','can_manage'],
   },
   manager: {
     dashboard: ['can_view','can_export','can_generate_ai'],
@@ -119,6 +120,7 @@ export const TEMPLATE_PRESETS: Record<string, Record<string, string[]>> = {
     history: ['can_view','can_export'],
     settings: ['can_view'],
     'qa-report': ['can_view','can_create','can_edit','can_export','can_generate_ai'],
+    'daily-report': ['can_view','can_create','can_edit','can_delete','can_export','can_manage'],
   },
   developer: {
     dashboard: ['can_view','can_generate_ai'],
@@ -128,6 +130,7 @@ export const TEMPLATE_PRESETS: Record<string, Record<string, string[]>> = {
     history: ['can_view'],
     settings: ['can_view'],
     'qa-report': ['can_view','can_create'],
+    'daily-report': ['can_view'],
   },
   qa_engineer: {
     dashboard: ['can_view','can_generate_ai'],
@@ -137,6 +140,7 @@ export const TEMPLATE_PRESETS: Record<string, Record<string, string[]>> = {
     history: ['can_view'],
     settings: ['can_view'],
     'qa-report': ['can_view','can_create','can_edit','can_export','can_generate_ai'],
+    'daily-report': ['can_view','can_create','can_edit','can_export'],
   },
   viewer: {
     dashboard: ['can_view'],
@@ -146,11 +150,13 @@ export const TEMPLATE_PRESETS: Record<string, Record<string, string[]>> = {
     history: ['can_view'],
     settings: ['can_view'],
     'qa-report': ['can_view'],
+    'daily-report': ['can_view'],
   },
   client: {
     dashboard: ['can_view'],
     'qa-report': ['can_view'],
     history: ['can_view'],
+    'daily-report': ['can_view'],
   },
   guest: {
     dashboard: ['can_view'],

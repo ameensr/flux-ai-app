@@ -248,3 +248,51 @@
     radial-gradient(at 100% 100%, hsla(45,60%,53%,0.1) 0, transparent 50%),
     radial-gradient(at 0% 100%, hsla(0,0%,75%,0.1)   0, transparent 50%);
 }
+
+/* ── Premium Data Table styling ── */
+.premium-table-row {
+  border-bottom: 1px solid var(--divider);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Zebra striping - alternate background colors */
+.premium-table-row:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.015) !important;
+}
+
+.light .premium-table-row:nth-child(even),
+.theme-light .premium-table-row:nth-child(even),
+.theme-fabric .premium-table-row:nth-child(even),
+.theme-apple .premium-table-row:nth-child(even),
+.theme-material .premium-table-row:nth-child(even),
+.theme-powerbi .premium-table-row:nth-child(even) {
+  background-color: rgba(0, 0, 0, 0.015) !important;
+}
+
+/* Hover highlights */
+.premium-table-row:hover {
+  background-color: var(--hover) !important;
+}
+
+.light .premium-table-row:hover,
+.theme-light .premium-table-row:hover,
+.theme-fabric .premium-table-row:hover,
+.theme-apple .premium-table-row:hover,
+.theme-material .premium-table-row:hover,
+.theme-powerbi .premium-table-row:hover {
+  background-color: rgba(0, 0, 0, 0.02) !important;
+}
+
+/* Selected row accents */
+.premium-table-row.row-selected {
+  background-color: rgba(212, 175, 55, 0.07) !important;
+}
+
+.light .premium-table-row.row-selected,
+.theme-light .premium-table-row.row-selected,
+.theme-fabric .premium-table-row.row-selected,
+.theme-apple .premium-table-row.row-selected,
+.theme-material .premium-table-row.row-selected,
+.theme-powerbi .premium-table-row.row-selected {
+  background-color: rgba(212, 175, 55, 0.1) !important;
+}

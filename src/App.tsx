@@ -26,6 +26,8 @@ const History          = lazy(() => import('@/pages/History').then(m => ({ defau
 const AdminPanel       = lazy(() => import('@/pages/AdminPanel').then(m => ({ default: m.AdminPanel })))
 const EnterpriseAdmin  = lazy(() => import('@/pages/EnterpriseAdmin').then(m => ({ default: m.EnterpriseAdmin })))
 const AICopilot        = lazy(() => import('@/components/ai/AICopilot').then(m => ({ default: m.AICopilot })))
+const DailyUpdateReport = lazy(() => import('@/modules/DailyUpdateReport').then(m => ({ default: m.DailyUpdateReport })))
+const DailyReportConfig = lazy(() => import('@/modules/DailyUpdateReport/DailyReportConfig').then(m => ({ default: m.DailyReportConfig })))
 
 // ── Route-level loading skeleton ─────────────────────────────────────────────
 function PageLoader() {
@@ -123,6 +125,14 @@ function AppShell() {
 
                   <Route path={ROUTES.qaReport} element={
                     <ProtectedRoute><QAWeeklyReport /></ProtectedRoute>
+                  } />
+
+                  <Route path={ROUTES.dailyReport} element={
+                    <ProtectedRoute><DailyUpdateReport /></ProtectedRoute>
+                  } />
+
+                  <Route path={ROUTES.dailyReportConfig} element={
+                    <ProtectedRoute><DailyReportConfig /></ProtectedRoute>
                   } />
 
                   <Route path={ROUTES.history} element={

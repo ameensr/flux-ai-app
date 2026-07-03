@@ -6,8 +6,53 @@ import {
   AlertTriangle, Play, HelpCircle, Activity, Sun, Moon, Maximize2,
   Minimize2, Download, Printer, Copy, RefreshCw, X, ChevronRight,
   BookOpen, Star, Sparkles, FileText, LayoutGrid, Users, History, CheckCheck,
-  ArrowRightLeft, GitCompare, Eye, EyeOff, Palette, Lock, Unlock
+  ArrowRightLeft, GitCompare, Eye, EyeOff, Palette, Lock, Unlock,
+  Cpu, GitBranch, Terminal, Code2, ChevronDown
 } from 'lucide-react'
+
+const customStyles = `
+  @keyframes float {
+    0% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-12px) rotate(4deg); }
+    100% { transform: translateY(0px) rotate(0deg); }
+  }
+  @keyframes float-reverse {
+    0% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(12px) rotate(-4deg); }
+    100% { transform: translateY(0px) rotate(0deg); }
+  }
+  @keyframes pulse-glow {
+    0% { opacity: 0.12; transform: scale(1); }
+    50% { opacity: 0.22; transform: scale(1.08); }
+    100% { opacity: 0.12; transform: scale(1); }
+  }
+  @keyframes scroll-dot {
+    0% { opacity: 0; transform: translateY(0); }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(10px); }
+  }
+  @keyframes shine {
+    0% { left: -100%; }
+    100% { left: 100%; }
+  }
+  @keyframes spin-slow {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+  .animate-float-reverse {
+    animation: float-reverse 7s ease-in-out infinite;
+  }
+  .animate-spin-slow {
+    animation: spin-slow 35s linear infinite;
+  }
+  .animate-pulse-glow {
+    animation: pulse-glow 8s ease-in-out infinite;
+  }
+`
 import {
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
   XAxis, YAxis, Tooltip, Legend, LineChart, Line, AreaChart, Area,
@@ -547,12 +592,17 @@ const ReportPreviewDashboardContent: React.FC = () => {
     let width = (canvas.width = window.innerWidth)
     let height = (canvas.height = window.innerHeight)
 
-    const particles: any[] = Array.from({ length: 50 }, () => ({
+    const particleColors = theme === 'dark'
+      ? ['rgba(212,175,55,0.22)', 'rgba(59,130,246,0.22)', 'rgba(168,85,247,0.22)', 'rgba(16,185,129,0.22)']
+      : ['rgba(184,150,12,0.12)', 'rgba(37,99,235,0.12)', 'rgba(124,58,237,0.12)', 'rgba(5,150,105,0.12)']
+
+    const particles: any[] = Array.from({ length: 60 }, () => ({
       x: Math.random() * width,
       y: Math.random() * height,
-      vx: Math.random() * 0.4 - 0.2,
-      vy: Math.random() * 0.4 - 0.2,
-      radius: Math.random() * 2 + 1
+      vx: Math.random() * 0.3 - 0.15,
+      vy: Math.random() * 0.3 - 0.15,
+      radius: Math.random() * 2.5 + 1.2,
+      color: particleColors[Math.floor(Math.random() * particleColors.length)]
     }))
 
     const handleResize = () => {
@@ -563,8 +613,6 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
     const animate = () => {
       ctx.clearRect(0, 0, width, height)
-      ctx.fillStyle = theme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'
-      ctx.strokeStyle = theme === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)'
 
       particles.forEach((p, i) => {
         p.x += p.vx
@@ -574,15 +622,20 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
         ctx.beginPath()
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
+        ctx.fillStyle = p.color
         ctx.fill()
 
         for (let j = i + 1; j < particles.length; j++) {
           const p2 = particles[j]
           const dist = Math.hypot(p.x - p2.x, p.y - p2.y)
-          if (dist < 150) {
+          if (dist < 130) {
             ctx.beginPath()
             ctx.moveTo(p.x, p.y)
             ctx.lineTo(p2.x, p2.y)
+            ctx.strokeStyle = theme === 'dark'
+              ? `rgba(255,255,255,${(1 - dist / 130) * 0.04})`
+              : `rgba(0,0,0,${(1 - dist / 130) * 0.04})`
+            ctx.lineWidth = 0.8
             ctx.stroke()
           }
         }
@@ -1178,13 +1231,39 @@ Do not return markdown wraps, only raw JSON text.
         />
       ))}
 
+      <style dangerouslySetInnerHTML={{ __html: customStyles }} />
+
       {/* ── Canvas Animated Particles ── */}
-      <canvas ref={canvasRef} className="absolute inset-0 z-0 pointer-events-none" />
+      <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none" />
 
       {/* ── Background Glow Blobs ── */}
-      <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0 overflow-hidden">
-        <div className={`absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full blur-[160px] opacity-[0.15] ${theme==='dark'?'bg-accent-gold':'bg-yellow-400'}`} />
-        <div className={`absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full blur-[150px] opacity-[0.12] ${theme==='dark'?'bg-blue-600':'bg-blue-400'}`} />
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <motion.div
+          animate={{
+            x: [0, 30, -20, 10, 0],
+            y: [0, -40, 20, -10, 0],
+            scale: [1, 1.1, 0.95, 1.05, 1]
+          }}
+          transition={{
+            duration: 25,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          className={`absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full blur-[160px] opacity-[0.15] ${theme==='dark'?'bg-accent-gold':'bg-yellow-400'}`}
+        />
+        <motion.div
+          animate={{
+            x: [0, -30, 25, -15, 0],
+            y: [0, 35, -15, 20, 0],
+            scale: [1, 1.05, 0.98, 1.1, 1]
+          }}
+          transition={{
+            duration: 30,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          className={`absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full blur-[150px] opacity-[0.12] ${theme==='dark'?'bg-blue-600':'bg-blue-400'}`}
+        />
       </div>
 
       {/* ── Sticky Top Navigation ── */}
@@ -1396,9 +1475,32 @@ Do not return markdown wraps, only raw JSON text.
         <motion.section
           variants={sectionVariants}
           ref={sectionsRef.overview}
-          className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 items-center pt-2"
+          className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 items-center pt-2 relative"
         >
-          <div className="flex flex-col gap-6">
+          {/* Floating tech background elements */}
+          <motion.div
+            animate={{ y: [0, -15, 0], rotate: [0, 6, -6, 0] }}
+            transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-10 right-[40%] text-accent-gold/15 pointer-events-none hidden sm:block"
+          >
+            <Cpu className="w-12 h-12" />
+          </motion.div>
+          <motion.div
+            animate={{ y: [0, 12, 0], rotate: [0, -8, 8, 0] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute bottom-5 left-[20%] text-blue-500/10 pointer-events-none hidden sm:block"
+          >
+            <GitBranch className="w-10 h-10" />
+          </motion.div>
+          <motion.div
+            animate={{ y: [0, -10, 0] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-20 left-[45%] text-purple-500/10 pointer-events-none hidden sm:block"
+          >
+            <Terminal className="w-8 h-8" />
+          </motion.div>
+
+          <div className="flex flex-col gap-6 relative z-10">
             <div className="flex items-center gap-2 flex-wrap">
               <motion.span
                 initial={{ opacity: 0, scale: 0.8 }}
@@ -1441,8 +1543,9 @@ Do not return markdown wraps, only raw JSON text.
 
           {/* Executive Quality Score Gauge */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 100, damping: 15 }}
             className={`p-6 rounded-3xl border flex flex-col items-center justify-between text-center relative overflow-hidden shadow-2xl ${theme==='dark'?'bg-white/[0.02] border-white/10':'bg-white border-slate-200'}`}
           >
             <div className="absolute inset-0 bg-gradient-to-tr from-accent-gold/5 to-blue-500/5 pointer-events-none" />
@@ -1483,6 +1586,22 @@ Do not return markdown wraps, only raw JSON text.
               <p className="font-semibold">{qualityStats.desc}</p>
             </motion.div>
           </motion.div>
+
+          {/* Scroll Indicator */}
+          <div className="col-span-full flex justify-center pt-8">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0, 1, 0], y: [0, 8, 0] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+              className="flex flex-col items-center gap-1.5 cursor-pointer text-text-muted hover:text-accent-gold"
+              onClick={() => scrollToSection('kpis')}
+            >
+              <span className="text-[9px] uppercase font-black tracking-widest">Scroll to Explore</span>
+              <div className="w-5 h-8 rounded-full border-2 border-current flex justify-center p-1 relative">
+                <div className="w-1.5 h-1.5 rounded-full bg-accent-gold" style={{ animation: 'scroll-dot 1.8s ease-in-out infinite' }} />
+              </div>
+            </motion.div>
+          </div>
         </motion.section>
 
         {/* ══════════════════════════════════════════════════════════
@@ -1514,17 +1633,33 @@ Do not return markdown wraps, only raw JSON text.
             ].filter(kpi => !clientMode || !kpi.isInternal).map((kpi, idx) => (
               <motion.div
                 key={kpi.label}
-                initial={{ opacity: 0, y: 15 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                whileHover={{ y: -6, scale: 1.02, boxShadow: theme === 'dark' ? '0 10px 30px -10px rgba(255,255,255,0.08)' : '0 10px 30px -10px rgba(0,0,0,0.12)' }}
+                initial="initial"
+                whileInView="show"
+                whileHover="hover"
+                variants={{
+                  initial: { opacity: 0, y: 15 },
+                  show: { opacity: 1, y: 0 },
+                  hover: { y: -6, scale: 1.02, boxShadow: theme === 'dark' ? '0 10px 30px -10px rgba(255,255,255,0.08)' : '0 10px 30px -10px rgba(0,0,0,0.12)' }
+                }}
                 viewport={{ once: true }}
                 transition={{ delay: idx * 0.04 }}
                 className={`p-5 rounded-2xl border flex flex-col justify-between gap-3 group relative overflow-hidden transition-all duration-300 min-h-[140px] ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme==='dark'?'bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]':'bg-white border-slate-200 hover:border-slate-300'}`}
               >
+                {/* Gradient Border Glow */}
+                <div className="absolute inset-0 border border-transparent bg-gradient-to-tr from-accent-gold/25 via-blue-500/25 to-transparent rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }} />
+
                 <div className="flex items-center justify-between">
-                  <kpi.icon className={`w-5 h-5 ${kpi.color} ${kpi.pulse ? 'animate-pulse' : ''}`} />
+                  <motion.div variants={{ hover: { rotate: [0, -8, 8, 0], scale: 1.15 } }} transition={{ duration: 0.4 }}>
+                    <kpi.icon className={`w-5 h-5 ${kpi.color} ${kpi.pulse ? 'animate-pulse' : ''}`} />
+                  </motion.div>
                   {kpi.sparklineData.length > 1 && (
                     <MiniSparkline data={kpi.sparklineData} color={kpi.color.includes('gold') ? '#d4af37' : kpi.color.includes('blue') ? '#60a5fa' : kpi.color.includes('green') ? '#4ade80' : '#a855f7'} />
+                  )}
+                  {kpi.pulse && (
+                    <span className="absolute top-3 right-3 flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                    </span>
                   )}
                 </div>
                 <div>
@@ -1719,8 +1854,15 @@ Do not return markdown wraps, only raw JSON text.
                 </tr>
               </thead>
               <tbody>
-                {data.releaseItems.map(item => (
-                  <tr key={item.id} className={`border-b text-xs transition-colors hover:bg-white/[0.02] ${theme==='dark'?'border-white/5':'border-slate-100'}`}>
+                 {data.releaseItems.map((item, idx) => (
+                  <motion.tr
+                    key={item.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.04, duration: 0.3 }}
+                    className={`border-b text-xs transition-colors hover:bg-white/[0.02] ${theme==='dark'?'border-white/5':'border-slate-100'}`}
+                  >
                     <td className="py-3.5 px-5 font-mono font-bold text-accent-gold">{item.taskId}</td>
                     <td className={`py-3.5 px-5 font-semibold ${theme==='dark'?'text-white':'text-slate-800'}`}>{item.featureName}</td>
                     <td className="py-3.5 px-5 text-text-secondary">{item.assignee}</td>
@@ -1730,7 +1872,7 @@ Do not return markdown wraps, only raw JSON text.
                     <td className="py-3.5 px-5 text-center">
                       <span className={`text-[10px] font-bold ${item.priority==='Critical'?'text-red-400':item.priority==='High'?'text-orange-400':'text-text-muted'}`}>{item.priority}</span>
                     </td>
-                  </tr>
+                  </motion.tr>
                 ))}
                 {data.releaseItems.length === 0 && (
                   <tr><td colSpan={5} className="py-8 text-center text-xs text-text-muted">No items configured.</td></tr>
@@ -1769,8 +1911,15 @@ Do not return markdown wraps, only raw JSON text.
                 </tr>
               </thead>
               <tbody>
-                {data.supportTickets.map(ticket => (
-                  <tr key={ticket.id} className={`border-b text-xs transition-colors hover:bg-white/[0.02] ${theme==='dark'?'border-white/5':'border-slate-100'}`}>
+                {data.supportTickets.map((ticket, idx) => (
+                  <motion.tr
+                    key={ticket.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.04, duration: 0.3 }}
+                    className={`border-b text-xs transition-colors hover:bg-white/[0.02] ${theme==='dark'?'border-white/5':'border-slate-100'}`}
+                  >
                     <td className="py-3.5 px-5 font-mono font-bold text-blue-400">{ticket.taskId}</td>
                     <td className={`py-3.5 px-5 font-semibold ${theme==='dark'?'text-white':'text-slate-800'}`}>{ticket.description}</td>
                     <td className="py-3.5 px-5 text-text-secondary">{ticket.assignedQA}</td>
@@ -1780,7 +1929,7 @@ Do not return markdown wraps, only raw JSON text.
                     <td className="py-3.5 px-5 text-center">
                       <span className={`text-[10px] font-bold ${ticket.priority==='Critical'?'text-red-400':ticket.priority==='High'?'text-orange-400':'text-text-muted'}`}>{ticket.priority}</span>
                     </td>
-                  </tr>
+                  </motion.tr>
                 ))}
                 {data.supportTickets.length === 0 && (
                   <tr><td colSpan={5} className="py-8 text-center text-xs text-text-muted">No tickets logged.</td></tr>
@@ -2079,7 +2228,7 @@ Do not return markdown wraps, only raw JSON text.
                           </tr>
                         </thead>
                         <tbody>
-                          {metricsCompare.map(m => {
+                          {metricsCompare.map((m, idx) => {
                             const diff = m.valB - m.valA
                             const pct = m.valA !== 0 ? Math.round((diff / m.valA) * 100) : 0
                             const isLowerBetter = m.type === 'lower'
@@ -2090,7 +2239,14 @@ Do not return markdown wraps, only raw JSON text.
                             }
 
                             return (
-                              <tr key={m.name} className="border-b border-white/5">
+                              <motion.tr
+                                key={m.name}
+                                initial={{ opacity: 0, y: 8 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: idx * 0.04, duration: 0.3 }}
+                                className="border-b border-white/5"
+                              >
                                 <td className="p-4 font-bold text-white">{m.name}</td>
                                 <td className="p-4 text-text-secondary">{m.valA}</td>
                                 <td className="p-4 text-white font-extrabold">{m.valB}</td>
@@ -2103,7 +2259,7 @@ Do not return markdown wraps, only raw JSON text.
                                     </span>
                                   )}
                                 </td>
-                              </tr>
+                              </motion.tr>
                             )
                           })}
                         </tbody>
@@ -2419,7 +2575,13 @@ Do not return markdown wraps, only raw JSON text.
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               
               {/* 1. Monthly KPI Trend (Line) */}
-              <div className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: "-45px" }}
+                transition={{ duration: 0.5 }}
+                className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+              >
                 <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Monthly KPI Trend</span>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -2428,16 +2590,22 @@ Do not return markdown wraps, only raw JSON text.
                       <YAxis stroke={chartText} fontSize={9} />
                       <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Line type="monotone" dataKey="emails" name="Support Emails" stroke="#3b82f6" strokeWidth={2} />
-                      <Line type="monotone" dataKey="features" name="Features Tested" stroke="#facc15" strokeWidth={2} />
-                      <Line type="monotone" dataKey="fixes" name="Code Fixes" stroke="#a855f7" strokeWidth={2} />
+                      <Line type="monotone" dataKey="emails" name="Support Emails" stroke="#3b82f6" strokeWidth={2} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Line type="monotone" dataKey="features" name="Features Tested" stroke="#facc15" strokeWidth={2} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Line type="monotone" dataKey="fixes" name="Code Fixes" stroke="#a855f7" strokeWidth={2} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
+              </motion.div>
 
               {/* 2. Defect Closure Trend (Area) */}
-              <div className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: "-45px" }}
+                transition={{ duration: 0.5, delay: 0.05 }}
+                className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+              >
                 <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Defect Closure Trend</span>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -2456,15 +2624,21 @@ Do not return markdown wraps, only raw JSON text.
                       <YAxis stroke={chartText} fontSize={9} />
                       <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Area type="monotone" dataKey="reportedDefects" name="Reported Defects" stroke="#f87171" fill="url(#reportedGrad)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="closedDefects" name="Closed Defects" stroke="#10b981" fill="url(#closedGrad)" strokeWidth={2} />
+                      <Area type="monotone" dataKey="reportedDefects" name="Reported Defects" stroke="#f87171" fill="url(#reportedGrad)" strokeWidth={2} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Area type="monotone" dataKey="closedDefects" name="Closed Defects" stroke="#10b981" fill="url(#closedGrad)" strokeWidth={2} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
+              </motion.div>
 
               {/* 3. Production Issue Trend (Stacked Area) */}
-              <div className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: "-45px" }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+              >
                 <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Production Issue Categories Trend</span>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -2473,18 +2647,24 @@ Do not return markdown wraps, only raw JSON text.
                       <YAxis stroke={chartText} fontSize={9} />
                       <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Area type="monotone" dataKey="codeFixProd" stackId="1" name="Code Fix" stroke="#d4af37" fill="#d4af37" fillOpacity={0.4} />
-                      <Area type="monotone" dataKey="supportProd" stackId="1" name="Support" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.4} />
-                      <Area type="monotone" dataKey="changeRequestProd" stackId="1" name="Change Req" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} />
-                      <Area type="monotone" dataKey="dataIssueProd" stackId="1" name="Data Issue" stroke="#f87171" fill="#f87171" fillOpacity={0.4} />
-                      <Area type="monotone" dataKey="backendUpdationProd" stackId="1" name="Backend Update" stroke="#10b981" fill="#10b981" fillOpacity={0.4} />
+                      <Area type="monotone" dataKey="codeFixProd" stackId="1" name="Code Fix" stroke="#d4af37" fill="#d4af37" fillOpacity={0.4} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Area type="monotone" dataKey="supportProd" stackId="1" name="Support" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.4} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Area type="monotone" dataKey="changeRequestProd" stackId="1" name="Change Req" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Area type="monotone" dataKey="dataIssueProd" stackId="1" name="Data Issue" stroke="#f87171" fill="#f87171" fillOpacity={0.4} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Area type="monotone" dataKey="backendUpdationProd" stackId="1" name="Backend Update" stroke="#10b981" fill="#10b981" fillOpacity={0.4} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
+              </motion.div>
 
               {/* 4. Support Ticket Volume (Line) */}
-              <div className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: "-45px" }}
+                transition={{ duration: 0.5, delay: 0.15 }}
+                className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+              >
                 <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Weekly Support Ticket Trend</span>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -2493,14 +2673,20 @@ Do not return markdown wraps, only raw JSON text.
                       <YAxis stroke={chartText} fontSize={9} />
                       <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Line type="monotone" dataKey="emails" name="Support tickets" stroke="#06b6d4" strokeWidth={2.5} />
+                      <Line type="monotone" dataKey="emails" name="Support tickets" stroke="#06b6d4" strokeWidth={2.5} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
+              </motion.div>
 
               {/* 5. QA Health Score & Team Size (Composed) */}
-              <div className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: "-45px" }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+              >
                 <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">QA Health vs Team Size Trend</span>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -2509,15 +2695,21 @@ Do not return markdown wraps, only raw JSON text.
                       <YAxis stroke={chartText} fontSize={9} />
                       <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="teamSize" name="Allocated Engineers" fill="rgba(212,175,55,0.2)" radius={[4, 4, 0, 0]} />
-                      <Line type="monotone" dataKey="healthScore" name="QA Health Score %" stroke="#10b981" strokeWidth={2.5} />
+                      <Bar dataKey="teamSize" name="Allocated Engineers" fill="rgba(212,175,55,0.2)" radius={[4, 4, 0, 0]} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Line type="monotone" dataKey="healthScore" name="QA Health Score %" stroke="#10b981" strokeWidth={2.5} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
+              </motion.div>
 
               {/* 6. Feature Completion Status (Stacked Bar) */}
-              <div className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: "-45px" }}
+                transition={{ duration: 0.5, delay: 0.25 }}
+                className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+              >
                 <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Feature Completion Trend</span>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -2526,13 +2718,13 @@ Do not return markdown wraps, only raw JSON text.
                       <YAxis stroke={chartText} fontSize={9} />
                       <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="passFeatures" name="Passed" stackId="a" fill="#10b981" />
-                      <Bar dataKey="failFeatures" name="Failed" stackId="a" fill="#f87171" />
-                      <Bar dataKey="blockedFeatures" name="Blocked" stackId="a" fill="#fb923c" />
+                      <Bar dataKey="passFeatures" name="Passed" stackId="a" fill="#10b981" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Bar dataKey="failFeatures" name="Failed" stackId="a" fill="#f87171" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Bar dataKey="blockedFeatures" name="Blocked" stackId="a" fill="#fb923c" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
+              </motion.div>
 
             </div>
           )}
@@ -2548,12 +2740,18 @@ Do not return markdown wraps, only raw JSON text.
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             
             {/* 1. Work Distribution (Pie) */}
-            <div className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true, margin: "-45px" }}
+              transition={{ duration: 0.5 }}
+              className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+            >
               <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Work Distribution</span>
               <div className="h-64 flex justify-center items-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={workDistributionData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={4} dataKey="value">
+                    <Pie data={workDistributionData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={4} dataKey="value" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out">
                       {workDistributionData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.hex} />
                       ))}
@@ -2563,10 +2761,16 @@ Do not return markdown wraps, only raw JSON text.
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-            </div>
+            </motion.div>
 
             {/* 2. Production Issues Comparison (Bar) */}
-            <div className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true, margin: "-45px" }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+            >
               <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Production Issue Categories</span>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -2575,20 +2779,26 @@ Do not return markdown wraps, only raw JSON text.
                     <YAxis stroke={chartText} fontSize={9} />
                     <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="lastWeek" name="Last Week" fill="#d4af37" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="mtd" name="MTD" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="lastWeek" name="Last Week" fill="#d4af37" radius={[4, 4, 0, 0]} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                    <Bar dataKey="mtd" name="MTD" fill="#3b82f6" radius={[4, 4, 0, 0]} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </div>
+            </motion.div>
 
             {/* 3. Defect Status (Doughnut) */}
-            <div className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true, margin: "-45px" }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+            >
               <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Defect Status Breakdown</span>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={defectStatusData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} dataKey="value">
+                    <Pie data={defectStatusData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} dataKey="value" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out">
                       {defectStatusData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.hex} />
                       ))}
@@ -2598,7 +2808,7 @@ Do not return markdown wraps, only raw JSON text.
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-            </div>
+            </motion.div>
 
           </div>
         </section>
@@ -2625,8 +2835,15 @@ Do not return markdown wraps, only raw JSON text.
                   </tr>
                 </thead>
                 <tbody>
-                  {data.releaseItems.map(item => (
-                    <tr key={item.id} className={`border-b text-xs transition-colors hover:bg-white/[0.01] ${theme==='dark'?'border-white/5':'border-slate-100'}`}>
+                  {data.releaseItems.map((item, idx) => (
+                    <motion.tr
+                      key={item.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.04, duration: 0.3 }}
+                      className={`border-b text-xs transition-colors hover:bg-white/[0.01] ${theme==='dark'?'border-white/5':'border-slate-100'}`}
+                    >
                       <td className="py-4 px-4 font-mono font-bold text-accent-gold">{item.taskId}</td>
                       <td className={`py-4 px-4 font-semibold ${theme==='dark'?'text-white':'text-slate-800'}`}>{item.featureName}</td>
                       <td className="py-4 px-4 text-text-secondary">{item.assignee}</td>
@@ -2638,7 +2855,7 @@ Do not return markdown wraps, only raw JSON text.
                       <td className="py-4 px-4 text-center">
                         <span className={`text-[10px] font-bold ${item.priority==='Critical'?'text-red-400':item.priority==='High'?'text-orange-400':'text-text-muted'}`}>{item.priority}</span>
                       </td>
-                    </tr>
+                    </motion.tr>
                   ))}
                   {data.releaseItems.length === 0 && (
                     <tr><td colSpan={5} className="py-6 text-center text-xs text-text-muted">No items configured.</td></tr>
@@ -2667,8 +2884,15 @@ Do not return markdown wraps, only raw JSON text.
                   </tr>
                 </thead>
                 <tbody>
-                  {data.supportTickets.map(ticket => (
-                    <tr key={ticket.id} className={`border-b text-xs transition-colors hover:bg-white/[0.01] ${theme==='dark'?'border-white/5':'border-slate-100'}`}>
+                  {data.supportTickets.map((ticket, idx) => (
+                    <motion.tr
+                      key={ticket.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.04, duration: 0.3 }}
+                      className={`border-b text-xs transition-colors hover:bg-white/[0.01] ${theme==='dark'?'border-white/5':'border-slate-100'}`}
+                    >
                       <td className="py-4 px-4 font-mono font-bold text-blue-400">{ticket.taskId}</td>
                       <td className={`py-4 px-4 font-semibold ${theme==='dark'?'text-white':'text-slate-800'}`}>{ticket.description}</td>
                       <td className="py-4 px-4 text-text-secondary">{ticket.assignedQA}</td>
@@ -2680,7 +2904,7 @@ Do not return markdown wraps, only raw JSON text.
                       <td className="py-4 px-4 text-center">
                         <span className={`text-[10px] font-bold ${ticket.priority==='Critical'?'text-red-400':ticket.priority==='High'?'text-orange-400':'text-text-muted'}`}>{ticket.priority}</span>
                       </td>
-                    </tr>
+                    </motion.tr>
                   ))}
                   {data.supportTickets.length === 0 && (
                     <tr><td colSpan={5} className="py-6 text-center text-xs text-text-muted">No tickets logged.</td></tr>
@@ -2748,20 +2972,40 @@ Do not return markdown wraps, only raw JSON text.
               <h2 className="text-2xl font-extrabold font-clash">Weekly QA Progress Timeline</h2>
             </div>
 
-            <div className="relative pl-6 border-l border-white/10 flex flex-col gap-8 ml-2 pt-2">
+            <div className="relative pl-6 flex flex-col gap-8 ml-2 pt-2">
+              <motion.div
+                initial={{ scaleY: 0 }}
+                whileInView={{ scaleY: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 1.2, ease: "easeOut" }}
+                className="absolute left-0 top-2 bottom-2 w-px bg-white/10 origin-top"
+              />
               {[
                 { day: 'Monday', title: 'Support & Exception Triage', desc: 'Analyzed Safari mobile checkout logs and established debug tickets.' },
                 { day: 'Tuesday', title: 'Automation Test coverage review', desc: 'Executed baseline pipeline regression checks and identified missing webhooks.' },
                 { day: 'Wednesday', title: 'Profile Redesign Verification failure', desc: 'Flagged REL-103 build issues and initiated feedback cycles.' },
                 { day: 'Thursday', title: 'Stress test run & latency logs', desc: 'Validated EUR/GBP multi-currency cache queries, reporting 40% drops.' },
                 { day: 'Friday', title: 'Sprint release candidate lock', desc: 'Closed Safari regression exceptions, signing off 3 critical integrations.' }
-              ].map(event => (
-                <div key={event.day} className="relative group">
-                  <div className="absolute left-[-31px] top-1.5 w-2.5 h-2.5 rounded-full bg-accent-gold shadow-[0_0_8px_rgba(212,175,55,0.8)] transition-transform duration-300 group-hover:scale-125" />
+              ].map((event, idx) => (
+                <motion.div
+                  key={event.day}
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: idx * 0.1, duration: 0.5 }}
+                  className="relative group pl-2"
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    whileInView={{ scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.15 + 0.1, type: "spring", stiffness: 350, damping: 15 }}
+                    className="absolute left-[-31px] top-1.5 w-2.5 h-2.5 rounded-full bg-accent-gold shadow-[0_0_8px_rgba(212,175,55,0.8)] transition-transform duration-300 group-hover:scale-125"
+                  />
                   <span className="text-[10px] font-black uppercase tracking-widest text-accent-gold block">{event.day}</span>
                   <h3 className={`text-sm font-extrabold mt-0.5 ${theme==='dark'?'text-white':'text-slate-800'}`}>{event.title}</h3>
                   <p className="text-xs text-text-secondary mt-1">{event.desc}</p>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>

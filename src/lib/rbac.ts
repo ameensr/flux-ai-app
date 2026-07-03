@@ -18,6 +18,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     'test-generator':  { can_view: true, can_generate_ai: true, can_export: true },
     'writing-assistant': { can_view: true, can_generate_ai: true },
     'qa-report':       { can_view: true, can_create: true, can_edit: true, can_export: true, can_generate_ai: true },
+    'daily-report':    { can_view: true, can_create: true, can_edit: true, can_export: true },
     history:           { can_view: true },
     settings:          { can_view: true },
   },
@@ -27,6 +28,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     'test-generator':  { can_view: true, can_generate_ai: true },
     'writing-assistant': { can_view: true, can_generate_ai: true },
     'qa-report':       { can_view: true, can_create: true, can_generate_ai: true },
+    'daily-report':    { can_view: true, can_create: true },
     settings:          { can_view: true },
   },
 }

@@ -30,6 +30,10 @@ export const ROUTES = {
   enterpriseRoles:      '/admin/enterprise/roles',
   enterpriseTemplates:  '/admin/enterprise/templates',
   enterpriseAudit:      '/admin/enterprise/audit',
+
+  // Daily Update Report & Config
+  dailyReport:          '/daily-report',
+  dailyReportConfig:    '/daily-report/configuration',
 } as const
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES]
@@ -53,5 +57,7 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.enterpriseRoles]:    'admin',
   [ROUTES.enterpriseTemplates]:'admin',
   [ROUTES.enterpriseAudit]:    'admin',
+  [ROUTES.dailyReport]:        'daily-report',
+  [ROUTES.dailyReportConfig]:  'daily-report',
 }
 
