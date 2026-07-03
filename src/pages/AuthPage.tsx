@@ -104,6 +104,34 @@ export const AuthPage = () => {
     }
   }
 
+  const handleForgotPassword = async () => {
+    clearErrors()
+    if (!email.trim()) {
+      setFieldError({ email: 'Please enter your email address first to reset password.' })
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/settings`,
+      })
+      if (error) throw error
+      toast({
+        title: 'Reset email sent',
+        description: 'Check your email inbox for a password reset link.',
+      })
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message,
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background relative overflow-hidden flex items-center justify-center px-4 sm:px-6 py-12 sm:py-20">
       {/* Cinematic Background */}
@@ -254,7 +282,7 @@ export const AuthPage = () => {
                   <input type="checkbox" className="w-4 h-4 rounded border-white/10 bg-white/5 text-accent-gold focus:ring-accent-gold/20" />
                   <span className="text-xs text-text-muted group-hover:text-text-secondary transition-colors font-montreal">Remember me</span>
                 </label>
-                <button type="button" className="text-xs text-accent-gold/80 hover:text-accent-gold transition-colors font-bold uppercase tracking-widest">Forgot?</button>
+                <button onClick={handleForgotPassword} type="button" className="text-xs text-accent-gold/80 hover:text-accent-gold transition-colors font-bold uppercase tracking-widest">Forgot?</button>
               </div>
             )}
 
