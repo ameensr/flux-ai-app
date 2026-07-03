@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import type { Variants } from 'framer-motion'
 import {
   TrendingUp, TrendingDown, Mail, Zap, Wrench, Shield, Check,
   AlertTriangle, Play, HelpCircle, Activity, Sun, Moon, Maximize2,
@@ -17,6 +18,9 @@ import { AIService } from '@/services/ai/ai-service'
 import { useQAReportStore } from '../store'
 import { ensureFormData } from '../types'
 import type { QAReportForm, SupportTicket, ReleaseItem, HistoricalDefect } from '../types'
+import { useTheme } from '@/context/ThemeContext'
+import { type ThemeId } from '@/lib/themes'
+import pptxgen from 'pptxgenjs'
 
 // No mock/dummy data — historical analytics use only the user's real saved reports
 
@@ -64,6 +68,30 @@ const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '' }) => {
   return <span>{count}{suffix}</span>
 }
 
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.1
+    }
+  }
+}
+
+const sectionVariants: Variants = {
+  hidden: { opacity: 0, y: 30, scale: 0.98 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.5,
+      ease: 'easeOut'
+    }
+  }
+}
+
 const ReportPreviewDashboardContent: React.FC = () => {
   const { savedReports, saveReport, fetchReports } = useQAReportStore()
   
@@ -78,10 +106,11 @@ const ReportPreviewDashboardContent: React.FC = () => {
     return ensureFormData(null)
   })
   const [isLoaded, setIsLoaded] = useState(() => !!localStorage.getItem('current-qa-report-data'))
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
-  const [themeGallery, setThemeGallery] = useState<'default' | 'fabric' | 'github' | 'apple' | 'material' | 'cred' | 'powerbi' | 'cyber' | 'glassmorphism'>(
-    (localStorage.getItem('flux-report-theme-gallery') as any) || 'glassmorphism'
-  )
+  const { theme: globalTheme, setTheme: setGlobalTheme } = useTheme()
+  const theme = (globalTheme === 'light' || globalTheme === 'fabric' || globalTheme === 'apple' || globalTheme === 'material' || globalTheme === 'powerbi') ? 'light' : 'dark'
+  const themeGallery = globalTheme
+  const [enableParticles, setEnableParticles] = useState<boolean>(localStorage.getItem('flux-enable-particles') !== 'false')
+  const [isHealthBarFilled, setIsHealthBarFilled] = useState(false)
   const [clientMode, setClientMode] = useState<boolean>(localStorage.getItem('flux-client-mode') === 'true')
   const [expandedTimelineWeeks, setExpandedTimelineWeeks] = useState<Record<string, boolean>>({})
   const [timelineFilter, setTimelineFilter] = useState<'weekly' | 'sprint' | 'monthly' | 'quarterly'>('weekly')
@@ -120,9 +149,13 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const sectionsRef = {
     overview: useRef<HTMLDivElement>(null),
     kpis: useRef<HTMLDivElement>(null),
-    comparison: useRef<HTMLDivElement>(null),
-    aiSummary: useRef<HTMLDivElement>(null),
+    sprintHealth: useRef<HTMLDivElement>(null),
+    releaseTesting: useRef<HTMLDivElement>(null),
+    supportLog: useRef<HTMLDivElement>(null),
+    defects: useRef<HTMLDivElement>(null),
     charts: useRef<HTMLDivElement>(null),
+    aiSummary: useRef<HTMLDivElement>(null),
+    comparison: useRef<HTMLDivElement>(null),
     historyDashboard: useRef<HTMLDivElement>(null),
     details: useRef<HTMLDivElement>(null),
     team: useRef<HTMLDivElement>(null),
@@ -179,6 +212,28 @@ const ReportPreviewDashboardContent: React.FC = () => {
   // ── Theme Gallery configurations ──
   const getThemeStyles = () => {
     switch (themeGallery) {
+      case 'light':
+        return {
+          bg: 'bg-[#f8f8f8] text-[#111111]',
+          card: 'bg-white border-black/10 rounded-3xl shadow-sm',
+          accent: 'text-[#b8960c]',
+          accentBg: 'bg-[#b8960c] text-white hover:bg-yellow-600',
+          border: 'border-black/10',
+          glow: '',
+          font: 'font-general',
+          chartColors: ['#B8960C', '#2563eb', '#059669', '#7c3aed', '#ea580c']
+        }
+      case 'dark':
+        return {
+          bg: 'bg-[#0B0B0B] text-[#F5F5F5]',
+          card: 'bg-[#111111] border-white/5 rounded-3xl',
+          accent: 'text-[#d4af37]',
+          accentBg: 'bg-[#d4af37] text-black hover:bg-yellow-500',
+          border: 'border-white/5',
+          glow: '',
+          font: 'font-general',
+          chartColors: ['#D4AF37', '#3b82f6', '#10b981', '#a855f7', '#fb923c']
+        }
       case 'fabric':
         return {
           bg: 'bg-[#f3f2f1] text-[#323130]',
@@ -471,11 +526,9 @@ const ReportPreviewDashboardContent: React.FC = () => {
     return () => cancelAnimationFrame(animationFrameId)
   }, [confetti.length])
 
-  // ── Mount: fetch remote reports + apply persisted theme ──
+  // ── Mount: fetch remote reports ──
   useEffect(() => {
     fetchReports()
-    const savedTheme = localStorage.getItem('flux-report-theme') as 'dark' | 'light'
-    if (savedTheme) setTheme(savedTheme)
   }, [])
 
   // ── Canvas Particle System ──
@@ -484,6 +537,11 @@ const ReportPreviewDashboardContent: React.FC = () => {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+
+    if (!enableParticles) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      return
+    }
 
     let animationFrameId: number
     let width = (canvas.width = window.innerWidth)
@@ -537,7 +595,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
       cancelAnimationFrame(animationFrameId)
       window.removeEventListener('resize', handleResize)
     }
-  }, [theme])
+  }, [theme, enableParticles])
 
   // Write theme classes
   useEffect(() => {
@@ -765,8 +823,8 @@ Do not return markdown wraps, only raw JSON text.
     { name: 'Closed Defects', value: data.defectsLastWeek.closed, hex: '#10b981' }
   ]
 
-  const gridColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)'
-  const chartText = theme === 'dark' ? '#8b8b8b' : '#4b5563'
+  const gridColor = 'var(--chart-grid)'
+  const chartText = 'var(--chart-text)'
 
   // ── Exports ──
   const downloadMarkdown = () => {
@@ -804,26 +862,271 @@ Do not return markdown wraps, only raw JSON text.
   }
 
   const downloadPPTX = () => {
-    let pptx = `SLIDE 1: QA EXECUTIVE SUMMARY\n`
-    pptx += `Project: ${data.projectName}\n`
-    pptx += `Period: ${data.weekStart} to ${data.weekEnd}\n\n`
-    pptx += `SLIDE 2: KEY PERFORMANCE INDICATORS\n`
-    pptx += `- Support Emails: ${data.supportEmails}\n`
-    pptx += `- New Features Verified: ${data.newFeatures}\n`
-    pptx += `- Engineering Code Fixes: ${data.codeFixes}\n\n`
-    pptx += `SLIDE 3: AI ACHIEVEMENTS & SUMMARY\n`
-    aiSummary.achievements.forEach(ach => { pptx += `- ${ach}\n` })
-    pptx += `\nSLIDE 4: ROADMAP PRIORITIES FOR NEXT WEEK\n`
-    data.nextPriorities.forEach(p => { pptx += `- ${p.title} (Assigned to: ${p.owner})\n` })
+    const ppt = new pptxgen()
+    
+    // Set 16:9 widescreen layout
+    ppt.layout = 'LAYOUT_16X9'
+    
+    const darkBg = '0F172A' // Slate-900 background style
+    const goldText = 'D4AF37'
+    const whiteText = 'FFFFFF'
+    const grayText = '94A3B8'
+    
+    // Slide 1: Title Slide
+    const s1 = ppt.addSlide()
+    s1.background = { fill: darkBg }
+    s1.addText('FLUX QA EXECUTIVE WEEKLY STATUS REPORT', {
+      x: 0.8,
+      y: 1.8,
+      w: 11.2,
+      h: 0.5,
+      fontSize: 16,
+      bold: true,
+      color: goldText,
+      fontFace: 'Segoe UI'
+    })
+    s1.addText(data.projectName.toUpperCase(), {
+      x: 0.8,
+      y: 2.3,
+      w: 11.2,
+      h: 1.2,
+      fontSize: 38,
+      bold: true,
+      color: whiteText,
+      fontFace: 'Segoe UI'
+    })
+    s1.addText(`Report Week: ${data.weekStart} to ${data.weekEnd}`, {
+      x: 0.8,
+      y: 3.6,
+      w: 11.2,
+      h: 0.5,
+      fontSize: 14,
+      color: grayText,
+      fontFace: 'Segoe UI'
+    })
+    s1.addText('CONFIDENTIAL DEVELOPER & OPERATIONS OUTLINE', {
+      x: 0.8,
+      y: 6.0,
+      w: 11.2,
+      h: 0.4,
+      fontSize: 10,
+      bold: true,
+      color: 'F43F5E',
+      fontFace: 'Segoe UI'
+    })
 
-    const blob = new Blob([pptx], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${data.projectName.toLowerCase().replace(/\s+/g, '-')}-presentation.pptx.txt`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast({ title: 'PowerPoint Outline Exported!', description: 'Downloaded structural text presentation slides.' })
+    // Slide 2: KPI Metrics Overview
+    const s2 = ppt.addSlide()
+    s2.background = { fill: darkBg }
+    s2.addText('Key Performance Indicators', {
+      x: 0.8,
+      y: 0.5,
+      w: 11.2,
+      h: 0.6,
+      fontSize: 24,
+      bold: true,
+      color: goldText,
+      fontFace: 'Segoe UI'
+    })
+
+    const kpiData = [
+      { title: 'Support Emails', val: data.supportEmails, desc: 'Active support queue exceptions' },
+      { title: 'New Features', val: data.newFeatures, desc: 'Sprint modules tested' },
+      { title: 'Code Fixes', val: data.codeFixes, desc: 'Regression patches verified' },
+      { title: 'Defects Open', val: data.defectsLastWeek.open, desc: 'Unresolved active bugs' },
+      { title: 'Defects Closed', val: data.defectsLastWeek.closed, desc: 'Bugs verified and closed' }
+    ]
+
+    kpiData.forEach((kpi, idx) => {
+      const xPos = 0.8 + idx * 2.3
+      // Draw background shape for card
+      s2.addShape('rect', {
+        x: xPos,
+        y: 1.8,
+        w: 2.1,
+        h: 3.5,
+        fill: { color: '1E293B' },
+        line: { color: '334155', width: 1 }
+      })
+      
+      s2.addText(kpi.title, {
+        x: xPos + 0.1,
+        y: 2.1,
+        w: 1.9,
+        h: 0.4,
+        fontSize: 11,
+        bold: true,
+        color: grayText,
+        fontFace: 'Segoe UI',
+        align: 'center'
+      })
+      
+      s2.addText(String(kpi.val), {
+        x: xPos + 0.1,
+        y: 2.7,
+        w: 1.9,
+        h: 0.8,
+        fontSize: 38,
+        bold: true,
+        color: goldText,
+        fontFace: 'Segoe UI',
+        align: 'center'
+      })
+      
+      s2.addText(kpi.desc, {
+        x: xPos + 0.1,
+        y: 3.8,
+        w: 1.9,
+        h: 1.0,
+        fontSize: 10,
+        color: grayText,
+        fontFace: 'Segoe UI',
+        align: 'center'
+      })
+    })
+
+    // Slide 3: Sprint Quality & Readiness Details
+    const s3 = ppt.addSlide()
+    s3.background = { fill: darkBg }
+    s3.addText('Sprint Quality & Release Readiness', {
+      x: 0.8,
+      y: 0.5,
+      w: 11.2,
+      h: 0.6,
+      fontSize: 24,
+      bold: true,
+      color: goldText,
+      fontFace: 'Segoe UI'
+    })
+
+    s3.addText('Executive Quality Score', {
+      x: 0.8,
+      y: 1.6,
+      w: 3.5,
+      h: 0.3,
+      fontSize: 13,
+      bold: true,
+      color: grayText,
+      fontFace: 'Segoe UI'
+    })
+    s3.addText(`${qualityStats.score}`, {
+      x: 0.8,
+      y: 1.9,
+      w: 3.5,
+      h: 0.9,
+      fontSize: 58,
+      bold: true,
+      color: goldText,
+      fontFace: 'Segoe UI'
+    })
+    s3.addText(`${qualityStats.label.toUpperCase()}\n\n${qualityStats.desc}`, {
+      x: 0.8,
+      y: 3.0,
+      w: 3.5,
+      h: 2.0,
+      fontSize: 11,
+      color: whiteText,
+      fontFace: 'Segoe UI'
+    })
+
+    // Health metrics card block
+    s3.addShape('rect', {
+      x: 4.8,
+      y: 1.6,
+      w: 7.0,
+      h: 3.8,
+      fill: { color: '1E293B' },
+      line: { color: '334155', width: 1 }
+    })
+    s3.addText('Regression & Sprint Health Analytics', {
+      x: 5.1,
+      y: 1.9,
+      w: 6.4,
+      h: 0.4,
+      fontSize: 16,
+      bold: true,
+      color: goldText,
+      fontFace: 'Segoe UI'
+    })
+    
+    const bullets = [
+      `QA Health Verification Score: ${sprintHealthScore}%`,
+      `Estimated Release Readiness Level: ${releaseReadinessScore}%`,
+      `Total Release Ticket Volume: ${totalCases} test items`,
+      `Passed Regression Checks: ${passedCases} items`,
+      `Failed / Broken Regressions: ${failedCases} items`,
+      `Blocked / Impeded Regressions: ${blockedCases} items`
+    ]
+    s3.addText(bullets.map(b => `• ${b}`).join('\n\n'), {
+      x: 5.1,
+      y: 2.5,
+      w: 6.4,
+      h: 2.6,
+      fontSize: 12,
+      color: whiteText,
+      fontFace: 'Segoe UI'
+    })
+
+    // Slide 4: AI Insights & Summary Achievements
+    const s4 = ppt.addSlide()
+    s4.background = { fill: darkBg }
+    s4.addText('AI Weekly Achievements Summary', {
+      x: 0.8,
+      y: 0.5,
+      w: 11.2,
+      h: 0.6,
+      fontSize: 24,
+      bold: true,
+      color: goldText,
+      fontFace: 'Segoe UI'
+    })
+    
+    const achs = aiSummary.achievements.map(a => `• ${a}`).join('\n\n')
+    s4.addText(achs || '• No developer notes or achievements compiled.', {
+      x: 0.8,
+      y: 1.5,
+      w: 11.2,
+      h: 4.5,
+      fontSize: 14,
+      color: whiteText,
+      fontFace: 'Segoe UI'
+    })
+
+    // Slide 5: Roadmap Priorities
+    const s5 = ppt.addSlide()
+    s5.background = { fill: darkBg }
+    s5.addText('Roadmap & Next Week Priorities', {
+      x: 0.8,
+      y: 0.5,
+      w: 11.2,
+      h: 0.6,
+      fontSize: 24,
+      bold: true,
+      color: goldText,
+      fontFace: 'Segoe UI'
+    })
+    
+    const prs = data.nextPriorities.map(p => `• ${p.title} (Owner: ${p.owner}, Due: ${p.dueDate})\n  ${p.description}`).join('\n\n')
+    s5.addText(prs || '• No immediate priority queue changes configured.', {
+      x: 0.8,
+      y: 1.5,
+      w: 11.2,
+      h: 4.5,
+      fontSize: 11.5,
+      color: whiteText,
+      fontFace: 'Segoe UI'
+    })
+
+    // Save output
+    const outName = `${data.projectName.toLowerCase().replace(/\s+/g, '-')}-presentation`
+    ppt.writeFile({ fileName: outName })
+      .then(() => {
+        toast({ title: 'PowerPoint Exported!', description: `Saved ${outName}.pptx successfully.` })
+      })
+      .catch((err) => {
+        console.error(err)
+        toast({ variant: 'destructive', title: 'Export Failed', description: 'Could not create PowerPoint (.pptx) file.' })
+      })
   }
 
   const handlePrint = () => {
@@ -899,22 +1202,24 @@ Do not return markdown wraps, only raw JSON text.
             </div>
 
             {/* Jump Anchors */}
-            <nav className="hidden xl:flex items-center gap-1 p-1 bg-white/5 border border-white/5 rounded-2xl">
+            <nav className={`hidden xl:flex items-center gap-1 p-1 rounded-2xl border transition-all ${theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-black/5 border-slate-200'}`}>
               {[
                 { id: 'overview', label: 'Overview' },
-                { id: 'kpis', label: 'KPI Cards' },
-                { id: 'comparison', label: 'WoW Comparison' },
-                { id: 'aiSummary', label: 'AI Summary' },
-                { id: 'charts', label: 'Weekly Charts' },
-                { id: 'historyDashboard', label: 'Historical Analytics' },
-                { id: 'details', label: 'Data Tables' },
-                { id: 'team', label: 'Team Allocation' },
+                { id: 'kpis', label: 'KPIs' },
+                { id: 'sprintHealth', label: 'Sprint Health' },
+                { id: 'releaseTesting', label: 'Release' },
+                { id: 'supportLog', label: 'Support' },
+                { id: 'defects', label: 'Defects' },
+                { id: 'charts', label: 'Charts' },
+                { id: 'aiSummary', label: 'AI Insights' },
+                { id: 'comparison', label: 'WoW' },
+                { id: 'historyDashboard', label: 'History' },
                 { id: 'roadmap', label: 'Priorities' }
               ].map(item => (
                 <button
                   key={item.id}
                   onClick={() => scrollToSection(item.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activeSection === item.id ? 'bg-accent-gold text-black shadow-lg shadow-accent-gold/20' : 'text-text-muted hover:text-white'}`}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activeSection === item.id ? 'bg-accent-gold text-black shadow-lg shadow-accent-gold/20' : `text-text-muted ${theme === 'dark' ? 'hover:text-white' : 'hover:text-slate-950'}`}`}
                 >
                   {item.label}
                 </button>
@@ -934,37 +1239,55 @@ Do not return markdown wraps, only raw JSON text.
                     description: next ? 'Confidential developer notes and internal bug metrics hidden.' : 'Restored full view.'
                   })
                 }}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-bold ${clientMode ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-white/5 border-white/10 text-text-secondary hover:text-white'}`}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-bold ${clientMode ? 'bg-green-500/10 border-green-500/30 text-green-400' : theme === 'dark' ? 'bg-white/5 border-white/10 text-text-secondary hover:text-white' : 'bg-black/5 border-slate-200 text-slate-600 hover:text-slate-800'}`}
               >
                 {clientMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 Client Mode
               </button>
 
+              {/* Particle Background Toggle */}
+              <button
+                onClick={() => {
+                  const next = !enableParticles
+                  setEnableParticles(next)
+                  localStorage.setItem('flux-enable-particles', String(next))
+                  toast({
+                    title: next ? 'Ambient Motion Enabled' : 'Ambient Motion Disabled',
+                    description: next ? 'Subtle particle background activated.' : 'Particle background disabled for reduced motion.'
+                  })
+                }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-bold ${enableParticles ? 'bg-accent-gold/10 border-accent-gold/30 text-accent-gold' : theme === 'dark' ? 'bg-white/5 border-white/10 text-text-secondary hover:text-white' : 'bg-black/5 border-slate-200 text-slate-600 hover:text-slate-800'}`}
+              >
+                <Activity className="w-3.5 h-3.5" />
+                {enableParticles ? 'Motion ON' : 'Motion OFF'}
+              </button>
+
               {/* Theme Gallery Selection Dropdown */}
-              <div className="relative flex items-center gap-1.5 px-3 py-2 bg-white/5 border border-white/10 rounded-xl">
+              <div className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-black/5 border-slate-200'}`}>
                 <Palette className="w-3.5 h-3.5 text-accent-gold" />
                 <select
                   value={themeGallery}
                   onChange={e => {
-                    const t = e.target.value as any
-                    setThemeGallery(t)
-                    localStorage.setItem('flux-report-theme-gallery', t)
+                    const t = e.target.value as ThemeId
+                    setGlobalTheme(t)
                   }}
-                  className="bg-transparent text-xs text-white border-none focus:outline-none font-bold cursor-pointer max-w-[110px]"
+                  className={`bg-transparent text-xs border-none focus:outline-none font-bold cursor-pointer max-w-[110px] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
                 >
-                  <option value="glassmorphism">Glassmorphism</option>
-                  <option value="fabric">Fabric</option>
-                  <option value="github">GitHub</option>
-                  <option value="apple">Apple</option>
-                  <option value="material">Material 3</option>
-                  <option value="cred">CRED Black</option>
-                  <option value="powerbi">Power BI</option>
-                  <option value="cyber">Cyberpunk</option>
+                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="dark">Dark</option>
+                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="light">Light</option>
+                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="glassmorphism">Glassmorphism</option>
+                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="fabric">Fabric</option>
+                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="github">GitHub</option>
+                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="apple">Apple</option>
+                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="material">Material 3</option>
+                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="cred">CRED Black</option>
+                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="powerbi">Power BI</option>
+                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="cyber">Cyberpunk</option>
                 </select>
               </div>
 
               <button
-                onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+                onClick={() => setGlobalTheme(theme === 'dark' ? 'light' : 'dark')}
                 className={`p-2.5 rounded-xl border transition-all ${theme==='dark'?'bg-white/5 border-white/10 text-yellow-400 hover:bg-white/10':'bg-white border-slate-200 text-purple-600 hover:bg-slate-100 shadow-sm'}`}
               >
                 {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -994,16 +1317,16 @@ Do not return markdown wraps, only raw JSON text.
                       className={`absolute right-0 mt-3 w-48 border rounded-2xl overflow-hidden shadow-2xl z-50 ${theme==='dark'?'bg-[#111114] border-white/10 text-white':'bg-white border-slate-200 text-slate-800'}`}
                     >
                       <div className="p-1.5 flex flex-col gap-1">
-                        <button onClick={() => { handlePrint(); setShowExportMenu(false) }} className="flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold hover:bg-white/5 transition-colors">
+                        <button onClick={() => { handlePrint(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
                           <Printer className="w-4 h-4 text-accent-gold" /> Print to PDF
                         </button>
-                        <button onClick={() => { downloadPPTX(); setShowExportMenu(false) }} className="flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold hover:bg-white/5 transition-colors">
+                        <button onClick={() => { downloadPPTX(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
                           <FileText className="w-4 h-4 text-blue-400" /> PowerPoint Outline
                         </button>
-                        <button onClick={() => { downloadHTML(); setShowExportMenu(false) }} className="flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold hover:bg-white/5 transition-colors">
+                        <button onClick={() => { downloadHTML(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
                           <LayoutGrid className="w-4 h-4 text-purple-400" /> Standalone HTML
                         </button>
-                        <button onClick={() => { downloadMarkdown(); setShowExportMenu(false) }} className="flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold hover:bg-white/5 transition-colors">
+                        <button onClick={() => { downloadMarkdown(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
                           <Copy className="w-4 h-4 text-green-400" /> Markdown File
                         </button>
                       </div>
@@ -1058,12 +1381,178 @@ Do not return markdown wraps, only raw JSON text.
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10 pt-8 sm:pt-12 flex flex-col gap-12 sm:gap-16">
-        
-        {/* ── Sprint Health & Release Readiness Meter ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
-          {/* Sprint Health Dashboard */}
-          <div className={`p-6 rounded-3xl border flex flex-col gap-4 ${tS.card} ${tS.border} ${tS.glow}`}>
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10 pt-8 sm:pt-12 flex flex-col gap-16"
+      >
+
+        {/* ══════════════════════════════════════════════════════════
+            EXECUTIVE SUMMARY
+        ══════════════════════════════════════════════════════════ */}
+
+        {/* ── SECTION 1: HERO & QUALITY SCORE PANEL ── */}
+        <motion.section
+          variants={sectionVariants}
+          ref={sectionsRef.overview}
+          className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 items-center pt-2"
+        >
+          <div className="flex flex-col gap-6">
+            <div className="flex items-center gap-2 flex-wrap">
+              <motion.span
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: [0.8, 1.05, 1] }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+                className={`px-3.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest shadow-md ${passRate >= 75 ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-amber-500/10 text-accent-gold border-accent-gold/20'}`}
+              >
+                🟢 QA Status: {passRate >= 75 ? 'Stable' : 'Warning'}
+              </motion.span>
+              <span className={`px-3.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest ${theme==='dark'?'bg-white/5 border-white/10 text-white/60':'bg-slate-200/50 border-slate-300 text-slate-600'}`}>
+                WEEK: {data.weekStart} – {data.weekEnd}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="text-accent-gold font-clash font-extrabold uppercase text-sm tracking-widest">{data.projectName}</span>
+              <h1 className={`font-clash font-black text-4xl sm:text-5xl tracking-tight leading-none ${theme==='dark'?'text-white':'text-slate-900'}`}>
+                {data.reportTitle || 'Weekly Status Report'}
+              </h1>
+            </div>
+            <p className={`text-base sm:text-lg font-normal leading-relaxed max-w-2xl ${theme==='dark'?'text-white/60':'text-slate-600'}`}>
+              {data.subtitle || 'Executive-level verification metrics, team load, release health and issue analytics.'}
+            </p>
+            <div className="flex items-center gap-6 mt-2 flex-wrap">
+              <div>
+                <span className="text-3xl font-black text-accent-gold block"><CountUpNumber end={releaseCount} /></span>
+                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme==='dark'?'text-white/40':'text-slate-400'}`}>Items Tested</span>
+              </div>
+              <div className="w-px h-10 bg-white/10" />
+              <div>
+                <span className="text-3xl font-black text-[#10b981] block"><CountUpNumber end={passRate} suffix="%" /></span>
+                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme==='dark'?'text-white/40':'text-slate-400'}`}>Test Pass Rate</span>
+              </div>
+              <div className="w-px h-10 bg-white/10" />
+              <div>
+                <span className="text-3xl font-black text-blue-400 block"><CountUpNumber end={defectClosureRate} suffix="%" /></span>
+                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme==='dark'?'text-white/40':'text-slate-400'}`}>Defect Closure</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Executive Quality Score Gauge */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={`p-6 rounded-3xl border flex flex-col items-center justify-between text-center relative overflow-hidden shadow-2xl ${theme==='dark'?'bg-white/[0.02] border-white/10':'bg-white border-slate-200'}`}
+          >
+            <div className="absolute inset-0 bg-gradient-to-tr from-accent-gold/5 to-blue-500/5 pointer-events-none" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-2">Executive Quality Score</span>
+            <div className="relative w-36 h-36 flex items-center justify-center my-3">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="40" fill="none" stroke={theme==='dark'?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'} strokeWidth="8" strokeDasharray="188.4 251.2" strokeLinecap="round" />
+                <motion.circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="none"
+                  stroke="#d4af37"
+                  strokeWidth="8"
+                  initial={{ strokeDasharray: "0 251.2" }}
+                  animate={{ strokeDasharray: `${(qualityStats.score / 100) * 188.4} 251.2` }}
+                  transition={{ duration: 1.2, ease: "easeOut" }}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute flex flex-col items-center justify-center">
+                <motion.span
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ delay: 1.2, duration: 0.4 }}
+                  className={`text-4xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}
+                >
+                  <CountUpNumber end={qualityStats.score} />
+                </motion.span>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${qualityStats.color.split(' ')[0]}`}>{qualityStats.label}</span>
+              </div>
+            </div>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 }}
+              className={`p-3 rounded-xl border text-xs leading-normal w-full ${qualityStats.color}`}
+            >
+              <p className="font-semibold">{qualityStats.desc}</p>
+            </motion.div>
+          </motion.div>
+        </motion.section>
+
+        {/* ══════════════════════════════════════════════════════════
+            KPI OVERVIEW
+        ══════════════════════════════════════════════════════════ */}
+
+        {/* ── SECTION 2: KPI SCORECARDS ── */}
+        <motion.section
+          variants={sectionVariants}
+          ref={sectionsRef.kpis}
+          className="flex flex-col gap-5"
+        >
+          <div className="flex items-center gap-2">
+            <Activity className="w-5 h-5 text-accent-gold" />
+            <h2 className="text-2xl font-extrabold font-clash">Key Performance Indicators</h2>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 items-stretch">
+            {[
+              { label: 'Support Emails', val: data.supportEmails, icon: Mail, color: 'text-blue-400', desc: 'Active support exceptions', sparklineData: getHistoricalValues(f => f.supportEmails) },
+              { label: 'New Features', val: data.newFeatures, icon: Zap, color: 'text-accent-gold', desc: 'Sprint modules tested', sparklineData: getHistoricalValues(f => f.newFeatures) },
+              { label: 'Code Fixes', val: data.codeFixes, icon: Wrench, color: 'text-purple-400', desc: 'Regression patches verified', sparklineData: getHistoricalValues(f => f.codeFixes) },
+              { label: 'Defects Reported', val: data.defectsLastWeek.reported, icon: AlertTriangle, color: 'text-red-400', desc: 'Bugs raised last week', sparklineData: getHistoricalValues(f => f.defectsLastWeek.reported) },
+              { label: 'Defects Closed', val: data.defectsLastWeek.closed, icon: Check, color: 'text-green-400', desc: 'Bugs resolved/closed', sparklineData: getHistoricalValues(f => f.defectsLastWeek.closed) },
+              { label: 'Open Defects', val: data.defectsLastWeek.open, icon: Shield, color: 'text-orange-400', desc: 'Backlog open defect count', sparklineData: getHistoricalValues(f => f.defectsLastWeek.open), pulse: data.defectsLastWeek.open > 5, isInternal: true },
+              { label: 'Team Size', val: data.newFeatureTeam.length + data.supportTeam.length + data.automationTeam.length, icon: Users, color: 'text-teal-400', desc: 'Active verification specialists', sparklineData: getHistoricalValues(f => f.newFeatureTeam.length + f.supportTeam.length + f.automationTeam.length), isInternal: true },
+              { label: 'Backend Updates', val: data.lastWeek.backendUpdation, icon: History, color: 'text-pink-400', desc: 'Hotfixes & schema mods', sparklineData: getHistoricalValues(f => f.lastWeek.backendUpdation), isInternal: true },
+              { label: 'Change Requests', val: data.lastWeek.changeRequest, icon: LayoutGrid, color: 'text-indigo-400', desc: 'Scope amendments verified', sparklineData: getHistoricalValues(f => f.lastWeek.changeRequest) },
+              { label: 'QA Health Score', val: passRate, suffix: '%', icon: Star, color: 'text-amber-400', desc: 'Release verification score', sparklineData: getHistoricalValues(f => { const p = f.releaseItems.filter((i: any) => i?.status === 'Pass').length; return f.releaseItems.length ? Math.round((p / f.releaseItems.length) * 100) : 0 }) }
+            ].filter(kpi => !clientMode || !kpi.isInternal).map((kpi, idx) => (
+              <motion.div
+                key={kpi.label}
+                initial={{ opacity: 0, y: 15 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                whileHover={{ y: -6, scale: 1.02, boxShadow: theme === 'dark' ? '0 10px 30px -10px rgba(255,255,255,0.08)' : '0 10px 30px -10px rgba(0,0,0,0.12)' }}
+                viewport={{ once: true }}
+                transition={{ delay: idx * 0.04 }}
+                className={`p-5 rounded-2xl border flex flex-col justify-between gap-3 group relative overflow-hidden transition-all duration-300 min-h-[140px] ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme==='dark'?'bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]':'bg-white border-slate-200 hover:border-slate-300'}`}
+              >
+                <div className="flex items-center justify-between">
+                  <kpi.icon className={`w-5 h-5 ${kpi.color} ${kpi.pulse ? 'animate-pulse' : ''}`} />
+                  {kpi.sparklineData.length > 1 && (
+                    <MiniSparkline data={kpi.sparklineData} color={kpi.color.includes('gold') ? '#d4af37' : kpi.color.includes('blue') ? '#60a5fa' : kpi.color.includes('green') ? '#4ade80' : '#a855f7'} />
+                  )}
+                </div>
+                <div>
+                  <span className={`text-3xl font-black block tracking-tight ${theme==='dark'?'text-white':'text-slate-800'}`}>
+                    <CountUpNumber end={kpi.val} suffix={kpi.suffix} />
+                  </span>
+                  <span className={`text-xs font-extrabold ${theme==='dark'?'text-white/80':'text-slate-700'}`}>{kpi.label}</span>
+                </div>
+                <p className="text-[10px] text-text-muted leading-normal">{kpi.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+
+        {/* ══════════════════════════════════════════════════════════
+            SPRINT HEALTH
+        ══════════════════════════════════════════════════════════ */}
+
+        {/* ── SECTION 3: SPRINT HEALTH & RELEASE READINESS ── */}
+        <motion.div
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+        >
+          {/* ── Sprint Health Dashboard ── */}
+          <div ref={sectionsRef.sprintHealth} className={`p-6 rounded-3xl border flex flex-col gap-4 ${tS.card} ${tS.border} ${tS.glow}`}>
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[10px] text-text-muted uppercase font-black tracking-widest block">Sprint Validation Status</span>
@@ -1090,25 +1579,34 @@ Do not return markdown wraps, only raw JSON text.
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${sprintHealthScore}%` }}
-                  transition={{ duration: 1, ease: 'easeOut' }}
-                  className={`h-full rounded-full ${
+                  transition={{ duration: 1.2, ease: 'easeOut' }}
+                  onAnimationComplete={() => setIsHealthBarFilled(true)}
+                  className={`h-full rounded-full relative overflow-hidden ${
                     sprintHealthScore >= 90 ? 'bg-gradient-to-r from-green-500 to-emerald-400' :
                     sprintHealthScore >= 70 ? 'bg-gradient-to-r from-amber-500 to-yellow-400' :
                     'bg-gradient-to-r from-red-500 to-rose-400'
                   }`}
-                />
+                >
+                  {!isHealthBarFilled && (
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                      animate={{ x: ['-100%', '100%'] }}
+                      transition={{ repeat: Infinity, duration: 1.0, ease: 'linear' }}
+                    />
+                  )}
+                </motion.div>
               </div>
             </div>
 
             {/* Sprint Status Cards Grid */}
             <div className="grid grid-cols-3 gap-3 mt-2">
               {[
-                { label: 'Passed', val: passedCases, color: 'text-green-400 bg-green-500/5' },
-                { label: 'Failed', val: failedCases, color: 'text-red-400 bg-red-500/5' },
-                { label: 'Blocked', val: blockedCases, color: 'text-orange-400 bg-orange-500/5' },
-                { label: 'Pending', val: pendingCases, color: 'text-yellow-400 bg-yellow-500/5' },
-                { label: 'Not Executed', val: notExecutedCases, color: 'text-white/45 bg-white/5' },
-                { label: 'In Progress', val: inProgressCases, color: 'text-blue-400 bg-blue-500/5' }
+                { label: 'Passed', val: passedCases, color: theme === 'dark' ? 'text-green-400 bg-green-500/5' : 'text-green-600 bg-green-50' },
+                { label: 'Failed', val: failedCases, color: theme === 'dark' ? 'text-red-400 bg-red-500/5' : 'text-red-600 bg-red-50' },
+                { label: 'Blocked', val: blockedCases, color: theme === 'dark' ? 'text-orange-400 bg-orange-500/5' : 'text-orange-600 bg-orange-50' },
+                { label: 'Pending', val: pendingCases, color: theme === 'dark' ? 'text-yellow-400 bg-yellow-500/5' : 'text-amber-600 bg-amber-50' },
+                { label: 'Not Executed', val: notExecutedCases, color: theme === 'dark' ? 'text-white/45 bg-white/5' : 'text-slate-500 bg-slate-100' },
+                { label: 'In Progress', val: inProgressCases, color: theme === 'dark' ? 'text-blue-400 bg-blue-500/5' : 'text-blue-600 bg-blue-50' }
               ].map(item => (
                 <div key={item.label} className={`p-3 rounded-2xl border ${tS.border} ${item.color} flex flex-col justify-between`}>
                   <span className="text-[9px] uppercase font-bold tracking-wider text-text-muted">{item.label}</span>
@@ -1190,203 +1688,290 @@ Do not return markdown wraps, only raw JSON text.
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        {/* ── SECTION 1: HERO & QUALITY SCORE PANEL ── */}
-        <section ref={sectionsRef.overview} className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8 items-center pt-4">
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-2">
-              <span className={`px-3.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest shadow-md ${passRate >= 75 ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-amber-500/10 text-accent-gold border-accent-gold/20'}`}>
-                🟢 QA Status: {passRate >= 75 ? 'Stable' : 'Warning'}
-              </span>
-              <span className={`px-3.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest ${theme==='dark'?'bg-white/5 border-white/10 text-white/60':'bg-slate-200/50 border-slate-300 text-slate-600'}`}>
-                WEEK: {data.weekStart} – {data.weekEnd}
-              </span>
-            </div>
+        {/* ════════════════════════════════════════════════════════════
+            RELEASE TESTING STATUS
+        ════════════════════════════════════════════════════════════ */}
 
-            <div className="flex flex-col gap-2">
-              <span className="text-accent-gold font-clash font-extrabold uppercase text-sm tracking-widest">{data.projectName}</span>
-              <h1 className={`font-clash font-black text-4xl sm:text-6xl tracking-tight leading-none ${theme==='dark'?'text-white':'text-slate-900'}`}>
-                {data.reportTitle || 'Weekly status Report'}
-              </h1>
-            </div>
-
-            <p className={`text-lg sm:text-xl font-normal leading-relaxed max-w-2xl ${theme==='dark'?'text-white/60':'text-slate-600'}`}>
-              {data.subtitle || 'Executive-level verification metrics, team load, release health and issue analytics.'}
-            </p>
-
-            <div className="flex items-center gap-6 mt-2 flex-wrap">
-              <div>
-                <span className="text-3xl font-black text-accent-gold block"><CountUpNumber end={releaseCount} /></span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme==='dark'?'text-white/40':'text-slate-400'}`}>Items Tested</span>
-              </div>
-              <div className="w-[1px] h-10 bg-white/10" />
-              <div>
-                <span className="text-3xl font-black text-[#10b981] block"><CountUpNumber end={passRate} suffix="%" /></span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme==='dark'?'text-white/40':'text-slate-400'}`}>Test Pass Rate</span>
-              </div>
-              <div className="w-[1px] h-10 bg-white/10" />
-              <div>
-                <span className="text-3xl font-black text-blue-400 block"><CountUpNumber end={defectClosureRate} suffix="%" /></span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme==='dark'?'text-white/40':'text-slate-400'}`}>Defect Closure</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Premium Executive Quality Score Gauge Arc */}
-          <div className="flex justify-center items-center relative h-[300px] w-full">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className={`p-6 rounded-3xl border w-full max-w-[340px] flex flex-col items-center justify-between text-center relative z-10 overflow-hidden shadow-2xl ${theme==='dark'?'bg-white/[0.02] border-white/10':'bg-white border-slate-200'}`}
-            >
-              <div className="absolute inset-0 bg-gradient-to-tr from-accent-gold/5 to-blue-500/5 pointer-events-none" />
-              <span className={`text-[10px] font-black uppercase tracking-widest text-text-muted mb-2`}>Executive Quality Score</span>
-              
-              <div className="relative w-40 h-40 flex items-center justify-center my-4">
-                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="40" fill="none" stroke={theme==='dark'?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'} strokeWidth="8" strokeDasharray="188.4 251.2" strokeLinecap="round" />
-                  <circle cx="50" cy="50" r="40" fill="none" stroke="#d4af37" strokeWidth="8" strokeDasharray={`${(qualityStats.score / 100) * 188.4} 251.2`} strokeLinecap="round" />
-                </svg>
-                <div className="absolute flex flex-col items-center justify-center">
-                  <span className="text-4xl font-black text-white"><CountUpNumber end={qualityStats.score} /></span>
-                  <span className={`text-[9px] font-bold uppercase tracking-widest ${qualityStats.color.split(' ')[0]}`}>{qualityStats.label}</span>
-                </div>
-              </div>
-
-              <div className={`mt-2 p-3 rounded-xl border text-xs leading-normal ${qualityStats.color}`}>
-                <p className="font-semibold">{qualityStats.desc}</p>
-              </div>
-            </motion.div>
-          </div>
-        </section>
-
-        {/* ── SECTION 2: ENHANCED KPI SCORECARDS ── */}
-        <section ref={sectionsRef.kpis} className="flex flex-col gap-6">
+        {/* ── SECTION 4: RELEASE TESTING TABLE ── */}
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          ref={sectionsRef.releaseTesting}
+          className="flex flex-col gap-5"
+        >
           <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-accent-gold" />
-            <h2 className="text-2xl font-extrabold font-clash">Key Performance Indicators</h2>
+            <CheckCheck className="w-5 h-5 text-accent-gold" />
+            <h2 className="text-2xl font-extrabold font-clash">Release Testing Status</h2>
           </div>
+          <div className={`overflow-x-auto rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+            <table className="w-full border-collapse text-left">
+              <thead className="sticky top-0 z-10">
+                <tr className={`border-b ${theme==='dark'?'border-white/5 bg-[#0f0f12] text-white/55':'border-slate-200 bg-slate-50 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
+                  <th className="py-3.5 px-5">Task ID</th>
+                  <th className="py-3.5 px-5">Feature</th>
+                  <th className="py-3.5 px-5">Assignee</th>
+                  <th className="py-3.5 px-5 text-center">Status</th>
+                  <th className="py-3.5 px-5 text-center">Priority</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.releaseItems.map(item => (
+                  <tr key={item.id} className={`border-b text-xs transition-colors hover:bg-white/[0.02] ${theme==='dark'?'border-white/5':'border-slate-100'}`}>
+                    <td className="py-3.5 px-5 font-mono font-bold text-accent-gold">{item.taskId}</td>
+                    <td className={`py-3.5 px-5 font-semibold ${theme==='dark'?'text-white':'text-slate-800'}`}>{item.featureName}</td>
+                    <td className="py-3.5 px-5 text-text-secondary">{item.assignee}</td>
+                    <td className="py-3.5 px-5 text-center">
+                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${item.status==='Pass'?'bg-green-500/10 text-green-400':item.status==='Fail'?'bg-red-500/10 text-red-400':'bg-amber-500/10 text-accent-gold'}`}>{item.status}</span>
+                    </td>
+                    <td className="py-3.5 px-5 text-center">
+                      <span className={`text-[10px] font-bold ${item.priority==='Critical'?'text-red-400':item.priority==='High'?'text-orange-400':'text-text-muted'}`}>{item.priority}</span>
+                    </td>
+                  </tr>
+                ))}
+                {data.releaseItems.length === 0 && (
+                  <tr><td colSpan={5} className="py-8 text-center text-xs text-text-muted">No items configured.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </motion.section>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+        {/* ════════════════════════════════════════════════════════════
+            SUPPORT & EXCEPTION LOG
+        ════════════════════════════════════════════════════════════ */}
+
+        {/* ── SECTION 5: SUPPORT LOG TABLE ── */}
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          ref={sectionsRef.supportLog}
+          className="flex flex-col gap-5"
+        >
+          <div className="flex items-center gap-2">
+            <Mail className="w-5 h-5 text-accent-gold" />
+            <h2 className="text-2xl font-extrabold font-clash">Support & Exception Log</h2>
+          </div>
+          <div className={`overflow-x-auto rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+            <table className="w-full border-collapse text-left">
+              <thead className="sticky top-0 z-10">
+                <tr className={`border-b ${theme==='dark'?'border-white/5 bg-[#0f0f12] text-white/55':'border-slate-200 bg-slate-50 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
+                  <th className="py-3.5 px-5">Ticket</th>
+                  <th className="py-3.5 px-5">Description</th>
+                  <th className="py-3.5 px-5">QA</th>
+                  <th className="py-3.5 px-5 text-center">Status</th>
+                  <th className="py-3.5 px-5 text-center">Priority</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.supportTickets.map(ticket => (
+                  <tr key={ticket.id} className={`border-b text-xs transition-colors hover:bg-white/[0.02] ${theme==='dark'?'border-white/5':'border-slate-100'}`}>
+                    <td className="py-3.5 px-5 font-mono font-bold text-blue-400">{ticket.taskId}</td>
+                    <td className={`py-3.5 px-5 font-semibold ${theme==='dark'?'text-white':'text-slate-800'}`}>{ticket.description}</td>
+                    <td className="py-3.5 px-5 text-text-secondary">{ticket.assignedQA}</td>
+                    <td className="py-3.5 px-5 text-center">
+                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${ticket.status==='Resolved'?'bg-green-500/10 text-green-400':ticket.status==='Closed'?'bg-blue-500/10 text-blue-400':'bg-orange-500/10 text-orange-400'}`}>{ticket.status}</span>
+                    </td>
+                    <td className="py-3.5 px-5 text-center">
+                      <span className={`text-[10px] font-bold ${ticket.priority==='Critical'?'text-red-400':ticket.priority==='High'?'text-orange-400':'text-text-muted'}`}>{ticket.priority}</span>
+                    </td>
+                  </tr>
+                ))}
+                {data.supportTickets.length === 0 && (
+                  <tr><td colSpan={5} className="py-8 text-center text-xs text-text-muted">No tickets logged.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </motion.section>
+
+        {/* ════════════════════════════════════════════════════════════
+            DEFECTS ANALYSIS
+        ════════════════════════════════════════════════════════════ */}
+
+        {/* ── SECTION 6: DEFECTS ANALYSIS ── */}
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          ref={sectionsRef.defects}
+          className="flex flex-col gap-5"
+        >
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-accent-gold" />
+            <h2 className="text-2xl font-extrabold font-clash">Defects Analysis</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {[
-              {
-                label: 'Support Emails',
-                val: data.supportEmails,
-                icon: Mail,
-                color: 'text-blue-400',
-                desc: 'Active support exceptions',
-                sparklineData: getHistoricalValues(f => f.supportEmails)
-              },
-              {
-                label: 'New Features',
-                val: data.newFeatures,
-                icon: Zap,
-                color: 'text-accent-gold',
-                desc: 'Sprint modules tested',
-                sparklineData: getHistoricalValues(f => f.newFeatures)
-              },
-              {
-                label: 'Code Fixes',
-                val: data.codeFixes,
-                icon: Wrench,
-                color: 'text-purple-400',
-                desc: 'Regression patches verified',
-                sparklineData: getHistoricalValues(f => f.codeFixes)
-              },
-              {
-                label: 'Defects Reported',
-                val: data.defectsLastWeek.reported,
-                icon: AlertTriangle,
-                color: 'text-red-400',
-                desc: 'Bugs raised last week',
-                sparklineData: getHistoricalValues(f => f.defectsLastWeek.reported)
-              },
-              {
-                label: 'Defects Closed',
-                val: data.defectsLastWeek.closed,
-                icon: Check,
-                color: 'text-green-400',
-                desc: 'Bugs resolved/closed',
-                sparklineData: getHistoricalValues(f => f.defectsLastWeek.closed)
-              },
-              {
-                label: 'Open Defects',
-                val: data.defectsLastWeek.open,
-                icon: Shield,
-                color: 'text-orange-400',
-                desc: 'Backlog open defect count',
-                sparklineData: getHistoricalValues(f => f.defectsLastWeek.open),
-                pulse: data.defectsLastWeek.open > 5,
-                isInternal: true
-              },
-              {
-                label: 'Team Size',
-                val: data.newFeatureTeam.length + data.supportTeam.length + data.automationTeam.length,
-                icon: Users,
-                color: 'text-teal-400',
-                desc: 'Active verification specialists',
-                sparklineData: getHistoricalValues(f => f.newFeatureTeam.length + f.supportTeam.length + f.automationTeam.length),
-                isInternal: true
-              },
-              {
-                label: 'Backend Updates',
-                val: data.lastWeek.backendUpdation,
-                icon: History,
-                color: 'text-pink-400',
-                desc: 'Hotfixes & schema mods',
-                sparklineData: getHistoricalValues(f => f.lastWeek.backendUpdation),
-                isInternal: true
-              },
-              {
-                label: 'Change Requests',
-                val: data.lastWeek.changeRequest,
-                icon: LayoutGrid,
-                color: 'text-indigo-400',
-                desc: 'Scope amendments verified',
-                sparklineData: getHistoricalValues(f => f.lastWeek.changeRequest)
-              },
-              {
-                label: 'QA Health Score',
-                val: passRate,
-                suffix: '%',
-                icon: Star,
-                color: 'text-amber-400',
-                desc: 'Release verification score',
-                sparklineData: getHistoricalValues(f => {
-                  const passed = f.releaseItems.filter((i: any) => i?.status === 'Pass').length
-                  return f.releaseItems.length ? Math.round((passed / f.releaseItems.length) * 100) : 0
-                })
-              }
-            ].filter(kpi => !clientMode || !kpi.isInternal).map((kpi, idx) => (
-              <motion.div
-                key={kpi.label}
-                initial={{ opacity: 0, y: 15 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: idx * 0.05 }}
-                className={`p-5 rounded-2xl border flex flex-col justify-between gap-3 group relative overflow-hidden transition-all duration-300 ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme==='dark'?'bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]':'bg-white border-slate-200 hover:shadow-lg hover:border-slate-300'}`}
-              >
-                <div className="flex items-center justify-between">
-                  <kpi.icon className={`w-5 h-5 ${kpi.color} ${kpi.pulse ? 'animate-pulse' : ''}`} />
-                  {kpi.sparklineData.length > 1 && (
-                    <MiniSparkline data={kpi.sparklineData} color={kpi.color.includes('gold') ? '#d4af37' : kpi.color.includes('blue') ? '#60a5fa' : kpi.color.includes('green') ? '#4ade80' : '#a855f7'} />
-                  )}
+              { title: 'Last Week', d: data.defectsLastWeek },
+              { title: 'Month to Date', d: data.defectsMTD }
+            ].map(({ title, d }) => (
+              <div key={title} className={`p-6 rounded-2xl border flex flex-col gap-4 ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+                <span className="text-[10px] font-black uppercase tracking-widest text-accent-gold">{title}</span>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'Reported', val: d.reported, color: theme === 'dark' ? 'text-white' : 'text-slate-800' },
+                    { label: 'Open', val: d.open, color: theme === 'dark' ? 'text-red-400' : 'text-red-600' },
+                    { label: 'Fixed', val: d.fixed, color: theme === 'dark' ? 'text-yellow-400' : 'text-amber-600' },
+                    { label: 'Closed', val: d.closed, color: theme === 'dark' ? 'text-green-400' : 'text-green-600' }
+                  ].map(item => (
+                    <div key={item.label} className={`p-3 rounded-xl border ${theme==='dark'?'border-white/5 bg-white/[0.02]':'border-slate-100 bg-slate-50'} flex flex-col gap-1`}>
+                      <span className="text-[9px] uppercase font-bold tracking-wider text-text-muted">{item.label}</span>
+                      <span className={`text-2xl font-black ${item.color}`}><CountUpNumber end={item.val} /></span>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <span className={`text-3xl font-black block tracking-tight ${theme==='dark'?'text-white':'text-slate-800'}`}>
-                    <CountUpNumber end={kpi.val} suffix={kpi.suffix} />
-                  </span>
-                  <span className={`text-xs font-extrabold ${theme==='dark'?'text-white/80':'text-slate-700'}`}>{kpi.label}</span>
+                <div className="pt-2 border-t border-white/5">
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-text-muted">Closure Rate</span>
+                    <span className="font-bold text-green-400">{d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%</span>
+                  </div>
+                  <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-full bg-green-400 rounded-full" style={{ width: `${d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%` }} />
+                  </div>
                 </div>
-                <p className="text-[10px] text-text-muted mt-1 leading-normal">{kpi.desc}</p>
-              </motion.div>
+              </div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
-        {/* ── SECTION: WoW COMPARISON ── */}
-        <section ref={sectionsRef.comparison} className="flex flex-col gap-6">
+        {/* ════════════════════════════════════════════════════════════
+            WEEKLY CHARTS & DISTRIBUTION
+        ════════════════════════════════════════════════════════════ */}
+
+        {/* ── SECTION 7: WEEKLY CHARTS ── */}
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          ref={sectionsRef.charts}
+          className="flex flex-col gap-5"
+        >
+          <div className="flex items-center gap-2">
+            <LayoutGrid className="w-5 h-5 text-accent-gold" />
+            <h2 className="text-2xl font-extrabold font-clash">Weekly Charts & Distribution</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+              <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Work Distribution</span>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={workDistributionData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} paddingAngle={4} dataKey="value">
+                      {workDistributionData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.hex} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', fontSize: 11 }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+              <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Production Issue Categories</span>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={prodIssuesData} margin={{ top: 8, right: 8, left: -25, bottom: 0 }}>
+                    <XAxis dataKey="category" stroke={chartText} fontSize={9} />
+                    <YAxis stroke={chartText} fontSize={9} />
+                    <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', fontSize: 11 }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="lastWeek" name="Last Week" fill="#d4af37" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="mtd" name="MTD" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+              <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Defect Status Breakdown</span>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={defectStatusData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value">
+                      {defectStatusData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.hex} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', fontSize: 11 }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </motion.section>
+
+        {/* ════════════════════════════════════════════════════════════
+            AI INSIGHTS
+        ════════════════════════════════════════════════════════════ */}
+
+        {/* ── SECTION 8: AI EXECUTIVE SUMMARY ── */}
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          ref={sectionsRef.aiSummary}
+          className="flex flex-col gap-5"
+        >
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-accent-gold" />
+              <h2 className="text-2xl font-extrabold font-clash">AI Insights</h2>
+            </div>
+            <button
+              onClick={handleAIGenerate}
+              disabled={isGeneratingAI}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-tr from-accent-gold to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-extrabold text-xs uppercase tracking-widest transition-all disabled:opacity-50"
+            >
+              {isGeneratingAI ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Synthesizing...</> : <><Sparkles className="w-3.5 h-3.5" /> Regenerate</>}
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {[
+              { title: '🏆 Major Achievements', list: aiSummary.achievements, color: 'border-green-500/20 text-green-400', bg: 'bg-green-500/[0.03]' },
+              { title: '⚠ Risks & Impediments', list: aiSummary.risks, color: 'border-red-500/20 text-red-400', bg: 'bg-red-500/[0.03]', isInternal: true },
+              { title: '📈 Identified Trends', list: aiSummary.trends, color: 'border-blue-500/20 text-blue-400', bg: 'bg-blue-500/[0.03]' },
+              { title: '💡 Recommendations', list: aiSummary.recommendations, color: 'border-purple-500/20 text-purple-400', bg: 'bg-purple-500/[0.03]' }
+            ].filter(card => !clientMode || !card.isInternal).map(card => (
+              <div key={card.title} className={`p-5 rounded-2xl border flex flex-col gap-3 ${card.bg} ${theme==='dark'?`border-white/5 ${card.color.split(' ')[0]}`:`border-slate-200`}`}>
+                <span className={`text-xs font-black tracking-wide ${card.color.split(' ')[1]}`}>{card.title}</span>
+                <ul className="flex flex-col gap-2">
+                  {card.list.map((item, idx) => (
+                    <motion.li
+                      key={idx}
+                      initial={{ opacity: 0, x: -15 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.08, ease: 'easeOut' }}
+                      className="flex gap-2 items-start text-xs leading-relaxed"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-accent-gold" />
+                      <span className={theme==='dark'?'text-white/80':'text-slate-700'}>{item}</span>
+                    </motion.li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </motion.section>
+
+        {/* ════════════════════════════════════════════════════════════
+            HISTORICAL COMPARISON
+        ════════════════════════════════════════════════════════════ */}
+
+        {/* ── SECTION 9: WoW COMPARISON ── */}
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          ref={sectionsRef.comparison}
+          className="flex flex-col gap-5"
+        >
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-accent-gold" />
@@ -1607,10 +2192,17 @@ Do not return markdown wraps, only raw JSON text.
               </div>
             </div>
           )}
-        </section>
+        </motion.section>
 
         {/* ── SECTION 3: AI EXECUTIVE SUMMARY ── */}
-        <section ref={sectionsRef.aiSummary} className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-8">
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          ref={sectionsRef.aiSummary}
+          className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-8"
+        >
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-accent-gold" />
@@ -1659,10 +2251,16 @@ Do not return markdown wraps, only raw JSON text.
               </div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
         {/* ── SECTION 4: HISTORICAL PROGRESS TIMELINE ── */}
-        <section className="flex flex-col gap-6">
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          className="flex flex-col gap-6"
+        >
           {(() => {
             const getTimelineFilteredData = () => {
               switch (timelineFilter) {
@@ -1701,7 +2299,15 @@ Do not return markdown wraps, only raw JSON text.
                   </div>
                 </div>
 
-                <div className="relative pl-6 border-l border-white/10 flex flex-col gap-8 ml-2 pt-2">
+                <div className="relative pl-6 flex flex-col gap-8 ml-2 pt-2">
+                  {/* Dynamic drawing connecting line */}
+                  <motion.div
+                    initial={{ height: 0 }}
+                    whileInView={{ height: '100%' }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 1.2, ease: 'easeOut' }}
+                    className={`absolute left-0 top-4 w-[1px] ${theme==='dark'?'bg-white/10':'bg-slate-200'} origin-top`}
+                  />
                   {filteredTimeline.map((week, idx) => {
                     const isExpanded = !!expandedTimelineWeeks[week.id]
                     return (
@@ -1710,13 +2316,17 @@ Do not return markdown wraps, only raw JSON text.
                           initial={{ opacity: 0, x: -20 }}
                           whileInView={{ opacity: 1, x: 0 }}
                           viewport={{ once: true }}
+                          transition={{ delay: idx * 0.08, duration: 0.5, ease: 'easeOut' }}
                           onClick={() => {
                             setExpandedTimelineWeeks(prev => ({ ...prev, [week.id]: !prev[week.id] }))
                           }}
                           className={`relative group p-4 rounded-2xl border cursor-pointer transition-all duration-300 ${theme==='dark'?'bg-white/[0.01] border-white/5 hover:border-white/20 hover:bg-white/[0.03]':'bg-white border-slate-200 hover:shadow-md'}`}
                         >
                           {/* Timeline node marker */}
-                          <div className={`absolute left-[-32px] top-6 w-3.5 h-3.5 rounded-full border-2 transition-transform duration-300 group-hover:scale-125 ${week.healthScore >= 90 ? 'bg-green-400 border-green-500/20' : week.healthScore >= 70 ? 'bg-yellow-400 border-yellow-500/20' : 'bg-red-400 border-red-500/20'}`} />
+                          <motion.div
+                            whileHover={{ scale: 1.3 }}
+                            className={`absolute left-[-31px] top-6 z-10 w-3.5 h-3.5 rounded-full border-2 transition-transform duration-300 group-hover:scale-125 ${week.healthScore >= 90 ? 'bg-green-400 border-green-500/20' : week.healthScore >= 70 ? 'bg-yellow-400 border-yellow-500/20' : 'bg-red-400 border-red-500/20'}`}
+                          />
                           
                           <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
                             <div className="flex items-center gap-2">
@@ -1784,10 +2394,17 @@ Do not return markdown wraps, only raw JSON text.
               </>
             )
           })()}
-        </section>
+        </motion.section>
 
         {/* ── SECTION 5: HISTORICAL ANALYTICS DASHBOARD ── */}
-        <section ref={sectionsRef.historyDashboard} className="flex flex-col gap-6">
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          ref={sectionsRef.historyDashboard}
+          className="flex flex-col gap-6"
+        >
           <div className="flex items-center gap-2">
             <LayoutGrid className="w-5 h-5 text-accent-gold" />
             <h2 className="text-2xl font-extrabold font-clash">Historical Analytics</h2>
@@ -1809,7 +2426,7 @@ Do not return markdown wraps, only raw JSON text.
                     <LineChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                       <XAxis dataKey="name" stroke={chartText} fontSize={9} />
                       <YAxis stroke={chartText} fontSize={9} />
-                      <Tooltip contentStyle={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)' }} />
+                      <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Line type="monotone" dataKey="emails" name="Support Emails" stroke="#3b82f6" strokeWidth={2} />
                       <Line type="monotone" dataKey="features" name="Features Tested" stroke="#facc15" strokeWidth={2} />
@@ -1837,7 +2454,7 @@ Do not return markdown wraps, only raw JSON text.
                       </defs>
                       <XAxis dataKey="name" stroke={chartText} fontSize={9} />
                       <YAxis stroke={chartText} fontSize={9} />
-                      <Tooltip contentStyle={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)' }} />
+                      <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Area type="monotone" dataKey="reportedDefects" name="Reported Defects" stroke="#f87171" fill="url(#reportedGrad)" strokeWidth={2} />
                       <Area type="monotone" dataKey="closedDefects" name="Closed Defects" stroke="#10b981" fill="url(#closedGrad)" strokeWidth={2} />
@@ -1854,7 +2471,7 @@ Do not return markdown wraps, only raw JSON text.
                     <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                       <XAxis dataKey="name" stroke={chartText} fontSize={9} />
                       <YAxis stroke={chartText} fontSize={9} />
-                      <Tooltip contentStyle={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)' }} />
+                      <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Area type="monotone" dataKey="codeFixProd" stackId="1" name="Code Fix" stroke="#d4af37" fill="#d4af37" fillOpacity={0.4} />
                       <Area type="monotone" dataKey="supportProd" stackId="1" name="Support" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.4} />
@@ -1874,7 +2491,7 @@ Do not return markdown wraps, only raw JSON text.
                     <LineChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                       <XAxis dataKey="name" stroke={chartText} fontSize={9} />
                       <YAxis stroke={chartText} fontSize={9} />
-                      <Tooltip contentStyle={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)' }} />
+                      <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Line type="monotone" dataKey="emails" name="Support tickets" stroke="#06b6d4" strokeWidth={2.5} />
                     </LineChart>
@@ -1890,7 +2507,7 @@ Do not return markdown wraps, only raw JSON text.
                     <ComposedChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                       <XAxis dataKey="name" stroke={chartText} fontSize={9} />
                       <YAxis stroke={chartText} fontSize={9} />
-                      <Tooltip contentStyle={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)' }} />
+                      <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Bar dataKey="teamSize" name="Allocated Engineers" fill="rgba(212,175,55,0.2)" radius={[4, 4, 0, 0]} />
                       <Line type="monotone" dataKey="healthScore" name="QA Health Score %" stroke="#10b981" strokeWidth={2.5} />
@@ -1907,7 +2524,7 @@ Do not return markdown wraps, only raw JSON text.
                     <BarChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                       <XAxis dataKey="name" stroke={chartText} fontSize={9} />
                       <YAxis stroke={chartText} fontSize={9} />
-                      <Tooltip contentStyle={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)' }} />
+                      <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Bar dataKey="passFeatures" name="Passed" stackId="a" fill="#10b981" />
                       <Bar dataKey="failFeatures" name="Failed" stackId="a" fill="#f87171" />
@@ -1919,7 +2536,7 @@ Do not return markdown wraps, only raw JSON text.
 
             </div>
           )}
-        </section>
+        </motion.section>
 
         {/* ── SECTION 6: WEEKLY ANCHORED CHARTS ── */}
         <section ref={sectionsRef.charts} className="flex flex-col gap-6">
@@ -1941,7 +2558,7 @@ Do not return markdown wraps, only raw JSON text.
                         <Cell key={`cell-${index}`} fill={entry.hex} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)' }} />
+                    <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                   </PieChart>
                 </ResponsiveContainer>
@@ -1956,7 +2573,7 @@ Do not return markdown wraps, only raw JSON text.
                   <BarChart data={prodIssuesData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                     <XAxis dataKey="category" stroke={chartText} fontSize={9} />
                     <YAxis stroke={chartText} fontSize={9} />
-                    <Tooltip contentStyle={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)' }} />
+                    <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <Bar dataKey="lastWeek" name="Last Week" fill="#d4af37" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="mtd" name="MTD" fill="#3b82f6" radius={[4, 4, 0, 0]} />
@@ -1976,7 +2593,7 @@ Do not return markdown wraps, only raw JSON text.
                         <Cell key={`cell-${index}`} fill={entry.hex} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)' }} />
+                    <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                   </PieChart>
                 </ResponsiveContainer>
@@ -2115,7 +2732,14 @@ Do not return markdown wraps, only raw JSON text.
         </section>
 
         {/* ── SECTION 9: TIMELINE ROADMAP & NEXT PRIORITIES ── */}
-        <section ref={sectionsRef.roadmap} className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8">
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          ref={sectionsRef.roadmap}
+          className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8"
+        >
           
           {/* Daily Milestone Logs */}
           <div className="flex flex-col gap-6">
@@ -2171,9 +2795,9 @@ Do not return markdown wraps, only raw JSON text.
               )}
             </div>
           </div>
-        </section>
+        </motion.section>
 
-      </main>
+      </motion.div>
 
       {/* ── Footer ── */}
       <footer className={`mt-24 border-t py-8 text-center text-xs ${theme==='dark'?'border-white/5 text-white/35':'border-slate-200 text-slate-500'}`}>

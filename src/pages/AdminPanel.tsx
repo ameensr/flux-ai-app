@@ -11,6 +11,7 @@ import type { Role } from '@/lib/rbac'
 import { ROUTES } from '@/lib/routes'
 import { Shield, Users, Crown, User, Cpu, Lock, ShieldCheck, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/context/ThemeContext'
 
 const AdminAISettings  = lazy(() => import('@/pages/AdminAISettings').then(m => ({ default: m.AdminAISettings })))
 const AdminPermissions = lazy(() => import('@/pages/AdminPermissions').then(m => ({ default: m.AdminPermissions })))
@@ -43,6 +44,7 @@ const TABS = [
 ] as const
 
 export const AdminPanel = () => {
+  const { theme } = useTheme()
   const { toast } = useToast()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -125,7 +127,7 @@ export const AdminPanel = () => {
               'flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap shrink-0',
               activeTab === t.path
                 ? 'bg-accent-gold text-background'
-                : 'text-text-muted hover:text-white'
+                : theme === 'dark' ? 'text-text-muted hover:text-white' : 'text-text-secondary hover:text-slate-900'
             )}
           >
             <t.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
@@ -139,14 +141,14 @@ export const AdminPanel = () => {
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
             {[
-              { label: 'Total Users', value: stats.total, icon: Users,  color: 'text-white' },
-              { label: 'Admins',      value: stats.admin, icon: Shield, color: 'text-red-400' },
+              { label: 'Total Users', value: stats.total, icon: Users,  color: theme === 'dark' ? 'text-white' : 'text-slate-800' },
+              { label: 'Admins',      value: stats.admin, icon: Shield, color: theme === 'dark' ? 'text-red-400' : 'text-red-600' },
               { label: 'Pro Users',   value: stats.pro,   icon: Crown,  color: 'text-accent-gold' },
               { label: 'Free Users',  value: stats.free,  icon: User,   color: 'text-text-muted' },
             ].map((stat) => (
               <GlassCard key={stat.label} hoverEffect={false} className="py-6 flex flex-col items-center gap-2">
                 <stat.icon className={cn('w-5 h-5', stat.color)} />
-                <span className="text-3xl font-bold text-white">{stat.value}</span>
+                <span className="text-3xl font-bold text-foreground">{stat.value}</span>
                 <span className="text-[10px] uppercase tracking-widest text-text-muted">{stat.label}</span>
               </GlassCard>
             ))}
@@ -184,7 +186,7 @@ export const AdminPanel = () => {
                           {React.createElement(ROLE_ICONS[user.role] ?? Shield, { className: 'w-4 h-4 sm:w-5 sm:h-5 text-text-secondary' })}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-bold text-white truncate">{user.full_name || 'No name'}</p>
+                          <p className="text-sm font-bold text-text-primary truncate">{user.full_name || 'No name'}</p>
                           <p className="text-xs text-text-muted truncate">{user.email}</p>
                         </div>
                       </div>
@@ -197,7 +199,7 @@ export const AdminPanel = () => {
                           value={user.role}
                           disabled={updating === user.id}
                           onChange={(e) => updateRole(user.id, e.target.value as Role)}
-                          className="bg-[#141414] border border-white/10 rounded-xl px-2 sm:px-3 py-2 text-xs text-white focus:outline-none focus:border-accent-gold transition-all cursor-pointer disabled:opacity-50"
+                          className="bg-surface border border-border rounded-xl px-2 sm:px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-accent transition-all cursor-pointer disabled:opacity-50"
                         >
                           <option value="free">Free</option>
                           <option value="pro">Pro</option>

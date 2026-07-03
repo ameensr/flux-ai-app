@@ -319,7 +319,7 @@ export const WritingAssistant = () => {
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-5">
               <Sparkles className="w-7 h-7 text-text-muted" />
             </div>
-            <h3 className="text-lg font-bold text-white mb-2">10 Tones, One Click</h3>
+            <h3 className="text-lg font-bold text-foreground mb-2">10 Tones, One Click</h3>
             <p className="text-text-secondary text-sm max-w-sm">
               Type your rough message above and hit{' '}
               <span className="text-accent-gold font-bold">Refine in All Tones</span>{' '}

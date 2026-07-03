@@ -7,6 +7,7 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { FloatingButton } from '@/components/ui/FloatingButton'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
 import { useToast } from '@/hooks/use-toast'
+import { useTheme } from '@/context/ThemeContext'
 import { aiProviderService, type AIProviderConfig, type CreateProviderPayload } from '@/services/ai/aiProviderService'
 import {
   Plus, Trash2, Edit3, CheckCircle2, XCircle, Zap, Eye, EyeOff,
@@ -87,9 +88,9 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, c
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between bg-[#141414] border border-white/10 rounded-xl px-4 py-3 text-sm text-white hover:border-accent-gold/50 focus:outline-none focus:border-accent-gold transition-all"
+        className="w-full flex items-center justify-between bg-surface-elevated border border-border rounded-xl px-4 py-3 text-sm text-text-primary hover:border-accent-gold/50 focus:outline-none focus:border-accent-gold transition-all"
       >
-        <span className="truncate font-mono text-xs text-white">{value}</span>
+        <span className="truncate font-mono text-xs text-text-primary">{value}</span>
         <ChevronDown className={cn('w-4 h-4 text-text-muted shrink-0 ml-2 transition-transform', open && 'rotate-180')} />
       </button>
 
@@ -100,7 +101,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, c
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className="absolute z-50 w-full mt-2 bg-[#141414] border border-white/10 rounded-xl overflow-hidden shadow-[0_16px_48px_rgba(0,0,0,0.6)]"
+            className="absolute z-50 w-full mt-2 bg-surface-elevated border border-border rounded-xl overflow-hidden shadow-[0_16px_48px_rgba(0,0,0,0.6)]"
           >
             <div className="max-h-56 overflow-y-auto">
               {options.map(opt => (
@@ -112,7 +113,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, c
                     'w-full flex items-center justify-between px-4 py-2.5 text-xs font-mono text-left transition-colors',
                     value === opt
                       ? 'bg-accent-gold/15 text-accent-gold'
-                      : 'text-white/80 hover:bg-white/5 hover:text-white'
+                      : 'text-text-secondary hover:bg-hover hover:text-text-primary'
                   )}
                 >
                   <span className="truncate">{opt}</span>
@@ -145,6 +146,7 @@ const emptyForm = (): CreateProviderPayload => ({
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export const AdminAISettings = () => {
+  const { theme } = useTheme()
   const { toast } = useToast()
   const [configs, setConfigs] = useState<AIProviderConfig[]>([])
   const [loading, setLoading] = useState(true)
@@ -297,7 +299,7 @@ export const AdminAISettings = () => {
         ) : configs.length === 0 ? (
           <GlassCard hoverEffect={false} className="flex flex-col items-center justify-center py-24 text-center">
             <Cpu className="w-12 h-12 text-text-muted mb-4" />
-            <h3 className="text-xl font-bold text-white mb-2">No Providers Configured</h3>
+            <h3 className="text-xl font-bold text-foreground mb-2">No Providers Configured</h3>
             <p className="text-text-secondary mb-6">Add your first AI provider to enable AI features for all users.</p>
             <FloatingButton onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Add Provider</FloatingButton>
           </GlassCard>
@@ -306,7 +308,7 @@ export const AdminAISettings = () => {
             {configs.map((cfg) => {
               const meta = PROVIDERS.find(p => p.id === cfg.provider_name)
               const Icon = meta?.icon ?? Cpu
-              const colorClass = PROVIDER_COLORS[cfg.provider_name] ?? 'text-white/60 bg-white/5 border-white/10'
+              const colorClass = PROVIDER_COLORS[cfg.provider_name] ?? (theme === 'dark' ? 'text-white/60 bg-white/5 border-white/10' : 'text-slate-600 bg-slate-100 border-slate-200')
               const testResult = testResults[cfg.id]
               const isExpanded = expandedId === cfg.id
 
@@ -321,7 +323,7 @@ export const AdminAISettings = () => {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-bold text-white">{meta?.label ?? cfg.provider_name}</span>
+                        <span className="text-sm font-bold text-foreground">{meta?.label ?? cfg.provider_name}</span>
                         <span className={cn('px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-widest', colorClass)}>
                           {cfg.provider_name}
                         </span>
@@ -421,7 +423,7 @@ export const AdminAISettings = () => {
                           ].map(item => (
                             <div key={item.label} className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
                               <p className="text-[9px] font-black uppercase tracking-widest text-text-muted mb-1">{item.label}</p>
-                              <p className="text-sm font-bold text-white">{item.value}</p>
+                              <p className="text-sm font-bold text-foreground">{item.value}</p>
                             </div>
                           ))}
                         </div>
@@ -451,7 +453,7 @@ export const AdminAISettings = () => {
                 className="w-full max-w-lg"
               >
                 <GlassCard hoverEffect={false} className="bg-background/90">
-                  <h3 className="text-xl font-bold text-white mb-6">
+                  <h3 className="text-xl font-bold text-foreground mb-6">
                     {editingId ? 'Edit Provider' : 'Add AI Provider'}
                   </h3>
 

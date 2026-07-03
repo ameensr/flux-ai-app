@@ -49,7 +49,7 @@ export const History = () => {
                 <item.icon className="w-5 h-5" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-white truncate group-hover:text-accent-gold transition-colors">{item.title}</p>
+                <p className="text-sm font-bold text-foreground truncate group-hover:text-accent-gold transition-colors">{item.title}</p>
                 <p className="text-[11px] text-text-muted uppercase tracking-wider mt-0.5">{item.module} · {item.time}</p>
               </div>
               <ArrowRight className="w-4 h-4 text-text-muted opacity-0 group-hover:opacity-100 group-hover:text-accent-gold transition-all shrink-0" />

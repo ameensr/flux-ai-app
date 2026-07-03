@@ -195,7 +195,7 @@ export const BugRefiner = () => {
                 <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-6">
                   <Zap className="w-8 h-8 text-text-muted" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">Ready to Refine</h3>
+                <h3 className="text-xl font-bold text-foreground mb-2">Ready to Refine</h3>
                 <p className="text-text-secondary">
                   Your refined report will appear here. Our AI will automatically identify severity, steps, and expected results.
                 </p>

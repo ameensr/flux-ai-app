@@ -205,7 +205,7 @@ export const TestCaseGenerator = () => {
                       <div className="flex items-center gap-3 sm:gap-6 min-w-0">
                         <div className="w-2 h-2 rounded-full bg-accent-gold shadow-[0_0_8px_rgba(212,175,55,0.4)] shrink-0" />
                         <div className="min-w-0">
-                          <h4 className="text-base sm:text-lg font-bold text-white group-hover:text-accent-gold transition-colors truncate">{tc.title}</h4>
+                          <h4 className="text-base sm:text-lg font-bold text-foreground group-hover:text-accent-gold transition-colors truncate">{tc.title}</h4>
                           <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1 sm:mt-2">
                             <span className={cn(
                               "text-[10px] font-black uppercase tracking-widest",
@@ -224,7 +224,7 @@ export const TestCaseGenerator = () => {
                         <button className="p-2 rounded-lg hover:bg-white/5 text-text-muted hover:text-accent-gold transition-all">
                           <Code className="w-4 h-4" />
                         </button>
-                        <button className="p-2 rounded-lg hover:bg-white/5 text-text-muted hover:text-white transition-all">
+                        <button className="p-2 rounded-lg hover:bg-white/5 text-text-muted hover:text-foreground transition-all">
                           <Plus className="w-4 h-4" />
                         </button>
                       </div>
@@ -250,7 +250,7 @@ export const TestCaseGenerator = () => {
                   <FileText className="w-10 h-10 text-text-muted" />
                   <div className="absolute inset-0 bg-accent-gold/5 blur-2xl rounded-full" />
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-2">Architect Your Suite</h3>
+                <h3 className="text-2xl font-bold text-foreground mb-2">Architect Your Suite</h3>
                 <p className="text-text-secondary max-w-md">
                   Enter your requirements on the left to generate a structured test suite with professional coverage.
                 </p>

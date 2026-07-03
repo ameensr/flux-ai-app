@@ -76,7 +76,7 @@ export const Dashboard = () => {
 
         <div className="flex flex-col gap-6 sm:gap-8 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
-            <h1 className="text-[clamp(1.75rem,6vw,3.5rem)] font-clash font-bold text-white mb-3 leading-tight break-words">
+            <h1 className="text-[clamp(1.75rem,6vw,3.5rem)] font-clash font-bold text-foreground mb-3 leading-tight break-words">
               Welcome back, <span className="text-accent-gold">{displayName}</span>
             </h1>
             <p className="text-base sm:text-xl text-text-secondary font-montreal max-w-xl leading-relaxed">
@@ -86,11 +86,11 @@ export const Dashboard = () => {
 
           <div className="flex gap-3 sm:gap-4 shrink-0">
             <div className="glass-panel px-4 sm:px-6 py-3 sm:py-4 flex flex-col items-center justify-center gap-1">
-              <span className="text-xl sm:text-2xl font-bold text-white">128</span>
+              <span className="text-xl sm:text-2xl font-bold text-foreground">128</span>
               <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-text-muted whitespace-nowrap">Reports Generated</span>
             </div>
             <div className="glass-panel px-4 sm:px-6 py-3 sm:py-4 flex flex-col items-center justify-center gap-1">
-              <span className="text-xl sm:text-2xl font-bold text-white">94%</span>
+              <span className="text-xl sm:text-2xl font-bold text-foreground">94%</span>
               <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-text-muted whitespace-nowrap">AI Accuracy</span>
             </div>
           </div>
@@ -127,7 +127,7 @@ export const Dashboard = () => {
                     }
                   </div>
                   <h3 className={cn(
-                    "text-xl sm:text-2xl font-bold text-white mb-2 sm:mb-3 transition-colors",
+                    "text-xl sm:text-2xl font-bold text-foreground mb-2 sm:mb-3 transition-colors",
                     accessible && "group-hover:text-accent-gold"
                   )}>
                     {module.title}
@@ -168,7 +168,7 @@ export const Dashboard = () => {
                   <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-text-secondary group-hover:text-accent-gold" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-bold text-white truncate">Login Flow Regression Suite</h4>
+                  <h4 className="text-sm font-bold text-foreground truncate">Login Flow Regression Suite</h4>
                   <p className="text-[11px] text-text-muted uppercase tracking-wider truncate">Generated 2 hours ago • Gemini Pro</p>
                 </div>
                 <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-accent-gold opacity-0 group-hover:opacity-100 transition-all shrink-0" />
@@ -183,7 +183,7 @@ export const Dashboard = () => {
             <h2 className="text-lg sm:text-xl font-bold">Flux Pro Tip</h2>
           </div>
           <p className="text-text-secondary mb-6 sm:mb-8 leading-relaxed text-sm sm:text-base">
-            You can now export test cases directly to <span className="text-white font-bold">Playwright</span> or <span className="text-white font-bold">Cypress</span> scripts using the "Smart Assistant" panel in the Test Case Generator.
+            You can now export test cases directly to <span className="text-foreground font-bold">Playwright</span> or <span className="text-foreground font-bold">Cypress</span> scripts using the "Smart Assistant" panel in the Test Case Generator.
           </p>
           <div className="flex flex-wrap gap-3 sm:gap-4">
             <div className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl bg-white/5 text-[10px] font-bold uppercase tracking-widest text-text-muted">

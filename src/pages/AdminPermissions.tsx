@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
+import { useTheme } from '@/context/ThemeContext'
 import { invalidatePermissionCache } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
 import { Shield, Crown, User, RefreshCw, Check, X } from 'lucide-react'
@@ -30,6 +31,7 @@ const PERM_LABELS: Record<string, string> = {
 }
 
 export const AdminPermissions: React.FC = () => {
+  const { theme } = useTheme()
   const { toast } = useToast()
   const [roles, setRoles]       = useState<RoleRow[]>([])
   const [modules, setModules]   = useState<ModuleRow[]>([])
@@ -116,8 +118,10 @@ export const AdminPermissions: React.FC = () => {
               className={cn(
                 'flex items-center gap-2.5 px-5 py-3 rounded-2xl border text-sm font-bold transition-all duration-300',
                 isActive
-                  ? ROLE_COLORS[role.role_key] ?? 'text-white border-white/20 bg-white/10'
-                  : 'text-text-muted border-white/5 bg-white/[0.02] hover:border-white/15 hover:text-white'
+                  ? ROLE_COLORS[role.role_key] ?? (theme === 'dark' ? 'text-white border-white/20 bg-white/10' : 'text-slate-800 border-slate-200 bg-slate-100')
+                  : theme === 'dark'
+                  ? 'text-text-muted border-white/5 bg-white/[0.02] hover:border-white/15 hover:text-white'
+                  : 'text-text-secondary border-slate-200 bg-slate-50 hover:border-slate-300 hover:text-slate-900'
               )}
             >
               <Icon className="w-4 h-4" />
@@ -135,13 +139,13 @@ export const AdminPermissions: React.FC = () => {
         <GlassCard hoverEffect={false} className="overflow-x-auto">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                 {React.createElement(ROLE_ICONS[activeRole.role_key] ?? Shield, { className: 'w-4 h-4 text-accent-gold' })}
                 {activeRole.role_name} Permissions
               </h3>
               <p className="text-xs text-text-muted mt-1">{activeRole.description}</p>
             </div>
-            <button onClick={fetchMatrix} className="p-2 rounded-xl hover:bg-white/5 text-text-muted hover:text-white transition-all">
+            <button onClick={fetchMatrix} className="p-2 rounded-xl hover:bg-white/5 text-text-muted hover:text-foreground transition-all">
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
@@ -161,7 +165,7 @@ export const AdminPermissions: React.FC = () => {
               {modules.map(mod => (
                 <tr key={mod.id} className="group hover:bg-white/[0.02] transition-colors">
                   <td className="py-4 pr-6">
-                    <span className="text-white font-medium">{mod.module_name}</span>
+                    <span className="text-foreground font-medium">{mod.module_name}</span>
                     <span className="block text-[10px] text-text-muted mt-0.5">{mod.module_key}</span>
                   </td>
                   {perms.map(perm => {

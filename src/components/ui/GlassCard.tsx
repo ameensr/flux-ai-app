@@ -11,8 +11,8 @@ export const GlassCard = React.forwardRef<HTMLDivElement, GlassCardProps>(
   ({ children, className, hoverEffect = true, style, ...props }, ref) => {
     return (
       <motion.div
-        whileHover={hoverEffect ? { y: -4, scale: 1.005 } : {}}
-        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        whileHover={hoverEffect ? { y: -6, scale: 1.015, boxShadow: '0 20px 30px -10px rgba(0,0,0,0.12)' } : {}}
+        transition={{ duration: 0.25, ease: 'easeOut' }}
         className={cn("glass-panel p-6 relative overflow-hidden group", className)}
         style={{
           backgroundColor: 'var(--card-bg)',
@@ -29,8 +29,8 @@ export const GlassCard = React.forwardRef<HTMLDivElement, GlassCardProps>(
         />
         {/* Glow on hover */}
         <div
-          className="absolute -inset-[100%] opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-3xl pointer-events-none"
-          style={{ background: 'radial-gradient(circle, var(--accent) 0%, transparent 70%)', opacity: 0 }}
+          className="absolute -inset-[100%] opacity-0 group-hover:opacity-[0.05] transition-opacity duration-500 blur-3xl pointer-events-none"
+          style={{ background: 'radial-gradient(circle, var(--accent) 0%, transparent 70%)' }}
         />
         <div className="relative z-10">{children}</div>
       </motion.div>
