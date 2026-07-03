@@ -2,6 +2,9 @@ import React, { useRef, useState } from 'react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
 import type { SupportTicket } from '../types'
+import { useDailyReportStore } from '@/modules/DailyUpdateReport/store'
+import type { SupportLogRecord } from '@/modules/DailyUpdateReport/types'
+import { toast } from '@/hooks/use-toast'
 import { Plus, Trash2, Copy, Download, Upload, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -23,8 +26,24 @@ const newTicket = (): SupportTicket => ({
 const sel = 'bg-transparent border-none focus:outline-none text-sm text-white w-full'
 const cell = 'px-3 py-2 border-b border-white/5'
 
+const mapDailySupportToQA = (rows: SupportLogRecord[]): SupportTicket[] => rows.map(row => ({
+  id: crypto.randomUUID(),
+  taskId: row.support_id || '',
+  description: [row.description, row.bug_id ? `Bug ID: ${row.bug_id}` : '', row.branch ? `Branch: ${row.branch}` : '', row.received_date ? `Received: ${row.received_date}` : ''].filter(Boolean).join(' | '),
+  assignedQA: row.qa || '',
+  status: (() => {
+    const normalized = (row.status || '').toLowerCase()
+    if (['resolved', 'closed', 'passed', 'completed', 'done'].some(v => normalized.includes(v))) return 'Resolved'
+    if (['in progress', 'progress', 'working', 'ongoing'].some(v => normalized.includes(v))) return 'In Progress'
+    return 'Open'
+  })(),
+  priority: 'Medium',
+  remarks: [row.comments, row.retesting_status ? `Retesting: ${row.retesting_status}` : '', row.blocked_hours ? `Blocked Hours: ${row.blocked_hours}` : '', row.estimation_hrs ? `Estimation: ${row.estimation_hrs}` : ''].filter(Boolean).join(' | '),
+}))
+
 export const SupportLog: React.FC = () => {
   const { form, setForm } = useQAReportStore()
+  const { supportRows: dailySupportRows } = useDailyReportStore()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const fileRef = useRef<HTMLInputElement>(null)
@@ -55,6 +74,23 @@ export const SupportLog: React.FC = () => {
     const rows = tickets.map(t => `"${t.taskId}","${t.description}","${t.assignedQA}","${t.status}","${t.priority}","${t.remarks}"`)
     const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'support-log.csv'; a.click()
+  }
+
+  const importFromDailyReport = () => {
+    if (!dailySupportRows.length) {
+      toast({ title: 'No daily report data', description: 'Support & Exception Log in Daily Update Report is empty.' })
+      return
+    }
+
+    const imported = mapDailySupportToQA(dailySupportRows)
+    setForm({ supportTickets: [...tickets, ...imported] })
+    toast({ title: 'Imported from Daily Report', description: `${imported.length} row${imported.length === 1 ? '' : 's'} added to Support & Exception Log.` })
+  }
+
+  const downloadTemplate = () => {
+    const content = 'Task ID,Description,Assigned QA,Status,Priority,Remarks\nTK-001,Issue description,Alex,Open,Medium,Retest pending\n'
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'qa-support-template.csv'; a.click()
   }
 
   const importCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,8 +130,14 @@ export const SupportLog: React.FC = () => {
           <button onClick={duplicate} disabled={selected.size === 0} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all disabled:opacity-30">
             <Copy className="w-3 h-3" /> Dupe
           </button>
-          <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all">
+          <button onClick={importFromDailyReport} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all">
             <Upload className="w-3 h-3" /> Import
+          </button>
+          <button onClick={downloadTemplate} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all">
+            <Download className="w-3 h-3" /> Template
+          </button>
+          <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all">
+            <Upload className="w-3 h-3" /> CSV
           </button>
           <button onClick={exportCSV} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all">
             <Download className="w-3 h-3" /> Export

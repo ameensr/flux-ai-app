@@ -2,7 +2,10 @@ import React, { useState } from 'react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
 import type { ReleaseItem } from '../types'
-import { Plus, Trash2, Copy } from 'lucide-react'
+import { useDailyReportStore } from '@/modules/DailyUpdateReport/store'
+import type { ReleaseTestingRecord } from '@/modules/DailyUpdateReport/types'
+import { toast } from '@/hooks/use-toast'
+import { Plus, Trash2, Copy, Download, Upload } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -21,8 +24,26 @@ const newItem = (): ReleaseItem => ({
 const sel = 'bg-transparent border-none focus:outline-none text-sm text-white w-full'
 const cell = 'px-3 py-2 border-b border-white/5'
 
+const mapDailyReleaseToQA = (rows: ReleaseTestingRecord[]): ReleaseItem[] => rows.map(row => ({
+  id: crypto.randomUUID(),
+  taskId: row.task_id || '',
+  featureName: [row.description, row.scope_of_testing_for_smoke ? `Smoke Scope: ${row.scope_of_testing_for_smoke}` : '', row.overall_scope_of_testing ? `Overall Scope: ${row.overall_scope_of_testing}` : ''].filter(Boolean).join(' | '),
+  assignee: row.qa || '',
+  status: (() => {
+    const normalized = (row.smoke_testing_status || '').toLowerCase()
+    if (['passed', 'pass', 'completed'].some(v => normalized.includes(v))) return 'Pass'
+    if (['blocked', 'blocker'].some(v => normalized.includes(v))) return 'Blocked'
+    if (['fail', 'failed'].some(v => normalized.includes(v))) return 'Fail'
+    if (['in progress', 'progress', 'ongoing'].some(v => normalized.includes(v))) return 'In Progress'
+    return 'Not Started'
+  })(),
+  priority: 'Medium',
+  remarks: [row.scope_of_testing_for_smoke ? `Smoke Scope: ${row.scope_of_testing_for_smoke}` : '', row.overall_scope_of_testing ? `Overall Scope: ${row.overall_scope_of_testing}` : '', row.initial_round_estimation_hrs ? `Initial Est: ${row.initial_round_estimation_hrs}` : '', row.smoke_testing_estimation_hrs ? `Smoke Est: ${row.smoke_testing_estimation_hrs}` : '', row.overall_estimation_hrs ? `Overall Est: ${row.overall_estimation_hrs}` : ''].filter(Boolean).join(' | '),
+}))
+
 export const ReleaseTable: React.FC = () => {
   const { form, setForm } = useQAReportStore()
+  const { releaseRows: dailyReleaseRows } = useDailyReportStore()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const items = form.releaseItems
 
@@ -39,6 +60,23 @@ export const ReleaseTable: React.FC = () => {
   const duplicate = () => {
     const dupes = items.filter(i => selected.has(i.id)).map(i => ({ ...i, id: crypto.randomUUID() }))
     setForm({ releaseItems: [...items, ...dupes] })
+  }
+
+  const importFromDailyReport = () => {
+    if (!dailyReleaseRows.length) {
+      toast({ title: 'No daily report data', description: 'Release Testing Status in Daily Update Report is empty.' })
+      return
+    }
+
+    const imported = mapDailyReleaseToQA(dailyReleaseRows)
+    setForm({ releaseItems: [...items, ...imported] })
+    toast({ title: 'Imported from Daily Report', description: `${imported.length} row${imported.length === 1 ? '' : 's'} added to Release Testing Status.` })
+  }
+
+  const downloadTemplate = () => {
+    const content = 'Task ID,Feature Name,Assignee,Status,Priority,Remarks\nRT-001,Feature Name,Alice,Not Started,Medium,Initial validation pending\n'
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'qa-release-template.csv'; a.click()
   }
 
   const toggleSelect = (id: string) => setSelected(prev => {
@@ -65,6 +103,12 @@ export const ReleaseTable: React.FC = () => {
           </button>
           <button onClick={duplicate} disabled={selected.size === 0} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all disabled:opacity-30">
             <Copy className="w-3 h-3" /> Dupe
+          </button>
+          <button onClick={importFromDailyReport} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all">
+            <Upload className="w-3 h-3" /> Import
+          </button>
+          <button onClick={downloadTemplate} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all">
+            <Download className="w-3 h-3" /> Template
           </button>
         </div>
       </div>

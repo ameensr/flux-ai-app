@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
 import {
@@ -170,30 +170,79 @@ const SecurityScore = () => {
 }
 
 // ── Active Sessions ───────────────────────────────────────────────────────────
-type Session = { id: string; device: string; icon: React.ElementType; current: boolean; time: string }
+type SessionDeviceType = 'monitor' | 'smartphone' | 'globe'
+type Session = { id: string; device: string; current: boolean; time: string; deviceType: SessionDeviceType }
 
-const INITIAL_SESSIONS: Session[] = [
-  { id: 'current', device: 'Chrome • Windows', icon: Monitor, current: true, time: 'Current Session' },
-  { id: 'safari', device: 'Safari • MacBook', icon: Monitor, current: false, time: 'Yesterday' },
-  { id: 'android', device: 'Android • Pixel', icon: Smartphone, current: false, time: '2 days ago' },
-]
+const SESSION_STORAGE_KEY = 'security.active-sessions'
+
+const getBrowserInfo = () => {
+  if (typeof window === 'undefined') {
+    return { device: 'Current browser', time: 'Current Session' }
+  }
+
+  const ua = window.navigator.userAgent
+  let browser = 'Browser'
+  if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome'
+  else if (ua.includes('Firefox')) browser = 'Firefox'
+  else if (ua.includes('Safari')) browser = 'Safari'
+  else if (ua.includes('Edg')) browser = 'Edge'
+  else if (ua.includes('Opera') || ua.includes('OPR')) browser = 'Opera'
+
+  let os = 'Device'
+  if (ua.includes('Windows')) os = 'Windows'
+  else if (ua.includes('Mac')) os = 'macOS'
+  else if (ua.includes('Linux')) os = 'Linux'
+  else if (ua.includes('Android')) os = 'Android'
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS'
+
+  return { device: `${browser} • ${os}`, time: 'Current Session' }
+}
+
+const getInitialSessions = (): Session[] => {
+  if (typeof window === 'undefined') return []
+
+  try {
+    const stored = window.localStorage.getItem(SESSION_STORAGE_KEY)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed as Session[]
+      }
+    }
+  } catch {
+    // Fall back to a single current session if storage is unavailable.
+  }
+
+  const { device, time } = getBrowserInfo()
+  return [{ id: 'current', device, current: true, time, deviceType: 'monitor' }]
+}
 
 const ActiveSessions = () => {
-  const [sessions, setSessions] = useState<Session[]>(INITIAL_SESSIONS)
+  const [sessions, setSessions] = useState<Session[]>(() => getInitialSessions())
   const [signingOut, setSigningOut] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [signingOutAll, setSigningOutAll] = useState(false)
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessions))
+  }, [sessions])
+
   const handleSignOut = async (id: string) => {
+    const target = sessions.find(session => session.id === id)
+    if (!target) return
+
     setSigningOut(id)
     try {
-      // Supabase doesn't expose per-session revocation on the client SDK;
-      // sign the user out globally and let them re-auth on other devices.
-      const { error } = await supabase.auth.signOut({ scope: 'others' })
+      const { error } = await supabase.auth.signOut({ scope: target.current ? 'global' : 'others' })
       if (error) throw error
-      setSessions(prev => prev.filter(s => s.id !== id))
-      toast({ title: 'Session ended', description: 'That device has been signed out.' })
+      setSessions(prev => prev.filter(session => session.id !== id))
+      toast({
+        title: target.current ? 'Signed out' : 'Session ended',
+        description: target.current ? 'You have been signed out of this device.' : 'That device has been signed out.'
+      })
     } catch (err: unknown) {
+      setSessions(prev => prev.filter(session => session.id !== id))
       const msg = err instanceof Error ? err.message : 'Something went wrong.'
       toast({ title: 'Error', description: msg, variant: 'destructive' })
     } finally {
@@ -206,9 +255,10 @@ const ActiveSessions = () => {
     try {
       const { error } = await supabase.auth.signOut({ scope: 'others' })
       if (error) throw error
-      setSessions(prev => prev.filter(s => s.current))
+      setSessions(prev => prev.filter(session => session.current))
       toast({ title: 'Signed out all other devices', description: 'All other sessions have been terminated.' })
     } catch (err: unknown) {
+      setSessions(prev => prev.filter(session => session.current))
       const msg = err instanceof Error ? err.message : 'Something went wrong.'
       toast({ title: 'Error', description: msg, variant: 'destructive' })
     } finally {
@@ -217,7 +267,7 @@ const ActiveSessions = () => {
     }
   }
 
-  const otherSessions = sessions.filter(s => !s.current)
+  const otherSessions = sessions.filter(session => !session.current)
 
   return (
     <GlassCard hoverEffect={false}>
@@ -232,33 +282,36 @@ const ActiveSessions = () => {
       </div>
 
       <div className="space-y-2.5">
-        {sessions.map(s => (
-          <div key={s.id} className="flex items-center justify-between rounded-lg p-3"
-            style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}>
-            <div className="flex items-center gap-3">
-              <s.icon className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-              <div>
-                <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{s.device}</p>
-                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{s.time}</p>
+        {sessions.map(session => {
+          const Icon = session.deviceType === 'smartphone' ? Smartphone : session.deviceType === 'globe' ? Globe : Monitor
+          return (
+            <div key={session.id} className="flex items-center justify-between rounded-lg p-3"
+              style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}>
+              <div className="flex items-center gap-3">
+                <Icon className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                <div>
+                  <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{session.device}</p>
+                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{session.time}</p>
+                </div>
               </div>
+              {session.current
+                ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium">Active</span>
+                : (
+                  <button
+                    onClick={() => handleSignOut(session.id)}
+                    disabled={signingOut === session.id}
+                    className="text-[11px] px-2 py-1 rounded-md hover:opacity-80 transition flex items-center gap-1 disabled:opacity-50"
+                    style={{ background: 'rgba(239,68,68,0.08)', color: '#EF4444' }}
+                  >
+                    {signingOut === session.id
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <LogOut className="w-3 h-3" />}
+                    {signingOut === session.id ? 'Signing out…' : 'Sign Out'}
+                  </button>
+                )}
             </div>
-            {s.current
-              ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium">Active</span>
-              : (
-                <button
-                  onClick={() => handleSignOut(s.id)}
-                  disabled={signingOut === s.id}
-                  className="text-[11px] px-2 py-1 rounded-md hover:opacity-80 transition flex items-center gap-1 disabled:opacity-50"
-                  style={{ background: 'rgba(239,68,68,0.08)', color: '#EF4444' }}
-                >
-                  {signingOut === s.id
-                    ? <Loader2 className="w-3 h-3 animate-spin" />
-                    : <LogOut className="w-3 h-3" />}
-                  {signingOut === s.id ? 'Signing out…' : 'Sign Out'}
-                </button>
-              )}
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {otherSessions.length > 0 && (
