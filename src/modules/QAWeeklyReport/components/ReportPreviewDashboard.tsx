@@ -9,6 +9,8 @@ import {
   ArrowRightLeft, GitCompare, Eye, EyeOff, Palette, Lock, Unlock,
   Cpu, GitBranch, Terminal, Code2, ChevronDown
 } from 'lucide-react'
+import { Logo } from '@/components/ui/Logo'
+import { BRAND } from '@/lib/brand'
 
 const customStyles = `
   @keyframes float {
@@ -66,7 +68,7 @@ import type { QAReportForm, SupportTicket, ReleaseItem, HistoricalDefect } from 
 import { useTheme } from '@/context/ThemeContext'
 
 // Report preview has its own isolated theme system — independent of the global dark/light toggle.
-type ReportThemeId = 'dark' | 'light' | 'fabric' | 'github' | 'apple' | 'material' | 'cred' | 'powerbi' | 'cyber' | 'glassmorphism'
+type ReportThemeId = 'dark' | 'light' | 'fabric' | 'github' | 'apple' | 'material' | 'cred' | 'powerbi' | 'cyber' | 'glassmorphism' | 'nordic' | 'notion' | 'stripe' | 'bloomberg'
 import pptxgen from 'pptxgenjs'
 
 // No mock/dummy data — historical analytics use only the user's real saved reports
@@ -141,7 +143,7 @@ const sectionVariants: Variants = {
 
 const ReportPreviewDashboardContent: React.FC = () => {
   const { savedReports, saveReport, fetchReports } = useQAReportStore()
-  
+
   const activeHistory = savedReports.map(r => ({
     ...r,
     form: ensureFormData(r.form)
@@ -149,7 +151,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
   const [data, setData] = useState<QAReportForm>(() => {
     const raw = localStorage.getItem('current-qa-report-data')
-    if (raw) { try { return ensureFormData(JSON.parse(raw)) } catch {} }
+    if (raw) { try { return ensureFormData(JSON.parse(raw)) } catch { } }
     return ensureFormData(null)
   })
   const [isLoaded, setIsLoaded] = useState(() => !!localStorage.getItem('current-qa-report-data'))
@@ -159,9 +161,9 @@ const ReportPreviewDashboardContent: React.FC = () => {
     () => (localStorage.getItem('report-preview-theme') as ReportThemeId) || (globalTheme === 'light' ? 'light' : 'dark')
   )
   const themeGallery: ReportThemeId = reportTheme
-  const [enableParticles, setEnableParticles] = useState<boolean>(localStorage.getItem('flux-enable-particles') !== 'false')
+  const [enableParticles, setEnableParticles] = useState<boolean>(localStorage.getItem('qaly-enable-particles') !== 'false')
   const [isHealthBarFilled, setIsHealthBarFilled] = useState(false)
-  const [clientMode, setClientMode] = useState<boolean>(localStorage.getItem('flux-client-mode') === 'true')
+  const [clientMode, setClientMode] = useState<boolean>(localStorage.getItem('qaly-client-mode') === 'true')
   const [expandedTimelineWeeks, setExpandedTimelineWeeks] = useState<Record<string, boolean>>({})
   const [timelineFilter, setTimelineFilter] = useState<'weekly' | 'sprint' | 'monthly' | 'quarterly'>('weekly')
   const [compareMode, setCompareMode] = useState<boolean>(false)
@@ -195,7 +197,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const [activeSection, setActiveSection] = useState('overview')
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  
+
   const sectionsRef = {
     overview: useRef<HTMLDivElement>(null),
     kpis: useRef<HTMLDivElement>(null),
@@ -238,7 +240,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
   // ── Executive Quality Score Calculation ──
   const calculateQualityScore = (): { score: number; label: string; color: string; desc: string } => {
     let score = 70 // Baseline score
-    
+
     // 1. Defect Closure Rate contribution (+15 max)
     score += (defectClosureRate / 100) * 15
     // 2. Release pass rate contribution (+15 max)
@@ -362,6 +364,60 @@ const ReportPreviewDashboardContent: React.FC = () => {
           chartColors: ['#00f0ff', '#ff0055', '#b500ff', '#ffb700', '#00ff66']
         }
       case 'glassmorphism':
+        return {
+          bg: 'bg-[#09090b] text-white',
+          card: 'bg-white/[0.01] border-white/5 rounded-3xl backdrop-blur-xl',
+          accent: 'text-[#d4af37]',
+          accentBg: 'bg-gradient-to-tr from-[#d4af37] to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-extrabold',
+          border: 'border-white/5',
+          glow: 'shadow-[0_0_20px_rgba(255,255,255,0.02)]',
+          font: 'font-montreal',
+          chartColors: ['#d4af37', '#3b82f6', '#10b981', '#a855f7', '#fb923c']
+        }
+      case 'nordic':
+        return {
+          bg: 'bg-[#2e3440] text-[#eceff4]',
+          card: 'bg-[#3b4252] border-[#4c566a] rounded-2xl',
+          accent: 'text-[#88c0d0]',
+          accentBg: 'bg-[#88c0d0] text-[#2e3440] hover:bg-[#81b8c8] font-bold',
+          border: 'border-[#4c566a]',
+          glow: '',
+          font: 'font-satoshi',
+          chartColors: ['#88c0d0', '#a3be8c', '#ebcb8b', '#bf616a', '#b48ead']
+        }
+      case 'notion':
+        return {
+          bg: 'bg-[#ffffff] text-[#37352f]',
+          card: 'bg-[#ffffff] border-[#e3e3e0] rounded-lg shadow-none',
+          accent: 'text-[#2eaadc]',
+          accentBg: 'bg-[#37352f] text-white hover:bg-[#4a4a42] rounded-md font-bold',
+          border: 'border-[#e3e3e0]',
+          glow: '',
+          font: 'font-inter',
+          chartColors: ['#2eaadc', '#6940a5', '#d44c47', '#cb912f', '#448361']
+        }
+      case 'stripe':
+        return {
+          bg: 'bg-[#0a2540] text-[#f6f9fc]',
+          card: 'bg-[#0f2d4a] border-[#1a3d5c] rounded-2xl shadow-lg',
+          accent: 'text-[#635bff]',
+          accentBg: 'bg-[#635bff] text-white hover:bg-[#5247e5] rounded-full font-bold',
+          border: 'border-[#1a3d5c]',
+          glow: 'shadow-[0_4px_30px_rgba(99,91,255,0.08)]',
+          font: 'font-satoshi',
+          chartColors: ['#635bff', '#00d4aa', '#ff6e4a', '#ffbb33', '#80e9ff']
+        }
+      case 'bloomberg':
+        return {
+          bg: 'bg-[#000000] text-[#ff9900]',
+          card: 'bg-[#111111] border-[#333333] rounded-none',
+          accent: 'text-[#ff9900]',
+          accentBg: 'bg-[#ff9900] text-black hover:bg-[#ffaa22] font-black uppercase',
+          border: 'border-[#333333]',
+          glow: '',
+          font: 'font-mono',
+          chartColors: ['#ff9900', '#00cc66', '#ff3333', '#3399ff', '#cc66ff']
+        }
       default:
         return {
           bg: 'bg-[#09090b] text-white',
@@ -386,7 +442,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const inProgressCases = data.releaseItems.filter(i => i?.status === 'In Progress').length
   const notExecutedCases = data.releaseItems.filter(i => i?.status === 'Not Started').length
   const pendingCases = inProgressCases + blockedCases
-  
+
   const sprintHealthScore = totalCases > 0 ? Math.round((passedCases / totalCases) * 100) : 100
 
   // ── Release Readiness Meter calculations ──
@@ -420,7 +476,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
   ) => {
     const hasLast = lastVal !== undefined
     const diff = hasLast ? thisVal - (lastVal || 0) : 0
-    
+
     let percentStr = 'New'
     let percentNum = 0
     let trend: 'improved' | 'regression' | 'neutral' | 'no-change' = 'no-change'
@@ -440,14 +496,14 @@ const ReportPreviewDashboardContent: React.FC = () => {
       } else {
         const pct = Math.round((diff / lastVal) * 100)
         percentNum = Math.abs(pct)
-        
+
         if (pct === 0) {
           trend = 'no-change'
           badgeText = '▬ No Change'
         } else {
           trendSymbol = pct > 0 ? '▲' : '▼'
           percentStr = `${Math.abs(pct)}%`
-          
+
           if (type === 'lower-better') {
             trend = pct < 0 ? 'improved' : 'regression'
             badgeText = `${trendSymbol} ${percentStr} ${pct < 0 ? 'Improved' : 'Increased'}`
@@ -489,10 +545,10 @@ const ReportPreviewDashboardContent: React.FC = () => {
     const featureImps = comps.filter(c => c.trend === 'improved' && c.trendSymbol === '▲').map(c => `${c.name.toLowerCase()} increased by ${c.percentStr}`)
     const regressions = comps.filter(c => c.trend === 'regression' && c.trendSymbol === '▲').map(c => `${c.name.toLowerCase()} increased by ${c.percentStr}`)
     const featureRegs = comps.filter(c => c.trend === 'regression' && c.trendSymbol === '▼').map(c => `${c.name.toLowerCase()} reduced by ${c.percentStr}`)
-    
+
     const impParts = [...improvements, ...featureImps]
     const regParts = [...regressions, ...featureRegs]
-    
+
     let text = ''
     if (impParts.length > 0) {
       text += `Support tickets and defect validation showed improvement: ${impParts.join(', ')}. `
@@ -511,7 +567,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const getComparisonWinner = (reportA: QAReportForm, reportB: QAReportForm) => {
     const passRateA = reportA.releaseItems.length ? reportA.releaseItems.filter(i => i?.status === 'Pass').length / reportA.releaseItems.length : 1.0
     const passRateB = reportB.releaseItems.length ? reportB.releaseItems.filter(i => i?.status === 'Pass').length / reportB.releaseItems.length : 1.0
-    
+
     if (passRateB > passRateA) return `${reportB.reportTitle || 'Report B'} (Higher Test Pass Rate)`
     if (passRateA > passRateB) return `${reportA.reportTitle || 'Report A'} (Higher Test Pass Rate)`
     return 'Tie'
@@ -523,12 +579,12 @@ const ReportPreviewDashboardContent: React.FC = () => {
       { name: 'Defects Reported', change: ((reportB.defectsLastWeek.reported - reportA.defectsLastWeek.reported) / (reportA.defectsLastWeek.reported || 1)) * 100, type: 'lower' },
       { name: 'Features Completed', change: ((reportB.newFeatures - reportA.newFeatures) / (reportA.newFeatures || 1)) * 100, type: 'higher' }
     ]
-    
+
     const sorted = changes.map(c => {
       const positiveValue = c.type === 'lower' ? -c.change : c.change
       return { ...c, positiveValue }
     }).sort((a, b) => b.positiveValue - a.positiveValue)
-    
+
     if (sorted[0] && sorted[0].positiveValue > 0) {
       return `${sorted[0].name} (${Math.round(sorted[0].positiveValue)}% Improved)`
     }
@@ -657,7 +713,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
   // Write theme classes
   useEffect(() => {
-    localStorage.setItem('flux-report-theme', theme)
+    localStorage.setItem('qaly-report-theme', theme)
     if (theme === 'light') {
       document.documentElement.classList.add('light')
     } else {
@@ -688,14 +744,14 @@ const ReportPreviewDashboardContent: React.FC = () => {
   useEffect(() => {
     if (!isPresentation) return
     const keys = Object.keys(sectionsRef)
-    
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         exitFullscreen()
         setIsPresentation(false)
         return
       }
-      
+
       let currentIndex = keys.indexOf(activeSection)
       if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'ArrowDown') {
         e.preventDefault()
@@ -718,7 +774,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
   }
 
   const exitFullscreen = () => {
-    if (document.exitFullscreen) document.exitFullscreen().catch(() => {})
+    if (document.exitFullscreen) document.exitFullscreen().catch(() => { })
   }
 
   const togglePresentation = () => {
@@ -762,7 +818,7 @@ Current week metrics:
 - New Features: ${data.newFeatures}
 - Code Fixes: ${data.codeFixes}
 - Defects Raised: ${JSON.stringify(data.defectsLastWeek)}
-- Release Testing Items pass rate: ${data.releaseItems.filter(r=>r?.status==='Pass').length}/${data.releaseItems.length} passed.
+- Release Testing Items pass rate: ${data.releaseItems.filter(r => r?.status === 'Pass').length}/${data.releaseItems.length} passed.
 
 Write a custom dynamic executive review indicating actual trends (e.g. increase or decrease of defect rates or ticket backlogs).
 Return ONLY a valid JSON object matching this structure:
@@ -810,7 +866,7 @@ Do not return markdown wraps, only raw JSON text.
   const timelineData = activeHistory.slice(-5).map((h, i, arr) => {
     const currPassCount = h.form.releaseItems.filter((item: any) => item?.status === 'Pass').length
     const currPassRate = h.form.releaseItems.length ? Math.round((currPassCount / h.form.releaseItems.length) * 100) : 0
-    
+
     let emailChange = '➜'
     if (i > 0) {
       const prev = arr[i - 1].form.supportEmails
@@ -896,7 +952,7 @@ Do not return markdown wraps, only raw JSON text.
     data.nextPriorities.forEach(p => {
       md += `- **${p.title}** (Owner: ${p.owner}, Due: ${p.dueDate})\n  ${p.description}\n`
     })
-    
+
     const blob = new Blob([md], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -921,19 +977,19 @@ Do not return markdown wraps, only raw JSON text.
 
   const downloadPPTX = () => {
     const ppt = new pptxgen()
-    
+
     // Set 16:9 widescreen layout
     ppt.layout = 'LAYOUT_16X9'
-    
+
     const darkBg = '0F172A' // Slate-900 background style
     const goldText = 'D4AF37'
     const whiteText = 'FFFFFF'
     const grayText = '94A3B8'
-    
+
     // Slide 1: Title Slide
     const s1 = ppt.addSlide()
     s1.background = { fill: darkBg }
-    s1.addText('FLUX QA EXECUTIVE WEEKLY STATUS REPORT', {
+    s1.addText('QALY AI ENGINE — EXECUTIVE WEEKLY STATUS REPORT', {
       x: 0.8,
       y: 1.8,
       w: 11.2,
@@ -1006,7 +1062,7 @@ Do not return markdown wraps, only raw JSON text.
         fill: { color: '1E293B' },
         line: { color: '334155', width: 1 }
       })
-      
+
       s2.addText(kpi.title, {
         x: xPos + 0.1,
         y: 2.1,
@@ -1018,7 +1074,7 @@ Do not return markdown wraps, only raw JSON text.
         fontFace: 'Segoe UI',
         align: 'center'
       })
-      
+
       s2.addText(String(kpi.val), {
         x: xPos + 0.1,
         y: 2.7,
@@ -1030,7 +1086,7 @@ Do not return markdown wraps, only raw JSON text.
         fontFace: 'Segoe UI',
         align: 'center'
       })
-      
+
       s2.addText(kpi.desc, {
         x: xPos + 0.1,
         y: 3.8,
@@ -1106,7 +1162,7 @@ Do not return markdown wraps, only raw JSON text.
       color: goldText,
       fontFace: 'Segoe UI'
     })
-    
+
     const bullets = [
       `QA Health Verification Score: ${sprintHealthScore}%`,
       `Estimated Release Readiness Level: ${releaseReadinessScore}%`,
@@ -1138,7 +1194,7 @@ Do not return markdown wraps, only raw JSON text.
       color: goldText,
       fontFace: 'Segoe UI'
     })
-    
+
     const achs = aiSummary.achievements.map(a => `• ${a}`).join('\n\n')
     s4.addText(achs || '• No developer notes or achievements compiled.', {
       x: 0.8,
@@ -1163,7 +1219,7 @@ Do not return markdown wraps, only raw JSON text.
       color: goldText,
       fontFace: 'Segoe UI'
     })
-    
+
     const prs = data.nextPriorities.map(p => `• ${p.title} (Owner: ${p.owner}, Due: ${p.dueDate})\n  ${p.description}`).join('\n\n')
     s5.addText(prs || '• No immediate priority queue changes configured.', {
       x: 0.8,
@@ -1188,7 +1244,9 @@ Do not return markdown wraps, only raw JSON text.
   }
 
   const handlePrint = () => {
-    window.print()
+    setShowExportMenu(false)
+    // Allow React to close the export dropdown before triggering print
+    setTimeout(() => window.print(), 300)
   }
 
   if (!isLoaded) {
@@ -1218,7 +1276,7 @@ Do not return markdown wraps, only raw JSON text.
   }
 
   return (
-    <div className={`min-h-screen ${tS.font} ${tS.bg} transition-colors duration-300 relative overflow-hidden pb-20`}>
+    <div className={`min-h-screen ${tS.font} ${tS.bg} transition-colors duration-300 relative overflow-hidden pb-20 print:overflow-visible print:bg-white print:text-black`}>
       {/* ── React Confetti Layer ── */}
       {confetti.map((c, i) => (
         <div
@@ -1239,10 +1297,10 @@ Do not return markdown wraps, only raw JSON text.
       <style dangerouslySetInnerHTML={{ __html: customStyles }} />
 
       {/* ── Canvas Animated Particles ── */}
-      <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none" />
+      <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none print:hidden" />
 
       {/* ── Background Glow Blobs ── */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden print:hidden">
         <motion.div
           animate={{
             x: [0, 30, -20, 10, 0],
@@ -1254,7 +1312,7 @@ Do not return markdown wraps, only raw JSON text.
             repeat: Infinity,
             ease: "easeInOut"
           }}
-          className={`absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full blur-[160px] opacity-[0.15] ${theme==='dark'?'bg-accent-gold':'bg-yellow-400'}`}
+          className={`absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full blur-[160px] opacity-[0.15] ${theme === 'dark' ? 'bg-accent-gold' : 'bg-yellow-400'}`}
         />
         <motion.div
           animate={{
@@ -1267,165 +1325,185 @@ Do not return markdown wraps, only raw JSON text.
             repeat: Infinity,
             ease: "easeInOut"
           }}
-          className={`absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full blur-[150px] opacity-[0.12] ${theme==='dark'?'bg-blue-600':'bg-blue-400'}`}
+          className={`absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full blur-[150px] opacity-[0.12] ${theme === 'dark' ? 'bg-blue-600' : 'bg-blue-400'}`}
         />
       </div>
 
-      {/* ── Sticky Top Navigation ── */}
+      {/* ── Sticky Top Navigation — Premium Glassmorphic Bar ── */}
       {!isPresentation && (
-        <header className={`sticky top-0 z-40 backdrop-blur-xl border-b transition-colors duration-300 ${theme === 'dark' ? 'bg-[#09090b]/80 border-white/5' : 'bg-white/80 border-slate-200'} px-6 py-4`}>
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-accent-gold to-yellow-500 flex items-center justify-center text-black font-black text-lg shadow-[0_0_15px_rgba(212,175,55,0.3)]">
-                F
+        <header className="sticky top-0 z-40 transition-all duration-300 print:hidden" style={{ backdropFilter: 'blur(20px) saturate(1.8)' }}>
+          <div
+            className="border-b px-4 sm:px-6 py-3"
+            style={{
+              backgroundColor: theme === 'dark' ? 'rgba(9,9,11,0.72)' : 'rgba(255,255,255,0.72)',
+              borderColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
+              boxShadow: theme === 'dark'
+                ? '0 4px 30px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03)'
+                : '0 4px 30px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.8)',
+            }}
+          >
+            <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+              {/* Logo & Brand */}
+              <div className="flex items-center gap-3">
+                <Logo size="sm" animate={false} />
+                <div className="hidden sm:block h-6 w-px" style={{ backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }} />
+                <span className={`hidden sm:block text-[10px] uppercase font-bold tracking-[0.15em] ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>
+                  Executive Report Hub
+                </span>
               </div>
-              <div>
-                <span className="font-clash font-extrabold text-lg tracking-tight">Flux <span className="text-accent-gold font-clash">QA</span></span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest block ${theme==='dark'?'text-white/40':'text-slate-500'}`}>Weekly Executive Hub</span>
-              </div>
-            </div>
 
-            {/* Jump Anchors */}
-            <nav className={`hidden xl:flex items-center gap-1 p-1 rounded-2xl border transition-all ${theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-black/5 border-slate-200'}`}>
-              {[
-                { id: 'overview', label: 'Overview' },
-                { id: 'kpis', label: 'KPIs' },
-                { id: 'sprintHealth', label: 'Sprint Health' },
-                { id: 'releaseTesting', label: 'Release' },
-                { id: 'supportLog', label: 'Support' },
-                { id: 'defects', label: 'Defects' },
-                { id: 'charts', label: 'Charts' },
-                { id: 'aiSummary', label: 'AI Insights' },
-                { id: 'comparison', label: 'WoW' },
-                { id: 'historyDashboard', label: 'History' },
-                { id: 'roadmap', label: 'Priorities' }
-              ].map(item => (
+              {/* Jump Anchors */}
+              <nav className={`hidden xl:flex items-center gap-0.5 p-1 rounded-2xl border transition-all ${theme === 'dark' ? 'bg-white/[0.04] border-white/[0.06]' : 'bg-black/[0.03] border-black/[0.06]'}`}>
+                {[
+                  { id: 'overview', label: 'Overview' },
+                  { id: 'kpis', label: 'KPIs' },
+                  { id: 'sprintHealth', label: 'Sprint' },
+                  { id: 'releaseTesting', label: 'Release' },
+                  { id: 'supportLog', label: 'Support' },
+                  { id: 'defects', label: 'Defects' },
+                  { id: 'charts', label: 'Charts' },
+                  { id: 'aiSummary', label: 'AI Insights' },
+                  { id: 'comparison', label: 'WoW' },
+                  { id: 'historyDashboard', label: 'History' },
+                  { id: 'roadmap', label: 'Priorities' }
+                ].map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => scrollToSection(item.id)}
+                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200 ${activeSection === item.id ? 'bg-accent-gold text-black shadow-md shadow-accent-gold/20' : `${theme === 'dark' ? 'text-white/50 hover:text-white hover:bg-white/[0.06]' : 'text-slate-500 hover:text-slate-900 hover:bg-black/[0.04]'}`}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+
+              {/* Toolbar Buttons */}
+              <div className="flex items-center gap-2">
+                {/* Client Mode Toggle */}
                 <button
-                  key={item.id}
-                  onClick={() => scrollToSection(item.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activeSection === item.id ? 'bg-accent-gold text-black shadow-lg shadow-accent-gold/20' : `text-text-muted ${theme === 'dark' ? 'hover:text-white' : 'hover:text-slate-950'}`}`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </nav>
-
-            {/* Toolbar Buttons */}
-            <div className="flex items-center gap-3">
-              {/* Client Mode Toggle */}
-              <button
-                onClick={() => {
-                  const next = !clientMode
-                  setClientMode(next)
-                  localStorage.setItem('flux-client-mode', String(next))
-                  toast({
-                    title: next ? 'Client Mode Active' : 'Client Mode Disabled',
-                    description: next ? 'Confidential developer notes and internal bug metrics hidden.' : 'Restored full view.'
-                  })
-                }}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-bold ${clientMode ? 'bg-green-500/10 border-green-500/30 text-green-400' : theme === 'dark' ? 'bg-white/5 border-white/10 text-text-secondary hover:text-white' : 'bg-black/5 border-slate-200 text-slate-600 hover:text-slate-800'}`}
-              >
-                {clientMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                Client Mode
-              </button>
-
-              {/* Particle Background Toggle */}
-              <button
-                onClick={() => {
-                  const next = !enableParticles
-                  setEnableParticles(next)
-                  localStorage.setItem('flux-enable-particles', String(next))
-                  toast({
-                    title: next ? 'Ambient Motion Enabled' : 'Ambient Motion Disabled',
-                    description: next ? 'Subtle particle background activated.' : 'Particle background disabled for reduced motion.'
-                  })
-                }}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-bold ${enableParticles ? 'bg-accent-gold/10 border-accent-gold/30 text-accent-gold' : theme === 'dark' ? 'bg-white/5 border-white/10 text-text-secondary hover:text-white' : 'bg-black/5 border-slate-200 text-slate-600 hover:text-slate-800'}`}
-              >
-                <Activity className="w-3.5 h-3.5" />
-                {enableParticles ? 'Motion ON' : 'Motion OFF'}
-              </button>
-
-              {/* Theme Gallery Selection Dropdown */}
-              <div className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-black/5 border-slate-200'}`}>
-                <Palette className="w-3.5 h-3.5 text-accent-gold" />
-                <select
-                  value={themeGallery}
-                  onChange={e => {
-                    const t = e.target.value as ReportThemeId
-                    setReportTheme(t)
-                    localStorage.setItem('report-preview-theme', t)
+                  onClick={() => {
+                    const next = !clientMode
+                    setClientMode(next)
+                    localStorage.setItem('qaly-client-mode', String(next))
+                    toast({
+                      title: next ? 'Client Mode Active' : 'Client Mode Disabled',
+                      description: next ? 'Confidential developer notes and internal bug metrics hidden.' : 'Restored full view.'
+                    })
                   }}
-                  className={`bg-transparent text-xs border-none focus:outline-none font-bold cursor-pointer max-w-[110px] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
+                  className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all text-[11px] font-bold ${clientMode ? 'bg-green-500/10 border-green-500/25 text-green-400' : theme === 'dark' ? 'bg-white/[0.04] border-white/[0.06] text-white/50 hover:text-white hover:bg-white/[0.08]' : 'bg-black/[0.03] border-black/[0.06] text-slate-500 hover:text-slate-800 hover:bg-black/[0.05]'}`}
                 >
-                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="dark">Dark</option>
-                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="light">Light</option>
-                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="glassmorphism">Glassmorphism</option>
-                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="fabric">Fabric</option>
-                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="github">GitHub</option>
-                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="apple">Apple</option>
-                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="material">Material 3</option>
-                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="cred">CRED Black</option>
-                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="powerbi">Power BI</option>
-                  <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="cyber">Cyberpunk</option>
-                </select>
-              </div>
-
-              <button
-                onClick={() => setReportTheme(theme === 'dark' ? 'light' : 'dark')}
-                className={`p-2.5 rounded-xl border transition-all ${theme==='dark'?'bg-white/5 border-white/10 text-yellow-400 hover:bg-white/10':'bg-white border-slate-200 text-purple-600 hover:bg-slate-100 shadow-sm'}`}
-              >
-                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
-
-              <button
-                onClick={togglePresentation}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#d4af37] hover:bg-[#c3a030] text-black font-extrabold text-xs uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(212,175,55,0.2)]"
-              >
-                <Play className="w-3.5 h-3.5 fill-black" /> Present
-              </button>
-
-              <div className="relative">
-                <button
-                  onClick={() => setShowExportMenu(v => !v)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs uppercase tracking-widest transition-all ${theme==='dark'?'bg-white/5 border-white/10 text-white hover:bg-white/10':'bg-white border-slate-200 text-slate-800 hover:bg-slate-100 shadow-sm'}`}
-                >
-                  <Download className="w-3.5 h-3.5" /> Export
+                  {clientMode ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  <span className="hidden 2xl:inline">Client</span>
                 </button>
 
-                <AnimatePresence>
-                  {showExportMenu && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className={`absolute right-0 mt-3 w-48 border rounded-2xl overflow-hidden shadow-2xl z-50 ${theme==='dark'?'bg-[#111114] border-white/10 text-white':'bg-white border-slate-200 text-slate-800'}`}
-                    >
-                      <div className="p-1.5 flex flex-col gap-1">
-                        <button onClick={() => { handlePrint(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
-                          <Printer className="w-4 h-4 text-accent-gold" /> Print to PDF
-                        </button>
-                        <button onClick={() => { downloadPPTX(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
-                          <FileText className="w-4 h-4 text-blue-400" /> PowerPoint Outline
-                        </button>
-                        <button onClick={() => { downloadHTML(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
-                          <LayoutGrid className="w-4 h-4 text-purple-400" /> Standalone HTML
-                        </button>
-                        <button onClick={() => { downloadMarkdown(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
-                          <Copy className="w-4 h-4 text-green-400" /> Markdown File
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                {/* Particle Background Toggle */}
+                <button
+                  onClick={() => {
+                    const next = !enableParticles
+                    setEnableParticles(next)
+                    localStorage.setItem('qaly-enable-particles', String(next))
+                    toast({
+                      title: next ? 'Ambient Motion Enabled' : 'Ambient Motion Disabled',
+                      description: next ? 'Subtle particle background activated.' : 'Particle background disabled for reduced motion.'
+                    })
+                  }}
+                  className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all text-[11px] font-bold ${enableParticles ? 'bg-accent-gold/10 border-accent-gold/25 text-accent-gold' : theme === 'dark' ? 'bg-white/[0.04] border-white/[0.06] text-white/50 hover:text-white hover:bg-white/[0.08]' : 'bg-black/[0.03] border-black/[0.06] text-slate-500 hover:text-slate-800 hover:bg-black/[0.05]'}`}
+                >
+                  <Activity className="w-3 h-3" />
+                  <span className="hidden 2xl:inline">{enableParticles ? 'Motion' : 'Static'}</span>
+                </button>
 
-              <button
-                onClick={() => window.close()}
-                className={`p-2.5 rounded-xl border transition-all ${theme==='dark'?'bg-white/5 border-white/10 text-white hover:bg-red-500/20 hover:text-red-400':'bg-white border-slate-200 text-slate-600 hover:bg-red-100 hover:text-red-600 shadow-sm'}`}
-              >
-                <X className="w-4 h-4" />
-              </button>
+                {/* Theme Gallery Selection Dropdown */}
+                <div
+                  className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all"
+                  style={{
+                    backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                    borderColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+                  }}
+                >
+                  <Palette className="w-3 h-3 text-accent-gold" />
+                  <select
+                    value={themeGallery}
+                    onChange={e => {
+                      const t = e.target.value as ReportThemeId
+                      setReportTheme(t)
+                      localStorage.setItem('report-preview-theme', t)
+                    }}
+                    className={`bg-transparent text-[11px] border-none focus:outline-none font-bold cursor-pointer max-w-[100px] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
+                  >
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="dark">Dark</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="light">Light</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="glassmorphism">Glassmorphism</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="fabric">Fabric</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="github">GitHub</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="apple">Apple</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="material">Material 3</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="cred">CRED Black</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="powerbi">Power BI</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="cyber">Cyberpunk</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="nordic">Nordic</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="notion">Notion</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="stripe">Stripe</option>
+                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="bloomberg">Bloomberg</option>
+                  </select>
+                </div>
+
+                <button
+                  onClick={() => setReportTheme(theme === 'dark' ? 'light' : 'dark')}
+                  className={`p-2 rounded-xl border transition-all ${theme === 'dark' ? 'bg-white/[0.04] border-white/[0.06] text-yellow-400 hover:bg-white/[0.08]' : 'bg-white border-black/[0.06] text-purple-600 hover:bg-slate-50 shadow-sm'}`}
+                >
+                  {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                </button>
+
+                <button
+                  onClick={togglePresentation}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent-gold hover:bg-[#c3a030] text-black font-extrabold text-[11px] uppercase tracking-widest transition-all shadow-[0_2px_12px_rgba(212,175,55,0.25)]"
+                >
+                  <Play className="w-3 h-3 fill-black" /> Present
+                </button>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setShowExportMenu(v => !v)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-[11px] uppercase tracking-widest transition-all ${theme === 'dark' ? 'bg-white/[0.04] border-white/[0.06] text-white hover:bg-white/[0.08]' : 'bg-white border-black/[0.06] text-slate-800 hover:bg-slate-50 shadow-sm'}`}
+                  >
+                    <Download className="w-3 h-3" /> Export
+                  </button>
+
+                  <AnimatePresence>
+                    {showExportMenu && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className={`absolute right-0 mt-3 w-48 border rounded-2xl overflow-hidden shadow-2xl z-50 ${theme === 'dark' ? 'bg-[#111114] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                      >
+                        <div className="p-1.5 flex flex-col gap-1">
+                          <button onClick={() => { handlePrint(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
+                            <Printer className="w-4 h-4 text-accent-gold" /> Print to PDF
+                          </button>
+                          <button onClick={() => { downloadPPTX(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
+                            <FileText className="w-4 h-4 text-blue-400" /> PowerPoint Outline
+                          </button>
+                          <button onClick={() => { downloadHTML(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
+                            <LayoutGrid className="w-4 h-4 text-purple-400" /> Standalone HTML
+                          </button>
+                          <button onClick={() => { downloadMarkdown(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
+                            <Copy className="w-4 h-4 text-green-400" /> Markdown File
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <button
+                  onClick={() => window.close()}
+                  className={`p-2.5 rounded-xl border transition-all ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white hover:bg-red-500/20 hover:text-red-400' : 'bg-white border-slate-200 text-slate-600 hover:bg-red-100 hover:text-red-600 shadow-sm'}`}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </header>
@@ -1433,7 +1511,7 @@ Do not return markdown wraps, only raw JSON text.
 
       {/* ── Presentation Navigation Overlay ── */}
       {isPresentation && (
-        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 bg-black/80 backdrop-blur border border-white/10 p-2 rounded-2xl shadow-2xl">
+        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 bg-black/80 backdrop-blur border border-white/10 p-2 rounded-2xl shadow-2xl print:hidden">
           <button
             onClick={() => {
               const keys = Object.keys(sectionsRef)
@@ -1516,33 +1594,33 @@ Do not return markdown wraps, only raw JSON text.
               >
                 🟢 QA Status: {passRate >= 75 ? 'Stable' : 'Warning'}
               </motion.span>
-              <span className={`px-3.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest ${theme==='dark'?'bg-white/5 border-white/10 text-white/60':'bg-slate-200/50 border-slate-300 text-slate-600'}`}>
+              <span className={`px-3.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white/60' : 'bg-slate-200/50 border-slate-300 text-slate-600'}`}>
                 WEEK: {data.weekStart} – {data.weekEnd}
               </span>
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-accent-gold font-clash font-extrabold uppercase text-sm tracking-widest">{data.projectName}</span>
-              <h1 className={`font-clash font-black text-4xl sm:text-5xl tracking-tight leading-none ${theme==='dark'?'text-white':'text-slate-900'}`}>
+              <h1 className={`font-clash font-black text-4xl sm:text-5xl tracking-tight leading-none ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
                 {data.reportTitle || 'Weekly Status Report'}
               </h1>
             </div>
-            <p className={`text-base sm:text-lg font-normal leading-relaxed max-w-2xl ${theme==='dark'?'text-white/60':'text-slate-600'}`}>
+            <p className={`text-base sm:text-lg font-normal leading-relaxed max-w-2xl ${theme === 'dark' ? 'text-white/60' : 'text-slate-600'}`}>
               {data.subtitle || 'Executive-level verification metrics, team load, release health and issue analytics.'}
             </p>
             <div className="flex items-center gap-6 mt-2 flex-wrap">
               <div>
                 <span className="text-3xl font-black text-accent-gold block"><CountUpNumber end={releaseCount} /></span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme==='dark'?'text-white/40':'text-slate-400'}`}>Items Tested</span>
+                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>Items Tested</span>
               </div>
               <div className="w-px h-10 bg-white/10" />
               <div>
                 <span className="text-3xl font-black text-[#10b981] block"><CountUpNumber end={passRate} suffix="%" /></span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme==='dark'?'text-white/40':'text-slate-400'}`}>Test Pass Rate</span>
+                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>Test Pass Rate</span>
               </div>
               <div className="w-px h-10 bg-white/10" />
               <div>
                 <span className="text-3xl font-black text-blue-400 block"><CountUpNumber end={defectClosureRate} suffix="%" /></span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme==='dark'?'text-white/40':'text-slate-400'}`}>Defect Closure</span>
+                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>Defect Closure</span>
               </div>
             </div>
           </div>
@@ -1552,13 +1630,13 @@ Do not return markdown wraps, only raw JSON text.
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 100, damping: 15 }}
-            className={`p-6 rounded-3xl border flex flex-col items-center justify-between text-center relative overflow-hidden shadow-2xl ${theme==='dark'?'bg-white/[0.02] border-white/10':'bg-white border-slate-200'}`}
+            className={`p-6 rounded-3xl border flex flex-col items-center justify-between text-center relative overflow-hidden shadow-2xl ${theme === 'dark' ? 'bg-white/[0.02] border-white/10' : 'bg-white border-slate-200'}`}
           >
             <div className="absolute inset-0 bg-gradient-to-tr from-accent-gold/5 to-blue-500/5 pointer-events-none" />
             <span className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-2">Executive Quality Score</span>
             <div className="relative w-36 h-36 flex items-center justify-center my-3">
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="40" fill="none" stroke={theme==='dark'?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'} strokeWidth="8" strokeDasharray="188.4 251.2" strokeLinecap="round" />
+                <circle cx="50" cy="50" r="40" fill="none" stroke={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} strokeWidth="8" strokeDasharray="188.4 251.2" strokeLinecap="round" />
                 <motion.circle
                   cx="50"
                   cy="50"
@@ -1649,7 +1727,7 @@ Do not return markdown wraps, only raw JSON text.
                 }}
                 viewport={{ once: true }}
                 transition={{ delay: idx * 0.04 }}
-                className={`p-5 rounded-2xl border flex flex-col justify-between gap-3 group relative overflow-hidden transition-all duration-300 min-h-[140px] ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme==='dark'?'bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]':'bg-white border-slate-200 hover:border-slate-300'}`}
+                className={`p-5 rounded-2xl border flex flex-col justify-between gap-3 group relative overflow-hidden transition-all duration-300 min-h-[140px] ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme === 'dark' ? 'bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]' : 'bg-white border-slate-200 hover:border-slate-300'}`}
               >
                 {/* Gradient Border Glow */}
                 <div className="absolute inset-0 border border-transparent bg-gradient-to-tr from-accent-gold/25 via-blue-500/25 to-transparent rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }} />
@@ -1669,10 +1747,10 @@ Do not return markdown wraps, only raw JSON text.
                   )}
                 </div>
                 <div>
-                  <span className={`text-3xl font-black block tracking-tight ${theme==='dark'?'text-white':'text-slate-800'}`}>
+                  <span className={`text-3xl font-black block tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
                     <CountUpNumber end={kpi.val} suffix={kpi.suffix} />
                   </span>
-                  <span className={`text-xs font-extrabold ${theme==='dark'?'text-white/80':'text-slate-700'}`}>{kpi.label}</span>
+                  <span className={`text-xs font-extrabold ${theme === 'dark' ? 'text-white/80' : 'text-slate-700'}`}>{kpi.label}</span>
                 </div>
                 <p className="text-[10px] text-text-muted leading-normal">{kpi.desc}</p>
               </motion.div>
@@ -1699,11 +1777,10 @@ Do not return markdown wraps, only raw JSON text.
                 <span className="text-[10px] text-text-muted uppercase font-black tracking-widest block">Sprint Validation Status</span>
                 <h3 className="text-xl font-extrabold font-clash mt-1">Sprint Status Overview</h3>
               </div>
-              <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                sprintHealthScore >= 90 ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+              <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${sprintHealthScore >= 90 ? 'bg-green-500/10 text-green-400 border-green-500/20' :
                 sprintHealthScore >= 70 ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
-                'bg-red-500/10 text-red-400 border-red-500/20'
-              }`}>
+                  'bg-red-500/10 text-red-400 border-red-500/20'
+                }`}>
                 {sprintHealthScore}% Healthy
               </span>
             </div>
@@ -1722,11 +1799,10 @@ Do not return markdown wraps, only raw JSON text.
                   animate={{ width: `${sprintHealthScore}%` }}
                   transition={{ duration: 1.2, ease: 'easeOut' }}
                   onAnimationComplete={() => setIsHealthBarFilled(true)}
-                  className={`h-full rounded-full relative overflow-hidden ${
-                    sprintHealthScore >= 90 ? 'bg-gradient-to-r from-green-500 to-emerald-400' :
+                  className={`h-full rounded-full relative overflow-hidden ${sprintHealthScore >= 90 ? 'bg-gradient-to-r from-green-500 to-emerald-400' :
                     sprintHealthScore >= 70 ? 'bg-gradient-to-r from-amber-500 to-yellow-400' :
-                    'bg-gradient-to-r from-red-500 to-rose-400'
-                  }`}
+                      'bg-gradient-to-r from-red-500 to-rose-400'
+                    }`}
                 >
                   {!isHealthBarFilled && (
                     <motion.div
@@ -1784,8 +1860,8 @@ Do not return markdown wraps, only raw JSON text.
                     r="60"
                     stroke={
                       releaseReadinessScore >= 90 ? '#10b981' :
-                      releaseReadinessScore >= 70 ? '#f59e0b' :
-                      '#ef4444'
+                        releaseReadinessScore >= 70 ? '#f59e0b' :
+                          '#ef4444'
                     }
                     strokeWidth="10"
                     fill="transparent"
@@ -1819,11 +1895,10 @@ Do not return markdown wraps, only raw JSON text.
                   <span className={`font-bold ${blockedCases > 0 ? 'text-orange-400' : ''}`}>{blockedCases}</span>
                 </div>
 
-                <div className={`mt-3 p-2.5 rounded-xl text-center text-[10px] font-black uppercase tracking-widest border ${
-                  releaseReadinessScore >= 90 ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                <div className={`mt-3 p-2.5 rounded-xl text-center text-[10px] font-black uppercase tracking-widest border ${releaseReadinessScore >= 90 ? 'bg-green-500/10 text-green-400 border-green-500/20' :
                   releaseReadinessScore >= 70 ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
-                  'bg-red-500/10 text-red-400 border-red-500/20'
-                }`}>
+                    'bg-red-500/10 text-red-400 border-red-500/20'
+                  }`}>
                   {releaseReadinessScore >= 90 ? '🟢 Ready for Production' : releaseReadinessScore >= 70 ? '🟡 Needs Attention' : '🔴 Not Ready'}
                 </div>
               </div>
@@ -1848,10 +1923,10 @@ Do not return markdown wraps, only raw JSON text.
             <CheckCheck className="w-5 h-5 text-accent-gold" />
             <h2 className="text-2xl font-extrabold font-clash">Release Testing Status</h2>
           </div>
-          <div className={`overflow-x-auto rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+          <div className={`overflow-x-auto rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10">
-                <tr className={`border-b ${theme==='dark'?'border-white/5 bg-[#0f0f12] text-white/55':'border-slate-200 bg-slate-50 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
+                <tr className={`border-b ${theme === 'dark' ? 'border-white/5 bg-[#0f0f12] text-white/55' : 'border-slate-200 bg-slate-50 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
                   <th className="py-3.5 px-5">Task ID</th>
                   <th className="py-3.5 px-5">Feature</th>
                   <th className="py-3.5 px-5">Assignee</th>
@@ -1860,23 +1935,23 @@ Do not return markdown wraps, only raw JSON text.
                 </tr>
               </thead>
               <tbody>
-                 {data.releaseItems.map((item, idx) => (
+                {data.releaseItems.map((item, idx) => (
                   <motion.tr
                     key={item.id}
                     initial={{ opacity: 0, y: 10 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: idx * 0.04, duration: 0.3 }}
-                    className={`border-b text-xs transition-colors hover:bg-white/[0.02] ${theme==='dark'?'border-white/5':'border-slate-100'}`}
+                    className={`border-b text-xs transition-colors hover:bg-white/[0.02] ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'}`}
                   >
                     <td className="py-3.5 px-5 font-mono font-bold text-accent-gold">{item.taskId}</td>
-                    <td className={`py-3.5 px-5 font-semibold ${theme==='dark'?'text-white':'text-slate-800'}`}>{item.featureName}</td>
+                    <td className={`py-3.5 px-5 font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{item.featureName}</td>
                     <td className="py-3.5 px-5 text-text-secondary">{item.assignee}</td>
                     <td className="py-3.5 px-5 text-center">
-                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${item.status==='Pass'?'bg-green-500/10 text-green-400':item.status==='Fail'?'bg-red-500/10 text-red-400':'bg-amber-500/10 text-accent-gold'}`}>{item.status}</span>
+                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${item.status === 'Pass' ? 'bg-green-500/10 text-green-400' : item.status === 'Fail' ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-accent-gold'}`}>{item.status}</span>
                     </td>
                     <td className="py-3.5 px-5 text-center">
-                      <span className={`text-[10px] font-bold ${item.priority==='Critical'?'text-red-400':item.priority==='High'?'text-orange-400':'text-text-muted'}`}>{item.priority}</span>
+                      <span className={`text-[10px] font-bold ${item.priority === 'Critical' ? 'text-red-400' : item.priority === 'High' ? 'text-orange-400' : 'text-text-muted'}`}>{item.priority}</span>
                     </td>
                   </motion.tr>
                 ))}
@@ -1905,10 +1980,10 @@ Do not return markdown wraps, only raw JSON text.
             <Mail className="w-5 h-5 text-accent-gold" />
             <h2 className="text-2xl font-extrabold font-clash">Support & Exception Log</h2>
           </div>
-          <div className={`overflow-x-auto rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+          <div className={`overflow-x-auto rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10">
-                <tr className={`border-b ${theme==='dark'?'border-white/5 bg-[#0f0f12] text-white/55':'border-slate-200 bg-slate-50 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
+                <tr className={`border-b ${theme === 'dark' ? 'border-white/5 bg-[#0f0f12] text-white/55' : 'border-slate-200 bg-slate-50 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
                   <th className="py-3.5 px-5">Ticket</th>
                   <th className="py-3.5 px-5">Description</th>
                   <th className="py-3.5 px-5">QA</th>
@@ -1924,16 +1999,16 @@ Do not return markdown wraps, only raw JSON text.
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: idx * 0.04, duration: 0.3 }}
-                    className={`border-b text-xs transition-colors hover:bg-white/[0.02] ${theme==='dark'?'border-white/5':'border-slate-100'}`}
+                    className={`border-b text-xs transition-colors hover:bg-white/[0.02] ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'}`}
                   >
                     <td className="py-3.5 px-5 font-mono font-bold text-blue-400">{ticket.taskId}</td>
-                    <td className={`py-3.5 px-5 font-semibold ${theme==='dark'?'text-white':'text-slate-800'}`}>{ticket.description}</td>
+                    <td className={`py-3.5 px-5 font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{ticket.description}</td>
                     <td className="py-3.5 px-5 text-text-secondary">{ticket.assignedQA}</td>
                     <td className="py-3.5 px-5 text-center">
-                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${ticket.status==='Resolved'?'bg-green-500/10 text-green-400':ticket.status==='Closed'?'bg-blue-500/10 text-blue-400':'bg-orange-500/10 text-orange-400'}`}>{ticket.status}</span>
+                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${ticket.status === 'Resolved' ? 'bg-green-500/10 text-green-400' : ticket.status === 'Closed' ? 'bg-blue-500/10 text-blue-400' : 'bg-orange-500/10 text-orange-400'}`}>{ticket.status}</span>
                     </td>
                     <td className="py-3.5 px-5 text-center">
-                      <span className={`text-[10px] font-bold ${ticket.priority==='Critical'?'text-red-400':ticket.priority==='High'?'text-orange-400':'text-text-muted'}`}>{ticket.priority}</span>
+                      <span className={`text-[10px] font-bold ${ticket.priority === 'Critical' ? 'text-red-400' : ticket.priority === 'High' ? 'text-orange-400' : 'text-text-muted'}`}>{ticket.priority}</span>
                     </td>
                   </motion.tr>
                 ))}
@@ -1967,7 +2042,7 @@ Do not return markdown wraps, only raw JSON text.
               { title: 'Last Week', d: data.defectsLastWeek },
               { title: 'Month to Date', d: data.defectsMTD }
             ].map(({ title, d }) => (
-              <div key={title} className={`p-6 rounded-2xl border flex flex-col gap-4 ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+              <div key={title} className={`p-6 rounded-2xl border flex flex-col gap-4 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
                 <span className="text-[10px] font-black uppercase tracking-widest text-accent-gold">{title}</span>
                 <div className="grid grid-cols-2 gap-3">
                   {[
@@ -1976,7 +2051,7 @@ Do not return markdown wraps, only raw JSON text.
                     { label: 'Fixed', val: d.fixed, color: theme === 'dark' ? 'text-yellow-400' : 'text-amber-600' },
                     { label: 'Closed', val: d.closed, color: theme === 'dark' ? 'text-green-400' : 'text-green-600' }
                   ].map(item => (
-                    <div key={item.label} className={`p-3 rounded-xl border ${theme==='dark'?'border-white/5 bg-white/[0.02]':'border-slate-100 bg-slate-50'} flex flex-col gap-1`}>
+                    <div key={item.label} className={`p-3 rounded-xl border ${theme === 'dark' ? 'border-white/5 bg-white/[0.02]' : 'border-slate-100 bg-slate-50'} flex flex-col gap-1`}>
                       <span className="text-[9px] uppercase font-bold tracking-wider text-text-muted">{item.label}</span>
                       <span className={`text-2xl font-black ${item.color}`}><CountUpNumber end={item.val} /></span>
                     </div>
@@ -2014,7 +2089,7 @@ Do not return markdown wraps, only raw JSON text.
             <h2 className="text-2xl font-extrabold font-clash">Weekly Charts & Distribution</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
               <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Work Distribution</span>
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
@@ -2028,7 +2103,7 @@ Do not return markdown wraps, only raw JSON text.
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
               <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Production Issue Categories</span>
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
@@ -2043,7 +2118,7 @@ Do not return markdown wraps, only raw JSON text.
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
+            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
               <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Defect Status Breakdown</span>
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
@@ -2093,7 +2168,7 @@ Do not return markdown wraps, only raw JSON text.
               { title: '📈 Identified Trends', list: aiSummary.trends, color: 'border-blue-500/20 text-blue-400', bg: 'bg-blue-500/[0.03]' },
               { title: '💡 Recommendations', list: aiSummary.recommendations, color: 'border-purple-500/20 text-purple-400', bg: 'bg-purple-500/[0.03]' }
             ].filter(card => !clientMode || !card.isInternal).map(card => (
-              <div key={card.title} className={`p-5 rounded-2xl border flex flex-col gap-3 ${card.bg} ${theme==='dark'?`border-white/5 ${card.color.split(' ')[0]}`:`border-slate-200`}`}>
+              <div key={card.title} className={`p-5 rounded-2xl border flex flex-col gap-3 ${card.bg} ${theme === 'dark' ? `border-white/5 ${card.color.split(' ')[0]}` : `border-slate-200`}`}>
                 <span className={`text-xs font-black tracking-wide ${card.color.split(' ')[1]}`}>{card.title}</span>
                 <ul className="flex flex-col gap-2">
                   {card.list.map((item, idx) => (
@@ -2105,7 +2180,7 @@ Do not return markdown wraps, only raw JSON text.
                       className="flex gap-2 items-start text-xs leading-relaxed"
                     >
                       <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-accent-gold" />
-                      <span className={theme==='dark'?'text-white/80':'text-slate-700'}>{item}</span>
+                      <span className={theme === 'dark' ? 'text-white/80' : 'text-slate-700'}>{item}</span>
                     </motion.li>
                   ))}
                 </ul>
@@ -2150,7 +2225,7 @@ Do not return markdown wraps, only raw JSON text.
                   <h3 className="text-lg font-bold font-clash">Snapshot Comparison Mode</h3>
                   <p className="text-xs text-text-muted">Select any two saved reports to see differences side-by-side.</p>
                 </div>
-                
+
                 <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex flex-col gap-1">
                     <span className="text-[9px] uppercase font-bold text-text-muted">Report A (Baseline)</span>
@@ -2165,9 +2240,9 @@ Do not return markdown wraps, only raw JSON text.
                       ))}
                     </select>
                   </div>
-                  
+
                   <span className="text-text-muted mt-4">vs</span>
-                  
+
                   <div className="flex flex-col gap-1">
                     <span className="text-[9px] uppercase font-bold text-text-muted">Report B (Comparison)</span>
                     <select
@@ -2238,7 +2313,7 @@ Do not return markdown wraps, only raw JSON text.
                             const diff = m.valB - m.valA
                             const pct = m.valA !== 0 ? Math.round((diff / m.valA) * 100) : 0
                             const isLowerBetter = m.type === 'lower'
-                            
+
                             let isImproved = false
                             if (diff !== 0) {
                               isImproved = isLowerBetter ? diff < 0 : diff > 0
@@ -2276,7 +2351,7 @@ Do not return markdown wraps, only raw JSON text.
               })()}
             </div>
           ) : !prevReport ? (
-            <div className={`p-8 rounded-2xl border text-center text-sm ${theme==='dark'?'bg-white/[0.01] border-white/5 text-white/50':'bg-white border-slate-200 text-slate-500'}`}>
+            <div className={`p-8 rounded-2xl border text-center text-sm ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 text-white/50' : 'bg-white border-slate-200 text-slate-500'}`}>
               <p className="font-semibold text-accent-gold mb-1">No previous report available for comparison</p>
               <p className="text-xs">Save your first report to start tracking week-over-week performance changes.</p>
             </div>
@@ -2287,18 +2362,18 @@ Do not return markdown wraps, only raw JSON text.
                   const isImproved = card.trend === 'improved'
                   const isRegression = card.trend === 'regression'
                   const isNeutral = card.trend === 'neutral'
-                  
+
                   const badgeColor = isImproved
                     ? 'bg-green-500/10 text-green-400 border-green-500/20'
                     : isRegression
-                    ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                    : 'bg-amber-500/10 text-accent-gold border-accent-gold/20'
+                      ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                      : 'bg-amber-500/10 text-accent-gold border-accent-gold/20'
 
                   const glowColor = isImproved
                     ? 'shadow-[0_0_20px_rgba(74,222,128,0.05)] border-green-500/10'
                     : isRegression
-                    ? 'shadow-[0_0_20px_rgba(248,113,113,0.05)] border-red-500/10'
-                    : 'shadow-none border-white/5'
+                      ? 'shadow-[0_0_20px_rgba(248,113,113,0.05)] border-red-500/10'
+                      : 'shadow-none border-white/5'
 
                   return (
                     <motion.div
@@ -2307,30 +2382,30 @@ Do not return markdown wraps, only raw JSON text.
                       whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true }}
                       transition={{ delay: idx * 0.05 }}
-                      className={`p-6 rounded-2xl border flex flex-col justify-between gap-4 group transition-all duration-300 ${glowColor} ${theme==='dark'?'bg-white/[0.01] hover:border-white/20 hover:bg-white/[0.03]':'bg-white border-slate-200 hover:shadow-lg hover:border-slate-300'}`}
+                      className={`p-6 rounded-2xl border flex flex-col justify-between gap-4 group transition-all duration-300 ${glowColor} ${theme === 'dark' ? 'bg-white/[0.01] hover:border-white/20 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:shadow-lg hover:border-slate-300'}`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className={`text-xs font-extrabold ${theme==='dark'?'text-white/80':'text-slate-700'}`}>{card.name}</span>
+                        <span className={`text-xs font-extrabold ${theme === 'dark' ? 'text-white/80' : 'text-slate-700'}`}>{card.name}</span>
                         <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${badgeColor}`}>
                           {card.badgeText}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center justify-between py-2">
                         <div className="flex flex-col">
                           <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Last Week</span>
-                          <span className={`text-xl font-bold ${theme==='dark'?'text-white/60':'text-slate-500'}`}>
+                          <span className={`text-xl font-bold ${theme === 'dark' ? 'text-white/60' : 'text-slate-500'}`}>
                             {card.lastVal}
                           </span>
                         </div>
-                        
+
                         <div className="flex flex-col items-center justify-center text-text-muted">
                           <span className="text-xs">↓</span>
                         </div>
-                        
+
                         <div className="flex flex-col items-end">
                           <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">This Week</span>
-                          <span className={`text-2xl font-black ${theme==='dark'?'text-white':'text-slate-900'}`}>
+                          <span className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
                             <CountUpNumber end={card.thisVal} />
                           </span>
                         </div>
@@ -2341,13 +2416,13 @@ Do not return markdown wraps, only raw JSON text.
               </div>
 
               {/* WoW AI Insights Summary box */}
-              <div className={`p-5 rounded-2xl border flex items-start gap-4 ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 shadow-sm'}`}>
+              <div className={`p-5 rounded-2xl border flex items-start gap-4 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}>
                 <div className="p-2 rounded-xl bg-accent-gold/10 text-accent-gold shrink-0">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-black uppercase tracking-widest text-accent-gold">WoW AI Summary</span>
-                  <p className={`text-xs leading-relaxed ${theme==='dark'?'text-white/70':'text-slate-600'}`}>
+                  <p className={`text-xs leading-relaxed ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>
                     {generateWowSummary(comparisons)}
                   </p>
                 </div>
@@ -2370,7 +2445,7 @@ Do not return markdown wraps, only raw JSON text.
               <Sparkles className="w-5 h-5 text-accent-gold" />
               <h2 className="text-2xl font-extrabold font-clash">AI Summary</h2>
             </div>
-            <p className={`text-sm leading-relaxed ${theme==='dark'?'text-white/60':'text-slate-600'}`}>
+            <p className={`text-sm leading-relaxed ${theme === 'dark' ? 'text-white/60' : 'text-slate-600'}`}>
               Synthesizing current weekly data against the last 5 saved history reports to map trends, regression vectors, and resource workloads.
             </p>
             <button
@@ -2399,14 +2474,14 @@ Do not return markdown wraps, only raw JSON text.
             ].filter(card => !clientMode || !card.isInternal).map(card => (
               <div
                 key={card.title}
-                className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}
+                className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}
               >
                 <span className={`text-sm font-black tracking-wide ${card.color}`}>{card.title}</span>
                 <ul className="flex flex-col gap-2">
                   {card.list.map((item, idx) => (
                     <li key={idx} className="flex gap-2 items-start text-xs leading-normal">
                       <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-accent-gold" />
-                      <span className={theme==='dark'?'text-white/80':'text-slate-700'}>{item}</span>
+                      <span className={theme === 'dark' ? 'text-white/80' : 'text-slate-700'}>{item}</span>
                     </li>
                   ))}
                 </ul>
@@ -2447,7 +2522,7 @@ Do not return markdown wraps, only raw JSON text.
                     <History className="w-5 h-5 text-accent-gold" />
                     <h2 className="text-2xl font-extrabold font-clash">Weekly QA Progress Timeline</h2>
                   </div>
-                  
+
                   <div className="flex items-center gap-1.5 p-1 bg-white/5 border border-white/5 rounded-2xl text-[10px]">
                     {(['weekly', 'sprint', 'monthly', 'quarterly'] as const).map(tab => (
                       <button
@@ -2468,7 +2543,7 @@ Do not return markdown wraps, only raw JSON text.
                     whileInView={{ height: '100%' }}
                     viewport={{ once: true }}
                     transition={{ duration: 1.2, ease: 'easeOut' }}
-                    className={`absolute left-0 top-4 w-[1px] ${theme==='dark'?'bg-white/10':'bg-slate-200'} origin-top`}
+                    className={`absolute left-0 top-4 w-[1px] ${theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'} origin-top`}
                   />
                   {filteredTimeline.map((week, idx) => {
                     const isExpanded = !!expandedTimelineWeeks[week.id]
@@ -2482,14 +2557,14 @@ Do not return markdown wraps, only raw JSON text.
                           onClick={() => {
                             setExpandedTimelineWeeks(prev => ({ ...prev, [week.id]: !prev[week.id] }))
                           }}
-                          className={`relative group p-4 rounded-2xl border cursor-pointer transition-all duration-300 ${theme==='dark'?'bg-white/[0.01] border-white/5 hover:border-white/20 hover:bg-white/[0.03]':'bg-white border-slate-200 hover:shadow-md'}`}
+                          className={`relative group p-4 rounded-2xl border cursor-pointer transition-all duration-300 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 hover:border-white/20 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:shadow-md'}`}
                         >
                           {/* Timeline node marker */}
                           <motion.div
                             whileHover={{ scale: 1.3 }}
                             className={`absolute left-[-31px] top-6 z-10 w-3.5 h-3.5 rounded-full border-2 transition-transform duration-300 group-hover:scale-125 ${week.healthScore >= 90 ? 'bg-green-400 border-green-500/20' : week.healthScore >= 70 ? 'bg-yellow-400 border-yellow-500/20' : 'bg-red-400 border-red-500/20'}`}
                           />
-                          
+
                           <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-black uppercase tracking-widest text-accent-gold">{week.week}</span>
@@ -2573,20 +2648,20 @@ Do not return markdown wraps, only raw JSON text.
           </div>
 
           {historicalChartsData.length < 2 ? (
-            <div className={`p-8 rounded-2xl border text-center text-sm ${theme==='dark'?'bg-white/[0.01] border-white/5 text-white/50':'bg-white border-slate-200 text-slate-500'}`}>
+            <div className={`p-8 rounded-2xl border text-center text-sm ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 text-white/50' : 'bg-white border-slate-200 text-slate-500'}`}>
               <p className="font-semibold text-accent-gold mb-1">Insufficient Historical Data</p>
               <p className="text-xs">At least 2 saved reports are required to calculate trend performance charts.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
+
               {/* 1. Monthly KPI Trend (Line) */}
               <motion.div
                 initial={{ opacity: 0, y: 20, scale: 0.98 }}
                 whileInView={{ opacity: 1, y: 0, scale: 1 }}
                 viewport={{ once: true, margin: "-45px" }}
                 transition={{ duration: 0.5 }}
-                className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
               >
                 <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Monthly KPI Trend</span>
                 <div className="h-64">
@@ -2610,7 +2685,7 @@ Do not return markdown wraps, only raw JSON text.
                 whileInView={{ opacity: 1, y: 0, scale: 1 }}
                 viewport={{ once: true, margin: "-45px" }}
                 transition={{ duration: 0.5, delay: 0.05 }}
-                className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
               >
                 <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Defect Closure Trend</span>
                 <div className="h-64">
@@ -2643,7 +2718,7 @@ Do not return markdown wraps, only raw JSON text.
                 whileInView={{ opacity: 1, y: 0, scale: 1 }}
                 viewport={{ once: true, margin: "-45px" }}
                 transition={{ duration: 0.5, delay: 0.1 }}
-                className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
               >
                 <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Production Issue Categories Trend</span>
                 <div className="h-64">
@@ -2669,7 +2744,7 @@ Do not return markdown wraps, only raw JSON text.
                 whileInView={{ opacity: 1, y: 0, scale: 1 }}
                 viewport={{ once: true, margin: "-45px" }}
                 transition={{ duration: 0.5, delay: 0.15 }}
-                className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
               >
                 <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Weekly Support Ticket Trend</span>
                 <div className="h-64">
@@ -2691,7 +2766,7 @@ Do not return markdown wraps, only raw JSON text.
                 whileInView={{ opacity: 1, y: 0, scale: 1 }}
                 viewport={{ once: true, margin: "-45px" }}
                 transition={{ duration: 0.5, delay: 0.2 }}
-                className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
               >
                 <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">QA Health vs Team Size Trend</span>
                 <div className="h-64">
@@ -2714,7 +2789,7 @@ Do not return markdown wraps, only raw JSON text.
                 whileInView={{ opacity: 1, y: 0, scale: 1 }}
                 viewport={{ once: true, margin: "-45px" }}
                 transition={{ duration: 0.5, delay: 0.25 }}
-                className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
               >
                 <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Feature Completion Trend</span>
                 <div className="h-64">
@@ -2744,14 +2819,14 @@ Do not return markdown wraps, only raw JSON text.
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            
+
             {/* 1. Work Distribution (Pie) */}
             <motion.div
               initial={{ opacity: 0, y: 20, scale: 0.98 }}
               whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true, margin: "-45px" }}
               transition={{ duration: 0.5 }}
-              className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+              className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
             >
               <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Work Distribution</span>
               <div className="h-64 flex justify-center items-center">
@@ -2775,7 +2850,7 @@ Do not return markdown wraps, only raw JSON text.
               whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true, margin: "-45px" }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+              className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
             >
               <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Production Issue Categories</span>
               <div className="h-64">
@@ -2798,7 +2873,7 @@ Do not return markdown wraps, only raw JSON text.
               whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true, margin: "-45px" }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className={`p-5 rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+              className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
             >
               <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Defect Status Breakdown</span>
               <div className="h-64">
@@ -2819,108 +2894,6 @@ Do not return markdown wraps, only raw JSON text.
           </div>
         </section>
 
-        {/* ── SECTION 7: DATA TABLES ── */}
-        <section ref={sectionsRef.details} className="flex flex-col gap-8">
-          
-          {/* Release Testing Table */}
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <CheckCheck className="w-5 h-5 text-accent-gold" />
-              <h2 className="text-xl font-extrabold font-clash">Release Testing Status</h2>
-            </div>
-            
-            <div className={`overflow-x-auto rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className={`border-b ${theme==='dark'?'border-white/5 text-white/55':'border-slate-200 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
-                    <th className="py-4 px-4">Task ID</th>
-                    <th className="py-4 px-4">Feature</th>
-                    <th className="py-4 px-4">Assignee</th>
-                    <th className="py-4 px-4 text-center">Status</th>
-                    <th className="py-4 px-4 text-center">Priority</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.releaseItems.map((item, idx) => (
-                    <motion.tr
-                      key={item.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: idx * 0.04, duration: 0.3 }}
-                      className={`border-b text-xs transition-colors hover:bg-white/[0.01] ${theme==='dark'?'border-white/5':'border-slate-100'}`}
-                    >
-                      <td className="py-4 px-4 font-mono font-bold text-accent-gold">{item.taskId}</td>
-                      <td className={`py-4 px-4 font-semibold ${theme==='dark'?'text-white':'text-slate-800'}`}>{item.featureName}</td>
-                      <td className="py-4 px-4 text-text-secondary">{item.assignee}</td>
-                      <td className="py-4 px-4 text-center">
-                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${item.status==='Pass'?'bg-green-500/10 text-green-400':item.status==='Fail'?'bg-red-500/10 text-red-400':'bg-amber-500/10 text-accent-gold'}`}>
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        <span className={`text-[10px] font-bold ${item.priority==='Critical'?'text-red-400':item.priority==='High'?'text-orange-400':'text-text-muted'}`}>{item.priority}</span>
-                      </td>
-                    </motion.tr>
-                  ))}
-                  {data.releaseItems.length === 0 && (
-                    <tr><td colSpan={5} className="py-6 text-center text-xs text-text-muted">No items configured.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Support Log Table */}
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <Mail className="w-5 h-5 text-accent-gold" />
-              <h2 className="text-xl font-extrabold font-clash">Support & Exception Log</h2>
-            </div>
-            
-            <div className={`overflow-x-auto rounded-2xl border ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}>
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className={`border-b ${theme==='dark'?'border-white/5 text-white/55':'border-slate-200 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
-                    <th className="py-4 px-4">Ticket</th>
-                    <th className="py-4 px-4">Description</th>
-                    <th className="py-4 px-4">QA</th>
-                    <th className="py-4 px-4 text-center">Status</th>
-                    <th className="py-4 px-4 text-center">Priority</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.supportTickets.map((ticket, idx) => (
-                    <motion.tr
-                      key={ticket.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: idx * 0.04, duration: 0.3 }}
-                      className={`border-b text-xs transition-colors hover:bg-white/[0.01] ${theme==='dark'?'border-white/5':'border-slate-100'}`}
-                    >
-                      <td className="py-4 px-4 font-mono font-bold text-blue-400">{ticket.taskId}</td>
-                      <td className={`py-4 px-4 font-semibold ${theme==='dark'?'text-white':'text-slate-800'}`}>{ticket.description}</td>
-                      <td className="py-4 px-4 text-text-secondary">{ticket.assignedQA}</td>
-                      <td className="py-4 px-4 text-center">
-                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${ticket.status==='Resolved'?'bg-green-500/10 text-green-400':ticket.status==='Closed'?'bg-blue-500/10 text-blue-400':'bg-orange-500/10 text-orange-400'}`}>
-                          {ticket.status}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        <span className={`text-[10px] font-bold ${ticket.priority==='Critical'?'text-red-400':ticket.priority==='High'?'text-orange-400':'text-text-muted'}`}>{ticket.priority}</span>
-                      </td>
-                    </motion.tr>
-                  ))}
-                  {data.supportTickets.length === 0 && (
-                    <tr><td colSpan={5} className="py-6 text-center text-xs text-text-muted">No tickets logged.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
         {/* ── SECTION 8: TEAM RESOURCE ALLOCATION ── */}
         <section ref={sectionsRef.team} className="flex flex-col gap-6">
           <div className="flex items-center gap-2">
@@ -2936,12 +2909,12 @@ Do not return markdown wraps, only raw JSON text.
             ].map(group => (
               <div
                 key={group.role}
-                className={`p-6 rounded-2xl border relative overflow-hidden ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200'}`}
+                className={`p-6 rounded-2xl border relative overflow-hidden ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}
               >
                 <div className={`h-1.5 w-16 rounded-full mb-4 ${group.barColor}`} />
-                <h3 className={`text-base font-extrabold mb-1 ${theme==='dark'?'text-white':'text-slate-800'}`}>{group.role}</h3>
+                <h3 className={`text-base font-extrabold mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{group.role}</h3>
                 <span className="text-[10px] uppercase font-bold text-accent-gold tracking-widest">{group.metrics}</span>
-                
+
                 <div className="flex flex-col gap-3 mt-6">
                   {group.members.map(member => (
                     <div key={member} className="flex items-center justify-between border-t border-white/5 pt-3">
@@ -2970,7 +2943,7 @@ Do not return markdown wraps, only raw JSON text.
           ref={sectionsRef.roadmap}
           className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8"
         >
-          
+
           {/* Daily Milestone Logs */}
           <div className="flex flex-col gap-6">
             <div className="flex items-center gap-2">
@@ -3009,7 +2982,7 @@ Do not return markdown wraps, only raw JSON text.
                     className="absolute left-[-31px] top-1.5 w-2.5 h-2.5 rounded-full bg-accent-gold shadow-[0_0_8px_rgba(212,175,55,0.8)] transition-transform duration-300 group-hover:scale-125"
                   />
                   <span className="text-[10px] font-black uppercase tracking-widest text-accent-gold block">{event.day}</span>
-                  <h3 className={`text-sm font-extrabold mt-0.5 ${theme==='dark'?'text-white':'text-slate-800'}`}>{event.title}</h3>
+                  <h3 className={`text-sm font-extrabold mt-0.5 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{event.title}</h3>
                   <p className="text-xs text-text-secondary mt-1">{event.desc}</p>
                 </motion.div>
               ))}
@@ -3022,18 +2995,18 @@ Do not return markdown wraps, only raw JSON text.
               <Star className="w-5 h-5 text-accent-gold" />
               <h2 className="text-xl font-extrabold font-clash">Next Week Priorities</h2>
             </div>
-            
+
             <div className="flex flex-col gap-3">
               {data.nextPriorities.map((priority, idx) => (
                 <div
                   key={priority.id}
-                  className={`p-5 rounded-2xl border flex flex-col gap-2 relative ${theme==='dark'?'bg-white/[0.01] border-white/5':'bg-white border-slate-200 shadow-sm'}`}
+                  className={`p-5 rounded-2xl border flex flex-col gap-2 relative ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold font-mono text-accent-gold">0{idx + 1}.</span>
-                    <span className={`text-[10px] uppercase font-bold tracking-wider ${theme==='dark'?'text-white/40':'text-slate-400'}`}>Due: {priority.dueDate}</span>
+                    <span className={`text-[10px] uppercase font-bold tracking-wider ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>Due: {priority.dueDate}</span>
                   </div>
-                  <h3 className={`text-sm font-extrabold ${theme==='dark'?'text-white':'text-slate-800'}`}>{priority.title}</h3>
+                  <h3 className={`text-sm font-extrabold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{priority.title}</h3>
                   <p className="text-xs text-text-secondary leading-normal">{priority.description}</p>
                   <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
                     <span className="text-[10px] font-black uppercase text-blue-400 tracking-wider">Owner: {priority.owner}</span>
@@ -3049,9 +3022,21 @@ Do not return markdown wraps, only raw JSON text.
 
       </motion.div>
 
-      {/* ── Footer ── */}
-      <footer className={`mt-24 border-t py-8 text-center text-xs ${theme==='dark'?'border-white/5 text-white/35':'border-slate-200 text-slate-500'}`}>
-        <p>© 2026 Flux QA Engine. Synthesized client-side for executive presentation.</p>
+      {/* ── Footer — Consistent with main app ── */}
+      <footer
+        className="mt-16 py-4 px-4"
+        style={{ borderTop: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'}` }}
+      >
+        <div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
+          <Logo size="sm" animate={false} />
+          <span className={`text-xs tracking-wide ${theme === 'dark' ? 'text-white/35' : 'text-slate-400'}`}>
+            &copy; {new Date().getFullYear()} {BRAND.name}
+          </span>
+          <span className={`text-xs ${theme === 'dark' ? 'text-white/15' : 'text-slate-300'}`}>|</span>
+          <span className={`text-xs italic tracking-wide ${theme === 'dark' ? 'text-white/30' : 'text-slate-400'}`}>
+            Powered by Intelligence. Built for Quality.
+          </span>
+        </div>
       </footer>
     </div>
   )

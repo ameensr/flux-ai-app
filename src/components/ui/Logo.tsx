@@ -16,12 +16,10 @@ interface LogoProps {
 // ─── The Qaly Icon ────────────────────────────────────────────────────────────
 // Design language:
 //   • A perfect circle — representing quality, completeness, continuous improvement
-//   • A precision orbital arc sweeping 270° — representing AI intelligence, motion, automation
-//   • A clean diagonal tail extending from the arc endpoint — the Q signature, also an arrow
-//     pointing forward (progress, direction, precision)
-//   • Negative space between arc and circle — breathing room, confidence
-//   • No background fill — works on any surface
-//   • Pure geometry — timeless, scales from 16px favicon to billboard
+//   • A precision orbital arc sweeping 270° — representing AI intelligence, motion
+//   • A confident diagonal tail — the Q signature, also a forward-pointing arrow
+//   • Gradient stroke: indigo → blue (brand identity)
+//   • Bolder stroke weights for high visibility at all sizes
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface QIconProps {
@@ -32,30 +30,24 @@ interface QIconProps {
 }
 
 const QIcon: React.FC<QIconProps> = ({ size, mono, gradientId, glowId }) => {
-  // All geometry is defined in a 32×32 viewBox for crisp rendering at any size
   const cx = 14.5
   const cy = 14.5
-  const r = 9          // main circle radius
-  const strokeW = 2.2  // stroke width in viewBox units
+  const r = 9
+  const strokeW = 2.8
 
-  // Orbital arc: 270° sweep starting from top (−90°), going clockwise
-  // Ends at the 3 o'clock position (right side), leaving a gap at bottom-right
-  // Arc start: top  → (cx, cy - r)
-  // Arc end:   right → (cx + r, cy)
+  // Orbital arc: 270° sweep from top clockwise to right
   const arcStartX = cx
   const arcStartY = cy - r
   const arcEndX = cx + r
   const arcEndY = cy
 
-  // Tail: extends diagonally from arc end, pointing bottom-right
-  // This IS the Q tail — also reads as a forward arrow / precision mark
+  // Tail: diagonal from arc end, pointing bottom-right
   const tailX1 = arcEndX
   const tailY1 = arcEndY
   const tailX2 = arcEndX + 5.5
   const tailY2 = arcEndY + 5.5
 
-  const stroke = mono ? 'white' : `url(#${gradientId})`
-  const tailStroke = mono ? 'white' : `url(#${gradientId})`
+  const stroke = mono ? 'currentColor' : `url(#${gradientId})`
 
   return (
     <svg
@@ -68,12 +60,12 @@ const QIcon: React.FC<QIconProps> = ({ size, mono, gradientId, glowId }) => {
     >
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-          <stop offset="0%"   stopColor="#7C5CFF" />
-          <stop offset="50%"  stopColor="#5A7DFF" />
+          <stop offset="0%" stopColor="#6366F1" />
+          <stop offset="50%" stopColor="#7C5CFF" />
           <stop offset="100%" stopColor="#2D8CFF" />
         </linearGradient>
         <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="1.2" result="blur" />
+          <feGaussianBlur stdDeviation="1" result="blur" />
           <feComposite in="SourceGraphic" in2="blur" operator="over" />
         </filter>
       </defs>
@@ -90,25 +82,23 @@ const QIcon: React.FC<QIconProps> = ({ size, mono, gradientId, glowId }) => {
         filter={mono ? undefined : `url(#${glowId})`}
       />
 
-      {/* Orbital arc — 270° sweep, the intelligence layer */}
-      {/* We draw this as a path arc from top, clockwise 270°, ending at right */}
+      {/* Orbital arc — intelligence layer, subtly lighter */}
       <path
         d={`M ${arcStartX} ${arcStartY} A ${r} ${r} 0 1 1 ${arcEndX} ${arcEndY}`}
         stroke={stroke}
-        strokeWidth={strokeW * 0.72}
+        strokeWidth={strokeW * 0.6}
         fill="none"
         strokeLinecap="round"
-        opacity={0.38}
-        filter={mono ? undefined : `url(#${glowId})`}
+        opacity={0.35}
       />
 
-      {/* Precision tail — the Q signature + forward arrow */}
+      {/* Precision tail — the Q signature */}
       <line
         x1={tailX1}
         y1={tailY1}
         x2={tailX2}
         y2={tailY2}
-        stroke={tailStroke}
+        stroke={stroke}
         strokeWidth={strokeW}
         strokeLinecap="round"
         filter={mono ? undefined : `url(#${glowId})`}
@@ -119,10 +109,10 @@ const QIcon: React.FC<QIconProps> = ({ size, mono, gradientId, glowId }) => {
 
 // ─── Size map ─────────────────────────────────────────────────────────────────
 const SIZE_MAP = {
-  sm: { icon: 24, qaly: 16,  engine: 9,    gap: 8,  letterSpacing: '-0.02em', engineTracking: '0.13em' },
-  md: { icon: 28, qaly: 19,  engine: 10.5, gap: 9,  letterSpacing: '-0.02em', engineTracking: '0.15em' },
-  lg: { icon: 36, qaly: 25,  engine: 13,   gap: 11, letterSpacing: '-0.025em', engineTracking: '0.16em' },
-  xl: { icon: 50, qaly: 35,  engine: 16.5, gap: 14, letterSpacing: '-0.03em', engineTracking: '0.18em' },
+  sm: { icon: 24, qaly: 16, engine: 9, gap: 7, letterSpacing: '-0.02em', engineTracking: '0.12em' },
+  md: { icon: 28, qaly: 19, engine: 10, gap: 8, letterSpacing: '-0.02em', engineTracking: '0.14em' },
+  lg: { icon: 36, qaly: 26, engine: 13, gap: 10, letterSpacing: '-0.025em', engineTracking: '0.15em' },
+  xl: { icon: 50, qaly: 36, engine: 16, gap: 13, letterSpacing: '-0.03em', engineTracking: '0.17em' },
 }
 
 // ─── Logo ─────────────────────────────────────────────────────────────────────
@@ -135,18 +125,17 @@ export const Logo: React.FC<LogoProps> = ({
   dark = false,
 }) => {
   const s = SIZE_MAP[size]
-
-  // Unique IDs per instance to avoid SVG gradient conflicts when multiple logos render
   const uid = React.useId().replace(/:/g, '')
   const gradientId = `qg-${uid}`
-  const glowId     = `qgl-${uid}`
+  const glowId = `qgl-${uid}`
 
+  // Wordmark color: always high-contrast solid color (no transparent gradient trick)
   const qalyColor = mono
     ? (dark ? '#111827' : '#ffffff')
-    : 'url(#qaly-wordmark-grad)'
+    : 'var(--text-primary)'
 
   const engineColor = mono
-    ? (dark ? 'rgba(17,24,39,0.5)' : 'rgba(255,255,255,0.5)')
+    ? (dark ? 'rgba(17,24,39,0.5)' : 'rgba(255,255,255,0.55)')
     : 'var(--text-muted)'
 
   return (
@@ -177,46 +166,29 @@ export const Logo: React.FC<LogoProps> = ({
             className="flex items-baseline"
             style={{ gap: size === 'sm' ? 3 : 4 }}
           >
-            {/* Hidden gradient def for wordmark */}
-            <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
-              <defs>
-                <linearGradient id="qaly-wordmark-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%"   stopColor="#7C5CFF" />
-                  <stop offset="60%"  stopColor="#5A7DFF" />
-                  <stop offset="100%" stopColor="#2D8CFF" />
-                </linearGradient>
-              </defs>
-            </svg>
-
-            {/* "Qaly" — hero wordmark */}
+            {/* "Qaly" — solid, bold, always visible */}
             <span
+              className="font-clash"
               style={{
                 fontSize: s.qaly,
                 fontWeight: 700,
                 letterSpacing: s.letterSpacing,
                 lineHeight: 1,
-                background: mono ? undefined : 'linear-gradient(90deg, #7C5CFF 0%, #5A7DFF 55%, #2D8CFF 100%)',
-                WebkitBackgroundClip: mono ? undefined : 'text',
-                WebkitTextFillColor: mono ? qalyColor : 'transparent',
-                backgroundClip: mono ? undefined : 'text',
-                color: mono ? qalyColor : undefined,
-                fontFamily: 'var(--font-sans, system-ui, sans-serif)',
+                color: qalyColor,
               }}
             >
               Qaly
             </span>
 
-            {/* "AI Engine" — refined secondary */}
+            {/* "AI ENGINE" — refined secondary */}
             <span
               style={{
                 fontSize: s.engine,
-                fontWeight: 400,
+                fontWeight: 500,
                 letterSpacing: s.engineTracking,
                 lineHeight: 1,
                 textTransform: 'uppercase',
                 color: engineColor,
-                fontFamily: 'var(--font-sans, system-ui, sans-serif)',
-                paddingBottom: size === 'xl' ? 2 : 1,
               }}
             >
               AI Engine

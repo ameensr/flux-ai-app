@@ -1,6 +1,7 @@
 import React from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { Sidebar } from './Sidebar'
+import { Footer } from './Footer'
 import { Menu, Sun, Moon } from 'lucide-react'
 import { useTheme } from '@/context/ThemeContext'
 import { Logo } from '../ui/Logo'
@@ -62,8 +63,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
         className="min-h-screen px-4 pt-20 pb-8 lg:px-8 lg:pt-8 lg:pb-8 transition-[margin-left] duration-300"
         style={{ marginLeft: isSidebarOpen ? marginLeft : 76 }}
       >
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto overflow-hidden">
           {children}
+          <Footer />
         </div>
       </main>
     </div>

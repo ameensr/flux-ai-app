@@ -399,40 +399,94 @@ const TwoFactorPlaceholder = () => (
 )
 
 // ── Login Activity ────────────────────────────────────────────────────────────
-const loginActivity = [
-  { date: '3 Jul 2026, 10:45 AM', browser: 'Chrome', device: 'Windows', status: 'Success' },
-  { date: '2 Jul 2026, 8:12 PM', browser: 'Safari', device: 'macOS', status: 'Success' },
-  { date: '1 Jul 2026, 3:30 PM', browser: 'Firefox', device: 'Linux', status: 'Failed' },
-]
 
-const LoginActivity = () => (
-  <GlassCard hoverEffect={false}>
-    <div className="flex items-center gap-3 mb-4">
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
-        <Activity className="w-4 h-4" style={{ color: 'var(--accent)' }} />
-      </div>
-      <div>
-        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Login Activity</h2>
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Recent sign-in attempts.</p>
-      </div>
-    </div>
-    <div className="space-y-2">
-      {loginActivity.map((a, i) => (
-        <div key={i} className="flex items-center justify-between rounded-lg p-3"
-          style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}>
-          <div>
-            <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{a.date}</p>
-            <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{a.browser} • {a.device}</p>
-          </div>
-          <span className={cn(
-            'text-[10px] px-2 py-0.5 rounded-full font-medium',
-            a.status === 'Success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-          )}>{a.status}</span>
+import { getLoginActivity, type LoginEvent } from '@/services/loginActivity'
+
+const LoginActivity = () => {
+  const [events, setEvents] = useState<LoginEvent[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    const fetchActivity = async () => {
+      setLoading(true)
+      const data = await getLoginActivity(10)
+      if (!cancelled) {
+        setEvents(data)
+        setLoading(false)
+      }
+    }
+    fetchActivity()
+    return () => { cancelled = true }
+  }, [])
+
+  const formatDate = (iso: string) => {
+    try {
+      const d = new Date(iso)
+      return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) +
+        ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
+    } catch {
+      return iso
+    }
+  }
+
+  const getStatusLabel = (eventType: LoginEvent['event_type']) => {
+    switch (eventType) {
+      case 'sign_in': return 'Success'
+      case 'sign_up': return 'Sign Up'
+      case 'failed': return 'Failed'
+      default: return eventType
+    }
+  }
+
+  const getStatusStyle = (eventType: LoginEvent['event_type']) => {
+    return eventType === 'failed'
+      ? 'bg-red-500/10 text-red-400'
+      : 'bg-emerald-500/10 text-emerald-400'
+  }
+
+  return (
+    <GlassCard hoverEffect={false}>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+          <Activity className="w-4 h-4" style={{ color: 'var(--accent)' }} />
         </div>
-      ))}
-    </div>
-  </GlassCard>
-)
+        <div>
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Login Activity</h2>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Recent sign-in attempts.</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--text-muted)' }} />
+        </div>
+      ) : events.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No login activity recorded yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {events.map((event) => (
+            <div key={event.id} className="flex items-center justify-between rounded-lg p-3"
+              style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}>
+              <div>
+                <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{formatDate(event.created_at)}</p>
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  {event.browser || 'Unknown'} {'\u2022'} {event.os || 'Unknown'}
+                </p>
+              </div>
+              <span className={cn(
+                'text-[10px] px-2 py-0.5 rounded-full font-medium',
+                getStatusStyle(event.event_type)
+              )}>{getStatusLabel(event.event_type)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </GlassCard>
+  )
+}
 
 // ── Main Security Settings ────────────────────────────────────────────────────
 export const SecuritySettings = () => {

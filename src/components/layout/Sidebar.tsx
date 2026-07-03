@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
   LayoutDashboard, Bug, FileText, PenTool, Settings,
-  History, ChevronLeft, Shield, LogOut, ClipboardList,
+  ChevronLeft, Shield, LogOut, ClipboardList,
   ClipboardCheck,
 } from 'lucide-react'
 import { Logo } from '../ui/Logo'
@@ -14,15 +14,14 @@ import { supabase } from '@/lib/supabase'
 import { ROUTES } from '@/lib/routes'
 
 const ALL_MENU_ITEMS = [
-  { path: ROUTES.dashboard,        label: 'Dashboard',          icon: LayoutDashboard, moduleKey: 'dashboard' },
-  { path: ROUTES.bugRefiner,       label: 'AI Bug Refiner',     icon: Bug,             moduleKey: 'bug-refiner' },
-  { path: ROUTES.testGenerator,    label: 'Test Case Gen',      icon: FileText,        moduleKey: 'test-generator' },
-  { path: ROUTES.writingAssistant, label: 'Writing Assistant',  icon: PenTool,         moduleKey: 'writing-assistant' },
-  { path: ROUTES.qaReport,         label: 'QA Weekly Report',   icon: ClipboardList,   moduleKey: 'qa-report' },
-  { path: ROUTES.dailyReport,      label: 'Daily Update Report',icon: ClipboardCheck,  moduleKey: 'daily-report' },
-  { path: ROUTES.history,          label: 'History',            icon: History,         moduleKey: 'history' },
-  { path: ROUTES.settings,         label: 'Settings',           icon: Settings,        moduleKey: 'settings' },
-  { path: ROUTES.admin,            label: 'Admin Panel',        icon: Shield,          moduleKey: 'admin' },
+  { path: ROUTES.dashboard, label: 'Dashboard', icon: LayoutDashboard, moduleKey: 'dashboard' },
+  { path: ROUTES.bugRefiner, label: 'AI Bug Refiner', icon: Bug, moduleKey: 'bug-refiner' },
+  { path: ROUTES.testGenerator, label: 'Test Case Gen', icon: FileText, moduleKey: 'test-generator' },
+  { path: ROUTES.writingAssistant, label: 'Writing Assistant', icon: PenTool, moduleKey: 'writing-assistant' },
+  { path: ROUTES.qaReport, label: 'QA Weekly Report', icon: ClipboardList, moduleKey: 'qa-report' },
+  { path: ROUTES.dailyReport, label: 'Daily Update Report', icon: ClipboardCheck, moduleKey: 'daily-report' },
+  { path: ROUTES.settings, label: 'Settings', icon: Settings, moduleKey: 'settings' },
+  { path: ROUTES.admin, label: 'Admin Panel', icon: Shield, moduleKey: 'admin' },
 ]
 
 // ── Nav section label ─────────────────────────────────────────────────────────
@@ -64,6 +63,7 @@ export const Sidebar = () => {
     await supabase.auth.signOut()
     setUser(null)
     setProfile(null)
+    navigate(ROUTES.login, { replace: true })
   }
 
   const visibleItems = permissionsLoaded

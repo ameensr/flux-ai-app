@@ -36,16 +36,31 @@ function StatusBadge({ status }: { status: UserStatus }) {
 
 function ActionMenu({ user, onAction }: { user: EnterpriseUser; onAction: (action: string, user: EnterpriseUser) => void }) {
   const [open, setOpen] = useState(false)
+  const [dropUp, setDropUp] = useState(false)
+  const buttonRef = React.useRef<HTMLButtonElement>(null)
+
   const actions = [
-    { id: 'change_role',    label: 'Change Role',     icon: UserCog },
-    { id: 'reset_password', label: 'Reset Password',  icon: KeyRound },
-    { id: 'change_status',  label: user.status === 'active' ? 'Disable User' : 'Enable User', icon: user.status === 'active' ? UserX : UserCheck },
-    { id: 'delete',         label: 'Delete User',     icon: Trash2, danger: true },
+    { id: 'change_role', label: 'Change Role', icon: UserCog },
+    { id: 'reset_password', label: 'Reset Password', icon: KeyRound },
+    { id: 'change_status', label: user.status === 'active' ? 'Disable User' : 'Enable User', icon: user.status === 'active' ? UserX : UserCheck },
+    { id: 'delete', label: 'Delete User', icon: Trash2, danger: true },
   ]
+
+  const handleOpen = () => {
+    // Check if there's enough space below (dropdown is ~160px tall)
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      const spaceBelow = window.innerHeight - rect.bottom
+      setDropUp(spaceBelow < 180)
+    }
+    setOpen(v => !v)
+  }
+
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(v => !v)}
+        ref={buttonRef}
+        onClick={handleOpen}
         className="p-2 rounded-xl hover:bg-white/5 text-text-muted hover:text-white transition-all"
       >
         <MoreVertical className="w-4 h-4" />
@@ -53,14 +68,17 @@ function ActionMenu({ user, onAction }: { user: EnterpriseUser; onAction: (actio
       <AnimatePresence>
         {open && (
           <>
-            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: -4 }}
+              initial={{ opacity: 0, scale: 0.95, y: dropUp ? 4 : -4 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -4 }}
+              exit={{ opacity: 0, scale: 0.95, y: dropUp ? 4 : -4 }}
               transition={{ duration: 0.15 }}
-              className="absolute right-0 top-10 z-20 w-48 glass-panel py-1 shadow-2xl"
-              style={{ backgroundColor: 'var(--surface-elevated)' }}
+              className={cn(
+                "absolute right-0 z-50 w-48 py-1 rounded-xl border shadow-2xl",
+                dropUp ? 'bottom-10' : 'top-10'
+              )}
+              style={{ backgroundColor: 'var(--surface-elevated)', borderColor: 'var(--border)' }}
             >
               {actions.map(a => (
                 <button
@@ -252,8 +270,27 @@ export function UserManagement() {
         supabase.from('roles').select('*').order('priority'),
         supabase.from('departments').select('*').order('name'),
       ])
+
+      // Enrich last_login_at with real data from login_events
+      const userIds = (usersData ?? []).map((u: any) => u.id)
+      let lastLogins: Record<string, string> = {}
+      if (userIds.length > 0) {
+        const { data: loginData } = await supabase
+          .from('login_events')
+          .select('user_id, created_at')
+          .in('user_id', userIds)
+          .eq('event_type', 'sign_in')
+          .order('created_at', { ascending: false })
+        if (loginData) {
+          for (const row of loginData as { user_id: string; created_at: string }[]) {
+            if (!lastLogins[row.user_id]) lastLogins[row.user_id] = row.created_at
+          }
+        }
+      }
+
       setUsers((usersData ?? []).map((u: any) => ({
         ...u,
+        last_login_at: lastLogins[u.id] || u.last_login_at || null,
         department_name: u.departments?.name ?? null,
         plan_name: u.plans?.plan_name ?? null,
       })))
@@ -319,9 +356,9 @@ export function UserManagement() {
         (u.employee_id ?? '').toLowerCase().includes(q)
       )
     }
-    if (filterRole)   list = list.filter(u => u.role === filterRole)
+    if (filterRole) list = list.filter(u => u.role === filterRole)
     if (filterStatus) list = list.filter(u => u.status === filterStatus)
-    if (filterDept)   list = list.filter(u => u.department_id === filterDept)
+    if (filterDept) list = list.filter(u => u.department_id === filterDept)
     list.sort((a, b) => {
       const av = (a as any)[sortKey] ?? ''
       const bv = (b as any)[sortKey] ?? ''
@@ -338,10 +375,10 @@ export function UserManagement() {
     : <ChevronUp className="w-3 h-3 opacity-20" />
 
   const stats = useMemo(() => ({
-    total:     users.length,
-    active:    users.filter(u => u.status === 'active').length,
+    total: users.length,
+    active: users.filter(u => u.status === 'active').length,
     suspended: users.filter(u => u.status === 'suspended').length,
-    pending:   users.filter(u => u.status === 'pending').length,
+    pending: users.filter(u => u.status === 'pending').length,
   }), [users])
 
   return (
@@ -349,10 +386,10 @@ export function UserManagement() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Users',  value: stats.total,     icon: Users,     color: 'text-white' },
-          { label: 'Active',       value: stats.active,    icon: UserCheck, color: 'text-emerald-400' },
-          { label: 'Suspended',    value: stats.suspended, icon: UserX,     color: 'text-red-400' },
-          { label: 'Pending',      value: stats.pending,   icon: Clock,     color: 'text-yellow-400' },
+          { label: 'Total Users', value: stats.total, icon: Users, color: 'text-white' },
+          { label: 'Active', value: stats.active, icon: UserCheck, color: 'text-emerald-400' },
+          { label: 'Suspended', value: stats.suspended, icon: UserX, color: 'text-red-400' },
+          { label: 'Pending', value: stats.pending, icon: Clock, color: 'text-yellow-400' },
         ].map(s => (
           <GlassCard key={s.label} hoverEffect={false} className="py-5 flex flex-col items-center gap-2">
             <s.icon className={cn('w-5 h-5', s.color)} />
@@ -409,8 +446,8 @@ export function UserManagement() {
                   <tr className="border-b border-white/5">
                     {[
                       { key: 'full_name' as SortKey, label: 'User' },
-                      { key: 'role' as SortKey,      label: 'Role' },
-                      { key: 'status' as SortKey,    label: 'Status' },
+                      { key: 'role' as SortKey, label: 'Role' },
+                      { key: 'status' as SortKey, label: 'Status' },
                     ].map(col => (
                       <th key={col.key} className="text-left py-3 pr-4 text-text-muted font-semibold text-[10px] uppercase tracking-widest">
                         <button onClick={() => handleSort(col.key)} className="flex items-center gap-1 hover:text-white transition-colors">
@@ -472,7 +509,9 @@ export function UserManagement() {
                         ) : <span className="text-text-muted text-xs">—</span>}
                       </td>
                       <td className="py-4 pr-4 text-text-muted text-xs">
-                        {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : 'Never'}
+                        {user.last_login_at
+                          ? new Date(user.last_login_at).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+                          : 'Never'}
                       </td>
                       <td className="py-4 text-right">
                         <ActionMenu user={user} onAction={handleAction} />

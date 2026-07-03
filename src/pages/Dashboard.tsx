@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -8,7 +8,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { ROUTES } from '@/lib/routes'
 import {
   Bug, FileText, PenTool, ArrowRight, Zap, Lock,
-  Newspaper, RefreshCw, ExternalLink, Clock, ChevronRight,
+  Newspaper, RefreshCw, ExternalLink, Clock, ChevronRight, Calendar, Sparkles,
 } from 'lucide-react'
 
 // ── Brand ────────────────────────────────────────────────────────────────────
@@ -31,17 +31,17 @@ interface NewsArticle {
 
 // ── Category badge colors ────────────────────────────────────────────────────
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  'OpenAI':       { bg: 'rgba(16,163,127,0.12)',  text: '#10a37f', border: 'rgba(16,163,127,0.25)' },
-  'Google AI':    { bg: 'rgba(66,133,244,0.12)',   text: '#4285f4', border: 'rgba(66,133,244,0.25)' },
-  'Anthropic':    { bg: 'rgba(210,105,30,0.12)',   text: '#d2691e', border: 'rgba(210,105,30,0.25)' },
-  'Microsoft AI': { bg: 'rgba(0,120,212,0.12)',    text: '#0078d4', border: 'rgba(0,120,212,0.25)' },
-  'Meta AI':      { bg: 'rgba(24,119,242,0.12)',   text: '#1877f2', border: 'rgba(24,119,242,0.25)' },
-  'Gemini':       { bg: 'rgba(124,92,255,0.12)',   text: '#7c5cff', border: 'rgba(124,92,255,0.25)' },
-  'Claude':       { bg: 'rgba(210,105,30,0.12)',   text: '#d2691e', border: 'rgba(210,105,30,0.25)' },
-  'DeepSeek':     { bg: 'rgba(0,188,212,0.12)',    text: '#00bcd4', border: 'rgba(0,188,212,0.25)' },
-  'Grok':         { bg: 'rgba(30,30,30,0.18)',     text: '#aaaaaa', border: 'rgba(170,170,170,0.2)' },
-  'Research':     { bg: 'rgba(139,92,246,0.12)',   text: '#8b5cf6', border: 'rgba(139,92,246,0.25)' },
-  'AI Tools':     { bg: 'rgba(245,158,11,0.12)',   text: '#f59e0b', border: 'rgba(245,158,11,0.25)' },
+  'OpenAI': { bg: 'rgba(16,163,127,0.12)', text: '#10a37f', border: 'rgba(16,163,127,0.25)' },
+  'Google AI': { bg: 'rgba(66,133,244,0.12)', text: '#4285f4', border: 'rgba(66,133,244,0.25)' },
+  'Anthropic': { bg: 'rgba(210,105,30,0.12)', text: '#d2691e', border: 'rgba(210,105,30,0.25)' },
+  'Microsoft AI': { bg: 'rgba(0,120,212,0.12)', text: '#0078d4', border: 'rgba(0,120,212,0.25)' },
+  'Meta AI': { bg: 'rgba(24,119,242,0.12)', text: '#1877f2', border: 'rgba(24,119,242,0.25)' },
+  'Gemini': { bg: 'rgba(124,92,255,0.12)', text: '#7c5cff', border: 'rgba(124,92,255,0.25)' },
+  'Claude': { bg: 'rgba(210,105,30,0.12)', text: '#d2691e', border: 'rgba(210,105,30,0.25)' },
+  'DeepSeek': { bg: 'rgba(0,188,212,0.12)', text: '#00bcd4', border: 'rgba(0,188,212,0.25)' },
+  'Grok': { bg: 'rgba(30,30,30,0.18)', text: '#aaaaaa', border: 'rgba(170,170,170,0.2)' },
+  'Research': { bg: 'rgba(139,92,246,0.12)', text: '#8b5cf6', border: 'rgba(139,92,246,0.25)' },
+  'AI Tools': { bg: 'rgba(245,158,11,0.12)', text: '#f59e0b', border: 'rgba(245,158,11,0.25)' },
 }
 
 const defaultBadge = { bg: 'rgba(124,92,255,0.12)', text: '#7c5cff', border: 'rgba(124,92,255,0.25)' }
@@ -59,7 +59,7 @@ const MOCK_NEWS: NewsArticle[] = [
     category: 'OpenAI',
     publishedAt: '2 hours ago',
     readingTime: '5 min read',
-    url: '#',
+    url: 'https://openai.com/index/introducing-gpt-5/',
   },
   {
     id: '2',
@@ -71,7 +71,7 @@ const MOCK_NEWS: NewsArticle[] = [
     category: 'Google AI',
     publishedAt: '5 hours ago',
     readingTime: '4 min read',
-    url: '#',
+    url: 'https://deepmind.google/discover/blog/alphafold-3-predicts-the-structure-and-interactions-of-all-of-lifes-molecules/',
   },
   {
     id: '3',
@@ -83,7 +83,7 @@ const MOCK_NEWS: NewsArticle[] = [
     category: 'Anthropic',
     publishedAt: '8 hours ago',
     readingTime: '3 min read',
-    url: '#',
+    url: 'https://www.anthropic.com/news',
   },
   {
     id: '4',
@@ -95,7 +95,7 @@ const MOCK_NEWS: NewsArticle[] = [
     category: 'Microsoft AI',
     publishedAt: '12 hours ago',
     readingTime: '3 min read',
-    url: '#',
+    url: 'https://blogs.microsoft.com/blog/category/ai/',
   },
   {
     id: '5',
@@ -107,7 +107,7 @@ const MOCK_NEWS: NewsArticle[] = [
     category: 'Meta AI',
     publishedAt: '1 day ago',
     readingTime: '4 min read',
-    url: '#',
+    url: 'https://ai.meta.com/blog/',
   },
 ]
 
@@ -291,8 +291,65 @@ const EmptyState = ({ onRefresh }: { onRefresh: () => void }) => (
   </motion.div>
 )
 
+// ── Motivational lines (rotates daily) ────────────────────────────────────────
+const MOTIV_LINES = [
+  'Build quality. Ship confidence.',
+  'Every bug found is a user saved.',
+  'Precision today, excellence tomorrow.',
+  'Let AI handle the grind. You focus on craft.',
+  'Test smarter. Release bolder.',
+  'Quality is not an act — it\'s a habit.',
+  'One test case closer to perfection.',
+]
+
+// ── Date & Time Widget ────────────────────────────────────────────────────────
+const DateTimeWidget = () => {
+  const [now, setNow] = useState(new Date())
+  const [motivIndex] = useState(() => Math.floor(Date.now() / 86400000) % MOTIV_LINES.length)
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30000) // update every 30s
+    return () => clearInterval(timer)
+  }, [])
+
+  const time = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
+  const date = now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3, duration: 0.5 }}
+      className="glass-panel px-5 sm:px-6 py-4 flex flex-col items-end gap-2 min-w-[180px]"
+    >
+      {/* Time */}
+      <div className="flex items-center gap-2">
+        <Clock className="w-3.5 h-3.5 text-accent-gold" />
+        <span className="text-xl sm:text-2xl font-bold text-foreground tabular-nums tracking-tight">
+          {time}
+        </span>
+      </div>
+      {/* Date */}
+      <div className="flex items-center gap-2">
+        <Calendar className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+        <span className="text-[11px] sm:text-xs text-text-muted whitespace-nowrap">
+          {date}
+        </span>
+      </div>
+      {/* Motivational line */}
+      <div className="flex items-center gap-1.5 mt-1 pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
+        <Sparkles className="w-3 h-3 text-accent-gold shrink-0" />
+        <span className="text-[10px] sm:text-[11px] italic text-text-secondary leading-tight">
+          {MOTIV_LINES[motivIndex]}
+        </span>
+      </div>
+    </motion.div>
+  )
+}
+
 // ── AI News Section ───────────────────────────────────────────────────────────
 const AINewsSection = () => {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [news, setNews] = useState<NewsArticle[]>(MOCK_NEWS)
   const [lastUpdated, setLastUpdated] = useState('Just now')
@@ -343,6 +400,7 @@ const AINewsSection = () => {
             <RefreshCw className={cn('w-4 h-4 transition-transform duration-700', spinning && 'animate-spin')} />
           </button>
           <button
+            onClick={() => navigate(ROUTES.aiNews)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:opacity-80"
             style={{ background: 'rgba(124,92,255,0.12)', color: '#7C5CFF', border: '1px solid rgba(124,92,255,0.2)' }}
             aria-label="View all news"
@@ -407,8 +465,8 @@ const modules = [
 ]
 
 const MODULE_ROUTES: Record<string, string> = {
-  'bug-refiner':       ROUTES.bugRefiner,
-  'test-generator':    ROUTES.testGenerator,
+  'bug-refiner': ROUTES.bugRefiner,
+  'test-generator': ROUTES.testGenerator,
   'writing-assistant': ROUTES.writingAssistant,
 }
 
@@ -450,14 +508,7 @@ export const Dashboard = () => {
           </div>
 
           <div className="flex gap-3 sm:gap-4 shrink-0">
-            <div className="glass-panel px-4 sm:px-6 py-3 sm:py-4 flex flex-col items-center justify-center gap-1">
-              <span className="text-xl sm:text-2xl font-bold text-foreground">128</span>
-              <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-text-muted whitespace-nowrap">Reports Generated</span>
-            </div>
-            <div className="glass-panel px-4 sm:px-6 py-3 sm:py-4 flex flex-col items-center justify-center gap-1">
-              <span className="text-xl sm:text-2xl font-bold text-foreground">94%</span>
-              <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-text-muted whitespace-nowrap">AI Accuracy</span>
-            </div>
+            <DateTimeWidget />
           </div>
         </div>
       </header>

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react'
+import React, { Suspense, lazy, createContext, useContext } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
@@ -13,21 +13,52 @@ import { ProtectedRoute } from '@/components/router/ProtectedRoute'
 import { ErrorBoundary, SilentBoundary } from '@/components/ErrorBoundary'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { ROUTES } from '@/lib/routes'
+import { useIdleTimeout } from '@/hooks/useIdleTimeout'
+import { SessionTimeoutWarning } from '@/components/ui/SessionTimeoutWarning'
+import { logLoginEvent } from '@/services/loginActivity'
+
+// ── Idle timeout context (so child components can register active operations) ─
+type RegisterOperationFn = (key: string) => () => void
+const IdleContext = createContext<RegisterOperationFn>(() => () => { })
+
+/**
+ * Hook for child components to register active operations that should
+ * prevent automatic logout (e.g., file uploads, AI generation, exports).
+ *
+ * Usage:
+ *   const registerOp = useRegisterActiveOperation()
+ *   const unregister = registerOp('ai-generation')
+ *   // ... when done:
+ *   unregister()
+ */
+export function useRegisterActiveOperation(): RegisterOperationFn {
+  return useContext(IdleContext)
+}
 
 // ── Lazy-loaded page modules ──────────────────────────────────────────────────
-const Dashboard        = lazy(() => import('@/pages/Dashboard').then(m => ({ default: m.Dashboard })))
-const BugRefiner       = lazy(() => import('@/modules/BugRefiner').then(m => ({ default: m.BugRefiner })))
+const Dashboard = lazy(() => import('@/pages/Dashboard').then(m => ({ default: m.Dashboard })))
+const BugRefiner = lazy(() => import('@/modules/BugRefiner').then(m => ({ default: m.BugRefiner })))
 const TestCaseGenerator = lazy(() => import('@/modules/TestCaseGenerator').then(m => ({ default: m.TestCaseGenerator })))
 const WritingAssistant = lazy(() => import('@/modules/WritingAssistant').then(m => ({ default: m.WritingAssistant })))
-const QAWeeklyReport  = lazy(() => import('@/modules/QAWeeklyReport').then(m => ({ default: m.QAWeeklyReport })))
+const QAWeeklyReport = lazy(() => import('@/modules/QAWeeklyReport').then(m => ({ default: m.QAWeeklyReport })))
 const ReportPreviewDashboard = lazy(() => import('@/modules/QAWeeklyReport/components/ReportPreviewDashboard').then(m => ({ default: m.ReportPreviewDashboard })))
-const Settings         = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })))
-const History          = lazy(() => import('@/pages/History').then(m => ({ default: m.History })))
-const AdminPanel       = lazy(() => import('@/pages/AdminPanel').then(m => ({ default: m.AdminPanel })))
-const EnterpriseAdmin  = lazy(() => import('@/pages/EnterpriseAdmin').then(m => ({ default: m.EnterpriseAdmin })))
-const AICopilot        = lazy(() => import('@/components/ai/AICopilot').then(m => ({ default: m.AICopilot })))
+const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })))
+const AdminPanel = lazy(() => import('@/pages/AdminPanel').then(m => ({ default: m.AdminPanel })))
+const EnterpriseAdmin = lazy(() => import('@/pages/EnterpriseAdmin').then(m => ({ default: m.EnterpriseAdmin })))
+const AICopilot = lazy(() => import('@/components/ai/AICopilot').then(m => ({ default: m.AICopilot })))
 const DailyUpdateReport = lazy(() => import('@/modules/DailyUpdateReport').then(m => ({ default: m.DailyUpdateReport })))
 const DailyReportConfig = lazy(() => import('@/modules/DailyUpdateReport/DailyReportConfig').then(m => ({ default: m.DailyReportConfig })))
+const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINews })))
+
+// ── Redirect to /login when unauthenticated (replaces URL in address bar) ────
+function NavigateToLogin() {
+  const location = useLocation()
+  const publicPaths = [ROUTES.login, ROUTES.landing]
+  if (!publicPaths.includes(location.pathname as any)) {
+    return <Navigate to={ROUTES.login} replace />
+  }
+  return null
+}
 
 // ── Route-level loading skeleton ─────────────────────────────────────────────
 function PageLoader() {
@@ -75,29 +106,28 @@ function AppShell() {
   const location = useLocation()
   const isReportPreview = location.pathname.startsWith('/report-preview')
 
-  if (isReportPreview) {
-    return (
-      <ErrorBoundary>
-        <AnimatePresence mode="wait">
-          <AnimatedPage key={location.pathname}>
-            <SilentBoundary fallback={<ModuleErrorFallback />}>
-              <Suspense fallback={<PageLoader />}>
-                <Routes location={location}>
-                  <Route path={ROUTES.reportPreview} element={
-                    <ProtectedRoute><ReportPreviewDashboard /></ProtectedRoute>
-                  } />
-                  <Route path="*" element={<Navigate to={ROUTES.reportPreview} replace />} />
-                </Routes>
-              </Suspense>
-            </SilentBoundary>
-          </AnimatedPage>
-        </AnimatePresence>
-        <Toaster />
-      </ErrorBoundary>
-    )
-  }
+  // Idle timeout — active for the entire authenticated session
+  const { phase, secondsLeft, stayLoggedIn, logoutNow, registerOperation } = useIdleTimeout()
 
-  return (
+  const shell = isReportPreview ? (
+    <ErrorBoundary>
+      <AnimatePresence mode="wait">
+        <AnimatedPage key={location.pathname}>
+          <SilentBoundary fallback={<ModuleErrorFallback />}>
+            <Suspense fallback={<PageLoader />}>
+              <Routes location={location}>
+                <Route path={ROUTES.reportPreview} element={
+                  <ProtectedRoute><ReportPreviewDashboard /></ProtectedRoute>
+                } />
+                <Route path="*" element={<Navigate to={ROUTES.reportPreview} replace />} />
+              </Routes>
+            </Suspense>
+          </SilentBoundary>
+        </AnimatedPage>
+      </AnimatePresence>
+      <Toaster />
+    </ErrorBoundary>
+  ) : (
     <ErrorBoundary>
       <DashboardLayout>
         <AnimatePresence mode="wait">
@@ -135,8 +165,8 @@ function AppShell() {
                     <ProtectedRoute><DailyReportConfig /></ProtectedRoute>
                   } />
 
-                  <Route path={ROUTES.history} element={
-                    <ProtectedRoute><History /></ProtectedRoute>
+                  <Route path={ROUTES.aiNews} element={
+                    <ProtectedRoute><AINews /></ProtectedRoute>
                   } />
 
                   <Route path={ROUTES.settings} element={
@@ -173,6 +203,19 @@ function AppShell() {
         <Toaster />
       </DashboardLayout>
     </ErrorBoundary>
+  )
+
+  return (
+    <IdleContext.Provider value={registerOperation}>
+      {shell}
+      {/* Session timeout warning modal — rendered above everything */}
+      <SessionTimeoutWarning
+        visible={phase === 'warning'}
+        secondsLeft={secondsLeft}
+        onStay={stayLoggedIn}
+        onLogout={logoutNow}
+      />
+    </IdleContext.Provider>
   )
 }
 
@@ -213,6 +256,11 @@ function AuthBootstrap() {
       if (session?.user) {
         handleSession(session.user).finally(() => setAuthChecking(false))
         setShowLanding(false)
+
+        // Log login activity (non-blocking)
+        if (event === 'SIGNED_IN') {
+          logLoginEvent(session.user.id, 'sign_in')
+        }
       } else {
         if (event === 'SIGNED_OUT' || !session) {
           initializedUidRef.current = null
@@ -220,6 +268,8 @@ function AuthBootstrap() {
           setProfile(null)
           setPermissionMap({})
           setPermissionsLoaded(false)
+          // Replace URL so protected route path is no longer visible
+          window.history.replaceState(null, '', '/login')
         }
         setAuthChecking(false)
       }
@@ -241,6 +291,7 @@ function AuthBootstrap() {
   if (!isAuthenticated) {
     return (
       <>
+        <NavigateToLogin />
         <AuthPage />
         <Toaster />
       </>
