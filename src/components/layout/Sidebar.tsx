@@ -6,30 +6,50 @@ import { useAppStore } from '@/store/useAppStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
   LayoutDashboard, Bug, FileText, PenTool, Settings,
-  History, ChevronLeft, Shield, LogOut, ClipboardList, ClipboardCheck,
+  History, ChevronLeft, Shield, LogOut, ClipboardList,
+  ClipboardCheck,
 } from 'lucide-react'
 import { Logo } from '../ui/Logo'
 import { supabase } from '@/lib/supabase'
 import { ROUTES } from '@/lib/routes'
 
 const ALL_MENU_ITEMS = [
-  { path: ROUTES.dashboard,        label: 'Dashboard',         icon: LayoutDashboard, moduleKey: 'dashboard' },
-  { path: ROUTES.bugRefiner,       label: 'AI Bug Refiner',    icon: Bug,             moduleKey: 'bug-refiner' },
-  { path: ROUTES.testGenerator,    label: 'Test Case Gen',     icon: FileText,        moduleKey: 'test-generator' },
-  { path: ROUTES.writingAssistant, label: 'Writing Assistant', icon: PenTool,         moduleKey: 'writing-assistant' },
-  { path: ROUTES.qaReport,         label: 'QA Weekly Report',  icon: ClipboardList,   moduleKey: 'qa-report' },
+  { path: ROUTES.dashboard,        label: 'Dashboard',          icon: LayoutDashboard, moduleKey: 'dashboard' },
+  { path: ROUTES.bugRefiner,       label: 'AI Bug Refiner',     icon: Bug,             moduleKey: 'bug-refiner' },
+  { path: ROUTES.testGenerator,    label: 'Test Case Gen',      icon: FileText,        moduleKey: 'test-generator' },
+  { path: ROUTES.writingAssistant, label: 'Writing Assistant',  icon: PenTool,         moduleKey: 'writing-assistant' },
+  { path: ROUTES.qaReport,         label: 'QA Weekly Report',   icon: ClipboardList,   moduleKey: 'qa-report' },
   { path: ROUTES.dailyReport,      label: 'Daily Update Report',icon: ClipboardCheck,  moduleKey: 'daily-report' },
-  { path: ROUTES.history,          label: 'History',           icon: History,         moduleKey: 'history' },
-  { path: ROUTES.settings,         label: 'Settings',          icon: Settings,        moduleKey: 'settings' },
-  { path: ROUTES.admin,            label: 'Admin Panel',       icon: Shield,          moduleKey: 'admin' },
+  { path: ROUTES.history,          label: 'History',            icon: History,         moduleKey: 'history' },
+  { path: ROUTES.settings,         label: 'Settings',           icon: Settings,        moduleKey: 'settings' },
+  { path: ROUTES.admin,            label: 'Admin Panel',        icon: Shield,          moduleKey: 'admin' },
 ]
+
+// ── Nav section label ─────────────────────────────────────────────────────────
+const SectionLabel = ({ label, visible }: { label: string; visible: boolean }) => (
+  <AnimatePresence>
+    {visible && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
+        className="px-3 pt-4 pb-1"
+      >
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em]"
+          style={{ color: 'var(--text-muted)' }}>
+          {label}
+        </span>
+      </motion.div>
+    )}
+  </AnimatePresence>
+)
 
 export const Sidebar = () => {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const { isSidebarOpen, setSidebarOpen, profile, setUser, setProfile } = useAppStore()
   const { canView, permissionsLoaded } = usePermissions()
-
   useEffect(() => {
     if (window.innerWidth < 1024) setSidebarOpen(false)
   }, [pathname])
@@ -53,164 +73,55 @@ export const Sidebar = () => {
   const isActive = (itemPath: string) =>
     pathname === itemPath || pathname.startsWith(itemPath + '/')
 
-  const sidebarContent = (
-    <div className="flex flex-col h-full">
-      <div className="p-5 flex items-center justify-between h-[72px] shrink-0">
-        <Logo
-          collapsed={!isSidebarOpen}
-          size="md"
-          className={cn('transition-all duration-500', !isSidebarOpen && 'ml-1')}
-        />
-        <button
-          onClick={() => setSidebarOpen(!isSidebarOpen)}
-          className="p-2 rounded-lg transition-all shrink-0"
-          style={{ color: 'var(--text-secondary)' }}
-          onMouseEnter={e => {
-            e.currentTarget.style.backgroundColor = 'var(--hover)'
-            e.currentTarget.style.color = 'var(--text-primary)'
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.backgroundColor = 'transparent'
-            e.currentTarget.style.color = 'var(--text-secondary)'
-          }}
-          aria-label="Toggle sidebar"
-        >
-          <ChevronLeft className={cn('w-5 h-5 transition-transform duration-500', !isSidebarOpen && 'rotate-180')} />
-        </button>
-      </div>
+  // Split nav into main + bottom items
+  const mainItems = visibleItems.filter(i => !['settings', 'admin'].includes(i.moduleKey))
+  const bottomItems = visibleItems.filter(i => ['settings', 'admin'].includes(i.moduleKey))
 
-      <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
-        {visibleItems.map(item => {
-          const active = isActive(item.path)
-          return (
-            <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              className="flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 group relative overflow-hidden w-full text-left"
-              style={active ? {
-                backgroundColor: 'var(--accent)',
-                color: 'var(--accent-fg)',
-                fontWeight: 700,
-              } : {
-                color: 'var(--text-secondary)',
-              }}
-              onMouseEnter={e => {
-                if (!active) {
-                  e.currentTarget.style.backgroundColor = 'var(--hover)'
-                  e.currentTarget.style.color = 'var(--text-primary)'
-                }
-              }}
-              onMouseLeave={e => {
-                if (!active) {
-                  e.currentTarget.style.backgroundColor = 'transparent'
-                  e.currentTarget.style.color = 'var(--text-secondary)'
-                }
-              }}
-            >
-              <item.icon className="w-5 h-5 shrink-0" />
-              <AnimatePresence>
-                {isSidebarOpen && (
-                  <motion.span
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -8 }}
-                    transition={{ duration: 0.2 }}
-                    className="text-sm tracking-wide whitespace-nowrap overflow-hidden"
-                  >
-                    {item.label}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-              {active && (
-                <motion.div
-                  layoutId="active-pill"
-                  className="absolute inset-0 -z-10 rounded-xl"
-                  style={{ backgroundColor: 'var(--accent)' }}
-                  transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-                />
-              )}
-            </button>
-          )
-        })}
-      </nav>
-
-      <div className="p-4 flex flex-col gap-3 shrink-0">
+  const NavItem = ({ item }: { item: typeof ALL_MENU_ITEMS[0] }) => {
+    const active = isActive(item.path)
+    return (
+      <button
+        key={item.path}
+        onClick={() => navigate(item.path)}
+        title={!isSidebarOpen ? item.label : undefined}
+        aria-label={item.label}
+        aria-current={active ? 'page' : undefined}
+        className={cn(
+          'qaly-nav-item relative',
+          active && 'active',
+          !isSidebarOpen && 'justify-center px-0',
+        )}
+      >
+        {/* Active indicator bar */}
+        {active && (
+          <motion.div
+            layoutId="sidebar-active"
+            className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full"
+            style={{ background: 'var(--accent)' }}
+            transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
+          />
+        )}
+        <item.icon className={cn('shrink-0', isSidebarOpen ? 'w-4 h-4' : 'w-5 h-5')} />
         <AnimatePresence>
           {isSidebarOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="rounded-2xl p-4"
-              style={{ backgroundColor: 'var(--hover)', border: '1px solid var(--border)' }}
+            <motion.span
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -6 }}
+              transition={{ duration: 0.18 }}
+              className="text-[13px] font-medium truncate"
             >
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0" />
-                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-                  AI System Live
-                </span>
-              </div>
-              <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Quantum Engine v2.4 initialized and ready for QA.
-              </p>
-            </motion.div>
+              {item.label}
+            </motion.span>
           )}
         </AnimatePresence>
-
-        <AnimatePresence>
-          {isSidebarOpen && profile && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="px-4 py-2 rounded-xl flex items-center gap-2"
-              style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}
-            >
-              <div className={cn(
-                'w-2 h-2 rounded-full shrink-0',
-                profile.role === 'admin' ? 'bg-red-400' : profile.role === 'pro' ? 'bg-yellow-400' : 'bg-gray-400'
-              )} />
-              <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-                {profile.role} plan
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <button
-          onClick={handleSignOut}
-          className="flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 group w-full"
-          style={{ color: 'var(--text-secondary)' }}
-          onMouseEnter={e => {
-            e.currentTarget.style.backgroundColor = 'var(--hover)'
-            e.currentTarget.style.color = 'var(--text-primary)'
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.backgroundColor = 'transparent'
-            e.currentTarget.style.color = 'var(--text-secondary)'
-          }}
-        >
-          <LogOut className="w-5 h-5 shrink-0 group-hover:text-red-400 transition-colors" />
-          <AnimatePresence>
-            {isSidebarOpen && (
-              <motion.span
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -8 }}
-                transition={{ duration: 0.2 }}
-                className="text-sm tracking-wide"
-              >
-                Sign Out
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </button>
-      </div>
-    </div>
-  )
+      </button>
+    )
+  }
 
   return (
     <>
+      {/* Mobile backdrop */}
       <AnimatePresence>
         {isSidebarOpen && (
           <motion.div
@@ -218,28 +129,118 @@ export const Sidebar = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setSidebarOpen(false)}
-            className="fixed inset-0 z-30 lg:hidden backdrop-blur-sm"
-            style={{ backgroundColor: 'var(--overlay)' }}
+            className="fixed inset-0 z-30 lg:hidden"
+            style={{ backgroundColor: 'var(--overlay)', backdropFilter: 'blur(4px)' }}
           />
         )}
       </AnimatePresence>
 
       <motion.aside
         initial={false}
-        animate={{ width: isSidebarOpen ? 280 : 80 }}
-        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        animate={{ width: isSidebarOpen ? 240 : 64 }}
+        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
-          'fixed top-0 bottom-0 z-40 flex flex-col overflow-hidden glass-panel',
-          'left-0 rounded-none lg:left-4 lg:top-4 lg:bottom-4 lg:rounded-[32px]',
-          !isSidebarOpen && 'max-lg:-translate-x-full'
+          'fixed top-0 bottom-0 z-40 flex flex-col overflow-hidden',
+          'left-0 lg:left-3 lg:top-3 lg:bottom-3 lg:rounded-2xl',
+          !isSidebarOpen && 'max-lg:-translate-x-full',
         )}
         style={{
           backgroundColor: 'var(--sidebar-bg)',
-          borderColor: 'var(--glass-border)',
-          width: isSidebarOpen ? 280 : undefined,
+          borderRight: '1px solid var(--border)',
+          // On desktop, use a card-style sidebar
         }}
       >
-        {sidebarContent}
+        {/* ── Header ── */}
+        <div className={cn(
+          'flex items-center h-[60px] shrink-0 px-4',
+          isSidebarOpen ? 'justify-between' : 'justify-center',
+        )}>
+          <Logo size="sm" animate={false} collapsed={!isSidebarOpen} />
+          <button
+            onClick={() => setSidebarOpen(!isSidebarOpen)}
+            className="p-1.5 rounded-lg transition-all"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={e => {
+              e.currentTarget.style.backgroundColor = 'var(--hover)'
+              e.currentTarget.style.color = 'var(--text-primary)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.backgroundColor = 'transparent'
+              e.currentTarget.style.color = 'var(--text-muted)'
+            }}
+            aria-label="Toggle sidebar"
+          >
+            <ChevronLeft className={cn(
+              'w-4 h-4 transition-transform duration-300',
+              !isSidebarOpen && 'rotate-180',
+            )} />
+          </button>
+        </div>
+
+        {/* ── Divider ── */}
+        <div style={{ height: 1, background: 'var(--divider)', margin: '0 12px' }} />
+
+        {/* ── Main nav ── */}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 flex flex-col gap-0.5">
+          <SectionLabel label="Workspace" visible={isSidebarOpen} />
+          {mainItems.map(item => <NavItem key={item.path} item={item} />)}
+        </nav>
+
+        {/* ── Bottom section ── */}
+        <div className="px-2 pb-3 flex flex-col gap-0.5">
+          <div style={{ height: 1, background: 'var(--divider)', margin: '4px 4px 8px' }} />
+
+          {bottomItems.map(item => <NavItem key={item.path} item={item} />)}
+
+          {/* Role badge */}
+          <AnimatePresence>
+            {isSidebarOpen && profile && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="mx-1 px-3 py-2 rounded-lg flex items-center gap-2"
+                style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}
+              >
+                <div className={cn(
+                  'w-1.5 h-1.5 rounded-full shrink-0',
+                  profile.role === 'admin' ? 'bg-red-400' : profile.role === 'pro' ? 'bg-violet-400' : 'bg-slate-400',
+                )} />
+                <span className="text-[11px] font-medium capitalize" style={{ color: 'var(--text-muted)' }}>
+                  {profile.role} plan
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Sign out */}
+          <button
+            onClick={handleSignOut}
+            aria-label="Sign out"
+            className={cn(
+              'qaly-nav-item group',
+              !isSidebarOpen && 'justify-center px-0',
+            )}
+          >
+            <LogOut className={cn(
+              'shrink-0 transition-colors group-hover:text-red-400',
+              isSidebarOpen ? 'w-4 h-4' : 'w-5 h-5',
+            )} />
+            <AnimatePresence>
+              {isSidebarOpen && (
+                <motion.span
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -6 }}
+                  transition={{ duration: 0.18 }}
+                  className="text-[13px] font-medium"
+                >
+                  Sign Out
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </button>
+        </div>
       </motion.aside>
     </>
   )

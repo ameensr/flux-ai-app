@@ -64,7 +64,9 @@ import { useQAReportStore } from '../store'
 import { ensureFormData } from '../types'
 import type { QAReportForm, SupportTicket, ReleaseItem, HistoricalDefect } from '../types'
 import { useTheme } from '@/context/ThemeContext'
-import { type ThemeId } from '@/lib/themes'
+
+// Report preview has its own isolated theme system — independent of the global dark/light toggle.
+type ReportThemeId = 'dark' | 'light' | 'fabric' | 'github' | 'apple' | 'material' | 'cred' | 'powerbi' | 'cyber' | 'glassmorphism'
 import pptxgen from 'pptxgenjs'
 
 // No mock/dummy data — historical analytics use only the user's real saved reports
@@ -151,9 +153,12 @@ const ReportPreviewDashboardContent: React.FC = () => {
     return ensureFormData(null)
   })
   const [isLoaded, setIsLoaded] = useState(() => !!localStorage.getItem('current-qa-report-data'))
-  const { theme: globalTheme, setTheme: setGlobalTheme } = useTheme()
-  const theme = (globalTheme === 'light' || globalTheme === 'fabric' || globalTheme === 'apple' || globalTheme === 'material' || globalTheme === 'powerbi') ? 'light' : 'dark'
-  const themeGallery = globalTheme
+  const { theme: globalTheme } = useTheme()
+  const theme = globalTheme === 'light' ? 'light' : 'dark'
+  const [reportTheme, setReportTheme] = React.useState<ReportThemeId>(
+    () => (localStorage.getItem('report-preview-theme') as ReportThemeId) || (globalTheme === 'light' ? 'light' : 'dark')
+  )
+  const themeGallery: ReportThemeId = reportTheme
   const [enableParticles, setEnableParticles] = useState<boolean>(localStorage.getItem('flux-enable-particles') !== 'false')
   const [isHealthBarFilled, setIsHealthBarFilled] = useState(false)
   const [clientMode, setClientMode] = useState<boolean>(localStorage.getItem('flux-client-mode') === 'true')
@@ -1347,8 +1352,9 @@ Do not return markdown wraps, only raw JSON text.
                 <select
                   value={themeGallery}
                   onChange={e => {
-                    const t = e.target.value as ThemeId
-                    setGlobalTheme(t)
+                    const t = e.target.value as ReportThemeId
+                    setReportTheme(t)
+                    localStorage.setItem('report-preview-theme', t)
                   }}
                   className={`bg-transparent text-xs border-none focus:outline-none font-bold cursor-pointer max-w-[110px] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
                 >
@@ -1366,7 +1372,7 @@ Do not return markdown wraps, only raw JSON text.
               </div>
 
               <button
-                onClick={() => setGlobalTheme(theme === 'dark' ? 'light' : 'dark')}
+                onClick={() => setReportTheme(theme === 'dark' ? 'light' : 'dark')}
                 className={`p-2.5 rounded-xl border transition-all ${theme==='dark'?'bg-white/5 border-white/10 text-yellow-400 hover:bg-white/10':'bg-white border-slate-200 text-purple-600 hover:bg-slate-100 shadow-sm'}`}
               >
                 {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}

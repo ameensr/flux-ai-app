@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { MessageSquare, X, Send, Terminal, Code, Cpu, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Logo } from '../ui/Logo'
+import { Logo, QalyIcon } from '../ui/Logo'
 import { callAIGateway } from '@/services/ai/aiProviderService'
 import { COPILOT_PROMPT } from '@/ai/prompts/copilotPrompt'
 
@@ -20,7 +20,7 @@ const QUICK_PROMPTS = [
 export const AICopilot = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hello! I am your Flux AI Copilot. How can I help you with your QA tasks today?' }
+    { role: 'assistant', content: 'Hello! I am your Qaly AI Engine Copilot. How can I help you with your QA tasks today?' }
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -56,11 +56,16 @@ export const AICopilot = () => {
     <>
       <motion.button
         onClick={() => setIsOpen(true)}
-        whileHover={{ scale: 1.1, rotate: 5 }}
-        whileTap={{ scale: 0.9 }}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-accent-gold shadow-[0_0_20px_rgba(212,175,55,0.4)] flex items-center justify-center z-50"
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.93 }}
+        aria-label="Open Qaly Copilot"
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-2xl flex items-center justify-center z-50"
+        style={{
+          background: 'linear-gradient(135deg, #7C5CFF 0%, #5A7DFF 55%, #2D8CFF 100%)',
+          boxShadow: '0 0 24px rgba(124,92,255,0.45), 0 4px 16px rgba(0,0,0,0.3)',
+        }}
       >
-        <Logo size="sm" collapsed={true} />
+        <QalyIcon size={28} mono />
       </motion.button>
 
       <AnimatePresence>
@@ -75,9 +80,9 @@ export const AICopilot = () => {
               {/* Header */}
               <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
                 <div className="flex items-center gap-3">
-                  <Logo size="sm" collapsed={true} />
+                  <QalyIcon size={22} />
                   <div>
-                    <h3 className="text-sm font-bold text-white tracking-wide">Flux Copilot</h3>
+                    <h3 className="text-sm font-bold text-white tracking-wide">Qaly Copilot</h3>
                     <div className="flex items-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                       <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">Platform AI Online</span>
@@ -107,7 +112,7 @@ export const AICopilot = () => {
                       {msg.content}
                     </div>
                     <span className="text-[9px] font-bold uppercase tracking-widest text-text-muted">
-                      {msg.role === 'user' ? 'You' : 'Flux AI'} • Just now
+                      {msg.role === 'user' ? 'You' : 'Qaly AI'} • Just now
                     </span>
                   </motion.div>
                 ))}

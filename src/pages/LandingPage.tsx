@@ -4,6 +4,7 @@ import { FloatingButton } from "@/components/ui/FloatingButton"
 import { AmbientGlow } from "@/components/ui/AmbientGlow"
 import { Zap, Shield, Globe, ChevronRight } from "lucide-react"
 import { Logo } from "@/components/ui/Logo"
+import { BRAND } from "@/lib/brand"
 
 export const LandingPage = ({ onStart }: { onStart: () => void }) => {
   return (
@@ -47,7 +48,7 @@ export const LandingPage = ({ onStart }: { onStart: () => void }) => {
           </h1>
           
           <p className="text-base sm:text-xl md:text-2xl text-text-secondary font-montreal max-w-3xl mx-auto leading-relaxed mb-8 sm:mb-12 px-2">
-            Flux AI transforms messy requirements and rough notes into professional QA infrastructure. Faster, smarter, and deeper than ever before.
+            {BRAND.name} transforms messy requirements and rough notes into professional QA infrastructure. Faster, smarter, and deeper than ever before.
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">

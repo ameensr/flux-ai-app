@@ -2,33 +2,54 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='black'/><text x='50' y='65' font-family='sans-serif' font-size='60' font-weight='bold' fill='%23D4AF37' text-anchor='middle'>F</text></svg>" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='32' y2='32' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0%25' stop-color='%237C5CFF'/%3E%3Cstop offset='50%25' stop-color='%235A7DFF'/%3E%3Cstop offset='100%25' stop-color='%232D8CFF'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='14.5' cy='14.5' r='9' stroke='url(%23g)' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3Cline x1='23.5' y1='14.5' x2='29' y2='20' stroke='url(%23g)' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Flux AI | The IQ behind your QA</title>
-    <meta name="description" content="Production-quality AI-powered QA Productivity Platform with cinematic premium fintech UI." />
-    <!-- Theme init: apply saved theme tokens before first paint to prevent FOUC -->
+    <title>Qaly AI Engine | Test Smarter. Ship Faster.</title>
+    <meta name="description" content="Qaly AI Engine — Enterprise-grade AI-powered QA productivity platform. Test smarter, ship faster." />
+    <meta property="og:title" content="Qaly AI Engine" />
+    <meta property="og:description" content="Test Smarter. Ship Faster. The AI engine behind your QA." />
+    <meta name="application-name" content="Qaly AI Engine" />
+    <!-- Anti-FOUC: apply theme tokens before first paint -->
     <script>
       (function(){
         try {
-          var THEMES = {
-            dark:          {'--bg':'#0B0B0B','--surface':'#111111','--surface-secondary':'#161616','--surface-elevated':'#1a1a1a','--text-primary':'#F5F5F5','--text-secondary':'#8B8B8B','--text-muted':'#555555','--accent':'#D4AF37','--accent-fg':'#0B0B0B','--border':'rgba(255,255,255,0.07)','--divider':'rgba(255,255,255,0.05)','--card-bg':'rgba(255,255,255,0.02)','--sidebar-bg':'rgba(255,255,255,0.03)','--nav-bg':'rgba(11,11,11,0.85)','--input-bg':'rgba(255,255,255,0.05)','--modal-bg':'#111111','--overlay':'rgba(0,0,0,0.6)','--hover':'rgba(255,255,255,0.05)','--chart-grid':'rgba(255,255,255,0.05)','--chart-text':'#555555','--chart-tooltip-bg':'#111111','--shadow':'0 8px 32px rgba(0,0,0,0.4)','--radius':'24px','--glass-border':'rgba(255,255,255,0.06)'},
-            light:         {'--bg':'#F8F8F8','--surface':'#FFFFFF','--surface-secondary':'#F0F0F0','--surface-elevated':'#FFFFFF','--text-primary':'#111111','--text-secondary':'#555555','--text-muted':'#999999','--accent':'#D4AF37','--accent-fg':'#FFFFFF','--border':'rgba(0,0,0,0.08)','--divider':'rgba(0,0,0,0.06)','--card-bg':'#FFFFFF','--sidebar-bg':'#F4F4F4','--nav-bg':'rgba(248,248,248,0.9)','--input-bg':'#F0F0F0','--modal-bg':'#FFFFFF','--overlay':'rgba(0,0,0,0.4)','--hover':'rgba(0,0,0,0.04)','--chart-grid':'rgba(0,0,0,0.06)','--chart-text':'#888888','--chart-tooltip-bg':'#FFFFFF','--shadow':'0 4px 20px rgba(0,0,0,0.08)','--radius':'24px','--glass-border':'rgba(0,0,0,0.08)'},
-            fabric:        {'--bg':'#f3f2f1','--surface':'#ffffff','--surface-secondary':'#edebe9','--surface-elevated':'#ffffff','--text-primary':'#323130','--text-secondary':'#605e5c','--text-muted':'#a19f9d','--accent':'#0078d4','--accent-fg':'#ffffff','--border':'#edebe9','--divider':'#e1dfdd','--card-bg':'#ffffff','--sidebar-bg':'#f3f2f1','--nav-bg':'rgba(243,242,241,0.95)','--input-bg':'#ffffff','--modal-bg':'#ffffff','--overlay':'rgba(0,0,0,0.4)','--hover':'#f3f2f1','--chart-grid':'rgba(0,0,0,0.06)','--chart-text':'#605e5c','--chart-tooltip-bg':'#ffffff','--shadow':'0 2px 8px rgba(0,0,0,0.1)','--radius':'4px','--glass-border':'#edebe9'},
-            github:        {'--bg':'#0d1117','--surface':'#161b22','--surface-secondary':'#21262d','--surface-elevated':'#1c2128','--text-primary':'#e6edf3','--text-secondary':'#8b949e','--text-muted':'#6e7681','--accent':'#58a6ff','--accent-fg':'#ffffff','--border':'#30363d','--divider':'#21262d','--card-bg':'#161b22','--sidebar-bg':'#161b22','--nav-bg':'rgba(13,17,23,0.9)','--input-bg':'#0d1117','--modal-bg':'#161b22','--overlay':'rgba(0,0,0,0.6)','--hover':'#21262d','--chart-grid':'rgba(255,255,255,0.05)','--chart-text':'#8b949e','--chart-tooltip-bg':'#161b22','--shadow':'0 8px 24px rgba(0,0,0,0.4)','--radius':'8px','--glass-border':'#30363d'},
-            apple:         {'--bg':'#f5f5f7','--surface':'#ffffff','--surface-secondary':'#f5f5f7','--surface-elevated':'#ffffff','--text-primary':'#1d1d1f','--text-secondary':'#6e6e73','--text-muted':'#aeaeb2','--accent':'#0071e3','--accent-fg':'#ffffff','--border':'#d2d2d7','--divider':'#e5e5ea','--card-bg':'rgba(255,255,255,0.85)','--sidebar-bg':'rgba(245,245,247,0.9)','--nav-bg':'rgba(245,245,247,0.85)','--input-bg':'#f5f5f7','--modal-bg':'#ffffff','--overlay':'rgba(0,0,0,0.3)','--hover':'rgba(0,0,0,0.04)','--chart-grid':'rgba(0,0,0,0.05)','--chart-text':'#6e6e73','--chart-tooltip-bg':'#ffffff','--shadow':'0 4px 30px rgba(0,0,0,0.06)','--radius':'18px','--glass-border':'#d2d2d7'},
-            material:      {'--bg':'#f7f9fc','--surface':'#eff4f9','--surface-secondary':'#e8edf2','--surface-elevated':'#ffffff','--text-primary':'#1f1f1f','--text-secondary':'#49454f','--text-muted':'#79747e','--accent':'#0b57d0','--accent-fg':'#ffffff','--border':'#c4c7c5','--divider':'#e0e0e0','--card-bg':'#eff4f9','--sidebar-bg':'#e8edf2','--nav-bg':'rgba(247,249,252,0.95)','--input-bg':'#eff4f9','--modal-bg':'#eff4f9','--overlay':'rgba(0,0,0,0.3)','--hover':'rgba(11,87,208,0.06)','--chart-grid':'rgba(0,0,0,0.06)','--chart-text':'#49454f','--chart-tooltip-bg':'#eff4f9','--shadow':'0 2px 12px rgba(0,0,0,0.08)','--radius':'28px','--glass-border':'#c4c7c5'},
-            cred:          {'--bg':'#090909','--surface':'#121212','--surface-secondary':'#1a1a1a','--surface-elevated':'#1f1f1f','--text-primary':'#e5e5e5','--text-secondary':'#888888','--text-muted':'#555555','--accent':'#d4af37','--accent-fg':'#000000','--border':'rgba(255,255,255,0.05)','--divider':'rgba(255,255,255,0.04)','--card-bg':'#121212','--sidebar-bg':'#0f0f0f','--nav-bg':'rgba(9,9,9,0.9)','--input-bg':'#1a1a1a','--modal-bg':'#121212','--overlay':'rgba(0,0,0,0.7)','--hover':'rgba(255,255,255,0.04)','--chart-grid':'rgba(255,255,255,0.04)','--chart-text':'#555555','--chart-tooltip-bg':'#1a1a1a','--shadow':'0 0 30px rgba(212,175,55,0.05)','--radius':'16px','--glass-border':'rgba(212,175,55,0.15)'},
-            powerbi:       {'--bg':'#eaeaea','--surface':'#ffffff','--surface-secondary':'#f0f0f0','--surface-elevated':'#ffffff','--text-primary':'#333333','--text-secondary':'#666666','--text-muted':'#999999','--accent':'#118d95','--accent-fg':'#ffffff','--border':'#b8babd','--divider':'#d0d0d0','--card-bg':'#ffffff','--sidebar-bg':'#f0f0f0','--nav-bg':'rgba(234,234,234,0.95)','--input-bg':'#ffffff','--modal-bg':'#ffffff','--overlay':'rgba(0,0,0,0.4)','--hover':'#f5f5f5','--chart-grid':'rgba(0,0,0,0.06)','--chart-text':'#666666','--chart-tooltip-bg':'#ffffff','--shadow':'0 2px 8px rgba(0,0,0,0.1)','--radius':'4px','--glass-border':'#b8babd'},
-            cyber:         {'--bg':'#030303','--surface':'#0a0a0f','--surface-secondary':'#0f0f18','--surface-elevated':'#12121e','--text-primary':'#00f0ff','--text-secondary':'#7af0ff','--text-muted':'#3a8a90','--accent':'#ff0055','--accent-fg':'#000000','--border':'rgba(255,0,85,0.25)','--divider':'rgba(0,240,255,0.1)','--card-bg':'#0a0a0f','--sidebar-bg':'#080810','--nav-bg':'rgba(3,3,3,0.9)','--input-bg':'#0f0f18','--modal-bg':'#0a0a0f','--overlay':'rgba(0,0,0,0.8)','--hover':'rgba(0,240,255,0.05)','--chart-grid':'rgba(0,240,255,0.06)','--chart-text':'#3a8a90','--chart-tooltip-bg':'#0a0a0f','--shadow':'0 0 20px rgba(0,240,255,0.1)','--radius':'12px','--glass-border':'rgba(0,240,255,0.2)'},
-            glassmorphism: {'--bg':'#09090b','--surface':'rgba(255,255,255,0.03)','--surface-secondary':'rgba(255,255,255,0.05)','--surface-elevated':'rgba(255,255,255,0.07)','--text-primary':'#ffffff','--text-secondary':'#a1a1aa','--text-muted':'#71717a','--accent':'#d4af37','--accent-fg':'#000000','--border':'rgba(255,255,255,0.08)','--divider':'rgba(255,255,255,0.05)','--card-bg':'rgba(255,255,255,0.03)','--sidebar-bg':'rgba(255,255,255,0.04)','--nav-bg':'rgba(9,9,11,0.8)','--input-bg':'rgba(255,255,255,0.05)','--modal-bg':'rgba(9,9,11,0.9)','--overlay':'rgba(0,0,0,0.6)','--hover':'rgba(255,255,255,0.05)','--chart-grid':'rgba(255,255,255,0.05)','--chart-text':'#71717a','--chart-tooltip-bg':'rgba(9,9,11,0.95)','--shadow':'0 8px 32px rgba(0,0,0,0.4)','--radius':'24px','--glass-border':'rgba(255,255,255,0.08)'}
+          var T = {
+            dark: {
+              '--bg':'#0B1020','--surface':'#111827','--surface-secondary':'#161f30',
+              '--surface-elevated':'#1a2235','--text-primary':'#F1F5F9',
+              '--text-secondary':'#94A3B8','--text-muted':'#475569',
+              '--accent':'#6366F1','--accent-fg':'#ffffff','--accent-hover':'#4F46E5',
+              '--border':'rgba(148,163,184,0.1)','--divider':'rgba(148,163,184,0.07)',
+              '--card-bg':'rgba(255,255,255,0.03)','--sidebar-bg':'#0f1623',
+              '--nav-bg':'rgba(11,16,32,0.9)','--input-bg':'rgba(255,255,255,0.05)',
+              '--modal-bg':'#111827','--overlay':'rgba(0,0,0,0.65)',
+              '--hover':'rgba(255,255,255,0.05)','--chart-grid':'rgba(148,163,184,0.08)',
+              '--chart-text':'#475569','--chart-tooltip-bg':'#1a2235',
+              '--shadow':'0 4px 24px rgba(0,0,0,0.35)','--shadow-sm':'0 1px 4px rgba(0,0,0,0.25)',
+              '--radius':'12px','--glass-border':'rgba(148,163,184,0.1)'
+            },
+            light: {
+              '--bg':'#F8FAFC','--surface':'#FFFFFF','--surface-secondary':'#F1F5F9',
+              '--surface-elevated':'#FFFFFF','--text-primary':'#0F172A',
+              '--text-secondary':'#475569','--text-muted':'#94A3B8',
+              '--accent':'#6366F1','--accent-fg':'#ffffff','--accent-hover':'#4F46E5',
+              '--border':'rgba(15,23,42,0.1)','--divider':'rgba(15,23,42,0.07)',
+              '--card-bg':'#FFFFFF','--sidebar-bg':'#FFFFFF',
+              '--nav-bg':'rgba(248,250,252,0.92)','--input-bg':'#F8FAFC',
+              '--modal-bg':'#FFFFFF','--overlay':'rgba(15,23,42,0.4)',
+              '--hover':'rgba(15,23,42,0.04)','--chart-grid':'rgba(15,23,42,0.07)',
+              '--chart-text':'#94A3B8','--chart-tooltip-bg':'#FFFFFF',
+              '--shadow':'0 1px 8px rgba(15,23,42,0.08),0 4px 24px rgba(15,23,42,0.06)',
+              '--shadow-sm':'0 1px 3px rgba(15,23,42,0.08)',
+              '--radius':'12px','--glass-border':'rgba(15,23,42,0.1)'
+            }
           };
-          var id = localStorage.getItem('flux-theme') || 'dark';
-          var tokens = THEMES[id] || THEMES['dark'];
+          var raw = localStorage.getItem('qaly-theme') || localStorage.getItem('flux-theme') || 'dark';
+          var id = raw === 'light' ? 'light' : 'dark';
+          var tokens = T[id];
           var root = document.documentElement;
           for (var k in tokens) root.style.setProperty(k, tokens[k]);
-          var lightThemes = ['light','fabric','apple','material','powerbi'];
-          root.classList.add(lightThemes.indexOf(id) !== -1 ? 'light' : 'dark');
-          root.classList.add('theme-' + id);
+          root.classList.add(id === 'light' ? 'light' : 'dark', 'theme-' + id);
         } catch(e) {}
       })();
     </script>

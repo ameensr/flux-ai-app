@@ -16,9 +16,10 @@ import {
   ChevronLeft,
   ShieldCheck
 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn } from '@/lib/utils'
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import { BRAND } from '@/lib/brand'
 
 const mapAuthError = (message: string): { field: 'email' | 'password' | 'general'; text: string } => {
   const m = message.toLowerCase()
@@ -167,11 +168,11 @@ export const AuthPage = () => {
               animate={{ opacity: 1, y: 0 }}
               className="text-3xl font-clash font-bold text-white mb-3"
             >
-              {isLogin ? 'Welcome back' : 'Join the IQ'}
+              {isLogin ? 'Welcome back' : `Join ${BRAND.shortName}`}
             </motion.h1>
             <p className="text-text-secondary text-sm font-montreal leading-relaxed">
               {isLogin 
-                ? 'Enter your credentials to access the command center.' 
+                ? `${BRAND.tagline}` 
                 : 'Start your journey into high-fidelity QA intelligence.'}
               <span className="sr-only">v1.1</span>
             </p>
@@ -307,12 +308,7 @@ export const AuthPage = () => {
 
           {/* Divider */}
           <div className="relative my-10">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/5" />
-            </div>
-            <div className="relative flex justify-center text-[10px] font-black uppercase tracking-[0.4em] text-text-muted bg-transparent">
-              <span className="px-4 bg-[#0B0B0B]">Or Secure With</span>
-            </div>
+            <div className="w-full border-t border-white/5" />
           </div>
 
           {/* OAuth Buttons */}
