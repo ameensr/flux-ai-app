@@ -5,15 +5,17 @@ import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ROUTES } from '@/lib/routes'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
-import { Cpu, ShieldCheck } from 'lucide-react'
+import { Cpu, ShieldCheck, Megaphone } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 
 const AdminAISettings = lazy(() => import('@/pages/AdminAISettings').then(m => ({ default: m.AdminAISettings })))
+const AdminAnnouncements = lazy(() => import('@/modules/Announcements/AdminAnnouncements').then(m => ({ default: m.AdminAnnouncements })))
 
 const TABS = [
-  { path: ROUTES.adminAI,    label: 'AI Providers',    icon: Cpu },
+  { path: ROUTES.adminAI, label: 'AI Providers', icon: Cpu },
   { path: ROUTES.enterprise, label: 'Enterprise RBAC', icon: ShieldCheck },
+  { path: ROUTES.adminAnnouncements, label: 'Announcements', icon: Megaphone },
 ] as const
 
 export const AdminPanel = () => {
@@ -23,7 +25,9 @@ export const AdminPanel = () => {
 
   const activeTab = pathname.startsWith(ROUTES.enterprise)
     ? ROUTES.enterprise
-    : (TABS.find(t => pathname === t.path)?.path ?? ROUTES.adminAI)
+    : pathname.startsWith(ROUTES.adminAnnouncements)
+      ? ROUTES.adminAnnouncements
+      : (TABS.find(t => pathname === t.path)?.path ?? ROUTES.adminAI)
 
   // Redirect /admin, /admin/users, /admin/permissions → /admin/ai-providers
   useEffect(() => {
@@ -72,6 +76,11 @@ export const AdminPanel = () => {
         </Suspense>
       )}
       {activeTab === ROUTES.enterprise && <Navigate to={ROUTES.enterpriseUsers} replace />}
+      {activeTab === ROUTES.adminAnnouncements && (
+        <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" /></div>}>
+          <AdminAnnouncements />
+        </Suspense>
+      )}
     </motion.div>
   )
 }

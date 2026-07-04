@@ -20,6 +20,10 @@ export const ROUTES = {
   // AI News
   aiNews: '/ai-news',
 
+  // Announcements
+  announcements: '/announcements',
+  adminAnnouncements: '/admin/announcements',
+
   // Admin only
   admin: '/admin',
   adminUsers: '/admin/users',
@@ -49,6 +53,8 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.qaReport]: 'qa-report',
   [ROUTES.reportPreview]: 'qa-report',
   [ROUTES.settings]: 'settings',
+  [ROUTES.announcements]: 'announcements',
+  [ROUTES.adminAnnouncements]: 'admin',
   [ROUTES.admin]: 'admin',
   [ROUTES.adminUsers]: 'admin',
   [ROUTES.adminAI]: 'admin',

@@ -36,6 +36,11 @@ function parseOS(ua: string): string {
   return 'Unknown'
 }
 
+// ── Config ─────────────────────────────────────────────────────────────────────
+
+/** Maximum login events stored per user. Older entries are pruned on each login. */
+const MAX_EVENTS_PER_USER = 3
+
 // ── Log a login event ─────────────────────────────────────────────────────────
 
 export async function logLoginEvent(
@@ -47,14 +52,31 @@ export async function logLoginEvent(
   const os = parseOS(ua)
 
   try {
+    // Insert new event
     await supabase.from('login_events').insert({
       user_id: userId,
       event_type: eventType,
       browser,
       os,
-      // ip_address is not available client-side; leave null (could be enriched server-side)
       ip_address: null,
     })
+
+    // Prune old events — keep only the latest MAX_EVENTS_PER_USER
+    const { data: recent } = await supabase
+      .from('login_events')
+      .select('id')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(MAX_EVENTS_PER_USER)
+
+    if (recent && recent.length === MAX_EVENTS_PER_USER) {
+      const keepIds = recent.map((r: { id: string }) => r.id)
+      await supabase
+        .from('login_events')
+        .delete()
+        .eq('user_id', userId)
+        .not('id', 'in', `(${keepIds.join(',')})`)
+    }
   } catch {
     // Non-critical — don't break auth flow if logging fails
     console.warn('[LoginActivity] Failed to log event')
@@ -63,7 +85,7 @@ export async function logLoginEvent(
 
 // ── Fetch recent login activity for the current user ──────────────────────────
 
-export async function getLoginActivity(limit = 10): Promise<LoginEvent[]> {
+export async function getLoginActivity(limit = MAX_EVENTS_PER_USER): Promise<LoginEvent[]> {
   const { data, error } = await supabase
     .from('login_events')
     .select('*')

@@ -36,7 +36,7 @@ function StatusBadge({ status }: { status: UserStatus }) {
 
 function ActionMenu({ user, onAction }: { user: EnterpriseUser; onAction: (action: string, user: EnterpriseUser) => void }) {
   const [open, setOpen] = useState(false)
-  const [dropUp, setDropUp] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; dropUp: boolean }>({ top: 0, left: 0, dropUp: false })
   const buttonRef = React.useRef<HTMLButtonElement>(null)
 
   const actions = [
@@ -47,17 +47,21 @@ function ActionMenu({ user, onAction }: { user: EnterpriseUser; onAction: (actio
   ]
 
   const handleOpen = () => {
-    // Check if there's enough space below (dropdown is ~160px tall)
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect()
       const spaceBelow = window.innerHeight - rect.bottom
-      setDropUp(spaceBelow < 180)
+      const dropUp = spaceBelow < 200
+      setMenuPos({
+        top: dropUp ? rect.top - 170 : rect.bottom + 4,
+        left: rect.right - 192, // 192 = w-48 (12rem)
+        dropUp,
+      })
     }
     setOpen(v => !v)
   }
 
   return (
-    <div className="relative">
+    <>
       <button
         ref={buttonRef}
         onClick={handleOpen}
@@ -68,17 +72,19 @@ function ActionMenu({ user, onAction }: { user: EnterpriseUser; onAction: (actio
       <AnimatePresence>
         {open && (
           <>
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: dropUp ? 4 : -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: dropUp ? 4 : -4 }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.15 }}
-              className={cn(
-                "absolute right-0 z-50 w-48 py-1 rounded-xl border shadow-2xl",
-                dropUp ? 'bottom-10' : 'top-10'
-              )}
-              style={{ backgroundColor: 'var(--surface-elevated)', borderColor: 'var(--border)' }}
+              className="fixed z-[9999] w-48 py-1 rounded-xl border shadow-2xl"
+              style={{
+                top: menuPos.top,
+                left: Math.max(8, menuPos.left),
+                backgroundColor: 'var(--surface-elevated)',
+                borderColor: 'var(--border)',
+              }}
             >
               {actions.map(a => (
                 <button
@@ -97,7 +103,7 @@ function ActionMenu({ user, onAction }: { user: EnterpriseUser; onAction: (actio
           </>
         )}
       </AnimatePresence>
-    </div>
+    </>
   )
 }
 

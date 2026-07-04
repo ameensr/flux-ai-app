@@ -1,5 +1,5 @@
 // src/pages/EnterpriseAdmin/RoleManagement.tsx
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -8,10 +8,10 @@ import { invalidatePermissionCache } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
 import {
   Shield, Plus, Copy, Edit2, Trash2, ChevronDown, ChevronRight,
-  Check, X, RefreshCw, Save, Users, ArrowDown,
+  Check, X, RefreshCw, Save, Users, ArrowDown, Search, UserCircle,
 } from 'lucide-react'
 import type { EnterpriseRole, ModuleRow, PermRow, RMPRow } from './types'
-import { PERM_LABELS } from './types'
+import { PERM_LABELS, STATUS_CONFIG } from './types'
 
 interface MatrixData {
   roles: EnterpriseRole[]
@@ -20,8 +20,248 @@ interface MatrixData {
   matrix: RMPRow[]
 }
 
+// ── Assigned Users Modal ──────────────────────────────────────────────────────
+
+interface AssignedUser {
+  id: string
+  email: string
+  full_name: string | null
+  employee_id: string | null
+  status: string
+  department_name: string | null
+  last_login_at: string | null
+  created_at: string
+}
+
+function AssignedUsersModal({
+  role,
+  userCount,
+  onClose,
+}: {
+  role: EnterpriseRole
+  userCount: number
+  onClose: () => void
+}) {
+  const [users, setUsers] = useState<AssignedUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const modalRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  // Fetch users assigned to this role
+  useEffect(() => {
+    const fetchUsers = async () => {
+      setLoading(true)
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, employee_id, status, department_id, last_login_at, created_at, departments(name)')
+        .eq('role', role.role_key)
+        .order('full_name')
+      setUsers(
+        (data ?? []).map((u: any) => ({
+          ...u,
+          department_name: u.departments?.name ?? null,
+        }))
+      )
+      setLoading(false)
+    }
+    fetchUsers()
+  }, [role.role_key])
+
+  // Focus search on open
+  useEffect(() => {
+    const timer = setTimeout(() => searchRef.current?.focus(), 150)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Keyboard: Escape to close, Tab trapping
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'button, input, [tabindex]:not([tabindex="-1"])'
+        )
+        if (focusable.length === 0) return
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault(); last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault(); first.focus()
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
+  // Filter
+  const filtered = search.trim()
+    ? users.filter(u => {
+      const q = search.toLowerCase()
+      return (u.full_name ?? '').toLowerCase().includes(q)
+        || u.email.toLowerCase().includes(q)
+        || (u.employee_id ?? '').toLowerCase().includes(q)
+    })
+    : users
+
+  const formatDate = (iso: string | null) => {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'var(--overlay)' }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="assigned-users-title"
+    >
+      <motion.div
+        ref={modalRef}
+        initial={{ scale: 0.95, y: 20, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={{ scale: 0.95, y: 20, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        onClick={e => e.stopPropagation()}
+        className="w-full max-w-lg max-h-[80vh] flex flex-col rounded-3xl border overflow-hidden"
+        style={{ backgroundColor: 'var(--surface-elevated)', borderColor: 'var(--border)' }}
+      >
+        {/* Sticky Header */}
+        <div className="shrink-0 px-6 pt-6 pb-4" style={{ borderBottom: '1px solid var(--divider)' }}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+                <Users className="w-4.5 h-4.5" style={{ color: 'var(--accent)' }} />
+              </div>
+              <div>
+                <h3 id="assigned-users-title" className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                  {role.role_name}
+                </h3>
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  {userCount} user{userCount !== 1 ? 's' : ''} assigned
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl transition-all"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)' }}
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+            <input
+              ref={searchRef}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by name, email, or ID…"
+              className="field-input pl-9 h-9 text-xs"
+            />
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'var(--hover)' }}>
+                <UserCircle className="w-7 h-7" style={{ color: 'var(--text-muted)' }} />
+              </div>
+              <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+                {search ? 'No matching users' : 'No users assigned'}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {search
+                  ? 'Try a different search term.'
+                  : 'No users are currently assigned to this role.'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filtered.map((user) => {
+                const initials = (user.full_name || user.email).slice(0, 2).toUpperCase()
+                const statusCfg = STATUS_CONFIG[user.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.inactive
+                return (
+                  <div
+                    key={user.id}
+                    className="flex items-center gap-3 p-3 rounded-xl transition-colors"
+                    style={{ border: '1px solid var(--border)' }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--hover)' }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                  >
+                    {/* Avatar */}
+                    <div
+                      className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold"
+                      style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--accent)' }}
+                    >
+                      {initials}
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                          {user.full_name || '—'}
+                        </span>
+                        {user.employee_id && (
+                          <span className="text-[10px] shrink-0" style={{ color: 'var(--text-muted)' }}>
+                            #{user.employee_id}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] truncate" style={{ color: 'var(--text-secondary)' }}>
+                        {user.email}
+                      </p>
+                      <div className="flex items-center gap-3 mt-1">
+                        {user.department_name && (
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                            {user.department_name}
+                          </span>
+                        )}
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          Joined {formatDate(user.created_at)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Status */}
+                    <span className={cn('shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] font-bold uppercase tracking-widest', statusCfg.color)}>
+                      <span className={cn('w-1.5 h-1.5 rounded-full', statusCfg.dot)} />
+                      {statusCfg.label}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── Role Card ─────────────────────────────────────────────────────────────────
+
 function RoleCard({
-  role, isSelected, userCount, onSelect, onDuplicate, onDelete,
+  role, isSelected, userCount, onSelect, onDuplicate, onDelete, onViewUsers,
 }: {
   role: EnterpriseRole
   isSelected: boolean
@@ -29,12 +269,13 @@ function RoleCard({
   onSelect: () => void
   onDuplicate: () => void
   onDelete: () => void
+  onViewUsers: () => void
 }) {
   const priorityColor =
     role.priority <= 10 ? 'text-red-400 border-red-500/30 bg-red-500/10' :
-    role.priority <= 30 ? 'text-orange-400 border-orange-500/30 bg-orange-500/10' :
-    role.priority <= 50 ? 'text-accent-gold border-accent-gold/30 bg-accent-gold/10' :
-    'text-text-muted border-white/10 bg-white/5'
+      role.priority <= 30 ? 'text-orange-400 border-orange-500/30 bg-orange-500/10' :
+        role.priority <= 50 ? 'text-accent-gold border-accent-gold/30 bg-accent-gold/10' :
+          'text-text-muted border-white/10 bg-white/5'
 
   return (
     <motion.div
@@ -71,9 +312,13 @@ function RoleCard({
         <span className={cn('text-[10px] px-2 py-0.5 rounded-full border font-bold uppercase tracking-widest', priorityColor)}>
           P{role.priority}
         </span>
-        <span className="text-[10px] text-text-muted flex items-center gap-1">
+        <button
+          onClick={e => { e.stopPropagation(); onViewUsers() }}
+          className="text-[10px] text-text-muted flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-accent/10 hover:text-accent transition-all"
+          title={`View ${userCount} assigned user${userCount !== 1 ? 's' : ''}`}
+        >
           <Users className="w-3 h-3" /> {userCount}
-        </span>
+        </button>
       </div>
     </motion.div>
   )
@@ -167,6 +412,7 @@ export function RoleManagement() {
   const [localState, setLocalState] = useState<Record<string, boolean>>({})
   const [userCounts, setUserCounts] = useState<Record<string, number>>({})
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [viewUsersRole, setViewUsersRole] = useState<EnterpriseRole | null>(null)
   const [newRoleName, setNewRoleName] = useState('')
   const [newRoleDesc, setNewRoleDesc] = useState('')
   const [creating, setCreating] = useState(false)
@@ -345,6 +591,7 @@ export function RoleManagement() {
                       onSelect={() => setSelectedRoleId(role.id)}
                       onDuplicate={() => handleDuplicate(role)}
                       onDelete={() => handleDelete(role)}
+                      onViewUsers={() => setViewUsersRole(role)}
                     />
                   </div>
                 )
@@ -453,6 +700,17 @@ export function RoleManagement() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Assigned Users Modal */}
+      <AnimatePresence>
+        {viewUsersRole && (
+          <AssignedUsersModal
+            role={viewUsersRole}
+            userCount={userCounts[viewUsersRole.id] ?? 0}
+            onClose={() => setViewUsersRole(null)}
+          />
         )}
       </AnimatePresence>
     </motion.div>

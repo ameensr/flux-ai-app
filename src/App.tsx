@@ -49,6 +49,7 @@ const AICopilot = lazy(() => import('@/components/ai/AICopilot').then(m => ({ de
 const DailyUpdateReport = lazy(() => import('@/modules/DailyUpdateReport').then(m => ({ default: m.DailyUpdateReport })))
 const DailyReportConfig = lazy(() => import('@/modules/DailyUpdateReport/DailyReportConfig').then(m => ({ default: m.DailyReportConfig })))
 const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINews })))
+const AnnouncementsPage = lazy(() => import('@/modules/Announcements/AnnouncementsPage').then(m => ({ default: m.AnnouncementsPage })))
 
 // ── Redirect to /login when unauthenticated (replaces URL in address bar) ────
 function NavigateToLogin() {
@@ -167,6 +168,10 @@ function AppShell() {
 
                   <Route path={ROUTES.aiNews} element={
                     <ProtectedRoute><AINews /></ProtectedRoute>
+                  } />
+
+                  <Route path={ROUTES.announcements} element={
+                    <ProtectedRoute><AnnouncementsPage /></ProtectedRoute>
                   } />
 
                   <Route path={ROUTES.settings} element={

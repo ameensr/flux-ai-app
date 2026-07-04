@@ -36,7 +36,7 @@ export const DailyReportConfig: React.FC = () => {
   } = useDailyReportStore()
 
   // Authorization Check via RBAC
-  const isAuthorized = can('daily-report', 'can_manage')
+  const isAuthorized = can('daily-report', 'can_configure')
 
   // Configuration page states
   const [activeTab, setActiveTab] = useState<ConfigCategory>('branch')
@@ -49,7 +49,7 @@ export const DailyReportConfig: React.FC = () => {
   useEffect(() => {
     if (!isAuthorized) return
     fetchDropdownConfigs()
-    
+
     // Fetch profile names for audit maps
     supabase
       .from('profiles')
@@ -156,7 +156,7 @@ export const DailyReportConfig: React.FC = () => {
 
   return (
     <div className="py-6 sm:py-12 min-h-screen">
-      
+
       {/* Back button */}
       <button
         onClick={() => navigate(ROUTES.dailyReport)}
@@ -172,7 +172,7 @@ export const DailyReportConfig: React.FC = () => {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-8 mt-10">
-        
+
         {/* Sidebar tabs */}
         <div className="flex flex-col gap-2">
           {CATEGORIES.map(cat => {
@@ -196,13 +196,13 @@ export const DailyReportConfig: React.FC = () => {
 
         {/* Configuration list container */}
         <div className="flex flex-col gap-6">
-          
+
           <GlassCard hoverEffect={false} className="flex flex-col gap-5">
             <div className="flex items-center justify-between flex-wrap gap-4 border-b border-white/5 pb-4">
               <h2 className="text-xl font-extrabold font-clash text-white">
                 {CATEGORIES.find(c => c.key === activeTab)?.label} List
               </h2>
-              
+
               {/* Search config */}
               <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10 text-xs w-56 focus-within:border-accent-gold/40 transition-all">
                 <Search className="w-3.5 h-3.5 text-text-muted" />
@@ -242,7 +242,7 @@ export const DailyReportConfig: React.FC = () => {
               <div className="flex flex-col gap-2">
                 {activeConfigs.map((config, idx) => {
                   const isEditing = editingConfigId === config.id
-                  
+
                   return (
                     <div
                       key={config.id}
@@ -289,7 +289,7 @@ export const DailyReportConfig: React.FC = () => {
                       {/* Right actions */}
                       {!isEditing && (
                         <div className="flex items-center gap-2 shrink-0">
-                          
+
                           {/* Toggle Active */}
                           <button
                             onClick={() => handleToggleActive(config)}

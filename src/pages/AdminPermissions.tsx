@@ -9,10 +9,10 @@ import { invalidatePermissionCache } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
 import { Shield, Crown, User, RefreshCw, Check, X } from 'lucide-react'
 
-interface RoleRow   { id: string; role_key: string; role_name: string; description: string }
+interface RoleRow { id: string; role_key: string; role_name: string; description: string }
 interface ModuleRow { id: string; module_key: string; module_name: string; sort_order: number }
-interface PermRow   { id: string; permission_key: string; permission_name: string }
-interface RMPRow    { id: string; role_id: string; module_id: string; permission_id: string; is_enabled: boolean }
+interface PermRow { id: string; permission_key: string; permission_name: string }
+interface RMPRow { id: string; role_id: string; module_id: string; permission_id: string; is_enabled: boolean }
 
 const ROLE_ICONS: Record<string, React.ElementType> = {
   admin: Shield, pro: Crown, free: User,
@@ -20,35 +20,35 @@ const ROLE_ICONS: Record<string, React.ElementType> = {
 
 const ROLE_COLORS: Record<string, string> = {
   admin: 'text-red-400 border-red-500/30 bg-red-500/10',
-  pro:   'text-accent-gold border-accent-gold/30 bg-accent-gold/10',
-  free:  'text-text-muted border-white/10 bg-white/5',
+  pro: 'text-accent-gold border-accent-gold/30 bg-accent-gold/10',
+  free: 'text-text-muted border-white/10 bg-white/5',
 }
 
 const PERM_LABELS: Record<string, string> = {
   can_view: 'View', can_create: 'Create', can_edit: 'Edit',
-  can_delete: 'Delete', can_export: 'Export', can_generate_ai: 'AI Gen',
-  can_manage: 'Manage', can_use_advanced_ai: 'Adv AI',
+  can_delete: 'Delete', can_export: 'Export', can_share: 'Share',
+  can_generate_ai: 'AI Gen', can_configure: 'Configure', can_use_advanced_ai: 'Adv AI',
 }
 
 export const AdminPermissions: React.FC = () => {
   const { theme } = useTheme()
   const { toast } = useToast()
-  const [roles, setRoles]       = useState<RoleRow[]>([])
-  const [modules, setModules]   = useState<ModuleRow[]>([])
-  const [perms, setPerms]       = useState<PermRow[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [saving, setSaving]     = useState<string | null>(null)
+  const [roles, setRoles] = useState<RoleRow[]>([])
+  const [modules, setModules] = useState<ModuleRow[]>([])
+  const [perms, setPerms] = useState<PermRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<string | null>(null)
   const [selectedRole, setSelectedRole] = useState<string | null>(null)
-  const [localState, setLocalState]     = useState<Record<string, boolean>>({})
+  const [localState, setLocalState] = useState<Record<string, boolean>>({})
 
   const fetchMatrix = useCallback(async () => {
     setLoading(true)
     try {
       const [
-        { data: rolesData,   error: e1 },
+        { data: rolesData, error: e1 },
         { data: modulesData, error: e2 },
-        { data: permsData,   error: e3 },
-        { data: rmpData,     error: e4 },
+        { data: permsData, error: e3 },
+        { data: rmpData, error: e4 },
       ] = await Promise.all([
         supabase.from('roles').select('id,role_key,role_name,description').order('priority'),
         supabase.from('modules').select('id,module_key,module_name,sort_order').eq('is_active', true).order('sort_order'),
@@ -120,8 +120,8 @@ export const AdminPermissions: React.FC = () => {
                 isActive
                   ? ROLE_COLORS[role.role_key] ?? (theme === 'dark' ? 'text-white border-white/20 bg-white/10' : 'text-slate-800 border-slate-200 bg-slate-100')
                   : theme === 'dark'
-                  ? 'text-text-muted border-white/5 bg-white/[0.02] hover:border-white/15 hover:text-white'
-                  : 'text-text-secondary border-slate-200 bg-slate-50 hover:border-slate-300 hover:text-slate-900'
+                    ? 'text-text-muted border-white/5 bg-white/[0.02] hover:border-white/15 hover:text-white'
+                    : 'text-text-secondary border-slate-200 bg-slate-50 hover:border-slate-300 hover:text-slate-900'
               )}
             >
               <Icon className="w-4 h-4" />

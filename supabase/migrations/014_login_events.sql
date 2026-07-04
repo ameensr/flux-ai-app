@@ -26,6 +26,10 @@ CREATE POLICY "Users can insert own login events"
     ON login_events FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
+CREATE POLICY "Users can delete own login events"
+    ON login_events FOR DELETE
+    USING (auth.uid() = user_id);
+
 -- Admins can view all login events (for audit purposes)
 CREATE POLICY "Admins can view all login events"
     ON login_events FOR SELECT

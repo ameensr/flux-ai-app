@@ -8,7 +8,7 @@ import { UserManagement } from './UserManagement'
 import { RoleManagement } from './RoleManagement'
 import { PermissionTemplates } from './PermissionTemplates'
 import { AuditLogs } from './AuditLogs'
-import { Users, Shield, Layers, Activity, RefreshCw } from 'lucide-react'
+import { Users, Shield, Layers, Activity, RefreshCw, ChevronLeft } from 'lucide-react'
 import { ROUTES } from '@/lib/routes'
 import { SilentBoundary } from '@/components/ErrorBoundary'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -52,10 +52,10 @@ function TabBoundary({ children }: { children: React.ReactNode }) {
 }
 
 const TABS = [
-  { path: ROUTES.enterpriseUsers,     label: 'User Management',      icon: Users,   short: 'Users' },
-  { path: ROUTES.enterpriseRoles,     label: 'Roles & Permissions',  icon: Shield,  short: 'Roles' },
-  { path: ROUTES.enterpriseTemplates, label: 'Permission Templates', icon: Layers,  short: 'Templates' },
-  { path: ROUTES.enterpriseAudit,     label: 'Audit Logs',           icon: Activity,short: 'Audit' },
+  { path: ROUTES.enterpriseUsers, label: 'User Management', icon: Users, short: 'Users' },
+  { path: ROUTES.enterpriseRoles, label: 'Roles & Permissions', icon: Shield, short: 'Roles' },
+  { path: ROUTES.enterpriseTemplates, label: 'Permission Templates', icon: Layers, short: 'Templates' },
+  { path: ROUTES.enterpriseAudit, label: 'Audit Logs', icon: Activity, short: 'Audit' },
 ] as const
 
 export function EnterpriseAdmin() {
@@ -66,11 +66,11 @@ export function EnterpriseAdmin() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case ROUTES.enterpriseUsers:     return <TabBoundary><UserManagement /></TabBoundary>
-      case ROUTES.enterpriseRoles:     return <TabBoundary><RoleManagement /></TabBoundary>
+      case ROUTES.enterpriseUsers: return <TabBoundary><UserManagement /></TabBoundary>
+      case ROUTES.enterpriseRoles: return <TabBoundary><RoleManagement /></TabBoundary>
       case ROUTES.enterpriseTemplates: return <TabBoundary><PermissionTemplates /></TabBoundary>
-      case ROUTES.enterpriseAudit:     return <TabBoundary><AuditLogs /></TabBoundary>
-      default:                         return <TabBoundary><UserManagement /></TabBoundary>
+      case ROUTES.enterpriseAudit: return <TabBoundary><AuditLogs /></TabBoundary>
+      default: return <TabBoundary><UserManagement /></TabBoundary>
     }
   }
 
@@ -81,6 +81,16 @@ export function EnterpriseAdmin() {
       exit={{ opacity: 0, y: -20 }}
       className="py-6 sm:py-12"
     >
+      <button
+        onClick={() => navigate(ROUTES.adminAI)}
+        className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest mb-6 transition-colors"
+        style={{ color: 'var(--text-muted)' }}
+        onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)' }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+      >
+        <ChevronLeft className="w-3.5 h-3.5" /> Back to Admin Panel
+      </button>
+
       <CinematicHeading
         title="Enterprise RBAC"
         subtitle="Centralized user management, role-based access control, and audit logging."

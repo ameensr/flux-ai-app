@@ -40,7 +40,7 @@ export const DailyUpdateReport: React.FC = () => {
   }, [])
 
   // Check if role is authorized to view dropdown configuration manager
-  const isAuthorizedToConfig = can('daily-report', 'can_manage')
+  const isAuthorizedToConfig = can('daily-report', 'can_configure')
 
   // Metrics summary calculations
   const totalSupport = supportRows.length
@@ -84,18 +84,18 @@ export const DailyUpdateReport: React.FC = () => {
   const completedSupportHrs = supportRows
     .filter(r => ['Passed', 'Closed', 'Fixed'].includes(r.status))
     .reduce((acc, r) => acc + (parseFloat(r.estimation_hrs as any) || 0) + (parseFloat(r.retesting_estimation_hrs as any) || 0), 0)
-  
+
   const completedReleaseHrs = releaseRows
     .filter(r => ['Pass', 'Passes'].includes(r.smoke_testing_status))
     .reduce((acc, r) => acc + (parseFloat(r.overall_estimation_hrs as any) || 0), 0)
-    
+
   const totalBlockedHrs = sumVal(supportRows, 'blocked_hours')
 
   const totalActualHrs = completedSupportHrs + completedReleaseHrs + totalBlockedHrs
 
   return (
     <div className="py-6 sm:py-12">
-      
+
       {/* Header bar */}
       <div className="flex items-center justify-between flex-wrap gap-4 mb-8">
         <div>
@@ -168,13 +168,12 @@ export const DailyUpdateReport: React.FC = () => {
                   setOverdueOnlyFilter(!overdueOnlyFilter)
                 }
               }}
-              className={`p-4 rounded-2xl border ${
-                isSelected 
-                  ? 'border-rose-500/60 bg-rose-500/[0.06] shadow-lg shadow-rose-500/[0.05]' 
-                  : card.isClickable 
+              className={`p-4 rounded-2xl border ${isSelected
+                  ? 'border-rose-500/60 bg-rose-500/[0.06] shadow-lg shadow-rose-500/[0.05]'
+                  : card.isClickable
                     ? 'border-[var(--border)] bg-[var(--surface-secondary)]/50 hover:bg-rose-500/[0.02] hover:border-rose-500/25 hover:shadow-lg cursor-pointer'
                     : 'border-[var(--border)] bg-[var(--surface-secondary)]/50 hover:bg-[var(--surface-secondary)]/90 hover:border-accent-gold/25 hover:shadow-lg'
-              } flex flex-col justify-between transition-all duration-300 relative overflow-hidden`}
+                } flex flex-col justify-between transition-all duration-300 relative overflow-hidden`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-[9px] uppercase font-bold tracking-widest text-text-muted">{card.label}</span>

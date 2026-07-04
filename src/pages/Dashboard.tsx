@@ -13,6 +13,7 @@ import {
 
 // ── Brand ────────────────────────────────────────────────────────────────────
 import { BRAND } from '@/lib/brand'
+import { AnnouncementsWidget } from '@/modules/Announcements/AnnouncementsWidget'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface NewsArticle {
@@ -567,8 +568,11 @@ export const Dashboard = () => {
         })}
       </div>
 
-      {/* AI News Section */}
-      <AINewsSection />
+      {/* Announcements + AI News */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 mb-10 sm:mb-16">
+        <AINewsSection />
+        <AnnouncementsWidget />
+      </div>
     </motion.div>
   )
 }
