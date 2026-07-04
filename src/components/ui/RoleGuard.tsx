@@ -25,8 +25,8 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({
   const { role, permissionsLoaded } = useAppStore()
   const { canView, can } = usePermissions()
 
-    // Admin always has full access — never block
-  if (role === 'admin') return <>{children}</>
+  // Admin always has full access — never block
+  if (role === 'admin' || role === 'super_admin') return <>{children}</>
 
   // Wait for permissions to load before blocking
   if (!permissionsLoaded) return (

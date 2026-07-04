@@ -33,13 +33,13 @@ export function ProtectedRoute({ children, adminOnly = false }: Props) {
   }
 
   // Admin-only routes
-  if (adminOnly && role !== 'admin') {
+  if (adminOnly && role !== 'admin' && role !== 'super_admin') {
     return <AccessDenied />
   }
 
   // Module-level RBAC check
   const moduleKey = ROUTE_MODULE_KEY[location.pathname as AppRoute]
-  if (moduleKey && role !== 'admin' && !canView(moduleKey)) {
+  if (moduleKey && role !== 'admin' && role !== 'super_admin' && !canView(moduleKey)) {
     return <AccessDenied />
   }
 

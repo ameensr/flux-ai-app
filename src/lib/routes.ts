@@ -6,6 +6,7 @@ export const ROUTES = {
   // Public
   landing: '/',
   login: '/login',
+  signup: '/signup',
 
   // Authenticated — app shell
   dashboard: '/dashboard',
@@ -23,6 +24,12 @@ export const ROUTES = {
   // Announcements
   announcements: '/announcements',
   adminAnnouncements: '/admin/announcements',
+
+  // Lazy Panda Config (super_admin only)
+  adminPanda: '/admin/panda',
+
+  // Event & Greetings (super_admin only)
+  adminEvents: '/admin/events',
 
   // Admin only
   admin: '/admin',

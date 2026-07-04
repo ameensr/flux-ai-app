@@ -78,7 +78,7 @@ function buildMarkdown(f: QAReportForm): string {
   const hasTeam = f.newFeatureTeam.length || f.supportTeam.length || f.automationTeam.length
   if (!hasTeam) { lines.push(na) } else {
     if (f.newFeatureTeam.length) lines.push(`- **New Feature Testing:** ${f.newFeatureTeam.join(', ')}`)
-    if (f.supportTeam.length)    lines.push(`- **Support Team:** ${f.supportTeam.join(', ')}`)
+    if (f.supportTeam.length) lines.push(`- **Support Team:** ${f.supportTeam.join(', ')}`)
     if (f.automationTeam.length) lines.push(`- **Automation Team:** ${f.automationTeam.join(', ')}`)
   }
 
@@ -135,7 +135,7 @@ function buildMarkdown(f: QAReportForm): string {
   }
 
   lines.push('\n---')
-  lines.push(`*Report generated on ${new Date().toLocaleString()} by Flux QA*`)
+  lines.push(`*Report generated on ${new Date().toLocaleString()} by Qaly AI Engine*`)
 
   return lines.join('\n')
 }
@@ -161,11 +161,11 @@ export const QAWeeklyReport: React.FC = () => {
     const errs = validate(form)
     setErrors(errs)
     if (errs.length) return
-    
+
     // Save to local storage for the dashboard preview tab to pick up
     localStorage.setItem('current-qa-report-data', JSON.stringify(form))
     setGeneratedReport(buildMarkdown(form))
-    
+
     // Open in a new tab
     window.open(ROUTES.reportPreview, '_blank')
     toast({ title: 'Dashboard Launched!', description: 'Opening the Executive Dashboard in a new tab.' })

@@ -51,12 +51,17 @@ const DailyReportConfig = lazy(() => import('@/modules/DailyUpdateReport/DailyRe
 const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINews })))
 const AnnouncementsPage = lazy(() => import('@/modules/Announcements/AnnouncementsPage').then(m => ({ default: m.AnnouncementsPage })))
 
-// ── Redirect to /login when unauthenticated (replaces URL in address bar) ────
+// ── Redirect to /login when unauthenticated (saves intended destination) ──────
 function NavigateToLogin() {
   const location = useLocation()
-  const publicPaths = [ROUTES.login, ROUTES.landing]
-  if (!publicPaths.includes(location.pathname as any)) {
-    return <Navigate to={ROUTES.login} replace />
+  // Public paths that don't require auth
+  const publicPaths: string[] = [ROUTES.landing, ROUTES.login, ROUTES.signup, '/forgot-password', '/reset-password']
+  if (!publicPaths.includes(location.pathname)) {
+    // Save the intended route so we can return after login
+    try {
+      sessionStorage.setItem('qaly-return-to', location.pathname + location.search)
+    } catch { /* non-critical */ }
+    return <Navigate to={ROUTES.login} state={{ from: location }} replace />
   }
   return null
 }
@@ -227,13 +232,13 @@ function AppShell() {
 // ── Root auth bootstrap ───────────────────────────────────────────────────────
 function AuthBootstrap() {
   const {
-    showLanding, setShowLanding,
     isAuthenticated, setUser, setProfile,
     setPermissionMap, setPermissionsLoaded, initSession,
   } = useAppStore()
 
   const [authChecking, setAuthChecking] = React.useState(true)
   const initializedUidRef = React.useRef<string | null>(null)
+  const location = useLocation()
 
   React.useEffect(() => {
     const handleSession = async (user: any) => {
@@ -257,26 +262,32 @@ function AuthBootstrap() {
       }
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    // 1. Check stored session immediately (handles refresh)
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         handleSession(session.user).finally(() => setAuthChecking(false))
-        setShowLanding(false)
-
-        // Log login activity (non-blocking)
-        if (event === 'SIGNED_IN') {
-          logLoginEvent(session.user.id, 'sign_in')
-        }
       } else {
-        if (event === 'SIGNED_OUT' || !session) {
-          initializedUidRef.current = null
-          setUser(null)
-          setProfile(null)
-          setPermissionMap({})
-          setPermissionsLoaded(false)
-          // Replace URL so protected route path is no longer visible
-          window.history.replaceState(null, '', '/login')
-        }
         setAuthChecking(false)
+      }
+    })
+
+    // 2. Subscribe to auth changes (handles login/logout/token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        handleSession(session.user).finally(() => setAuthChecking(false))
+        logLoginEvent(session.user.id, 'sign_in')
+      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+        // Session refreshed — keep user logged in, no action needed
+        handleSession(session.user)
+      } else if (event === 'SIGNED_OUT') {
+        // Explicit sign-out — clear everything
+        initializedUidRef.current = null
+        setUser(null)
+        setProfile(null)
+        setPermissionMap({})
+        setPermissionsLoaded(false)
+        setAuthChecking(false)
+        window.history.replaceState(null, '', '/login')
       }
     })
 
@@ -291,19 +302,46 @@ function AuthBootstrap() {
     )
   }
 
-  if (showLanding) return <LandingPage onStart={() => setShowLanding(false)} />
+  // Public routes — accessible without authentication
+  const publicPaths = [ROUTES.landing, ROUTES.login, ROUTES.signup, '/forgot-password', '/reset-password']
+  const isPublicRoute = publicPaths.includes(location.pathname)
 
-  if (!isAuthenticated) {
-    return (
-      <>
-        <NavigateToLogin />
-        <AuthPage />
-        <Toaster />
-      </>
-    )
+  // Authenticated users on auth pages (login/signup) → redirect to saved route or dashboard
+  if (isAuthenticated && (location.pathname === ROUTES.login || location.pathname === ROUTES.signup)) {
+    let returnTo: string = ROUTES.dashboard
+    try {
+      const saved = sessionStorage.getItem('qaly-return-to')
+      if (saved && saved !== '/' && saved !== '/login' && saved !== '/signup') {
+        returnTo = saved
+        sessionStorage.removeItem('qaly-return-to')
+      }
+    } catch { /* non-critical */ }
+    return <Navigate to={returnTo} replace />
   }
 
-  return <AppShell />
+  // Authenticated users on landing page → redirect to dashboard
+  if (isAuthenticated && location.pathname === ROUTES.landing) {
+    return <Navigate to={ROUTES.dashboard} replace />
+  }
+
+  // Authenticated → render the app shell (preserves current route)
+  if (isAuthenticated) {
+    return <AppShell />
+  }
+
+  // Unauthenticated → render public routes
+  return (
+    <>
+      <NavigateToLogin />
+      <Routes>
+        <Route path={ROUTES.landing} element={<LandingPage />} />
+        <Route path={ROUTES.login} element={<AuthPage />} />
+        <Route path={ROUTES.signup} element={<AuthPage />} />
+        <Route path="*" element={<AuthPage />} />
+      </Routes>
+      <Toaster />
+    </>
+  )
 }
 
 // ── App root — BrowserRouter lives here ──────────────────────────────────────

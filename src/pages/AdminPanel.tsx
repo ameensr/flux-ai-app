@@ -5,14 +5,16 @@ import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ROUTES } from '@/lib/routes'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
-import { Cpu, ShieldCheck, Megaphone } from 'lucide-react'
+import { Cpu, ShieldCheck, Megaphone, PawPrint } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
+import { useAppStore } from '@/store/useAppStore'
 
 const AdminAISettings = lazy(() => import('@/pages/AdminAISettings').then(m => ({ default: m.AdminAISettings })))
 const AdminAnnouncements = lazy(() => import('@/modules/Announcements/AdminAnnouncements').then(m => ({ default: m.AdminAnnouncements })))
+const AdminPandaConfig = lazy(() => import('@/components/LazyPanda/AdminPandaConfig').then(m => ({ default: m.AdminPandaConfig })))
 
-const TABS = [
+const BASE_TABS = [
   { path: ROUTES.adminAI, label: 'AI Providers', icon: Cpu },
   { path: ROUTES.enterprise, label: 'Enterprise RBAC', icon: ShieldCheck },
   { path: ROUTES.adminAnnouncements, label: 'Announcements', icon: Megaphone },
@@ -20,14 +22,24 @@ const TABS = [
 
 export const AdminPanel = () => {
   const { theme } = useTheme()
+  const { role } = useAppStore()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+
+  const isSuperAdmin = role === 'super_admin'
+
+  // Panda tab only visible to super_admin (Events embedded inside Panda Config)
+  const TABS = isSuperAdmin
+    ? [...BASE_TABS, { path: ROUTES.adminPanda, label: 'Lazy Panda', icon: PawPrint }] as const
+    : BASE_TABS
 
   const activeTab = pathname.startsWith(ROUTES.enterprise)
     ? ROUTES.enterprise
     : pathname.startsWith(ROUTES.adminAnnouncements)
       ? ROUTES.adminAnnouncements
-      : (TABS.find(t => pathname === t.path)?.path ?? ROUTES.adminAI)
+      : pathname.startsWith(ROUTES.adminPanda) || pathname.startsWith(ROUTES.adminEvents)
+        ? ROUTES.adminPanda
+        : (TABS.find(t => pathname === t.path)?.path ?? ROUTES.adminAI)
 
   // Redirect /admin, /admin/users, /admin/permissions → /admin/ai-providers
   useEffect(() => {
@@ -79,6 +91,11 @@ export const AdminPanel = () => {
       {activeTab === ROUTES.adminAnnouncements && (
         <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" /></div>}>
           <AdminAnnouncements />
+        </Suspense>
+      )}
+      {activeTab === ROUTES.adminPanda && isSuperAdmin && (
+        <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" /></div>}>
+          <AdminPandaConfig />
         </Suspense>
       )}
     </motion.div>

@@ -1,10 +1,11 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
-import { Shield, Sparkles, CheckCircle2, Sun, Moon, Monitor } from 'lucide-react'
+import { Shield, Sparkles, CheckCircle2, Sun, Moon, Monitor, PawPrint } from 'lucide-react'
 import { useTheme } from '@/context/ThemeContext'
 import { cn } from '@/lib/utils'
 import { SecuritySettings } from '@/components/SecuritySettings'
+import { usePandaEnabled } from '@/components/LazyPanda'
 
 // ── Appearance mode card ──────────────────────────────────────────────────────
 const ModeCard = ({
@@ -68,6 +69,49 @@ const ModeCard = ({
   </button>
 )
 
+// ── Lazy Panda Toggle ─────────────────────────────────────────────────────────
+const LazyPandaToggle = () => {
+  const [enabled, setEnabled] = usePandaEnabled()
+  return (
+    <GlassCard hoverEffect={false}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center"
+            style={{ background: 'rgba(99,102,241,0.1)' }}
+          >
+            <PawPrint className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Lazy Panda Animations
+            </h2>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Interactive mascot on the login page.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => setEnabled(!enabled)}
+          className="relative w-11 h-6 rounded-full transition-colors duration-200"
+          style={{
+            background: enabled ? 'var(--accent)' : 'var(--hover)',
+            border: `1px solid ${enabled ? 'var(--accent)' : 'var(--border)'}`,
+          }}
+          aria-label={enabled ? 'Disable Lazy Panda' : 'Enable Lazy Panda'}
+          role="switch"
+          aria-checked={enabled}
+        >
+          <span
+            className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
+            style={{ transform: enabled ? 'translateX(20px)' : 'translateX(0)' }}
+          />
+        </button>
+      </div>
+    </GlassCard>
+  )
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 export const Settings = () => {
   const { theme, setTheme } = useTheme()
@@ -130,6 +174,9 @@ export const Settings = () => {
             />
           </div>
         </GlassCard>
+
+        {/* ── Lazy Panda ── */}
+        <LazyPandaToggle />
 
         {/* ── AI Platform ── */}
         <GlassCard hoverEffect={false}>

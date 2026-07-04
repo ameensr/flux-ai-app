@@ -15,25 +15,25 @@ import { toast } from '@/hooks/use-toast'
 
 const TONE_PROMPTS: Record<string, string> = {
   professional: 'Rewrite the following text in a polished, professional tone. Return only the rewritten text.',
-  casual:       'Rewrite the following text in a casual, conversational tone. Return only the rewritten text.',
-  polite:       'Rewrite the following text in a polite, courteous tone. Return only the rewritten text.',
-  friendly:     'Rewrite the following text in a warm, friendly tone. Return only the rewritten text.',
-  confident:    'Rewrite the following text in a confident, assertive tone. Return only the rewritten text.',
-  formal:       'Rewrite the following text in a formal tone. Return only the rewritten text.',
-  concise:      'Rewrite the following text as concisely as possible. Return only the rewritten text.',
-  corporate:    'Rewrite the following text in a corporate business tone. Return only the rewritten text.',
-  genz:         'Rewrite the following text in a Gen Z internet tone. Return only the rewritten text.',
-  email:        'Rewrite the following text as a ready-to-send email. Return only the rewritten text.',
+  casual: 'Rewrite the following text in a casual, conversational tone. Return only the rewritten text.',
+  polite: 'Rewrite the following text in a polite, courteous tone. Return only the rewritten text.',
+  friendly: 'Rewrite the following text in a warm, friendly tone. Return only the rewritten text.',
+  confident: 'Rewrite the following text in a confident, assertive tone. Return only the rewritten text.',
+  formal: 'Rewrite the following text in a formal tone. Return only the rewritten text.',
+  concise: 'Rewrite the following text as concisely as possible. Return only the rewritten text.',
+  corporate: 'Rewrite the following text in a corporate business tone. Return only the rewritten text.',
+  genz: 'Rewrite the following text in a Gen Z internet tone. Return only the rewritten text.',
+  email: 'Rewrite the following text as a ready-to-send email. Return only the rewritten text.',
 }
 
 const QUICK_ACTIONS = [
-  { id: 'shorten',      label: 'Shorten',     icon: Scissors   },
-  { id: 'expand',       label: 'Expand',       icon: Expand     },
-  { id: 'grammar',      label: 'Fix Grammar',  icon: SpellCheck },
-  { id: 'professional', label: 'Professional', icon: Briefcase  },
-  { id: 'friendly',     label: 'Friendly',     icon: Smile      },
-  { id: 'simplify',     label: 'Simplify',     icon: AlignLeft  },
-  { id: 'clarity',      label: 'Clarity',      icon: Wand2      },
+  { id: 'shorten', label: 'Shorten', icon: Scissors },
+  { id: 'expand', label: 'Expand', icon: Expand },
+  { id: 'grammar', label: 'Fix Grammar', icon: SpellCheck },
+  { id: 'professional', label: 'Professional', icon: Briefcase },
+  { id: 'friendly', label: 'Friendly', icon: Smile },
+  { id: 'simplify', label: 'Simplify', icon: AlignLeft },
+  { id: 'clarity', label: 'Clarity', icon: Wand2 },
 ] as const
 
 const ToneCard = ({ tone, text, index }: {
@@ -116,21 +116,32 @@ export const WritingAssistant = () => {
     let successCount = 0
     let firstError = ''
 
-    for (const tone of TONES) {
-      try {
-        const text = await AIService.callAI({
-          prompt: input,
-          options: { systemPrompt: TONE_PROMPTS[tone.id], module: 'writing-assistant' },
-        })
-        ;(built as any)[tone.id] = text.trim()
-        successCount++
-        setLoadedCount(successCount)
-        setResults({ ...built })
-      } catch (err: any) {
-        if (!firstError) firstError = err?.message ?? 'Unknown error'
-        console.error(`[WA] ${tone.id}:`, err?.message)
+    // Process tones with concurrency limit of 3 to avoid rate-limiting
+    const CONCURRENCY = 3
+    const queue = [...TONES]
+
+    const worker = async () => {
+      while (queue.length > 0) {
+        const tone = queue.shift()
+        if (!tone) break
+        try {
+          const text = await AIService.callAI({
+            prompt: input,
+            options: { systemPrompt: TONE_PROMPTS[tone.id], module: 'writing-assistant' },
+          })
+            ; (built as any)[tone.id] = text.trim()
+          successCount++
+          setLoadedCount(successCount)
+          setResults({ ...built })
+        } catch (err: any) {
+          if (!firstError) firstError = err?.message ?? 'Unknown error'
+          console.error(`[WA] ${tone.id}:`, err?.message)
+        }
       }
     }
+
+    // Launch workers
+    await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()))
 
     if (successCount === 0) {
       setError(firstError || 'All tone requests failed. Please check your AI provider settings.')
@@ -162,8 +173,8 @@ export const WritingAssistant = () => {
   const charCount = input.length
   const wordCount = input.trim() ? input.trim().split(/\s+/).length : 0
   const showSkeleton = isGenerating && !results
-  const showResults  = !!results
-  const showEmpty    = !isGenerating && !results && !error
+  const showResults = !!results
+  const showEmpty = !isGenerating && !results && !error
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-6 sm:py-12">

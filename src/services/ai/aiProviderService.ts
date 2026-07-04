@@ -1,17 +1,123 @@
 // src/services/ai/aiProviderService.ts
-// Admin CRUD + user-facing gateway call.
-// API keys are NEVER handled on the frontend.
+// AI Provider Service — calls OpenRouter directly.
+// API key is loaded from Supabase ai_provider_configs table (set via Admin UI).
+// Falls back to env variable VITE_OPENROUTER_API_KEY if no DB config found.
 
 import { supabase } from '@/lib/supabase'
 
-const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+// ── Config ────────────────────────────────────────────────────────────────────
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
+const REQUEST_TIMEOUT_MS = 45_000
+const MAX_RETRIES = 2
+const RETRY_DELAY_MS = 1500
+const TRANSIENT_STATUS_CODES = [429, 500, 502, 503, 504]
 
-async function authHeaders(): Promise<HeadersInit> {
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) throw new Error('Not authenticated')
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${session.access_token}`
+const DEFAULT_MODEL = 'openai/gpt-4o-mini'
+const DEFAULT_MAX_TOKENS = 4096
+const DEFAULT_TEMPERATURE = 0.7
+
+const SITE_URL = window.location.origin
+const SITE_NAME = 'Qaly AI Engine'
+
+// ── API Key Management ────────────────────────────────────────────────────────
+
+let cachedApiKey: string | null = null
+let cachedModel: string = DEFAULT_MODEL
+let cachedMaxTokens: number = DEFAULT_MAX_TOKENS
+let cachedTemperature: number = DEFAULT_TEMPERATURE
+let cacheTimestamp = 0
+const CACHE_TTL = 5 * 60 * 1000 // 5 min
+
+async function getProviderConfig(): Promise<{
+  apiKey: string
+  model: string
+  maxTokens: number
+  temperature: number
+}> {
+  const now = Date.now()
+
+  // Return cached if still fresh
+  if (cachedApiKey && now - cacheTimestamp < CACHE_TTL) {
+    return {
+      apiKey: cachedApiKey,
+      model: cachedModel,
+      maxTokens: cachedMaxTokens,
+      temperature: cachedTemperature,
+    }
+  }
+
+  // Try loading from Supabase ai_provider_configs
+  try {
+    const { data } = await supabase
+      .from('ai_provider_configs')
+      .select('encrypted_api_key, model_name, max_tokens, temperature')
+      .eq('is_active', true)
+      .eq('is_enabled', true)
+      .order('provider_priority', { ascending: true })
+      .limit(1)
+      .single()
+
+    if (data?.encrypted_api_key) {
+      cachedApiKey = data.encrypted_api_key
+      cachedModel = data.model_name || DEFAULT_MODEL
+      cachedMaxTokens = data.max_tokens || DEFAULT_MAX_TOKENS
+      cachedTemperature = data.temperature ?? DEFAULT_TEMPERATURE
+      cacheTimestamp = now
+      return {
+        apiKey: data.encrypted_api_key as string,
+        model: cachedModel,
+        maxTokens: cachedMaxTokens,
+        temperature: cachedTemperature,
+      }
+    }
+  } catch {
+    // DB unavailable — fall through to env var
+  }
+
+  // Fallback: env variable
+  const envKey = import.meta.env.VITE_OPENROUTER_API_KEY
+  if (envKey) {
+    cachedApiKey = envKey
+    cachedModel = DEFAULT_MODEL
+    cachedMaxTokens = DEFAULT_MAX_TOKENS
+    cachedTemperature = DEFAULT_TEMPERATURE
+    cacheTimestamp = now
+    return { apiKey: envKey, model: DEFAULT_MODEL, maxTokens: DEFAULT_MAX_TOKENS, temperature: DEFAULT_TEMPERATURE }
+  }
+
+  throw new Error('No AI provider configured. Please add an API key in Admin > AI Providers.')
+}
+
+/** Invalidate cached config (call after admin updates provider) */
+export function invalidateProviderCache(): void {
+  cachedApiKey = null
+  cachedModel = DEFAULT_MODEL
+  cachedMaxTokens = DEFAULT_MAX_TOKENS
+  cachedTemperature = DEFAULT_TEMPERATURE
+  cacheTimestamp = 0
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function isTransientError(status: number): boolean {
+  return TRANSIENT_STATUS_CODES.includes(status)
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 
@@ -47,106 +153,253 @@ export interface CreateProviderPayload {
 
 export type UpdateProviderPayload = Partial<CreateProviderPayload>
 
-// ── Admin API ─────────────────────────────────────────────────────────────────
+// ── Admin API (Supabase direct — no Edge Function needed) ─────────────────────
+
+async function authHeaders(): Promise<HeadersInit> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not authenticated')
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${session.access_token}`
+  }
+}
 
 export const aiProviderService = {
   async list(): Promise<AIProviderConfig[]> {
-    const headers = await authHeaders()
-    const res = await fetch(`${FUNCTIONS_URL}/admin-ai-config`, { headers })
-    if (!res.ok) throw new Error((await res.json()).error)
-    return res.json()
+    const { data, error } = await supabase
+      .from('ai_provider_configs')
+      .select('*')
+      .order('provider_priority')
+
+    if (error) throw new Error(error.message)
+    return (data ?? []) as AIProviderConfig[]
   },
 
   async create(payload: CreateProviderPayload): Promise<AIProviderConfig> {
-    const headers = await authHeaders()
-    const res = await fetch(`${FUNCTIONS_URL}/admin-ai-config`, {
-      method: 'POST', headers, body: JSON.stringify(payload)
-    })
-    if (!res.ok) throw new Error((await res.json()).error)
-    return res.json()
+    const { data: { session } } = await supabase.auth.getSession()
+    const { data, error } = await supabase
+      .from('ai_provider_configs')
+      .insert({
+        provider_name: payload.provider_name,
+        model_name: payload.model_name,
+        encrypted_api_key: payload.api_key,
+        is_active: payload.is_active ?? true,
+        is_enabled: payload.is_enabled ?? true,
+        max_tokens: payload.max_tokens ?? DEFAULT_MAX_TOKENS,
+        temperature: payload.temperature ?? DEFAULT_TEMPERATURE,
+        rate_limit_rpm: payload.rate_limit_rpm ?? null,
+        monthly_budget: payload.monthly_budget ?? null,
+        provider_priority: payload.provider_priority ?? 1,
+        created_by: session?.user?.id,
+      })
+      .select()
+      .single()
+
+    if (error) throw new Error(error.message)
+    invalidateProviderCache()
+    return data as AIProviderConfig
   },
 
   async update(id: string, payload: UpdateProviderPayload): Promise<AIProviderConfig> {
-    const headers = await authHeaders()
-    const res = await fetch(`${FUNCTIONS_URL}/admin-ai-config?id=${id}`, {
-      method: 'PUT', headers, body: JSON.stringify(payload)
-    })
-    if (!res.ok) throw new Error((await res.json()).error)
-    return res.json()
+    const updateData: any = { ...payload }
+    if (payload.api_key) {
+      updateData.encrypted_api_key = payload.api_key
+      delete updateData.api_key
+    } else {
+      delete updateData.api_key
+    }
+
+    const { data, error } = await supabase
+      .from('ai_provider_configs')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw new Error(error.message)
+    invalidateProviderCache()
+    return data as AIProviderConfig
   },
 
   async remove(id: string): Promise<void> {
-    const headers = await authHeaders()
-    const res = await fetch(`${FUNCTIONS_URL}/admin-ai-config?id=${id}`, {
-      method: 'DELETE', headers
-    })
-    if (!res.ok) throw new Error((await res.json()).error)
+    // Clear any fallback references pointing to this provider
+    await supabase
+      .from('ai_provider_configs')
+      .update({ fallback_provider_id: null })
+      .eq('fallback_provider_id', id)
+
+    // Clear usage logs referencing this provider
+    await supabase
+      .from('ai_usage_logs')
+      .update({ provider_id: null })
+      .eq('provider_id', id)
+
+    const { error } = await supabase
+      .from('ai_provider_configs')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw new Error(error.message)
+    invalidateProviderCache()
   },
 
   async testConnection(id: string): Promise<{ ok: boolean; latency: number; error?: string }> {
     const start = Date.now()
     try {
-      const headers = await authHeaders()
-      const res = await fetch(`${FUNCTIONS_URL}/ai-gateway`, {
+      const { data } = await supabase
+        .from('ai_provider_configs')
+        .select('encrypted_api_key, model_name')
+        .eq('id', id)
+        .single()
+
+      if (!data?.encrypted_api_key) {
+        return { ok: false, latency: Date.now() - start, error: 'No API key found for this provider' }
+      }
+
+      const res = await fetchWithTimeout(OPENROUTER_URL, {
         method: 'POST',
-        headers,
-        body: JSON.stringify({ prompt: 'Reply with: OK', module: 'connection_test', _test_provider_id: id })
-      })
-      const data = await res.json()
-      return { ok: res.ok, latency: Date.now() - start, error: data.error }
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${data.encrypted_api_key}`,
+          'HTTP-Referer': SITE_URL,
+          'X-Title': SITE_NAME,
+        },
+        body: JSON.stringify({
+          model: data.model_name || DEFAULT_MODEL,
+          messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
+          max_tokens: 10,
+        }),
+      }, 15_000)
+
+      if (res.ok) {
+        return { ok: true, latency: Date.now() - start }
+      }
+
+      const err = await res.json().catch(() => ({ error: { message: `HTTP ${res.status}` } }))
+      return { ok: false, latency: Date.now() - start, error: err.error?.message || `HTTP ${res.status}` }
     } catch (e: any) {
       return { ok: false, latency: Date.now() - start, error: e.message }
     }
   }
 }
 
-// ── User-facing gateway calls ───────────────────────────────────────────────
+// ── User-facing AI calls (direct to OpenRouter with retry) ────────────────────
 
-export async function callAIGatewayStream(payload: {
-  prompt: string
-  module?: string
-  systemPrompt?: string
-}): Promise<ReadableStream<Uint8Array>> {
-  const headers = await authHeaders()
-  const res = await fetch(`${FUNCTIONS_URL}/ai-gateway`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ ...payload, stream: true }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'AI stream request failed' }))
-    throw new Error(err.error || 'AI stream request failed')
-  }
-  if (!res.body) throw new Error('No stream body received')
-  return res.body
-}
-
+/**
+ * Calls OpenRouter with retry on transient failures.
+ */
 export async function callAIGateway(payload: {
   prompt: string
   systemPrompt?: string
   module?: string
 }): Promise<string> {
-  const headers = await authHeaders()
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 60_000)
-  try {
-    const res = await fetch(`${FUNCTIONS_URL}/ai-gateway`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'AI request failed' }))
-      throw new Error(err.error || 'AI request failed')
+  const config = await getProviderConfig()
+  let lastError = ''
+
+  const messages: { role: string; content: string }[] = []
+  if (payload.systemPrompt) {
+    messages.push({ role: 'system', content: payload.systemPrompt })
+  }
+  messages.push({ role: 'user', content: payload.prompt })
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetchWithTimeout(OPENROUTER_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.apiKey}`,
+          'HTTP-Referer': SITE_URL,
+          'X-Title': SITE_NAME,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages,
+          max_tokens: config.maxTokens,
+          temperature: config.temperature,
+        }),
+      }, REQUEST_TIMEOUT_MS)
+
+      if (res.ok) {
+        const data = await res.json()
+        const content = data.choices?.[0]?.message?.content
+        if (!content) throw new Error('AI returned empty response. Please try again.')
+        return content
+      }
+
+      // Parse error
+      const errBody = await res.json().catch(() => ({ error: { message: 'AI request failed' } }))
+      lastError = errBody.error?.message || `Provider returned ${res.status}`
+
+      if (isTransientError(res.status) && attempt < MAX_RETRIES) {
+        await delay(RETRY_DELAY_MS * (attempt + 1))
+        continue
+      }
+
+      if (attempt < MAX_RETRIES) {
+        await delay(RETRY_DELAY_MS)
+        continue
+      }
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        lastError = 'AI request timed out'
+      } else {
+        lastError = e.message || 'Network error'
+      }
+      if (attempt < MAX_RETRIES) {
+        await delay(RETRY_DELAY_MS)
+        continue
+      }
     }
-    const data = await res.json()
-    if (!data.content) throw new Error('AI returned empty response. Please try again.')
-    return data.content
+  }
+
+  throw new Error(`${lastError}. All retry attempts exhausted. Please try again later.`)
+}
+
+/**
+ * Streaming variant — calls OpenRouter with stream: true.
+ */
+export async function callAIGatewayStream(payload: {
+  prompt: string
+  module?: string
+  systemPrompt?: string
+}): Promise<ReadableStream<Uint8Array>> {
+  const config = await getProviderConfig()
+
+  const messages: { role: string; content: string }[] = []
+  if (payload.systemPrompt) {
+    messages.push({ role: 'system', content: payload.systemPrompt })
+  }
+  messages.push({ role: 'user', content: payload.prompt })
+
+  try {
+    const res = await fetchWithTimeout(OPENROUTER_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+        'HTTP-Referer': SITE_URL,
+        'X-Title': SITE_NAME,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        max_tokens: config.maxTokens,
+        temperature: config.temperature,
+        stream: true,
+      }),
+    }, REQUEST_TIMEOUT_MS)
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: { message: 'AI stream request failed' } }))
+      throw new Error(err.error?.message || 'AI stream request failed')
+    }
+    if (!res.body) throw new Error('No stream body received')
+    return res.body
   } catch (e: any) {
-    if (e.name === 'AbortError') throw new Error('AI request timed out. Please try again.')
+    if (e.name === 'AbortError') {
+      throw new Error('AI stream timed out. The provider may be overloaded — please try again.')
+    }
     throw e
-  } finally {
-    clearTimeout(timeoutId)
   }
 }

@@ -204,10 +204,21 @@ export const Sidebar = () => {
               >
                 <div className={cn(
                   'w-1.5 h-1.5 rounded-full shrink-0',
-                  profile.role === 'admin' ? 'bg-red-400' : profile.role === 'pro' ? 'bg-violet-400' : 'bg-slate-400',
+                  profile.role === 'admin' || profile.role === 'super_admin' ? 'bg-red-400' : profile.role === 'pro' ? 'bg-violet-400' : 'bg-slate-400',
                 )} />
-                <span className="text-[11px] font-medium capitalize" style={{ color: 'var(--text-muted)' }}>
-                  {profile.role} plan
+                <span className="text-[11px] font-medium truncate" style={{ color: 'var(--text-muted)' }}>
+                  {({
+                    super_admin: 'Super Admin',
+                    admin: 'Administrator',
+                    pro: 'Pro',
+                    free: 'Free',
+                    manager: 'Manager',
+                    qa_lead: 'QA Lead',
+                    qa_engineer: 'QA Engineer',
+                    developer: 'Developer',
+                    standard: 'Standard',
+                    guest: 'Guest',
+                  } as Record<string, string>)[profile.role] || profile.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                 </span>
               </motion.div>
             )}

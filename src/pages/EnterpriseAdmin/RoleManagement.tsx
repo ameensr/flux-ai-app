@@ -336,7 +336,7 @@ function PermissionCard({
   onToggle: (moduleId: string, permId: string) => void
 }) {
   const [expanded, setExpanded] = useState(true)
-  const enabledCount = permissions.filter(p => localState[`${roleId}:${module.id}:${p.id}`]).length
+  const enabledCount = isAdmin ? permissions.length : permissions.filter(p => localState[`${roleId}:${module.id}:${p.id}`]).length
 
   return (
     <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden">
@@ -351,7 +351,7 @@ function PermissionCard({
         </div>
         <span className={cn(
           'text-[10px] px-2 py-0.5 rounded-full font-bold',
-          enabledCount > 0 ? 'bg-accent-gold/10 text-accent-gold' : 'bg-white/5 text-text-muted'
+          isAdmin ? 'bg-green-500/10 text-green-400' : enabledCount > 0 ? 'bg-accent-gold/10 text-accent-gold' : 'bg-white/5 text-text-muted'
         )}>
           {enabledCount}/{permissions.length}
         </span>
@@ -369,21 +369,21 @@ function PermissionCard({
             <div className="px-5 pb-4 flex flex-wrap gap-3 border-t border-white/5 pt-4">
               {permissions.map(perm => {
                 const key = `${roleId}:${module.id}:${perm.id}`
-                const enabled = localState[key] ?? false
+                const enabled = isAdmin ? true : (localState[key] ?? false)
                 const isSaving = saving === key
                 return (
                   <button
                     key={perm.id}
                     onClick={() => !isAdmin && onToggle(module.id, perm.id)}
                     disabled={isSaving || isAdmin}
-                    title={isAdmin ? 'Admin always has full access' : `${enabled ? 'Disable' : 'Enable'} ${perm.permission_name}`}
+                    title={isAdmin ? 'Granted — system administrator' : `${enabled ? 'Disable' : 'Enable'} ${perm.permission_name}`}
                     className={cn(
                       'flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all duration-200',
-                      enabled
-                        ? isAdmin
-                          ? 'bg-accent-gold/20 border-accent-gold/30 text-accent-gold cursor-not-allowed'
-                          : 'bg-accent-gold/15 border-accent-gold/40 text-accent-gold hover:bg-accent-gold/25'
-                        : 'bg-white/[0.02] border-white/5 text-text-muted hover:border-white/15 hover:text-white',
+                      isAdmin
+                        ? 'bg-green-500/10 border-green-500/25 text-green-400 cursor-default'
+                        : enabled
+                          ? 'bg-accent-gold/15 border-accent-gold/40 text-accent-gold hover:bg-accent-gold/25'
+                          : 'bg-white/[0.02] border-white/5 text-text-muted hover:border-white/15 hover:text-white',
                       isSaving && 'opacity-50 cursor-wait'
                     )}
                   >
@@ -479,18 +479,41 @@ export function RoleManagement() {
     setLocalState(prev => ({ ...prev, [key]: next }))
     setSaving(key)
     try {
+      // Try upsert first
       const { error } = await supabase
         .from('role_module_permissions')
         .upsert(
           { role_id: selectedRoleId, module_id: moduleId, permission_id: permId, is_enabled: next },
-          { onConflict: 'role_id,module_id,permission_id' }
+          { onConflict: 'role_id,module_id,permission_id', ignoreDuplicates: false }
         )
-      if (error) throw error
+      if (error) {
+        // Fallback: try update if row exists, otherwise insert
+        const { data: existing } = await supabase
+          .from('role_module_permissions')
+          .select('id')
+          .eq('role_id', selectedRoleId)
+          .eq('module_id', moduleId)
+          .eq('permission_id', permId)
+          .maybeSingle()
+
+        if (existing) {
+          const { error: updateErr } = await supabase
+            .from('role_module_permissions')
+            .update({ is_enabled: next })
+            .eq('id', existing.id)
+          if (updateErr) throw updateErr
+        } else {
+          const { error: insertErr } = await supabase
+            .from('role_module_permissions')
+            .insert({ role_id: selectedRoleId, module_id: moduleId, permission_id: permId, is_enabled: next })
+          if (insertErr) throw insertErr
+        }
+      }
       const role = data?.roles.find(r => r.id === selectedRoleId)
       if (role) invalidatePermissionCache(role.role_key)
-    } catch {
+    } catch (e: any) {
       setLocalState(prev => ({ ...prev, [key]: current }))
-      toast({ variant: 'destructive', title: 'Failed to update permission' })
+      toast({ variant: 'destructive', title: 'Failed to update permission', description: e?.message })
     } finally {
       setSaving(null)
     }
@@ -616,11 +639,24 @@ export function RoleManagement() {
                   )}
                 </div>
                 {isAdminRole && (
-                  <span className="text-xs px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold">
-                    Full Access — Locked
+                  <span className="text-xs px-3 py-1.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 font-bold flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5" /> Unrestricted Access
                   </span>
                 )}
               </div>
+
+              {/* Admin role info banner */}
+              {isAdminRole && (
+                <div className="flex items-start gap-3 p-4 rounded-2xl border border-green-500/15 bg-green-500/[0.04]">
+                  <Shield className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-green-400 mb-0.5">All permissions granted by default</p>
+                    <p className="text-[11px] text-text-muted leading-relaxed">
+                      This is a system administrator role with unrestricted access to all modules. Permissions are not configurable — full access is always enforced at both the application and database level.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-3">
                 {data.modules.map(mod => (

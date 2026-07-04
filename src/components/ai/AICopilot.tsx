@@ -34,14 +34,21 @@ export const AICopilot = () => {
     const trimmed = text.trim()
     if (!trimmed || loading) return
 
-    setMessages(prev => [...prev, { role: 'user', content: trimmed }])
+    const updatedMessages: Message[] = [...messages, { role: 'user', content: trimmed }]
+    setMessages(updatedMessages)
     setInput('')
     setLoading(true)
 
     try {
+      // Build conversation context from last 10 messages for memory
+      const historyWindow = updatedMessages.slice(-10)
+      const conversationPrompt = historyWindow
+        .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+        .join('\n\n')
+
       const content = await callAIGateway({
-        prompt: trimmed,
-        systemPrompt: COPILOT_PROMPT,
+        prompt: conversationPrompt,
+        systemPrompt: COPILOT_PROMPT + '\n\nYou are in a multi-turn conversation. The above shows the recent conversation history. Respond only to the latest User message while considering the full context.',
         module: 'ai-copilot'
       })
       setMessages(prev => [...prev, { role: 'assistant', content }])
