@@ -12,8 +12,8 @@ import { DefectAnalysis, HistoricalProgress, NextPriorities } from './components
 import { ReportPreview } from './components/ReportPreview'
 import { DashboardWidgets, DefectChart, ReportHistory } from './components/Widgets'
 import { toast } from '@/hooks/use-toast'
-import { FileText, RefreshCw, RotateCcw, AlertCircle } from 'lucide-react'
-import type { QAReportForm } from './types'
+import { FileText, RefreshCw, RotateCcw, AlertCircle, Plus, Trash, History as HistoryIcon } from 'lucide-react'
+import type { QAReportForm, TimelineNode } from './types'
 import { ROUTES } from '@/lib/routes'
 
 function buildMarkdown(f: QAReportForm): string {
@@ -149,6 +149,227 @@ function validate(form: QAReportForm): string[] {
   return errors
 }
 
+function ReportDisplayToggles() {
+  const { form, setForm } = useQAReportStore()
+
+  return (
+    <div className="p-6 rounded-3xl border glass-panel flex flex-col gap-4 text-left">
+      <div>
+        <h3 className="text-sm font-bold text-white">Dashboard Display Sections</h3>
+        <p className="text-[11px] text-text-muted">Choose which sections to display on the Executive Dashboard preview.</p>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { key: 'showAISummary', label: 'AI Summary' },
+          { key: 'showAIInsights', label: 'AI Insights' },
+          { key: 'showHistoricalAnalytics', label: 'Historical Analytics' },
+          { key: 'showTimeline', label: 'Weekly QA Timeline' },
+        ].map((opt) => (
+          <label key={opt.key} className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all">
+            <input
+              type="checkbox"
+              checked={!!(form as any)[opt.key]}
+              onChange={(e) => setForm({ [opt.key]: e.target.checked })}
+              className="w-4 h-4 rounded border-white/10 bg-black text-[#d4af37] focus:ring-[#d4af37]"
+            />
+            <span className="text-xs font-semibold text-text-secondary">{opt.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TimelineBuilder() {
+  const { form, setForm, savedReports } = useQAReportStore()
+
+  if (!form.showTimeline) return null
+
+  const timeline = form.customTimeline || []
+
+  const updateNode = (id: string, patch: Partial<TimelineNode>) => {
+    const next = timeline.map(n => n.id === id ? { ...n, ...patch } : n)
+    setForm({ customTimeline: next })
+  }
+
+  const addNode = () => {
+    const newNode: TimelineNode = {
+      id: crypto.randomUUID(),
+      week: `Week ${timeline.length + 1}`,
+      healthScore: 100,
+      emails: 0,
+      features: 0,
+      fixes: 0,
+      openDefects: 0,
+      closedDefects: 0,
+      emailChange: '➜'
+    }
+    setForm({ customTimeline: [...timeline, newNode] })
+  }
+
+  const deleteNode = (id: string) => {
+    setForm({ customTimeline: timeline.filter(n => n.id !== id) })
+  }
+
+  const handleAutoPopulate = () => {
+    const activeHistory = savedReports
+      .filter(r => r.project === form.projectName && r.status === 'Final')
+      .sort((a, b) => new Date(a.generatedDate).getTime() - new Date(b.generatedDate).getTime())
+      .slice(-5)
+
+    if (activeHistory.length === 0) {
+      toast({ variant: 'destructive', title: 'No History Found', description: `No saved final reports found for project "${form.projectName || 'unnamed'}"` })
+      return
+    }
+
+    const populated = activeHistory.map((h, i, arr) => {
+      const currPassCount = h.form.releaseItems.filter((item: any) => item?.status === 'Pass').length
+      const currPassRate = h.form.releaseItems.length ? Math.round((currPassCount / h.form.releaseItems.length) * 100) : 0
+
+      let emailChange = '➜'
+      if (i > 0) {
+        const prev = arr[i - 1].form.supportEmails
+        const diff = h.form.supportEmails - prev
+        if (diff > 0) emailChange = `▲ +${Math.round((diff / (prev || 1)) * 100)}%`
+        else if (diff < 0) emailChange = `▼ ${Math.round((diff / (prev || 1)) * 100)}%`
+      }
+
+      return {
+        id: crypto.randomUUID(),
+        week: h.week || `${h.form.weekStart} – ${h.form.weekEnd}`,
+        emails: h.form.supportEmails,
+        features: h.form.newFeatures,
+        fixes: h.form.codeFixes,
+        openDefects: h.form.defectsLastWeek.open,
+        closedDefects: h.form.defectsLastWeek.closed,
+        healthScore: currPassRate,
+        emailChange
+      }
+    })
+
+    setForm({ customTimeline: populated })
+    toast({ title: 'Timeline Populated', description: `Loaded ${populated.length} weeks from historical reports.` })
+  }
+
+  return (
+    <div className="p-6 rounded-3xl border glass-panel flex flex-col gap-4 text-left">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h3 className="text-sm font-bold text-white">Customize QA Progress Timeline</h3>
+          <p className="text-[11px] text-text-muted">Add custom timeline nodes or load them automatically from history.</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleAutoPopulate}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#d4af37]/10 border border-[#d4af37]/20 text-accent-gold text-xs font-bold hover:bg-[#d4af37]/20 transition-all"
+        >
+          <HistoryIcon className="w-3.5 h-3.5" /> Auto-populate from History
+        </button>
+      </div>
+
+      <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+        {timeline.map((node, index) => (
+          <div key={node.id} className="p-4 rounded-2xl border border-white/5 bg-white/[0.01] flex flex-col gap-3 relative group text-left">
+            <button
+              type="button"
+              onClick={() => deleteNode(node.id)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg bg-red-500/10 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
+              title="Delete node"
+            >
+              <Trash className="w-3.5 h-3.5" />
+            </button>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pr-8">
+              <div>
+                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Week / Cycle Label</label>
+                <input
+                  type="text"
+                  value={node.week}
+                  onChange={(e) => updateNode(node.id, { week: e.target.value })}
+                  placeholder="e.g. Week 1 or Sprint 1"
+                  className="field-input h-9 text-xs bg-black/45 border-white/10"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Health Index (%)</label>
+                <input
+                  type="number"
+                  value={node.healthScore}
+                  onChange={(e) => updateNode(node.id, { healthScore: Number(e.target.value) })}
+                  placeholder="e.g. 95"
+                  className="field-input h-9 text-xs bg-black/45 border-white/10"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div>
+                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Emails</label>
+                <input
+                  type="number"
+                  value={node.emails}
+                  onChange={(e) => updateNode(node.id, { emails: Number(e.target.value) })}
+                  className="field-input h-9 text-xs bg-black/45 border-white/10"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Features</label>
+                <input
+                  type="number"
+                  value={node.features}
+                  onChange={(e) => updateNode(node.id, { features: Number(e.target.value) })}
+                  className="field-input h-9 text-xs bg-black/45 border-white/10"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Fixes</label>
+                <input
+                  type="number"
+                  value={node.fixes}
+                  onChange={(e) => updateNode(node.id, { fixes: Number(e.target.value) })}
+                  className="field-input h-9 text-xs bg-black/45 border-white/10"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Open Bugs</label>
+                <input
+                  type="number"
+                  value={node.openDefects}
+                  onChange={(e) => updateNode(node.id, { openDefects: Number(e.target.value) })}
+                  className="field-input h-9 text-xs text-red-400 bg-black/45 border-white/10"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Closed Bugs</label>
+                <input
+                  type="number"
+                  value={node.closedDefects}
+                  onChange={(e) => updateNode(node.id, { closedDefects: Number(e.target.value) })}
+                  className="field-input h-9 text-xs text-green-400 bg-black/45 border-white/10"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {timeline.length === 0 && (
+          <div className="text-center py-6 border border-dashed border-white/10 rounded-2xl">
+            <p className="text-xs text-text-muted">No custom timeline entries. Bypassing customization will render automatic history.</p>
+          </div>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={addNode}
+        className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-white/10 hover:border-white/20 text-xs font-bold text-text-secondary hover:text-white transition-all bg-white/[0.01] hover:bg-white/[0.02]"
+      >
+        <Plus className="w-4 h-4" /> Add Timeline Entry
+      </button>
+    </div>
+  )
+}
+
 export const QAWeeklyReport: React.FC = () => {
   const { form, setGeneratedReport, generatedReport, resetForm, fetchReports } = useQAReportStore()
   const [errors, setErrors] = useState<string[]>([])
@@ -167,7 +388,8 @@ export const QAWeeklyReport: React.FC = () => {
     setGeneratedReport(buildMarkdown(form))
 
     // Open in a new tab
-    window.open(ROUTES.reportPreview, '_blank')
+    const url = `${window.location.origin}${ROUTES.reportPreview}`
+    window.open(url, '_blank', 'noopener')
     toast({ title: 'Dashboard Launched!', description: 'Opening the Executive Dashboard in a new tab.' })
   }
 
@@ -191,6 +413,8 @@ export const QAWeeklyReport: React.FC = () => {
         {/* ── Left Panel: Input Forms ────────────────────────────────────── */}
         <div className="flex flex-col gap-6">
           <HeaderSection />
+          <ReportDisplayToggles />
+          <TimelineBuilder />
           <KPICards />
           <ProductionIssues />
           <TeamAllocation />

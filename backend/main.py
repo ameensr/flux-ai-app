@@ -58,7 +58,11 @@ _pool: asyncpg.Pool | None = None
 @app.on_event("startup")
 async def startup():
     global _pool
-    _pool = await asyncpg.create_pool(settings.database_url, min_size=2, max_size=10)
+    try:
+        _pool = await asyncpg.create_pool(settings.database_url, min_size=2, max_size=10)
+    except Exception as e:
+        print(f"WARNING: Could not connect to PostgreSQL database: {e}")
+        print("Backend will run with database-dependent endpoints disabled.")
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -67,7 +71,7 @@ async def shutdown():
 
 def get_pool() -> asyncpg.Pool:
     if not _pool:
-        raise HTTPException(status_code=503, detail="DB not ready")
+        raise HTTPException(status_code=503, detail="Database pool is not initialized because the connection failed.")
     return _pool
 
 # ── Auth ──────────────────────────────────────────────────────────────────────

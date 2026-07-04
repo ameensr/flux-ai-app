@@ -54,6 +54,46 @@ const customStyles = `
   .animate-pulse-glow {
     animation: pulse-glow 8s ease-in-out infinite;
   }
+
+  @media print {
+    @page {
+      size: landscape;
+      margin: 10mm;
+    }
+    
+    body, html, #root, .min-h-screen {
+      overflow: visible !important;
+      height: auto !important;
+    }
+
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    /* Hide interactive elements, control panels, filters, headers */
+    .print\\:hidden, button, header, nav, select {
+      display: none !important;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      page-break-after: avoid !important;
+    }
+
+    /* Correct chart dimensions on print page */
+    .h-56 .recharts-responsive-container,
+    .h-60 .recharts-responsive-container,
+    .h-64 .recharts-responsive-container,
+    .h-72 .recharts-responsive-container,
+    .h-80 .recharts-responsive-container {
+      width: 100% !important;
+      height: 220px !important;
+      min-height: 220px !important;
+      max-height: 220px !important;
+      margin: 10px 0 !important;
+      page-break-inside: avoid !important;
+    }
+  }
 `
 import {
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
@@ -97,8 +137,38 @@ interface CountUpProps {
   suffix?: string
 }
 const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '' }) => {
-  const [count, setCount] = useState(0)
+  const [isPrinting, setIsPrinting] = useState(false)
+  const [count, setCount] = useState(end)
+
   useEffect(() => {
+    const mediaQueryList = window.matchMedia('print')
+    const handlePrintChange = (mql: MediaQueryListEvent | MediaQueryList) => {
+      setIsPrinting(mql.matches)
+    }
+    
+    // Modern browsers
+    mediaQueryList.addEventListener('change', handlePrintChange)
+    if (mediaQueryList.matches) {
+      setIsPrinting(true)
+    }
+
+    const handleBeforePrint = () => setIsPrinting(true)
+    const handleAfterPrint = () => setIsPrinting(false)
+    window.addEventListener('beforeprint', handleBeforePrint)
+    window.addEventListener('afterprint', handleAfterPrint)
+
+    return () => {
+      mediaQueryList.removeEventListener('change', handlePrintChange)
+      window.removeEventListener('beforeprint', handleBeforePrint)
+      window.removeEventListener('afterprint', handleAfterPrint)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isPrinting) {
+      setCount(end)
+      return
+    }
     let startTimestamp: number | null = null
     const duration = 1000 // ms
     const step = (timestamp: number) => {
@@ -112,9 +182,9 @@ const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '' }) => {
       }
     }
     window.requestAnimationFrame(step)
-  }, [end])
+  }, [end, isPrinting])
 
-  return <span>{count}{suffix}</span>
+  return <span>{isPrinting ? end : count}{suffix}</span>
 }
 
 const containerVariants: Variants = {
@@ -863,31 +933,33 @@ Do not return markdown wraps, only raw JSON text.
   }
 
   // ── Weekly Progress Timeline calculations ──
-  const timelineData = activeHistory.slice(-5).map((h, i, arr) => {
-    const currPassCount = h.form.releaseItems.filter((item: any) => item?.status === 'Pass').length
-    const currPassRate = h.form.releaseItems.length ? Math.round((currPassCount / h.form.releaseItems.length) * 100) : 0
+  const timelineData = data.customTimeline && data.customTimeline.length > 0
+    ? data.customTimeline
+    : activeHistory.slice(-5).map((h, i, arr) => {
+        const currPassCount = h.form.releaseItems.filter((item: any) => item?.status === 'Pass').length
+        const currPassRate = h.form.releaseItems.length ? Math.round((currPassCount / h.form.releaseItems.length) * 100) : 0
 
-    let emailChange = '➜'
-    if (i > 0) {
-      const prev = arr[i - 1].form.supportEmails
-      const diff = h.form.supportEmails - prev
-      if (diff > 0) emailChange = `▲ +${Math.round((diff / (prev || 1)) * 100)}%`
-      else if (diff < 0) emailChange = `▼ ${Math.round((diff / (prev || 1)) * 100)}%`
-    }
+        let emailChange = '➜'
+        if (i > 0) {
+          const prev = arr[i - 1].form.supportEmails
+          const diff = h.form.supportEmails - prev
+          if (diff > 0) emailChange = `▲ +${Math.round((diff / (prev || 1)) * 100)}%`
+          else if (diff < 0) emailChange = `▼ ${Math.round((diff / (prev || 1)) * 100)}%`
+        }
 
-    return {
-      id: h.id,
-      week: h.week || `${h.form.weekStart} – ${h.form.weekEnd}`,
-      emails: h.form.supportEmails,
-      features: h.form.newFeatures,
-      fixes: h.form.codeFixes,
-      openDefects: h.form.defectsLastWeek.open,
-      closedDefects: h.form.defectsLastWeek.closed,
-      healthScore: currPassRate,
-      emailChange,
-      rawForm: h.form
-    }
-  })
+        return {
+          id: h.id,
+          week: h.week || `${h.form.weekStart} – ${h.form.weekEnd}`,
+          emails: h.form.supportEmails,
+          features: h.form.newFeatures,
+          fixes: h.form.codeFixes,
+          openDefects: h.form.defectsLastWeek.open,
+          closedDefects: h.form.defectsLastWeek.closed,
+          healthScore: currPassRate,
+          emailChange,
+          rawForm: h.form
+        }
+      })
 
   // ── Historical Analytics Charts Data ──
   const historicalChartsData = activeHistory.map(h => {
@@ -1362,11 +1434,11 @@ Do not return markdown wraps, only raw JSON text.
                   { id: 'supportLog', label: 'Support' },
                   { id: 'defects', label: 'Defects' },
                   { id: 'charts', label: 'Charts' },
-                  { id: 'aiSummary', label: 'AI Insights' },
-                  { id: 'comparison', label: 'WoW' },
-                  { id: 'historyDashboard', label: 'History' },
+                  { id: 'aiSummary', label: 'AI Insights', show: data.showAIInsights !== false || data.showAISummary !== false },
+                  { id: 'comparison', label: 'WoW', show: data.showAIInsights !== false },
+                  { id: 'historyDashboard', label: 'History', show: data.showHistoricalAnalytics !== false },
                   { id: 'roadmap', label: 'Priorities' }
-                ].map(item => (
+                ].filter(item => item.show !== false).map(item => (
                   <button
                     key={item.id}
                     onClick={() => scrollToSection(item.id)}
@@ -2140,14 +2212,16 @@ Do not return markdown wraps, only raw JSON text.
         ════════════════════════════════════════════════════════════ */}
 
         {/* ── SECTION 8: AI EXECUTIVE SUMMARY ── */}
-        <motion.section
-          variants={sectionVariants}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, margin: "-80px" }}
-          ref={sectionsRef.aiSummary}
-          className="flex flex-col gap-5"
-        >
+        {data.showAIInsights !== false && (
+          <>
+            <motion.section
+            variants={sectionVariants}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: "-80px" }}
+            ref={sectionsRef.aiSummary}
+            className="flex flex-col gap-5"
+          >
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-accent-gold" />
@@ -2430,16 +2504,19 @@ Do not return markdown wraps, only raw JSON text.
             </div>
           )}
         </motion.section>
+          </>
+        )}
 
         {/* ── SECTION 3: AI EXECUTIVE SUMMARY ── */}
-        <motion.section
-          variants={sectionVariants}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, margin: "-80px" }}
-          ref={sectionsRef.aiSummary}
-          className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-8"
-        >
+        {data.showAISummary !== false && (
+          <motion.section
+            variants={sectionVariants}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: "-80px" }}
+            ref={sectionsRef.aiSummary}
+            className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-8"
+          >
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-accent-gold" />
@@ -2489,24 +2566,26 @@ Do not return markdown wraps, only raw JSON text.
             ))}
           </div>
         </motion.section>
+        )}
 
         {/* ── SECTION 4: HISTORICAL PROGRESS TIMELINE ── */}
-        <motion.section
-          variants={sectionVariants}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, margin: "-80px" }}
-          className="flex flex-col gap-6"
-        >
+        {data.showTimeline !== false && (
+          <motion.section
+            variants={sectionVariants}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: "-80px" }}
+            className="flex flex-col gap-6"
+          >
           {(() => {
             const getTimelineFilteredData = () => {
               switch (timelineFilter) {
                 case 'sprint':
                   return timelineData.filter((_, idx) => idx % 2 === 0).map(t => ({ ...t, week: `Sprint ${t.week.replace(/\D/g, '') || 'Cycle'}` }))
                 case 'monthly':
-                  return timelineData.filter((_, idx) => idx % 4 === 0).map(t => ({ ...t, week: `Month: ${new Date(t.rawForm.weekStart).toLocaleString('default', { month: 'long' })}` }))
+                  return timelineData.filter((_, idx) => idx % 4 === 0).map(t => ({ ...t, week: `Month: ${new Date(t.rawForm?.weekStart || Date.now()).toLocaleString('default', { month: 'long' })}` }))
                 case 'quarterly':
-                  return timelineData.filter((_, idx) => idx % 8 === 0).map(t => ({ ...t, week: `Quarterly Review Q${Math.floor(new Date(t.rawForm.weekStart).getMonth() / 3) + 1}` }))
+                  return timelineData.filter((_, idx) => idx % 8 === 0).map(t => ({ ...t, week: `Quarterly Review Q${Math.floor(new Date(t.rawForm?.weekStart || Date.now()).getMonth() / 3) + 1}` }))
                 case 'weekly':
                 default:
                   return timelineData
@@ -2607,17 +2686,19 @@ Do not return markdown wraps, only raw JSON text.
                               exit={{ opacity: 0, height: 0 }}
                               className="overflow-hidden pl-4 border-l border-white/5 flex flex-col gap-3 mb-4"
                             >
-                              <div className="flex items-center gap-3">
-                                <button
-                                  onClick={() => {
-                                    setData(ensureFormData(week.rawForm))
-                                    toast({ title: 'Report Loaded', description: `Swapped active dashboard to ${week.week}` })
-                                  }}
-                                  className="px-4 py-2 rounded-xl bg-[#d4af37]/10 border border-[#d4af37]/20 text-accent-gold text-xs font-bold hover:bg-[#d4af37]/20 transition-all"
-                                >
-                                  Load Active Workspace
-                                </button>
-                              </div>
+                              {week.rawForm && (
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    onClick={() => {
+                                      setData(ensureFormData(week.rawForm))
+                                      toast({ title: 'Report Loaded', description: `Swapped active dashboard to ${week.week}` })
+                                    }}
+                                    className="px-4 py-2 rounded-xl bg-[#d4af37]/10 border border-[#d4af37]/20 text-accent-gold text-xs font-bold hover:bg-[#d4af37]/20 transition-all"
+                                  >
+                                    Load Active Workspace
+                                  </button>
+                                </div>
+                              )}
                             </motion.div>
                           )}
                         </AnimatePresence>
@@ -2632,16 +2713,18 @@ Do not return markdown wraps, only raw JSON text.
             )
           })()}
         </motion.section>
+        )}
 
         {/* ── SECTION 5: HISTORICAL ANALYTICS DASHBOARD ── */}
-        <motion.section
-          variants={sectionVariants}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, margin: "-80px" }}
-          ref={sectionsRef.historyDashboard}
-          className="flex flex-col gap-6"
-        >
+        {data.showHistoricalAnalytics !== false && (
+          <motion.section
+            variants={sectionVariants}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: "-80px" }}
+            ref={sectionsRef.historyDashboard}
+            className="flex flex-col gap-6"
+          >
           <div className="flex items-center gap-2">
             <LayoutGrid className="w-5 h-5 text-accent-gold" />
             <h2 className="text-2xl font-extrabold font-clash">Historical Analytics</h2>
@@ -2810,6 +2893,7 @@ Do not return markdown wraps, only raw JSON text.
             </div>
           )}
         </motion.section>
+        )}
 
         {/* ── SECTION 6: WEEKLY ANCHORED CHARTS ── */}
         <section ref={sectionsRef.charts} className="flex flex-col gap-6">

@@ -49,6 +49,19 @@ export interface NextPriority {
   dueDate: string
 }
 
+export interface TimelineNode {
+  id: string
+  week: string
+  healthScore: number
+  emails: number
+  features: number
+  fixes: number
+  openDefects: number
+  closedDefects: number
+  emailChange?: string
+  rawForm?: QAReportForm
+}
+
 export interface QAReportForm {
   projectName: string
   reportTitle: string
@@ -69,6 +82,11 @@ export interface QAReportForm {
   defectsMTD: DefectMetrics
   historicalDefects: HistoricalDefect[]
   nextPriorities: NextPriority[]
+  showAIInsights?: boolean
+  showAISummary?: boolean
+  showHistoricalAnalytics?: boolean
+  showTimeline?: boolean
+  customTimeline?: TimelineNode[]
 }
 
 export interface SavedReport {
@@ -154,6 +172,22 @@ export const ensureFormData = (form: any): QAReportForm => {
       description: np?.description || '',
       owner: np?.owner || '',
       dueDate: np?.dueDate || ''
+    })) : [],
+    showAIInsights: f.showAIInsights !== false,
+    showAISummary: f.showAISummary !== false,
+    showHistoricalAnalytics: f.showHistoricalAnalytics !== false,
+    showTimeline: f.showTimeline !== false,
+    customTimeline: Array.isArray(f.customTimeline) ? f.customTimeline.filter(Boolean).map((t: any) => ({
+      id: t?.id || crypto.randomUUID(),
+      week: t?.week || '',
+      healthScore: Number(t?.healthScore) || 0,
+      emails: Number(t?.emails) || 0,
+      features: Number(t?.features) || 0,
+      fixes: Number(t?.fixes) || 0,
+      openDefects: Number(t?.openDefects) || 0,
+      closedDefects: Number(t?.closedDefects) || 0,
+      emailChange: t?.emailChange || '➜',
+      rawForm: t?.rawForm
     })) : [],
   }
 }

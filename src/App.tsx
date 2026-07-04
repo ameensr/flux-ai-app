@@ -1,6 +1,5 @@
 import React, { Suspense, lazy, createContext, useContext } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
 import { useAppStore } from '@/store/useAppStore'
 import type { Profile } from '@/store/useAppStore'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -10,27 +9,15 @@ import { supabase } from '@/lib/supabase'
 import { Toaster } from '@/components/ui/toaster'
 import { loadPermissionsForRole, FALLBACK_MAPS } from '@/lib/rbac'
 import { ProtectedRoute } from '@/components/router/ProtectedRoute'
-import { ErrorBoundary, SilentBoundary } from '@/components/ErrorBoundary'
-import { GlassCard } from '@/components/ui/GlassCard'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ROUTES } from '@/lib/routes'
 import { useIdleTimeout } from '@/hooks/useIdleTimeout'
 import { SessionTimeoutWarning } from '@/components/ui/SessionTimeoutWarning'
 import { logLoginEvent } from '@/services/loginActivity'
 
-// ── Idle timeout context (so child components can register active operations) ─
+// ── Idle timeout context ──────────────────────────────────────────────────────
 type RegisterOperationFn = (key: string) => () => void
 const IdleContext = createContext<RegisterOperationFn>(() => () => { })
-
-/**
- * Hook for child components to register active operations that should
- * prevent automatic logout (e.g., file uploads, AI generation, exports).
- *
- * Usage:
- *   const registerOp = useRegisterActiveOperation()
- *   const unregister = registerOp('ai-generation')
- *   // ... when done:
- *   unregister()
- */
 export function useRegisterActiveOperation(): RegisterOperationFn {
   return useContext(IdleContext)
 }
@@ -51,22 +38,7 @@ const DailyReportConfig = lazy(() => import('@/modules/DailyUpdateReport/DailyRe
 const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINews })))
 const AnnouncementsPage = lazy(() => import('@/modules/Announcements/AnnouncementsPage').then(m => ({ default: m.AnnouncementsPage })))
 
-// ── Redirect to /login when unauthenticated (saves intended destination) ──────
-function NavigateToLogin() {
-  const location = useLocation()
-  // Public paths that don't require auth
-  const publicPaths: string[] = [ROUTES.landing, ROUTES.login, ROUTES.signup, '/forgot-password', '/reset-password']
-  if (!publicPaths.includes(location.pathname)) {
-    // Save the intended route so we can return after login
-    try {
-      sessionStorage.setItem('qaly-return-to', location.pathname + location.search)
-    } catch { /* non-critical */ }
-    return <Navigate to={ROUTES.login} state={{ from: location }} replace />
-  }
-  return null
-}
-
-// ── Route-level loading skeleton ─────────────────────────────────────────────
+// ── Loaders ───────────────────────────────────────────────────────────────────
 function PageLoader() {
   return (
     <div className="flex items-center justify-center h-[60vh]">
@@ -75,150 +47,45 @@ function PageLoader() {
   )
 }
 
-function ModuleErrorFallback() {
+function FullPageLoader() {
   return (
-    <GlassCard hoverEffect={false} className="flex flex-col items-center justify-center py-32 text-center">
-      <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6">
-        <span className="text-2xl">⚠️</span>
-      </div>
-      <h3 className="text-2xl font-bold text-white mb-2">Module Failed to Load</h3>
-      <p className="text-text-secondary max-w-sm mb-6">Something went wrong rendering this module.</p>
-      <button
-        onClick={() => window.location.reload()}
-        className="px-6 py-3 rounded-xl bg-accent-gold text-background font-bold text-sm hover:opacity-90 transition-opacity"
-      >
-        Reload
-      </button>
-    </GlassCard>
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
+    </div>
   )
 }
 
-// ── Animated route wrapper ────────────────────────────────────────────────────
-function AnimatedPage({ children }: { children: React.ReactNode }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.25 }}
-    >
-      {children}
-    </motion.div>
-  )
-}
-
-// ── Authenticated app shell with animated routes ──────────────────────────────
-function AppShell() {
+// ── Auth guard ────────────────────────────────────────────────────────────────
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAppStore()
   const location = useLocation()
-  const isReportPreview = location.pathname.startsWith('/report-preview')
+  if (!isAuthenticated) {
+    return <Navigate to={ROUTES.login} state={{ from: location }} replace />
+  }
+  return <>{children}</>
+}
 
-  // Idle timeout — active for the entire authenticated session
+function RedirectIfAuth({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAppStore()
+  if (isAuthenticated) {
+    return <Navigate to={ROUTES.dashboard} replace />
+  }
+  return <>{children}</>
+}
+
+// ── Dashboard Layout wrapper (renders <Outlet /> for child routes) ─────────────
+function DashboardWrapper() {
   const { phase, secondsLeft, stayLoggedIn, logoutNow, registerOperation } = useIdleTimeout()
-
-  const shell = isReportPreview ? (
-    <ErrorBoundary>
-      <AnimatePresence mode="wait">
-        <AnimatedPage key={location.pathname}>
-          <SilentBoundary fallback={<ModuleErrorFallback />}>
-            <Suspense fallback={<PageLoader />}>
-              <Routes location={location}>
-                <Route path={ROUTES.reportPreview} element={
-                  <ProtectedRoute><ReportPreviewDashboard /></ProtectedRoute>
-                } />
-                <Route path="*" element={<Navigate to={ROUTES.reportPreview} replace />} />
-              </Routes>
-            </Suspense>
-          </SilentBoundary>
-        </AnimatedPage>
-      </AnimatePresence>
-      <Toaster />
-    </ErrorBoundary>
-  ) : (
-    <ErrorBoundary>
-      <DashboardLayout>
-        <AnimatePresence mode="wait">
-          <AnimatedPage key={location.pathname}>
-            <SilentBoundary fallback={<ModuleErrorFallback />}>
-              <Suspense fallback={<PageLoader />}>
-                <Routes location={location}>
-                  <Route index element={<Navigate to={ROUTES.dashboard} replace />} />
-
-                  <Route path={ROUTES.dashboard} element={
-                    <ProtectedRoute><Dashboard /></ProtectedRoute>
-                  } />
-
-                  <Route path={ROUTES.bugRefiner} element={
-                    <ProtectedRoute><BugRefiner /></ProtectedRoute>
-                  } />
-
-                  <Route path={ROUTES.testGenerator} element={
-                    <ProtectedRoute><TestCaseGenerator /></ProtectedRoute>
-                  } />
-
-                  <Route path={ROUTES.writingAssistant} element={
-                    <ProtectedRoute><WritingAssistant /></ProtectedRoute>
-                  } />
-
-                  <Route path={ROUTES.qaReport} element={
-                    <ProtectedRoute><QAWeeklyReport /></ProtectedRoute>
-                  } />
-
-                  <Route path={ROUTES.dailyReport} element={
-                    <ProtectedRoute><DailyUpdateReport /></ProtectedRoute>
-                  } />
-
-                  <Route path={ROUTES.dailyReportConfig} element={
-                    <ProtectedRoute><DailyReportConfig /></ProtectedRoute>
-                  } />
-
-                  <Route path={ROUTES.aiNews} element={
-                    <ProtectedRoute><AINews /></ProtectedRoute>
-                  } />
-
-                  <Route path={ROUTES.announcements} element={
-                    <ProtectedRoute><AnnouncementsPage /></ProtectedRoute>
-                  } />
-
-                  <Route path={ROUTES.settings} element={
-                    <ProtectedRoute><Settings /></ProtectedRoute>
-                  } />
-
-                  {/* Admin routes — all require adminOnly */}
-                  <Route path={ROUTES.admin} element={
-                    <ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>
-                  } />
-                  <Route path={`${ROUTES.admin}/*`} element={
-                    <ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>
-                  } />
-
-                  {/* Enterprise RBAC routes */}
-                  <Route path={`${ROUTES.enterprise}/*`} element={
-                    <ProtectedRoute adminOnly><EnterpriseAdmin /></ProtectedRoute>
-                  } />
-
-                  {/* Catch-all inside shell → back to dashboard */}
-                  <Route path="*" element={<Navigate to={ROUTES.dashboard} replace />} />
-                </Routes>
-              </Suspense>
-            </SilentBoundary>
-          </AnimatedPage>
-        </AnimatePresence>
-
-        <SilentBoundary>
-          <Suspense fallback={null}>
-            <AICopilot />
-          </Suspense>
-        </SilentBoundary>
-
-        <Toaster />
-      </DashboardLayout>
-    </ErrorBoundary>
-  )
 
   return (
     <IdleContext.Provider value={registerOperation}>
-      {shell}
-      {/* Session timeout warning modal — rendered above everything */}
+      <DashboardLayout>
+        <Suspense fallback={<PageLoader />}>
+          <Outlet />
+        </Suspense>
+        <Suspense fallback={null}><AICopilot /></Suspense>
+        <Toaster />
+      </DashboardLayout>
       <SessionTimeoutWarning
         visible={phase === 'warning'}
         secondsLeft={secondsLeft}
@@ -229,126 +96,127 @@ function AppShell() {
   )
 }
 
-// ── Root auth bootstrap ───────────────────────────────────────────────────────
-function AuthBootstrap() {
+// ── Report Preview wrapper (standalone, no sidebar) ───────────────────────────
+function ReportPreviewWrapper() {
+  const { registerOperation } = useIdleTimeout()
+  return (
+    <IdleContext.Provider value={registerOperation}>
+      <ErrorBoundary>
+        <Suspense fallback={<FullPageLoader />}>
+          <ReportPreviewDashboard />
+        </Suspense>
+        <Toaster />
+      </ErrorBoundary>
+    </IdleContext.Provider>
+  )
+}
+
+// ── Auth initializer ──────────────────────────────────────────────────────────
+function AuthInitializer({ children }: { children: React.ReactNode }) {
   const {
-    isAuthenticated, setUser, setProfile,
-    setPermissionMap, setPermissionsLoaded, initSession,
+    setUser, setProfile, setPermissionMap, setPermissionsLoaded, initSession,
   } = useAppStore()
 
-  const [authChecking, setAuthChecking] = React.useState(true)
-  const initializedUidRef = React.useRef<string | null>(null)
-  const location = useLocation()
+  const [ready, setReady] = React.useState(false)
+  const initPromiseRef = React.useRef<Promise<void> | null>(null)
 
   React.useEffect(() => {
-    const handleSession = async (user: any) => {
-      if (initializedUidRef.current === user.id) return
-      initializedUidRef.current = user.id
-      try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single()
+    const handleSession = (user: any): Promise<void> => {
+      if (initPromiseRef.current) return initPromiseRef.current
 
-        const role = data?.role ?? 'free'
-        if (data) setProfile(data as Profile)
+      initPromiseRef.current = (async () => {
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single()
 
-        const map = await loadPermissionsForRole(role)
-        initSession(user, map)
-      } catch (e) {
-        console.warn('[App] session setup error:', e)
-        initSession(user, FALLBACK_MAPS.free)
-      }
+          const role = data?.role ?? 'free'
+          if (data) setProfile(data as Profile)
+
+          const map = await loadPermissionsForRole(role)
+          initSession(user, map)
+        } catch (e) {
+          console.warn('[App] session setup error:', e)
+          initSession(user, FALLBACK_MAPS.free)
+        }
+      })()
+
+      return initPromiseRef.current
     }
 
-    // 1. Check stored session immediately (handles refresh)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        handleSession(session.user).finally(() => setAuthChecking(false))
-      } else {
-        setAuthChecking(false)
+    const checkInitialSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          await handleSession(session.user)
+        }
+      } catch (e) {
+        console.warn('[App] getSession error:', e)
+      } finally {
+        setReady(true)
       }
-    })
+    }
+    checkInitialSession()
 
-    // 2. Subscribe to auth changes (handles login/logout/token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') return
       if (event === 'SIGNED_IN' && session?.user) {
-        handleSession(session.user).finally(() => setAuthChecking(false))
+        handleSession(session.user).then(() => setReady(true))
         logLoginEvent(session.user.id, 'sign_in')
       } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        // Session refreshed — keep user logged in, no action needed
         handleSession(session.user)
       } else if (event === 'SIGNED_OUT') {
-        // Explicit sign-out — clear everything
-        initializedUidRef.current = null
+        initPromiseRef.current = null
         setUser(null)
         setProfile(null)
         setPermissionMap({})
         setPermissionsLoaded(false)
-        setAuthChecking(false)
-        window.history.replaceState(null, '', '/login')
+        setReady(true)
       }
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  if (authChecking) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-  // Public routes — accessible without authentication
-  const publicPaths = [ROUTES.landing, ROUTES.login, ROUTES.signup, '/forgot-password', '/reset-password']
-  const isPublicRoute = publicPaths.includes(location.pathname)
-
-  // Authenticated users on auth pages (login/signup) → redirect to saved route or dashboard
-  if (isAuthenticated && (location.pathname === ROUTES.login || location.pathname === ROUTES.signup)) {
-    let returnTo: string = ROUTES.dashboard
-    try {
-      const saved = sessionStorage.getItem('qaly-return-to')
-      if (saved && saved !== '/' && saved !== '/login' && saved !== '/signup') {
-        returnTo = saved
-        sessionStorage.removeItem('qaly-return-to')
-      }
-    } catch { /* non-critical */ }
-    return <Navigate to={returnTo} replace />
-  }
-
-  // Authenticated users on landing page → redirect to dashboard
-  if (isAuthenticated && location.pathname === ROUTES.landing) {
-    return <Navigate to={ROUTES.dashboard} replace />
-  }
-
-  // Authenticated → render the app shell (preserves current route)
-  if (isAuthenticated) {
-    return <AppShell />
-  }
-
-  // Unauthenticated → render public routes
-  return (
-    <>
-      <NavigateToLogin />
-      <Routes>
-        <Route path={ROUTES.landing} element={<LandingPage />} />
-        <Route path={ROUTES.login} element={<AuthPage />} />
-        <Route path={ROUTES.signup} element={<AuthPage />} />
-        <Route path="*" element={<AuthPage />} />
-      </Routes>
-      <Toaster />
-    </>
-  )
+  if (!ready) return <FullPageLoader />
+  return <>{children}</>
 }
 
-// ── App root — BrowserRouter lives here ──────────────────────────────────────
+// ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthBootstrap />
+      <AuthInitializer>
+        <Routes>
+          {/* Public routes */}
+          <Route path={ROUTES.landing} element={<RedirectIfAuth><LandingPage /></RedirectIfAuth>} />
+          <Route path={ROUTES.login} element={<RedirectIfAuth><AuthPage /></RedirectIfAuth>} />
+          <Route path={ROUTES.signup} element={<RedirectIfAuth><AuthPage /></RedirectIfAuth>} />
+
+          {/* Report Preview — standalone page, no sidebar */}
+          <Route path={ROUTES.reportPreview} element={<RequireAuth><ReportPreviewWrapper /></RequireAuth>} />
+
+          {/* Protected dashboard routes — uses layout with sidebar */}
+          <Route element={<RequireAuth><DashboardWrapper /></RequireAuth>}>
+            <Route path={ROUTES.dashboard} element={<Dashboard />} />
+            <Route path={ROUTES.bugRefiner} element={<BugRefiner />} />
+            <Route path={ROUTES.testGenerator} element={<TestCaseGenerator />} />
+            <Route path={ROUTES.writingAssistant} element={<WritingAssistant />} />
+            <Route path={ROUTES.qaReport} element={<QAWeeklyReport />} />
+            <Route path={ROUTES.dailyReport} element={<DailyUpdateReport />} />
+            <Route path={ROUTES.dailyReportConfig} element={<DailyReportConfig />} />
+            <Route path={ROUTES.aiNews} element={<AINews />} />
+            <Route path={ROUTES.announcements} element={<AnnouncementsPage />} />
+            <Route path={ROUTES.settings} element={<Settings />} />
+            <Route path={ROUTES.admin} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
+            <Route path={`${ROUTES.admin}/*`} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
+            <Route path={`${ROUTES.enterprise}/*`} element={<ProtectedRoute adminOnly><EnterpriseAdmin /></ProtectedRoute>} />
+            <Route path="*" element={<Navigate to={ROUTES.dashboard} replace />} />
+          </Route>
+        </Routes>
+      </AuthInitializer>
     </BrowserRouter>
   )
 }

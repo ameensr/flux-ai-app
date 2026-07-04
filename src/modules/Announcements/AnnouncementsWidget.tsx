@@ -1,7 +1,7 @@
 // src/modules/Announcements/AnnouncementsWidget.tsx
 // Premium Dashboard widget — shows latest announcements in a glassmorphic card.
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '@/store/useAppStore'
@@ -14,15 +14,18 @@ import {
   CheckCircle, Clock,
 } from 'lucide-react'
 import { ROUTES } from '@/lib/routes'
+import { DetailModal } from './AnnouncementsPage'
 
 // ── Single Announcement Item ──────────────────────────────────────────────────
 
 function AnnouncementItem({
   announcement,
   onMarkRead,
+  onClick,
 }: {
   announcement: AnnouncementWithMeta
   onMarkRead: (id: string) => void
+  onClick: () => void
 }) {
   const pCfg = PRIORITY_CONFIG[announcement.priority]
   const cCfg = CATEGORY_CONFIG[announcement.category]
@@ -39,7 +42,8 @@ function AnnouncementItem({
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group p-3 rounded-xl transition-all cursor-default"
+      onClick={onClick}
+      className="group p-3 rounded-xl transition-all cursor-pointer"
       style={{ border: '1px solid var(--border)' }}
       onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--hover)' }}
       onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
@@ -93,7 +97,8 @@ function AnnouncementItem({
 export function AnnouncementsWidget() {
   const navigate = useNavigate()
   const { user, role } = useAppStore()
-  const { announcements, loading, fetchForUser, markRead } = useAnnouncementsStore()
+  const { announcements, loading, fetchForUser, markRead, acknowledge } = useAnnouncementsStore()
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<AnnouncementWithMeta | null>(null)
 
   useEffect(() => {
     if (user?.id && role) {
@@ -103,6 +108,15 @@ export function AnnouncementsWidget() {
 
   const handleMarkRead = (id: string) => {
     if (user?.id) markRead(id, user.id)
+  }
+
+  const handleOpen = (a: AnnouncementWithMeta) => {
+    if (!a.is_read && user?.id) markRead(a.id, user.id)
+    setSelectedAnnouncement(a)
+  }
+
+  const handleAcknowledge = (id: string) => {
+    if (user?.id) acknowledge(id, user.id)
   }
 
   // Show max 5 announcements
@@ -157,11 +171,23 @@ export function AnnouncementsWidget() {
                 key={a.id}
                 announcement={a}
                 onMarkRead={handleMarkRead}
+                onClick={() => handleOpen(a)}
               />
             ))}
           </AnimatePresence>
         </div>
       )}
+
+      {/* Detail Modal Overlay */}
+      <AnimatePresence>
+        {selectedAnnouncement && (
+          <DetailModal
+            announcement={selectedAnnouncement}
+            onClose={() => setSelectedAnnouncement(null)}
+            onAcknowledge={handleAcknowledge}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

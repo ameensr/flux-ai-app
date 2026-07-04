@@ -18,7 +18,7 @@ import { GlassCard } from '@/components/ui/GlassCard'
 
 // ── Announcement Detail Modal ─────────────────────────────────────────────────
 
-function DetailModal({
+export function DetailModal({
   announcement,
   onClose,
   onAcknowledge,

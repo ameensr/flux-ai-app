@@ -15,6 +15,11 @@ const defaultForm = (): QAReportForm => ({
   defectsLastWeek: { reported: 0, open: 0, fixed: 0, closed: 0 },
   defectsMTD: { reported: 0, open: 0, fixed: 0, closed: 0 },
   historicalDefects: [], nextPriorities: [],
+  showAIInsights: true,
+  showAISummary: true,
+  showHistoricalAnalytics: true,
+  showTimeline: true,
+  customTimeline: [],
 })
 
 interface QAReportStore {
