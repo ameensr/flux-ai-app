@@ -28,6 +28,7 @@ const BugRefiner = lazy(() => import('@/modules/BugRefiner').then(m => ({ defaul
 const TestCaseGenerator = lazy(() => import('@/modules/TestCaseGenerator').then(m => ({ default: m.TestCaseGenerator })))
 const WritingAssistant = lazy(() => import('@/modules/WritingAssistant').then(m => ({ default: m.WritingAssistant })))
 const QAWeeklyReport = lazy(() => import('@/modules/QAWeeklyReport').then(m => ({ default: m.QAWeeklyReport })))
+const QAReportConfig = lazy(() => import('@/modules/QAWeeklyReport/QAReportConfig').then(m => ({ default: m.QAReportConfig })))
 const ReportPreviewDashboard = lazy(() => import('@/modules/QAWeeklyReport/components/ReportPreviewDashboard').then(m => ({ default: m.ReportPreviewDashboard })))
 const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })))
 const AdminPanel = lazy(() => import('@/pages/AdminPanel').then(m => ({ default: m.AdminPanel })))
@@ -207,6 +208,7 @@ export default function App() {
             <Route path={ROUTES.qaReport} element={<QAWeeklyReport />} />
             <Route path={ROUTES.dailyReport} element={<DailyUpdateReport />} />
             <Route path={ROUTES.dailyReportConfig} element={<DailyReportConfig />} />
+            <Route path={ROUTES.qaReportConfig} element={<QAReportConfig />} />
             <Route path={ROUTES.aiNews} element={<AINews />} />
             <Route path={ROUTES.announcements} element={<AnnouncementsPage />} />
             <Route path={ROUTES.settings} element={<Settings />} />

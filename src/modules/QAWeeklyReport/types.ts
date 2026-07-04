@@ -19,7 +19,8 @@ export interface ReleaseItem {
 }
 
 export interface ProductionIssueBlock {
-  codeFix: number
+  escapedIssue: number
+  supportFix: number
   support: number
   changeRequest: number
   dataIssue: number
@@ -62,7 +63,21 @@ export interface TimelineNode {
   rawForm?: QAReportForm
 }
 
+export interface ProjectConfig {
+  id?: string
+  projectName: string
+  projectCode: string
+  description?: string
+  status: 'Active' | 'Inactive'
+  isActive: boolean
+  createdBy?: string
+  createdAt?: string
+  updatedAt?: string
+  deletedAt?: string | null
+}
+
 export interface QAReportForm {
+  projectId?: string
   projectName: string
   reportTitle: string
   weekStart: string
@@ -93,6 +108,7 @@ export interface SavedReport {
   id: string
   week: string
   project: string
+  projectId?: string
   generatedDate: string
   createdBy: string
   markdown: string
@@ -103,6 +119,7 @@ export interface SavedReport {
 export const ensureFormData = (form: any): QAReportForm => {
   const f = form || {}
   return {
+    projectId: f.projectId || '',
     projectName: f.projectName || '',
     reportTitle: f.reportTitle || 'Weekly QA Status Report',
     weekStart: f.weekStart || '',
@@ -112,20 +129,31 @@ export const ensureFormData = (form: any): QAReportForm => {
     newFeatures: Number(f.newFeatures) || 0,
     codeFixes: Number(f.codeFixes) || 0,
     lastWeek: {
-      codeFix: Number(f.lastWeek?.codeFix) || 0,
-      support: Number(f.lastWeek?.support) || 0,
+      escapedIssue: Number(f.lastWeek?.escapedIssue ?? f.lastWeek?.codeFix) || 0,
+      supportFix: Number(f.lastWeek?.supportFix) || 0,
       changeRequest: Number(f.lastWeek?.changeRequest) || 0,
       dataIssue: Number(f.lastWeek?.dataIssue) || 0,
       backendUpdation: Number(f.lastWeek?.backendUpdation) || 0,
       completedCR: Number(f.lastWeek?.completedCR) || 0,
+      support: (Number(f.lastWeek?.escapedIssue ?? f.lastWeek?.codeFix) || 0) +
+               (Number(f.lastWeek?.supportFix) || 0) +
+               (Number(f.lastWeek?.changeRequest) || 0) +
+               (Number(f.lastWeek?.dataIssue) || 0) +
+               (Number(f.lastWeek?.backendUpdation) || 0),
     },
     monthToDate: {
-      codeFix: Number(f.monthToDate?.codeFix) || 0,
-      support: Number(f.monthToDate?.support) || 0,
+      escapedIssue: Number(f.monthToDate?.escapedIssue ?? f.monthToDate?.codeFix) || 0,
+      supportFix: Number(f.monthToDate?.supportFix) || 0,
       changeRequest: Number(f.monthToDate?.changeRequest) || 0,
       completedCR: Number(f.monthToDate?.completedCR) || 0,
       dataIssue: Number(f.monthToDate?.dataIssue) || 0,
       backendUpdation: Number(f.monthToDate?.backendUpdation) || 0,
+      support: (Number(f.monthToDate?.escapedIssue ?? f.monthToDate?.codeFix) || 0) +
+               (Number(f.monthToDate?.supportFix) || 0) +
+               (Number(f.monthToDate?.changeRequest) || 0) +
+               (Number(f.monthToDate?.completedCR) || 0) +
+               (Number(f.monthToDate?.dataIssue) || 0) +
+               (Number(f.monthToDate?.backendUpdation) || 0),
     },
     newFeatureTeam: Array.isArray(f.newFeatureTeam) ? f.newFeatureTeam.filter(Boolean) : [],
     supportTeam: Array.isArray(f.supportTeam) ? f.supportTeam.filter(Boolean) : [],

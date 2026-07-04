@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
 import { Mail, Zap, Wrench } from 'lucide-react'
@@ -7,14 +7,38 @@ const inp = 'field-input'
 const lbl = 'label-xs mb-1.5 block'
 
 export const HeaderSection: React.FC = () => {
-  const { form, setForm } = useQAReportStore()
+  const { form, setForm, resetForm, projects, fetchProjects } = useQAReportStore()
+
+  useEffect(() => {
+    fetchProjects(true)
+  }, [])
+
   return (
     <GlassCard hoverEffect={false} className="flex flex-col gap-4">
       <span className="label-xs">Report Header</span>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className={lbl}>Project Name <span className="text-red-400">*</span></label>
-          <input className={inp} value={form.projectName} onChange={e => setForm({ projectName: e.target.value })} placeholder="e.g. Phoenix Platform" />
+          <select
+            className={`${inp} text-xs text-text-primary`}
+            value={form.projectId || ''}
+            onChange={e => {
+              const selectedId = e.target.value
+              const selectedProj = projects.find(p => p.id === selectedId)
+              if (selectedProj) {
+                resetForm(selectedProj.id, selectedProj.projectName)
+                useQAReportStore.getState().fetchReports(selectedProj.id || '')
+                localStorage.setItem('last-selected-project-id', selectedProj.id || '')
+              } else {
+                resetForm('', '')
+              }
+            }}
+          >
+            <option value="">-- Select Project --</option>
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>{p.projectName} ({p.projectCode})</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className={lbl}>Report Title</label>

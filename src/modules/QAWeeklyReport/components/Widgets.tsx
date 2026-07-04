@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
 import { Trash2, ExternalLink, Search, Copy } from 'lucide-react'
@@ -182,13 +182,30 @@ export const DefectChart: React.FC = () => {
 // ── Report History ────────────────────────────────────────────────────────────
 
 export const ReportHistory: React.FC = () => {
-  const { savedReports, deleteReport, setGeneratedReport, setForm, historySearch, setHistorySearch } = useQAReportStore()
+  const { savedReports, deleteReport, setGeneratedReport, setForm, historySearch, setHistorySearch, projects, form, fetchReports } = useQAReportStore()
   const [page, setPage] = useState(1)
   const PER_PAGE = 5
 
-  const filtered = savedReports.filter(r =>
-    [r.project, r.week, r.createdBy].some(v => v?.toLowerCase().includes(historySearch.toLowerCase()))
-  )
+  const [searchProject, setSearchProject] = useState(form.projectId || '')
+  const [localSearchText, setLocalSearchText] = useState(historySearch)
+
+  useEffect(() => {
+    if (form.projectId) {
+      setSearchProject(form.projectId)
+    }
+  }, [form.projectId])
+
+  const filtered = savedReports.filter(r => {
+    if (searchProject && r.projectId !== searchProject) return false
+
+    if (historySearch) {
+      const matchText = [r.project, r.week, r.createdBy].some(v => v?.toLowerCase().includes(historySearch.toLowerCase()))
+      if (!matchText) return false
+    }
+
+    return true
+  })
+
   const pages = Math.ceil(filtered.length / PER_PAGE)
   const visible = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
@@ -204,29 +221,73 @@ export const ReportHistory: React.FC = () => {
     toast({ title: 'Duplicated', description: 'Report duplicated in history.' })
   }
 
-  if (savedReports.length === 0) return null
-
   return (
     <GlassCard hoverEffect={false} className="flex flex-col gap-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <span className="label-xs">Report History ({savedReports.length})</span>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10">
-          <Search className="w-3 h-3 text-text-muted" />
-          <input className="bg-transparent text-xs text-white focus:outline-none w-28 placeholder:text-text-muted" placeholder="Search..." value={historySearch} onChange={e => setHistorySearch(e.target.value)} />
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <span className="label-xs">Report History ({savedReports.length})</span>
+        </div>
+
+        <div className="flex flex-col gap-2.5">
+          {/* Project dropdown */}
+          <div className="flex flex-col gap-1 text-left">
+            <label className="text-[10px] text-text-muted font-bold uppercase">Project</label>
+            <select
+              value={searchProject}
+              onChange={e => {
+                const val = e.target.value
+                setSearchProject(val)
+                fetchReports(val || undefined)
+              }}
+              className="bg-hover border border-border rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-accent/40 w-full"
+            >
+              <option value="" className="bg-surface text-text-primary">All Projects</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id} className="bg-surface text-text-primary">{p.projectName}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Search box + button */}
+          <div className="flex flex-col gap-1 text-left">
+            <label className="text-[10px] text-text-muted font-bold uppercase">Search</label>
+            <div className="flex items-center gap-1.5 w-full">
+              <div className="flex items-center gap-1.5 px-3 py-2 bg-hover rounded-xl border border-border flex-1 focus-within:border-accent/40">
+                <Search className="w-3.5 h-3.5 text-text-muted" />
+                <input
+                  className="bg-transparent text-xs text-text-primary focus:outline-none w-full placeholder:text-text-muted"
+                  placeholder="Filter text..."
+                  value={localSearchText}
+                  onChange={e => setLocalSearchText(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      setHistorySearch(localSearchText)
+                    }
+                  }}
+                />
+              </div>
+              <button
+                onClick={() => setHistorySearch(localSearchText)}
+                className="px-3.5 py-2 rounded-xl bg-accent-gold text-black text-xs font-bold hover:opacity-90 transition-all shrink-0"
+              >
+                Search
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
         {visible.length === 0 && <p className="text-xs text-text-muted">No results.</p>}
         {visible.map(r => (
-          <div key={r.id} className="flex items-center justify-between gap-2 p-3 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all group">
+          <div key={r.id} className="flex items-center justify-between gap-2 p-3 rounded-2xl bg-hover/20 border border-border hover:border-accent/20 transition-all group">
             <div className="min-w-0">
-              <p className="text-sm font-bold text-white truncate">{r.project}</p>
+              <p className="text-sm font-bold text-text-primary truncate">{r.project}</p>
               <p className="text-[11px] text-text-muted">{r.week} · {new Date(r.generatedDate).toLocaleDateString()}</p>
             </div>
             <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => open(r)} className="p-1.5 rounded-lg hover:bg-white/10 text-text-muted hover:text-accent-gold transition-all" title="Open"><ExternalLink className="w-3.5 h-3.5" /></button>
-              <button onClick={() => duplicate(r)} className="p-1.5 rounded-lg hover:bg-white/10 text-text-muted hover:text-white transition-all" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
+              <button onClick={() => open(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-accent-gold transition-all" title="Open"><ExternalLink className="w-3.5 h-3.5" /></button>
+              <button onClick={() => duplicate(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-text-primary transition-all" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
               <button onClick={() => deleteReport(r.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
           </div>
@@ -236,7 +297,7 @@ export const ReportHistory: React.FC = () => {
       {pages > 1 && (
         <div className="flex items-center justify-center gap-2">
           {Array.from({ length: pages }, (_, i) => (
-            <button key={i} onClick={() => setPage(i + 1)} className={cn('w-7 h-7 rounded-lg text-xs font-bold transition-all', page === i + 1 ? 'bg-accent-gold text-background' : 'bg-white/5 text-text-muted hover:text-white')}>
+            <button key={i} onClick={() => setPage(i + 1)} className={cn('w-7 h-7 rounded-lg text-xs font-bold transition-all', page === i + 1 ? 'bg-accent-gold text-background' : 'bg-hover text-text-muted hover:text-text-primary')}>
               {i + 1}
             </button>
           ))}

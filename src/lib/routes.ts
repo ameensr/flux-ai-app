@@ -47,6 +47,9 @@ export const ROUTES = {
   // Daily Update Report & Config
   dailyReport: '/daily-report',
   dailyReportConfig: '/daily-report/configuration',
+
+  // QA Weekly Report Config
+  qaReportConfig: '/qa-report/configuration',
 } as const
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES]
@@ -58,6 +61,7 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.testGenerator]: 'test-generator',
   [ROUTES.writingAssistant]: 'writing-assistant',
   [ROUTES.qaReport]: 'qa-report',
+  [ROUTES.qaReportConfig]: 'qa-report',
   [ROUTES.reportPreview]: 'qa-report',
   [ROUTES.settings]: 'settings',
   [ROUTES.announcements]: 'announcements',

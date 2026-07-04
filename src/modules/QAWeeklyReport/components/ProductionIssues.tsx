@@ -17,14 +17,28 @@ function IssueBlock({
   showCR?: boolean
 }) {
   const fields: { key: BlockKey; label: string }[] = [
-    { key: 'codeFix', label: 'Code Fix' },
-    { key: 'support', label: 'Support' },
+    { key: 'escapedIssue', label: 'Escaped Issue' },
+    { key: 'supportFix', label: 'Support Fix' },
     { key: 'changeRequest', label: 'Change Request' },
     ...(showCR ? [{ key: 'completedCR' as BlockKey, label: 'Completed CR' }] : []),
     { key: 'dataIssue', label: 'Data Issue' },
     { key: 'backendUpdation', label: 'Backend Updation' },
   ]
+
   const total = fields.reduce((s, f) => s + (Number(value[f.key]) || 0), 0)
+
+  const handleFieldChange = (key: BlockKey, val: number) => {
+    const updatedValue = { ...value, [key]: val }
+    const supportSum =
+      (Number(updatedValue.escapedIssue) || 0) +
+      (Number(updatedValue.supportFix) || 0) +
+      (Number(updatedValue.changeRequest) || 0) +
+      (Number(updatedValue.completedCR) || 0) +
+      (Number(updatedValue.dataIssue) || 0) +
+      (Number(updatedValue.backendUpdation) || 0)
+    
+    onChange({ [key]: val, support: supportSum })
+  }
 
   return (
     <GlassCard hoverEffect={false} className="flex flex-col gap-3">
@@ -36,12 +50,15 @@ function IssueBlock({
             type="number" min={0}
             className={`${inp} w-24 text-right`}
             value={value[key] ?? 0}
-            onChange={e => onChange({ [key]: Number(e.target.value) })}
+            onChange={e => handleFieldChange(key, Number(e.target.value))}
           />
         </div>
       ))}
       <div className="flex items-center justify-between border-t border-white/10 pt-3 mt-1">
-        <span className="label-xs text-accent-gold">Total</span>
+        <div className="flex flex-col text-left">
+          <span className="label-xs text-accent-gold font-bold">Total</span>
+          <span className="text-[10px] text-text-muted mt-0.5">(Support Mails)</span>
+        </div>
         <span className="text-xl font-bold text-accent-gold">{total}</span>
       </div>
     </GlassCard>

@@ -3,13 +3,14 @@ import { persist } from 'zustand/middleware'
 import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/store/useAppStore'
 import { ensureFormData } from './types'
-import type { QAReportForm, SavedReport } from './types'
+import type { QAReportForm, SavedReport, ProjectConfig } from './types'
 
 const defaultForm = (): QAReportForm => ({
+  projectId: '',
   projectName: '', reportTitle: 'Weekly QA Status Report', weekStart: '', weekEnd: '', subtitle: '',
   supportEmails: 0, newFeatures: 0, codeFixes: 0,
-  lastWeek: { codeFix: 0, support: 0, changeRequest: 0, dataIssue: 0, backendUpdation: 0 },
-  monthToDate: { codeFix: 0, support: 0, changeRequest: 0, completedCR: 0, dataIssue: 0, backendUpdation: 0 },
+  lastWeek: { escapedIssue: 0, supportFix: 0, support: 0, changeRequest: 0, dataIssue: 0, backendUpdation: 0 },
+  monthToDate: { escapedIssue: 0, supportFix: 0, support: 0, changeRequest: 0, completedCR: 0, dataIssue: 0, backendUpdation: 0 },
   newFeatureTeam: [], supportTeam: [], automationTeam: [],
   supportTickets: [], releaseItems: [],
   defectsLastWeek: { reported: 0, open: 0, fixed: 0, closed: 0 },
@@ -25,26 +26,126 @@ const defaultForm = (): QAReportForm => ({
 interface QAReportStore {
   form: QAReportForm
   setForm: (patch: Partial<QAReportForm>) => void
-  resetForm: () => void
+  resetForm: (projectId?: string, projectName?: string) => void
   generatedReport: string
   setGeneratedReport: (md: string) => void
   savedReports: SavedReport[]
   saveReport: (report: SavedReport) => Promise<void>
   deleteReport: (id: string) => Promise<void>
-  fetchReports: () => Promise<void>
+  fetchReports: (projectId?: string) => Promise<void>
   historySearch: string
   setHistorySearch: (s: string) => void
+  
+  // Project Master actions
+  projects: ProjectConfig[]
+  fetchProjects: (activeOnly?: boolean) => Promise<void>
+  saveProject: (project: ProjectConfig) => Promise<void>
+  deleteProject: (id: string) => Promise<void>
 }
 
 export const useQAReportStore = create<QAReportStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       form: defaultForm(),
       setForm: (patch) => set((s) => ({ form: { ...s.form, ...patch } })),
-      resetForm: () => set({ form: defaultForm(), generatedReport: '' }),
+      resetForm: (projectId, projectName) => set({
+        form: {
+          ...defaultForm(),
+          projectId: projectId || '',
+          projectName: projectName || ''
+        },
+        generatedReport: ''
+      }),
       generatedReport: '',
       setGeneratedReport: (md) => set({ generatedReport: md }),
       savedReports: [],
+      projects: [],
+
+      fetchProjects: async (activeOnly = true) => {
+        try {
+          let query = supabase
+            .from('projects')
+            .select('*')
+            .is('deleted_at', null)
+
+          if (activeOnly) {
+            query = query.eq('is_active', true)
+          }
+
+          const { data, error } = await query.order('project_name', { ascending: true })
+          if (error) throw error
+          if (data) {
+            const mapped: ProjectConfig[] = data.map(p => ({
+              id: p.id,
+              projectName: p.project_name,
+              projectCode: p.project_code,
+              description: p.description || '',
+              status: p.status as 'Active' | 'Inactive',
+              isActive: p.is_active,
+              createdBy: p.created_by,
+              createdAt: p.created_at,
+              updatedAt: p.updated_at,
+              deletedAt: p.deleted_at
+            }))
+            set({ projects: mapped })
+          }
+        } catch (e) {
+          console.error('Error fetching projects from Supabase:', String(e).replace(/[\r\n]/g, ' '))
+        }
+      },
+
+      saveProject: async (project) => {
+        const user = useAppStore.getState().user
+        if (!user) return
+        try {
+          const payload = {
+            project_name: project.projectName,
+            project_code: project.projectCode,
+            description: project.description,
+            status: project.status,
+            is_active: project.isActive,
+            updated_at: new Date().toISOString()
+          } as any
+
+          if (project.id) {
+            const { error } = await supabase
+              .from('projects')
+              .update(payload)
+              .eq('id', project.id)
+            if (error) throw error
+          } else {
+            payload.created_by = user.id
+            payload.created_at = new Date().toISOString()
+            const { error } = await supabase
+              .from('projects')
+              .insert(payload)
+            if (error) throw error
+          }
+          await get().fetchProjects(false)
+        } catch (e) {
+          console.error('Error saving project to Supabase:', String(e).replace(/[\r\n]/g, ' '))
+          throw e
+        }
+      },
+
+      deleteProject: async (id) => {
+        try {
+          const { error } = await supabase
+            .from('projects')
+            .update({
+              deleted_at: new Date().toISOString(),
+              status: 'Inactive',
+              is_active: false
+            })
+            .eq('id', id)
+          if (error) throw error
+          await get().fetchProjects(false)
+        } catch (e) {
+          console.error('Error soft-deleting project from Supabase:', String(e).replace(/[\r\n]/g, ' '))
+          throw e
+        }
+      },
+
       saveReport: async (report) => {
         const user = useAppStore.getState().user
         if (user) {
@@ -56,10 +157,11 @@ export const useQAReportStore = create<QAReportStore>()(
                 user_id: user.id,
                 week: report.week,
                 project: report.project,
+                project_id: report.projectId,
                 generated_date: report.generatedDate,
                 created_by: report.createdBy,
                 markdown: report.markdown,
-                form_data: report.form,
+                form_data: { ...report.form, projectId: report.projectId, projectName: report.project },
                 status: report.status
               })
             if (error) throw error
@@ -68,6 +170,7 @@ export const useQAReportStore = create<QAReportStore>()(
           }
         }
 
+        // Maintain local store caching
         set((s) => {
           const now = new Date()
           const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate())
@@ -78,12 +181,13 @@ export const useQAReportStore = create<QAReportStore>()(
           const merged = [report, ...filtered.filter(r => r.id !== report.id)]
           const sliced = merged.slice(0, 10)
 
-          if (user && sliced.length > 0) {
+          if (user && sliced.length > 0 && report.projectId) {
             const oldestDate = sliced[sliced.length - 1].generatedDate
             supabase
               .from('weekly_reports')
               .delete()
               .eq('user_id', user.id)
+              .eq('project_id', report.projectId)
               .lt('generated_date', oldestDate)
               .then(({ error }) => {
                 if (error) console.error('Error cleaning up Supabase reports:', String(error).replace(/[\r\n]/g, ' '))
@@ -93,6 +197,7 @@ export const useQAReportStore = create<QAReportStore>()(
           return { savedReports: sliced }
         })
       },
+
       deleteReport: async (id) => {
         const user = useAppStore.getState().user
         if (user) {
@@ -108,25 +213,35 @@ export const useQAReportStore = create<QAReportStore>()(
         }
         set((s) => ({ savedReports: s.savedReports.filter(r => r.id !== id) }))
       },
-      fetchReports: async () => {
+
+      fetchReports: async (projectId) => {
         const user = useAppStore.getState().user
         if (!user) return
         try {
-          const { data, error } = await supabase
+          let query = supabase
             .from('weekly_reports')
             .select('*')
+            .eq('user_id', user.id)
+
+          if (projectId) {
+            query = query.eq('project_id', projectId)
+          }
+
+          const { data, error } = await query
             .order('generated_date', { ascending: false })
             .limit(10)
+
           if (error) throw error
           if (data) {
             const mapped: SavedReport[] = data.map(r => ({
               id: r.id,
               week: r.week,
               project: r.project,
+              projectId: r.project_id,
               generatedDate: r.generated_date,
               createdBy: r.created_by,
               markdown: r.markdown,
-              form: ensureFormData(r.form_data),
+              form: ensureFormData({ ...r.form_data, projectId: r.project_id, projectName: r.project }),
               status: r.status as 'Draft' | 'Final'
             }))
             set({ savedReports: mapped })

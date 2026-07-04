@@ -11,8 +11,9 @@ import {
 } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
 import { BRAND } from '@/lib/brand'
+import { calculateQAScore } from '../utils/qualityCalculator'
 
-const customStyles = `
+const getCustomStyles = (theme: 'light' | 'dark') => `
   @keyframes float {
     0% { transform: translateY(0px) rotate(0deg); }
     50% { transform: translateY(-12px) rotate(4deg); }
@@ -27,6 +28,15 @@ const customStyles = `
     0% { opacity: 0.12; transform: scale(1); }
     50% { opacity: 0.22; transform: scale(1.08); }
     100% { opacity: 0.12; transform: scale(1); }
+  }
+  @keyframes float-glow {
+    0% { transform: translate(0px, 0px) scale(1); opacity: 0.35; }
+    33% { transform: translate(30px, -50px) scale(1.1); opacity: 0.55; }
+    66% { transform: translate(-20px, 20px) scale(0.9); opacity: 0.25; }
+    100% { transform: translate(0px, 0px) scale(1); opacity: 0.35; }
+  }
+  .animate-float-glow {
+    animation: float-glow 20s ease-in-out infinite;
   }
   @keyframes scroll-dot {
     0% { opacity: 0; transform: translateY(0); }
@@ -58,40 +68,58 @@ const customStyles = `
   @media print {
     @page {
       size: landscape;
-      margin: 10mm;
+      margin: 12mm 10mm;
     }
     
     body, html, #root, .min-h-screen {
       overflow: visible !important;
       height: auto !important;
+      background: ${theme === 'dark' ? '#070a13' : '#f8fafc'} !important;
+      color: ${theme === 'dark' ? '#f8fafc' : '#0f172a'} !important;
     }
 
     * {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
     }
 
-    /* Hide interactive elements, control panels, filters, headers */
-    .print\\:hidden, button, header, nav, select {
+    /* Hide interactive elements, controls, sidebar buttons */
+    .print\:hidden, button, header, nav, select, .fixed.bottom-4 {
       display: none !important;
+    }
+
+    /* Prevent cards and charts from splitting across pages */
+    section, .grid > div, .flex-col > div, table, tr {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
 
     h1, h2, h3, h4, h5, h6 {
       page-break-after: avoid !important;
+      break-after: avoid !important;
+      color: ${theme === 'dark' ? '#ffffff' : '#0f172a'} !important;
+    }
+
+    /* Align columns nicely for standard paper width */
+    .max-w-7xl {
+      max-width: 100% !important;
+      width: 100% !important;
+      padding: 0 !important;
+      margin: 0 !important;
     }
 
     /* Correct chart dimensions on print page */
-    .h-56 .recharts-responsive-container,
-    .h-60 .recharts-responsive-container,
-    .h-64 .recharts-responsive-container,
-    .h-72 .recharts-responsive-container,
-    .h-80 .recharts-responsive-container {
+    .h-56, .h-60, .h-64, .h-72, .h-80 {
+      height: 240px !important;
+      page-break-inside: avoid !important;
+    }
+
+    .recharts-responsive-container {
       width: 100% !important;
       height: 220px !important;
       min-height: 220px !important;
-      max-height: 220px !important;
-      margin: 10px 0 !important;
-      page-break-inside: avoid !important;
     }
   }
 `
@@ -108,7 +136,7 @@ import type { QAReportForm, SupportTicket, ReleaseItem, HistoricalDefect } from 
 import { useTheme } from '@/context/ThemeContext'
 
 // Report preview has its own isolated theme system — independent of the global dark/light toggle.
-type ReportThemeId = 'dark' | 'light' | 'fabric' | 'github' | 'apple' | 'material' | 'cred' | 'powerbi' | 'cyber' | 'glassmorphism' | 'nordic' | 'notion' | 'stripe' | 'bloomberg'
+type ReportThemeId = 'light' | 'dark'
 import pptxgen from 'pptxgenjs'
 
 // No mock/dummy data — historical analytics use only the user's real saved reports
@@ -138,7 +166,10 @@ interface CountUpProps {
 }
 const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '' }) => {
   const [isPrinting, setIsPrinting] = useState(false)
-  const [count, setCount] = useState(end)
+  const [count, setCount] = useState(() => {
+    const hasPlayed = typeof window !== 'undefined' && sessionStorage.getItem('qaly-dashboard-entrance-played') === 'true'
+    return hasPlayed ? end : 0
+  })
 
   useEffect(() => {
     const mediaQueryList = window.matchMedia('print')
@@ -166,6 +197,11 @@ const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '' }) => {
 
   useEffect(() => {
     if (isPrinting) {
+      setCount(end)
+      return
+    }
+    const hasPlayed = typeof window !== 'undefined' && sessionStorage.getItem('qaly-dashboard-entrance-played') === 'true'
+    if (hasPlayed) {
       setCount(end)
       return
     }
@@ -214,6 +250,37 @@ const sectionVariants: Variants = {
 const ReportPreviewDashboardContent: React.FC = () => {
   const { savedReports, saveReport, fetchReports } = useQAReportStore()
 
+  // Track if entrance animations have already been played (e.g. page refresh)
+  const hasPlayed = typeof window !== 'undefined' && sessionStorage.getItem('qaly-dashboard-entrance-played') === 'true'
+
+  useEffect(() => {
+    sessionStorage.setItem('qaly-dashboard-entrance-played', 'true')
+  }, [])
+
+  const containerVariants: Variants = {
+    hidden: { opacity: hasPlayed ? 1 : 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: hasPlayed ? 0 : 0.08,
+        delayChildren: hasPlayed ? 0 : 0.1
+      }
+    }
+  }
+
+  const sectionVariants: Variants = {
+    hidden: hasPlayed ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.98 },
+    show: hasPlayed ? { opacity: 1, y: 0, scale: 1 } : {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        duration: 0.5,
+        ease: 'easeOut'
+      }
+    }
+  }
+
   const activeHistory = savedReports.map(r => ({
     ...r,
     form: ensureFormData(r.form)
@@ -227,10 +294,6 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const [isLoaded, setIsLoaded] = useState(() => !!localStorage.getItem('current-qa-report-data'))
   const { theme: globalTheme } = useTheme()
   const theme = globalTheme === 'light' ? 'light' : 'dark'
-  const [reportTheme, setReportTheme] = React.useState<ReportThemeId>(
-    () => (localStorage.getItem('report-preview-theme') as ReportThemeId) || (globalTheme === 'light' ? 'light' : 'dark')
-  )
-  const themeGallery: ReportThemeId = reportTheme
   const [enableParticles, setEnableParticles] = useState<boolean>(localStorage.getItem('qaly-enable-particles') !== 'false')
   const [isHealthBarFilled, setIsHealthBarFilled] = useState(false)
   const [clientMode, setClientMode] = useState<boolean>(localStorage.getItem('qaly-client-mode') === 'true')
@@ -308,197 +371,32 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const defectClosureRate = activeDefectsTotal ? Math.round((data.defectsLastWeek.closed / activeDefectsTotal) * 100) : 0
 
   // ── Executive Quality Score Calculation ──
-  const calculateQualityScore = (): { score: number; label: string; color: string; desc: string } => {
-    let score = 70 // Baseline score
-
-    // 1. Defect Closure Rate contribution (+15 max)
-    score += (defectClosureRate / 100) * 15
-    // 2. Release pass rate contribution (+15 max)
-    score += (passRate / 100) * 15
-    // 3. Open Defects Penalty (-2 per open defect)
-    score -= Math.min(data.defectsLastWeek.open * 2, 15)
-    // 4. Production Issues Penalty (-3 per production issue last week)
-    const prodIssues = Object.values(data.lastWeek).reduce((a, b) => a + b, 0)
-    score -= Math.min(prodIssues * 3, 20)
-
-    const finalScore = Math.max(Math.min(Math.round(score), 100), 0)
-
-    if (finalScore >= 90) return { score: finalScore, label: 'Excellent', color: 'text-green-400 border-green-500/20 bg-green-500/5', desc: 'System quality is extremely high. All main releases pass regression guidelines.' }
-    if (finalScore >= 70) return { score: finalScore, label: 'Good', color: 'text-accent-gold border-accent-gold/20 bg-accent-gold/5', desc: 'QA health checks out stable. Backlog contains minor non-blocking issues.' }
-    if (finalScore >= 50) return { score: finalScore, label: 'Needs Attention', color: 'text-orange-400 border-orange-500/20 bg-orange-500/5', desc: 'Bugs open count is rising. Plan regression sprints to clear out backlog debt.' }
-    return { score: finalScore, label: 'Critical', color: 'text-red-400 border-red-500/20 bg-red-500/5', desc: 'Critical support queues are overflowing. Major deployment items blocked.' }
-  }
-
-  const qualityStats = calculateQualityScore()
+  const qualityStats = calculateQAScore(data)
 
   // ── Theme Gallery configurations ──
   const getThemeStyles = () => {
-    switch (themeGallery) {
-      case 'light':
-        return {
-          bg: 'bg-[#f8f8f8] text-[#111111]',
-          card: 'bg-white border-black/10 rounded-3xl shadow-sm',
-          accent: 'text-[#b8960c]',
-          accentBg: 'bg-[#b8960c] text-white hover:bg-yellow-600',
-          border: 'border-black/10',
-          glow: '',
-          font: 'font-general',
-          chartColors: ['#B8960C', '#2563eb', '#059669', '#7c3aed', '#ea580c']
-        }
-      case 'dark':
-        return {
-          bg: 'bg-[#0B0B0B] text-[#F5F5F5]',
-          card: 'bg-[#111111] border-white/5 rounded-3xl',
-          accent: 'text-[#d4af37]',
-          accentBg: 'bg-[#d4af37] text-black hover:bg-yellow-500',
-          border: 'border-white/5',
-          glow: '',
-          font: 'font-general',
-          chartColors: ['#D4AF37', '#3b82f6', '#10b981', '#a855f7', '#fb923c']
-        }
-      case 'fabric':
-        return {
-          bg: 'bg-[#f3f2f1] text-[#323130]',
-          card: 'bg-white border-[#edebe9] shadow-sm rounded-none',
-          accent: 'text-[#0078d4]',
-          accentBg: 'bg-[#0078d4] text-white hover:bg-[#106ebe]',
-          border: 'border-[#edebe9]',
-          glow: '',
-          font: 'font-inter',
-          chartColors: ['#0078d4', '#107c41', '#a80038', '#d83b01', '#5c2d91']
-        }
-      case 'github':
-        return {
-          bg: 'bg-[#0d1117] text-[#c9d1d9]',
-          card: 'bg-[#161b22] border-[#30363d] rounded-lg',
-          accent: 'text-[#58a6ff]',
-          accentBg: 'bg-[#238636] text-white hover:bg-[#2ea44f]',
-          border: 'border-[#30363d]',
-          glow: '',
-          font: 'font-mono',
-          chartColors: ['#58a6ff', '#3fb950', '#f85149', '#db6d28', '#ab7df8']
-        }
-      case 'apple':
-        return {
-          bg: 'bg-[#f5f5f7] text-[#1d1d1f]',
-          card: 'bg-white/80 backdrop-blur-md border-[#d2d2d7] rounded-3xl shadow-[0_4px_30px_rgba(0,0,0,0.02)]',
-          accent: 'text-[#0071e3]',
-          accentBg: 'bg-[#0071e3] text-white hover:bg-[#0077ed] rounded-full',
-          border: 'border-[#d2d2d7]',
-          glow: '',
-          font: 'font-satoshi',
-          chartColors: ['#0071e3', '#34c759', '#ff3b30', '#ff9500', '#af52de']
-        }
-      case 'material':
-        return {
-          bg: 'bg-[#f7f9fc] text-[#1f1f1f]',
-          card: 'bg-[#eff4f9] border-none rounded-[28px] shadow-sm',
-          accent: 'text-[#0b57d0]',
-          accentBg: 'bg-[#0b57d0] text-white hover:bg-[#0842a0] rounded-full',
-          border: 'border-[#c4c7c5]',
-          glow: '',
-          font: 'font-general',
-          chartColors: ['#0b57d0', '#b31412', '#137333', '#e37400', '#7a28cb']
-        }
-      case 'cred':
-        return {
-          bg: 'bg-[#090909] text-[#e5e5e5]',
-          card: 'bg-[#121212] border-white/5 rounded-2xl shadow-xl',
-          accent: 'text-[#d4af37]',
-          accentBg: 'bg-[#d4af37] text-black hover:bg-yellow-500 font-extrabold',
-          border: 'border-white/5',
-          glow: 'shadow-[0_0_30px_rgba(212,175,55,0.05)] border-accent-gold/20',
-          font: 'font-clash',
-          chartColors: ['#d4af37', '#ffffff', '#888888', '#444444', '#111111']
-        }
-      case 'powerbi':
-        return {
-          bg: 'bg-[#eaeaea] text-[#333333]',
-          card: 'bg-white border-[#b8babd] rounded-md shadow-sm',
-          accent: 'text-[#f2c811]',
-          accentBg: 'bg-[#118d95] text-white hover:bg-[#0f7c83]',
-          border: 'border-[#b8babd]',
-          glow: '',
-          font: 'font-inter',
-          chartColors: ['#118d95', '#f2c811', '#e15241', '#3599b8', '#dfbf00']
-        }
-      case 'cyber':
-        return {
-          bg: 'bg-[#030303] text-[#00f0ff]',
-          card: 'bg-[#0a0a0f] border-[#ff0055]/30 rounded-xl shadow-[0_0_15px_rgba(255,0,85,0.15)]',
-          accent: 'text-[#00f0ff]',
-          accentBg: 'bg-gradient-to-tr from-[#ff0055] to-[#00f0ff] text-black font-black uppercase',
-          border: 'border-[#ff0055]/20',
-          glow: 'shadow-[0_0_20px_rgba(0,240,255,0.1)] border-[#00f0ff]/30',
-          font: 'font-mono',
-          chartColors: ['#00f0ff', '#ff0055', '#b500ff', '#ffb700', '#00ff66']
-        }
-      case 'glassmorphism':
-        return {
-          bg: 'bg-[#09090b] text-white',
-          card: 'bg-white/[0.01] border-white/5 rounded-3xl backdrop-blur-xl',
-          accent: 'text-[#d4af37]',
-          accentBg: 'bg-gradient-to-tr from-[#d4af37] to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-extrabold',
-          border: 'border-white/5',
-          glow: 'shadow-[0_0_20px_rgba(255,255,255,0.02)]',
-          font: 'font-montreal',
-          chartColors: ['#d4af37', '#3b82f6', '#10b981', '#a855f7', '#fb923c']
-        }
-      case 'nordic':
-        return {
-          bg: 'bg-[#2e3440] text-[#eceff4]',
-          card: 'bg-[#3b4252] border-[#4c566a] rounded-2xl',
-          accent: 'text-[#88c0d0]',
-          accentBg: 'bg-[#88c0d0] text-[#2e3440] hover:bg-[#81b8c8] font-bold',
-          border: 'border-[#4c566a]',
-          glow: '',
-          font: 'font-satoshi',
-          chartColors: ['#88c0d0', '#a3be8c', '#ebcb8b', '#bf616a', '#b48ead']
-        }
-      case 'notion':
-        return {
-          bg: 'bg-[#ffffff] text-[#37352f]',
-          card: 'bg-[#ffffff] border-[#e3e3e0] rounded-lg shadow-none',
-          accent: 'text-[#2eaadc]',
-          accentBg: 'bg-[#37352f] text-white hover:bg-[#4a4a42] rounded-md font-bold',
-          border: 'border-[#e3e3e0]',
-          glow: '',
-          font: 'font-inter',
-          chartColors: ['#2eaadc', '#6940a5', '#d44c47', '#cb912f', '#448361']
-        }
-      case 'stripe':
-        return {
-          bg: 'bg-[#0a2540] text-[#f6f9fc]',
-          card: 'bg-[#0f2d4a] border-[#1a3d5c] rounded-2xl shadow-lg',
-          accent: 'text-[#635bff]',
-          accentBg: 'bg-[#635bff] text-white hover:bg-[#5247e5] rounded-full font-bold',
-          border: 'border-[#1a3d5c]',
-          glow: 'shadow-[0_4px_30px_rgba(99,91,255,0.08)]',
-          font: 'font-satoshi',
-          chartColors: ['#635bff', '#00d4aa', '#ff6e4a', '#ffbb33', '#80e9ff']
-        }
-      case 'bloomberg':
-        return {
-          bg: 'bg-[#000000] text-[#ff9900]',
-          card: 'bg-[#111111] border-[#333333] rounded-none',
-          accent: 'text-[#ff9900]',
-          accentBg: 'bg-[#ff9900] text-black hover:bg-[#ffaa22] font-black uppercase',
-          border: 'border-[#333333]',
-          glow: '',
-          font: 'font-mono',
-          chartColors: ['#ff9900', '#00cc66', '#ff3333', '#3399ff', '#cc66ff']
-        }
-      default:
-        return {
-          bg: 'bg-[#09090b] text-white',
-          card: 'bg-white/[0.01] border-white/5 rounded-3xl backdrop-blur-xl',
-          accent: 'text-[#d4af37]',
-          accentBg: 'bg-gradient-to-tr from-[#d4af37] to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-extrabold',
-          border: 'border-white/5',
-          glow: 'shadow-[0_0_20px_rgba(255,255,255,0.02)]',
-          font: 'font-montreal',
-          chartColors: ['#d4af37', '#3b82f6', '#10b981', '#a855f7', '#fb923c']
-        }
+    if (theme === 'light') {
+      return {
+        bg: 'bg-[#f8fafc] text-slate-900',
+        card: 'bg-white border-slate-200/80 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.06)] hover:border-slate-300/80 transition-all duration-300',
+        accent: 'text-[#b5942b]',
+        accentBg: 'bg-accent-gold text-black hover:bg-[#b5942b] font-bold rounded-xl transition-all',
+        border: 'border-slate-200/80',
+        glow: 'shadow-[0_4px_20px_rgba(0,0,0,0.02)]',
+        font: 'font-inter',
+        chartColors: ['#d4af37', '#3b82f6', '#10b981', '#a855f7', '#fb923c']
+      }
+    } else {
+      return {
+        bg: 'bg-[#070a13] text-[#f8fafc]',
+        card: 'bg-[#0e1322]/60 border-white/[0.04] backdrop-blur-md rounded-2xl shadow-[0_4px_30px_rgba(0,0,0,0.2)] hover:border-white/[0.08] hover:shadow-[0_8px_40px_rgba(212,175,55,0.02)] transition-all duration-300',
+        accent: 'text-accent-gold',
+        accentBg: 'bg-accent-gold text-black hover:bg-[#b5942b] font-bold rounded-xl transition-all',
+        border: 'border-white/[0.04]',
+        glow: 'shadow-[0_0_50px_rgba(212,175,55,0.02)]',
+        font: 'font-inter',
+        chartColors: ['#d4af37', '#3b82f6', '#10b981', '#a855f7', '#fb923c']
+      }
     }
   }
 
@@ -664,22 +562,22 @@ const ReportPreviewDashboardContent: React.FC = () => {
   // ── Confetti Particle system on health score > 90% ──
   const [confetti, setConfetti] = useState<any[]>([])
   useEffect(() => {
-    if (passRate >= 90 || qualityStats.score >= 90) {
-      const colors = ['#d4af37', '#3b82f6', '#10b981', '#a855f7', '#fb923c']
-      const particles = Array.from({ length: 120 }, () => ({
+    if (qualityStats.score >= 90) {
+      const colors = ['#d4af37', '#facc15', '#fef08a']
+      const particles = Array.from({ length: 100 }, () => ({
         x: Math.random() * window.innerWidth,
         y: Math.random() * -100 - 20,
-        vx: Math.random() * 4 - 2,
-        vy: Math.random() * 5 + 4,
+        vx: Math.random() * 3 - 1.5,
+        vy: Math.random() * 4 + 3,
         color: colors[Math.floor(Math.random() * colors.length)],
-        size: Math.random() * 8 + 5,
+        size: Math.random() * 3 + 2,
         rotation: Math.random() * 360,
-        rotationSpeed: Math.random() * 4 - 2
+        rotationSpeed: Math.random() * 2 - 1
       }))
       setConfetti(particles)
       toast({ title: 'Quality Goal Achieved! 🏆', description: 'QA Health score has exceeded 90% this week.' })
     }
-  }, [passRate, qualityStats.score])
+  }, [qualityStats.score])
 
   useEffect(() => {
     if (confetti.length === 0) return
@@ -704,8 +602,12 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
   // ── Mount: fetch remote reports ──
   useEffect(() => {
-    fetchReports()
-  }, [])
+    if (data?.projectId) {
+      fetchReports(data.projectId)
+    } else {
+      fetchReports()
+    }
+  }, [data?.projectId])
 
   // ── Canvas Particle System ──
   useEffect(() => {
@@ -936,9 +838,6 @@ Do not return markdown wraps, only raw JSON text.
   const timelineData = data.customTimeline && data.customTimeline.length > 0
     ? data.customTimeline
     : activeHistory.slice(-5).map((h, i, arr) => {
-        const currPassCount = h.form.releaseItems.filter((item: any) => item?.status === 'Pass').length
-        const currPassRate = h.form.releaseItems.length ? Math.round((currPassCount / h.form.releaseItems.length) * 100) : 0
-
         let emailChange = '➜'
         if (i > 0) {
           const prev = arr[i - 1].form.supportEmails
@@ -955,7 +854,7 @@ Do not return markdown wraps, only raw JSON text.
           fixes: h.form.codeFixes,
           openDefects: h.form.defectsLastWeek.open,
           closedDefects: h.form.defectsLastWeek.closed,
-          healthScore: currPassRate,
+          healthScore: calculateQAScore(h.form).score,
           emailChange,
           rawForm: h.form
         }
@@ -966,7 +865,6 @@ Do not return markdown wraps, only raw JSON text.
     const passCount = h.form.releaseItems.filter((i: any) => i?.status === 'Pass').length
     const failCount = h.form.releaseItems.filter((i: any) => i?.status === 'Fail').length
     const blockedCount = h.form.releaseItems.filter((i: any) => i?.status === 'Blocked').length
-    const passRate = h.form.releaseItems.length ? Math.round((passCount / h.form.releaseItems.length) * 100) : 0
 
     return {
       name: h.week?.split('–')[0]?.trim() || h.form.weekStart,
@@ -975,8 +873,9 @@ Do not return markdown wraps, only raw JSON text.
       fixes: h.form.codeFixes,
       reportedDefects: h.form.defectsLastWeek.reported,
       closedDefects: h.form.defectsLastWeek.closed,
-      healthScore: passRate,
-      codeFixProd: h.form.lastWeek.codeFix,
+      healthScore: calculateQAScore(h.form).score,
+      escapedIssueProd: h.form.lastWeek.escapedIssue ?? (h.form.lastWeek as any).codeFix,
+      supportFixProd: h.form.lastWeek.supportFix || 0,
       supportProd: h.form.lastWeek.support,
       changeRequestProd: h.form.lastWeek.changeRequest,
       dataIssueProd: h.form.lastWeek.dataIssue,
@@ -990,11 +889,12 @@ Do not return markdown wraps, only raw JSON text.
 
   // ── Table Adapters ──
   const prodIssuesData = [
-    { category: 'Code Fix', lastWeek: data.lastWeek.codeFix, mtd: data.monthToDate.codeFix },
-    { category: 'Support Exception', lastWeek: data.lastWeek.support, mtd: data.monthToDate.support },
+    { category: 'Escaped Issue', lastWeek: data.lastWeek.escapedIssue ?? (data.lastWeek as any).codeFix, mtd: data.monthToDate.escapedIssue ?? (data.monthToDate as any).codeFix },
+    { category: 'Support Fix', lastWeek: data.lastWeek.supportFix || 0, mtd: data.monthToDate.supportFix || 0 },
     { category: 'Change Request', lastWeek: data.lastWeek.changeRequest, mtd: data.monthToDate.changeRequest },
     { category: 'Data Issue', lastWeek: data.lastWeek.dataIssue, mtd: data.monthToDate.dataIssue },
-    { category: 'Backend Update', lastWeek: data.lastWeek.backendUpdation, mtd: data.monthToDate.backendUpdation }
+    { category: 'Backend Update', lastWeek: data.lastWeek.backendUpdation, mtd: data.monthToDate.backendUpdation },
+    ...(data.monthToDate.completedCR ? [{ category: 'Completed CR', lastWeek: 0, mtd: data.monthToDate.completedCR }] : [])
   ]
 
   const workDistributionData = [
@@ -1366,40 +1266,64 @@ Do not return markdown wraps, only raw JSON text.
         />
       ))}
 
-      <style dangerouslySetInnerHTML={{ __html: customStyles }} />
+      <style dangerouslySetInnerHTML={{ __html: getCustomStyles(theme) }} />
 
       {/* ── Canvas Animated Particles ── */}
       <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none print:hidden" />
 
       {/* ── Background Glow Blobs ── */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden print:hidden">
-        <motion.div
-          animate={{
-            x: [0, 30, -20, 10, 0],
-            y: [0, -40, 20, -10, 0],
-            scale: [1, 1.1, 0.95, 1.05, 1]
-          }}
-          transition={{
-            duration: 25,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-          className={`absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full blur-[160px] opacity-[0.15] ${theme === 'dark' ? 'bg-accent-gold' : 'bg-yellow-400'}`}
-        />
-        <motion.div
-          animate={{
-            x: [0, -30, 25, -15, 0],
-            y: [0, 35, -15, 20, 0],
-            scale: [1, 1.05, 0.98, 1.1, 1]
-          }}
-          transition={{
-            duration: 30,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-          className={`absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full blur-[150px] opacity-[0.12] ${theme === 'dark' ? 'bg-blue-600' : 'bg-blue-400'}`}
-        />
-      </div>
+      {/* ── Background Glow Blobs ── */}
+      {enableParticles && (
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden print:hidden">
+          {/* Blob 1: Golden Aura Leakage (Top Center-Right) */}
+          <motion.div
+            animate={{
+              x: [0, 50, -30, 20, 0],
+              y: [0, -60, 40, -20, 0],
+              scale: [1, 1.15, 0.9, 1.08, 1],
+              rotate: [0, 45, 90, 45, 0]
+            }}
+            transition={{
+              duration: 22,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className={`absolute top-[-20%] left-[25%] w-[650px] h-[650px] rounded-full blur-[140px] opacity-[0.24] ${theme === 'dark' ? 'bg-gradient-to-br from-[#d4af37]/35 to-[#facc15]/5' : 'bg-gradient-to-br from-yellow-400/30 to-amber-300/5'}`}
+          />
+
+          {/* Blob 2: Cobalt/Blue Aura Leakage (Bottom Right) */}
+          <motion.div
+            animate={{
+              x: [0, -45, 30, -25, 0],
+              y: [0, 50, -35, 30, 0],
+              scale: [1, 1.08, 0.92, 1.12, 1],
+              rotate: [0, -30, -60, -30, 0]
+            }}
+            transition={{
+              duration: 26,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className={`absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full blur-[150px] opacity-[0.2] ${theme === 'dark' ? 'bg-gradient-to-tr from-blue-600/28 to-indigo-500/5' : 'bg-gradient-to-tr from-blue-400/25 to-sky-300/5'}`}
+          />
+
+          {/* Blob 3: Indigo/Purple Aura Leakage (Middle Left) */}
+          <motion.div
+            animate={{
+              x: [0, 35, -25, 15, 0],
+              y: [0, 35, -40, 20, 0],
+              scale: [1, 1.12, 0.95, 1.06, 1],
+              rotate: [0, 60, -30, 0]
+            }}
+            transition={{
+              duration: 32,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className={`absolute top-[35%] left-[-15%] w-[500px] h-[500px] rounded-full blur-[130px] opacity-[0.18] ${theme === 'dark' ? 'bg-gradient-to-tr from-purple-600/25 to-pink-500/5' : 'bg-gradient-to-tr from-purple-400/20 to-fuchsia-300/5'}`}
+          />
+        </div>
+      )}
 
       {/* ── Sticky Top Navigation — Premium Glassmorphic Bar ── */}
       {!isPresentation && (
@@ -1485,47 +1409,6 @@ Do not return markdown wraps, only raw JSON text.
                   <span className="hidden 2xl:inline">{enableParticles ? 'Motion' : 'Static'}</span>
                 </button>
 
-                {/* Theme Gallery Selection Dropdown */}
-                <div
-                  className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all"
-                  style={{
-                    backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-                    borderColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-                  }}
-                >
-                  <Palette className="w-3 h-3 text-accent-gold" />
-                  <select
-                    value={themeGallery}
-                    onChange={e => {
-                      const t = e.target.value as ReportThemeId
-                      setReportTheme(t)
-                      localStorage.setItem('report-preview-theme', t)
-                    }}
-                    className={`bg-transparent text-[11px] border-none focus:outline-none font-bold cursor-pointer max-w-[100px] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
-                  >
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="dark">Dark</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="light">Light</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="glassmorphism">Glassmorphism</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="fabric">Fabric</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="github">GitHub</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="apple">Apple</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="material">Material 3</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="cred">CRED Black</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="powerbi">Power BI</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="cyber">Cyberpunk</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="nordic">Nordic</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="notion">Notion</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="stripe">Stripe</option>
-                    <option className={theme === 'dark' ? 'bg-[#111111] text-white' : 'bg-white text-slate-800'} value="bloomberg">Bloomberg</option>
-                  </select>
-                </div>
-
-                <button
-                  onClick={() => setReportTheme(theme === 'dark' ? 'light' : 'dark')}
-                  className={`p-2 rounded-xl border transition-all ${theme === 'dark' ? 'bg-white/[0.04] border-white/[0.06] text-yellow-400 hover:bg-white/[0.08]' : 'bg-white border-black/[0.06] text-purple-600 hover:bg-slate-50 shadow-sm'}`}
-                >
-                  {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-                </button>
 
                 <button
                   onClick={togglePresentation}
@@ -1785,7 +1668,7 @@ Do not return markdown wraps, only raw JSON text.
               { label: 'Team Size', val: data.newFeatureTeam.length + data.supportTeam.length + data.automationTeam.length, icon: Users, color: 'text-teal-400', desc: 'Active verification specialists', sparklineData: getHistoricalValues(f => f.newFeatureTeam.length + f.supportTeam.length + f.automationTeam.length), isInternal: true },
               { label: 'Backend Updates', val: data.lastWeek.backendUpdation, icon: History, color: 'text-pink-400', desc: 'Hotfixes & schema mods', sparklineData: getHistoricalValues(f => f.lastWeek.backendUpdation), isInternal: true },
               { label: 'Change Requests', val: data.lastWeek.changeRequest, icon: LayoutGrid, color: 'text-indigo-400', desc: 'Scope amendments verified', sparklineData: getHistoricalValues(f => f.lastWeek.changeRequest) },
-              { label: 'QA Health Score', val: passRate, suffix: '%', icon: Star, color: 'text-amber-400', desc: 'Release verification score', sparklineData: getHistoricalValues(f => { const p = f.releaseItems.filter((i: any) => i?.status === 'Pass').length; return f.releaseItems.length ? Math.round((p / f.releaseItems.length) * 100) : 0 }) }
+              { label: 'QA Health Score', val: qualityStats.score, suffix: '%', icon: Star, color: 'text-amber-400', desc: 'Executive QA Quality Score index', sparklineData: getHistoricalValues(f => calculateQAScore(f).score) }
             ].filter(kpi => !clientMode || !kpi.isInternal).map((kpi, idx) => (
               <motion.div
                 key={kpi.label}
@@ -1867,9 +1750,9 @@ Do not return markdown wraps, only raw JSON text.
               </div>
               <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden border border-white/5 relative">
                 <motion.div
-                  initial={{ width: 0 }}
+                  initial={{ width: hasPlayed ? `${sprintHealthScore}%` : 0 }}
                   animate={{ width: `${sprintHealthScore}%` }}
-                  transition={{ duration: 1.2, ease: 'easeOut' }}
+                  transition={{ duration: hasPlayed ? 0 : 1.2, ease: 'easeOut' }}
                   onAnimationComplete={() => setIsHealthBarFilled(true)}
                   className={`h-full rounded-full relative overflow-hidden ${sprintHealthScore >= 90 ? 'bg-gradient-to-r from-green-500 to-emerald-400' :
                     sprintHealthScore >= 70 ? 'bg-gradient-to-r from-amber-500 to-yellow-400' :
@@ -2014,7 +1897,7 @@ Do not return markdown wraps, only raw JSON text.
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: idx * 0.04, duration: 0.3 }}
-                    className={`border-b text-xs transition-colors hover:bg-white/[0.02] ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'}`}
+                    className={`border-b text-xs transition-colors hover:bg-white/[0.03] ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'} ${idx % 2 === 0 ? '' : theme === 'dark' ? 'bg-white/[0.015]' : 'bg-slate-50/50'}`}
                   >
                     <td className="py-3.5 px-5 font-mono font-bold text-accent-gold">{item.taskId}</td>
                     <td className={`py-3.5 px-5 font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{item.featureName}</td>
@@ -2071,7 +1954,7 @@ Do not return markdown wraps, only raw JSON text.
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: idx * 0.04, duration: 0.3 }}
-                    className={`border-b text-xs transition-colors hover:bg-white/[0.02] ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'}`}
+                    className={`border-b text-xs transition-colors hover:bg-white/[0.03] ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'} ${idx % 2 === 0 ? '' : theme === 'dark' ? 'bg-white/[0.015]' : 'bg-slate-50/50'}`}
                   >
                     <td className="py-3.5 px-5 font-mono font-bold text-blue-400">{ticket.taskId}</td>
                     <td className={`py-3.5 px-5 font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{ticket.description}</td>
@@ -2135,7 +2018,12 @@ Do not return markdown wraps, only raw JSON text.
                     <span className="font-bold text-green-400">{d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%</span>
                   </div>
                   <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-green-400 rounded-full" style={{ width: `${d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%` }} />
+                    <motion.div
+                      initial={{ width: hasPlayed ? `${d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%` : 0 }}
+                      animate={{ width: `${d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%` }}
+                      transition={{ duration: hasPlayed ? 0 : 0.8, ease: 'easeOut' }}
+                      className="h-full bg-green-400 rounded-full"
+                    />
                   </div>
                 </div>
               </div>
@@ -2143,69 +2031,6 @@ Do not return markdown wraps, only raw JSON text.
           </div>
         </motion.section>
 
-        {/* ════════════════════════════════════════════════════════════
-            WEEKLY CHARTS & DISTRIBUTION
-        ════════════════════════════════════════════════════════════ */}
-
-        {/* ── SECTION 7: WEEKLY CHARTS ── */}
-        <motion.section
-          variants={sectionVariants}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, margin: "-80px" }}
-          ref={sectionsRef.charts}
-          className="flex flex-col gap-5"
-        >
-          <div className="flex items-center gap-2">
-            <LayoutGrid className="w-5 h-5 text-accent-gold" />
-            <h2 className="text-2xl font-extrabold font-clash">Weekly Charts & Distribution</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
-              <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Work Distribution</span>
-              <div className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={workDistributionData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} paddingAngle={4} dataKey="value">
-                      {workDistributionData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.hex} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', fontSize: 11 }} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
-              <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Production Issue Categories</span>
-              <div className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={prodIssuesData} margin={{ top: 8, right: 8, left: -25, bottom: 0 }}>
-                    <XAxis dataKey="category" stroke={chartText} fontSize={9} />
-                    <YAxis stroke={chartText} fontSize={9} />
-                    <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', fontSize: 11 }} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="lastWeek" name="Last Week" fill="#d4af37" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="mtd" name="MTD" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
-              <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Defect Status Breakdown</span>
-              <div className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={defectStatusData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value">
-                      {defectStatusData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.hex} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', fontSize: 11 }} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </motion.section>
 
         {/* ════════════════════════════════════════════════════════════
             AI INSIGHTS
@@ -2618,10 +2443,10 @@ Do not return markdown wraps, only raw JSON text.
                 <div className="relative pl-6 flex flex-col gap-8 ml-2 pt-2">
                   {/* Dynamic drawing connecting line */}
                   <motion.div
-                    initial={{ height: 0 }}
+                    initial={{ height: hasPlayed ? '100%' : 0 }}
                     whileInView={{ height: '100%' }}
                     viewport={{ once: true }}
-                    transition={{ duration: 1.2, ease: 'easeOut' }}
+                    transition={{ duration: hasPlayed ? 0 : 1.2, ease: 'easeOut' }}
                     className={`absolute left-0 top-4 w-[1px] ${theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'} origin-top`}
                   />
                   {filteredTimeline.map((week, idx) => {
@@ -2629,10 +2454,10 @@ Do not return markdown wraps, only raw JSON text.
                     return (
                       <div key={week.id} className="flex flex-col gap-3">
                         <motion.div
-                          initial={{ opacity: 0, x: -20 }}
+                          initial={{ opacity: hasPlayed ? 1 : 0, x: hasPlayed ? 0 : -20 }}
                           whileInView={{ opacity: 1, x: 0 }}
                           viewport={{ once: true }}
-                          transition={{ delay: idx * 0.08, duration: 0.5, ease: 'easeOut' }}
+                          transition={{ delay: hasPlayed ? 0 : idx * 0.08, duration: hasPlayed ? 0 : 0.5, ease: 'easeOut' }}
                           onClick={() => {
                             setExpandedTimelineWeeks(prev => ({ ...prev, [week.id]: !prev[week.id] }))
                           }}
@@ -2641,6 +2466,8 @@ Do not return markdown wraps, only raw JSON text.
                           {/* Timeline node marker */}
                           <motion.div
                             whileHover={{ scale: 1.3 }}
+                            animate={hasPlayed ? {} : { scale: [1, 1.4, 1] }}
+                            transition={{ duration: 0.6, ease: 'easeOut', delay: 0.8 }}
                             className={`absolute left-[-31px] top-6 z-10 w-3.5 h-3.5 rounded-full border-2 transition-transform duration-300 group-hover:scale-125 ${week.healthScore >= 90 ? 'bg-green-400 border-green-500/20' : week.healthScore >= 70 ? 'bg-yellow-400 border-yellow-500/20' : 'bg-red-400 border-red-500/20'}`}
                           />
 
@@ -2754,9 +2581,9 @@ Do not return markdown wraps, only raw JSON text.
                       <YAxis stroke={chartText} fontSize={9} />
                       <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Line type="monotone" dataKey="emails" name="Support Emails" stroke="#3b82f6" strokeWidth={2} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
-                      <Line type="monotone" dataKey="features" name="Features Tested" stroke="#facc15" strokeWidth={2} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
-                      <Line type="monotone" dataKey="fixes" name="Code Fixes" stroke="#a855f7" strokeWidth={2} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Line type="monotone" dataKey="emails" name="Support Emails" stroke="#3b82f6" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      <Line type="monotone" dataKey="features" name="Features Tested" stroke="#facc15" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      <Line type="monotone" dataKey="fixes" name="Code Fixes" stroke="#a855f7" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -2788,8 +2615,8 @@ Do not return markdown wraps, only raw JSON text.
                       <YAxis stroke={chartText} fontSize={9} />
                       <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Area type="monotone" dataKey="reportedDefects" name="Reported Defects" stroke="#f87171" fill="url(#reportedGrad)" strokeWidth={2} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
-                      <Area type="monotone" dataKey="closedDefects" name="Closed Defects" stroke="#10b981" fill="url(#closedGrad)" strokeWidth={2} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Area type="monotone" dataKey="reportedDefects" name="Reported Defects" stroke="#f87171" fill="url(#reportedGrad)" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      <Area type="monotone" dataKey="closedDefects" name="Closed Defects" stroke="#10b981" fill="url(#closedGrad)" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -2811,11 +2638,11 @@ Do not return markdown wraps, only raw JSON text.
                       <YAxis stroke={chartText} fontSize={9} />
                       <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Area type="monotone" dataKey="codeFixProd" stackId="1" name="Code Fix" stroke="#d4af37" fill="#d4af37" fillOpacity={0.4} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
-                      <Area type="monotone" dataKey="supportProd" stackId="1" name="Support" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.4} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
-                      <Area type="monotone" dataKey="changeRequestProd" stackId="1" name="Change Req" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
-                      <Area type="monotone" dataKey="dataIssueProd" stackId="1" name="Data Issue" stroke="#f87171" fill="#f87171" fillOpacity={0.4} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
-                      <Area type="monotone" dataKey="backendUpdationProd" stackId="1" name="Backend Update" stroke="#10b981" fill="#10b981" fillOpacity={0.4} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Area type="monotone" dataKey="escapedIssueProd" stackId="1" name="Escaped Issue" stroke="#d4af37" fill="#d4af37" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      <Area type="monotone" dataKey="supportFixProd" stackId="1" name="Support Fix" stroke="#eab308" fill="#eab308" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      <Area type="monotone" dataKey="changeRequestProd" stackId="1" name="Change Req" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      <Area type="monotone" dataKey="dataIssueProd" stackId="1" name="Data Issue" stroke="#f87171" fill="#f87171" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      <Area type="monotone" dataKey="backendUpdationProd" stackId="1" name="Backend Update" stroke="#10b981" fill="#10b981" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -2837,7 +2664,7 @@ Do not return markdown wraps, only raw JSON text.
                       <YAxis stroke={chartText} fontSize={9} />
                       <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Line type="monotone" dataKey="emails" name="Support tickets" stroke="#06b6d4" strokeWidth={2.5} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Line type="monotone" dataKey="emails" name="Support tickets" stroke="#06b6d4" strokeWidth={2.5} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -2859,8 +2686,8 @@ Do not return markdown wraps, only raw JSON text.
                       <YAxis stroke={chartText} fontSize={9} />
                       <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="teamSize" name="Allocated Engineers" fill="rgba(212,175,55,0.2)" radius={[4, 4, 0, 0]} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
-                      <Line type="monotone" dataKey="healthScore" name="QA Health Score %" stroke="#10b981" strokeWidth={2.5} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Bar dataKey="teamSize" name="Allocated Engineers" fill="rgba(212,175,55,0.2)" radius={[4, 4, 0, 0]} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      <Line type="monotone" dataKey="healthScore" name="QA Health Score %" stroke="#10b981" strokeWidth={2.5} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -2882,9 +2709,9 @@ Do not return markdown wraps, only raw JSON text.
                       <YAxis stroke={chartText} fontSize={9} />
                       <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="passFeatures" name="Passed" stackId="a" fill="#10b981" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
-                      <Bar dataKey="failFeatures" name="Failed" stackId="a" fill="#f87171" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
-                      <Bar dataKey="blockedFeatures" name="Blocked" stackId="a" fill="#fb923c" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                      <Bar dataKey="passFeatures" name="Passed" stackId="a" fill="#10b981" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      <Bar dataKey="failFeatures" name="Failed" stackId="a" fill="#f87171" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      <Bar dataKey="blockedFeatures" name="Blocked" stackId="a" fill="#fb923c" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -2916,7 +2743,7 @@ Do not return markdown wraps, only raw JSON text.
               <div className="h-64 flex justify-center items-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={workDistributionData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={4} dataKey="value" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out">
+                    <Pie data={workDistributionData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={4} dataKey="value" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out">
                       {workDistributionData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.hex} />
                       ))}
@@ -2944,8 +2771,8 @@ Do not return markdown wraps, only raw JSON text.
                     <YAxis stroke={chartText} fontSize={9} />
                     <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="lastWeek" name="Last Week" fill="#d4af37" radius={[4, 4, 0, 0]} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
-                    <Bar dataKey="mtd" name="MTD" fill="#3b82f6" radius={[4, 4, 0, 0]} isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
+                    <Bar dataKey="lastWeek" name="Last Week" fill="#d4af37" radius={[4, 4, 0, 0]} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                    <Bar dataKey="mtd" name="MTD" fill="#3b82f6" radius={[4, 4, 0, 0]} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -2963,7 +2790,7 @@ Do not return markdown wraps, only raw JSON text.
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={defectStatusData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} dataKey="value" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out">
+                    <Pie data={defectStatusData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} dataKey="value" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out">
                       {defectStatusData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.hex} />
                       ))}

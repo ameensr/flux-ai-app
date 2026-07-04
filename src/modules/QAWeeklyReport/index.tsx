@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { usePermissions } from '@/hooks/usePermissions'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
 import { FloatingButton } from '@/components/ui/FloatingButton'
@@ -12,16 +14,17 @@ import { DefectAnalysis, HistoricalProgress, NextPriorities } from './components
 import { ReportPreview } from './components/ReportPreview'
 import { DashboardWidgets, DefectChart, ReportHistory } from './components/Widgets'
 import { toast } from '@/hooks/use-toast'
-import { FileText, RefreshCw, RotateCcw, AlertCircle, Plus, Trash, History as HistoryIcon } from 'lucide-react'
+import { FileText, RefreshCw, RotateCcw, AlertCircle, Plus, Trash, History as HistoryIcon, Settings } from 'lucide-react'
 import type { QAReportForm, TimelineNode } from './types'
 import { ROUTES } from '@/lib/routes'
+import { calculateQAScore } from './utils/qualityCalculator'
 
 function buildMarkdown(f: QAReportForm): string {
   const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
   const na = 'No updates available for this week.'
 
-  const lwTotal = f.lastWeek.codeFix + f.lastWeek.support + f.lastWeek.changeRequest + f.lastWeek.dataIssue + f.lastWeek.backendUpdation
-  const mtdTotal = f.monthToDate.codeFix + f.monthToDate.support + f.monthToDate.changeRequest + (f.monthToDate.completedCR ?? 0) + f.monthToDate.dataIssue + f.monthToDate.backendUpdation
+  const lwTotal = f.lastWeek.support
+  const mtdTotal = f.monthToDate.support
 
   const passCount = f.releaseItems.filter(i => i.status === 'Pass').length
   const passRate = f.releaseItems.length ? Math.round((passCount / f.releaseItems.length) * 100) : 0
@@ -29,7 +32,8 @@ function buildMarkdown(f: QAReportForm): string {
   const lines: string[] = []
 
   // Title
-  lines.push(`# ${f.reportTitle || 'Weekly QA Status Report'}`)
+  const cleanTitle = (f.reportTitle || '').replace(/Weekly QA Status Report/i, 'Weekly QA Status Report').trim()
+  lines.push(`# ${cleanTitle || 'Weekly QA Status Report'}`)
   lines.push(`**Project:** ${f.projectName || '—'}  |  **Period:** ${fmt(f.weekStart)} – ${fmt(f.weekEnd)}`)
   if (f.subtitle) lines.push(`\n> ${f.subtitle}`)
   lines.push('\n---')
@@ -40,6 +44,7 @@ function buildMarkdown(f: QAReportForm): string {
   lines.push(`- Support Emails handled: **${f.supportEmails}**`)
   lines.push(`- New Features tested: **${f.newFeatures}**`)
   lines.push(`- Code Fixes tested: **${f.codeFixes}**`)
+  lines.push(`- QA Quality Score: **${calculateQAScore(f).score}% (${calculateQAScore(f).label})**`)
   if (f.releaseItems.length) lines.push(`- Release test pass rate: **${passRate}%** (${passCount}/${f.releaseItems.length} items passed)`)
 
   // KPI Summary
@@ -49,29 +54,30 @@ function buildMarkdown(f: QAReportForm): string {
   lines.push(`| Support Emails | **${f.supportEmails}** |`)
   lines.push(`| New Features | **${f.newFeatures}** |`)
   lines.push(`| Code Fixes Testing | **${f.codeFixes}** |`)
+  lines.push(`| QA Quality Score | **${calculateQAScore(f).score}% (${calculateQAScore(f).label})** |`)
 
   // Production Issues
   lines.push('\n## Production Issue Analysis')
   lines.push('\n### Last Week')
   lines.push('| Category | Count |')
   lines.push('|---|---|')
-  lines.push(`| Code Fix | ${f.lastWeek.codeFix} |`)
-  lines.push(`| Support | ${f.lastWeek.support} |`)
+  lines.push(`| Escaped Issue | ${f.lastWeek.escapedIssue} |`)
+  lines.push(`| Support Fix | ${f.lastWeek.supportFix} |`)
   lines.push(`| Change Request | ${f.lastWeek.changeRequest} |`)
   lines.push(`| Data Issue | ${f.lastWeek.dataIssue} |`)
   lines.push(`| Backend Updation | ${f.lastWeek.backendUpdation} |`)
-  lines.push(`| **Total** | **${lwTotal}** |`)
+  lines.push(`| **Total (Support Mails)** | **${lwTotal}** |`)
 
   lines.push('\n### Month To Date')
   lines.push('| Category | Count |')
   lines.push('|---|---|')
-  lines.push(`| Code Fix | ${f.monthToDate.codeFix} |`)
-  lines.push(`| Support | ${f.monthToDate.support} |`)
+  lines.push(`| Escaped Issue | ${f.monthToDate.escapedIssue} |`)
+  lines.push(`| Support Fix | ${f.monthToDate.supportFix} |`)
   lines.push(`| Change Request | ${f.monthToDate.changeRequest} |`)
   lines.push(`| Completed CR | ${f.monthToDate.completedCR ?? 0} |`)
   lines.push(`| Data Issue | ${f.monthToDate.dataIssue} |`)
   lines.push(`| Backend Updation | ${f.monthToDate.backendUpdation} |`)
-  lines.push(`| **Total** | **${mtdTotal}** |`)
+  lines.push(`| **Total (Support Mails)** | **${mtdTotal}** |`)
 
   // Team Allocation
   lines.push('\n## Team Resource Allocation')
@@ -142,7 +148,7 @@ function buildMarkdown(f: QAReportForm): string {
 
 function validate(form: QAReportForm): string[] {
   const errors: string[] = []
-  if (!form.projectName.trim()) errors.push('Project Name is required')
+  if (!form.projectId) errors.push('Please select a Project')
   if (!form.weekStart) errors.push('Week Start date is required')
   if (!form.weekEnd) errors.push('Week End date is required')
   if (form.weekStart && form.weekEnd && form.weekStart > form.weekEnd) errors.push('Week Start must be before Week End')
@@ -213,7 +219,7 @@ function TimelineBuilder() {
 
   const handleAutoPopulate = () => {
     const activeHistory = savedReports
-      .filter(r => r.project === form.projectName && r.status === 'Final')
+      .filter(r => r.projectId === form.projectId && r.status === 'Final')
       .sort((a, b) => new Date(a.generatedDate).getTime() - new Date(b.generatedDate).getTime())
       .slice(-5)
 
@@ -371,11 +377,30 @@ function TimelineBuilder() {
 }
 
 export const QAWeeklyReport: React.FC = () => {
-  const { form, setGeneratedReport, generatedReport, resetForm, fetchReports } = useQAReportStore()
+  const { form, setForm, setGeneratedReport, generatedReport, resetForm, fetchReports, fetchProjects } = useQAReportStore()
+  const { can } = usePermissions()
+  const navigate = useNavigate()
+  const isAuthorizedToConfig = can('qa-report', 'can_manage')
   const [errors, setErrors] = useState<string[]>([])
+  const [isLaunching, setIsLaunching] = useState(false)
+  const [launchMessage, setLaunchMessage] = useState('')
 
   React.useEffect(() => {
-    fetchReports()
+    fetchProjects(true).then(() => {
+      const activeProjects = useQAReportStore.getState().projects
+      const savedId = localStorage.getItem('last-selected-project-id')
+      const matched = activeProjects.find(p => p.id === savedId)
+
+      if (matched) {
+        setForm({ projectId: matched.id, projectName: matched.projectName })
+        fetchReports(matched.id)
+      } else if (activeProjects.length > 0) {
+        setForm({ projectId: activeProjects[0].id, projectName: activeProjects[0].projectName })
+        fetchReports(activeProjects[0].id)
+      } else {
+        fetchReports()
+      }
+    })
   }, [])
 
   const handleGenerate = () => {
@@ -387,27 +412,91 @@ export const QAWeeklyReport: React.FC = () => {
     localStorage.setItem('current-qa-report-data', JSON.stringify(form))
     setGeneratedReport(buildMarkdown(form))
 
-    // Open in a new tab
-    const url = `${window.location.origin}${ROUTES.reportPreview}`
-    window.open(url, '_blank', 'noopener')
-    toast({ title: 'Dashboard Launched!', description: 'Opening the Executive Dashboard in a new tab.' })
+    // Start premium animation experience
+    setIsLaunching(true)
+    setLaunchMessage('Preparing Executive Dashboard...')
+
+    // Switch message halfway
+    setTimeout(() => {
+      setLaunchMessage('Loading KPIs, Analytics & Historical Insights...')
+    }, 450)
+
+    // Complete transition and open new tab
+    setTimeout(() => {
+      const url = `${window.location.origin}${ROUTES.reportPreview}`
+      window.open(url, '_blank', 'noopener')
+      setIsLaunching(false)
+      toast({ title: 'Dashboard Launched!', description: 'Opening the Executive Dashboard in a new tab.' })
+    }, 900)
   }
 
   const handleReset = () => {
     if (!confirm('Reset all form data?')) return
-    resetForm()
+    resetForm(form.projectId, form.projectName)
     setErrors([])
     localStorage.removeItem('current-qa-report-data')
-    toast({ title: 'Form Reset', description: 'All fields have been cleared.' })
+    toast({ title: 'Form Reset', description: 'All fields have been cleared (project preserved).' })
   }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-6 sm:py-10">
-      <CinematicHeading
-        title="QA Weekly Report"
-        subtitle="Fill in the weekly QA data and generate a professional executive-level report instantly."
-        align="left"
-      />
+      <div className="flex items-center justify-between flex-wrap gap-4 mb-8 sm:mb-12">
+        <div className="flex-1 min-w-0">
+          <CinematicHeading
+            title="QA Weekly Report"
+            subtitle="Fill in the weekly QA data and generate a professional executive-level report instantly."
+            align="left"
+            className="mb-0 sm:mb-0"
+          />
+        </div>
+        <div className="flex items-center gap-2 text-xs shrink-0 self-start sm:self-center mt-2 sm:mt-0">
+          {/* New Report Button */}
+          <button
+            onClick={() => {
+              const isFormEmpty = 
+                !form.weekStart && 
+                !form.weekEnd && 
+                !form.subtitle && 
+                form.supportEmails === 0 && 
+                form.newFeatures === 0 && 
+                form.codeFixes === 0 && 
+                form.releaseItems.length === 0 && 
+                form.supportTickets.length === 0 && 
+                form.defectsLastWeek.reported === 0 && 
+                form.defectsLastWeek.open === 0 && 
+                form.defectsLastWeek.closed === 0
+
+              const executeReset = () => {
+                resetForm(form.projectId, form.projectName)
+                setErrors([])
+                localStorage.removeItem('current-qa-report-data')
+                toast({ title: 'New Report Initialized', description: 'Form fields have been reset, project preserved.' })
+              }
+
+              if (isFormEmpty) {
+                executeReset()
+              } else if (confirm('Create a new report? This will clear current fields.')) {
+                executeReset()
+              }
+            }}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-hover border border-border text-text-secondary hover:text-text-primary transition-all font-black uppercase tracking-wider"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New Report
+          </button>
+
+          {/* Configuration Button */}
+          {isAuthorizedToConfig && (
+            <button
+              onClick={() => navigate(ROUTES.qaReportConfig)}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-accent-gold text-black hover:opacity-90 transition-all font-black uppercase tracking-wider"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              Configuration
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_480px] gap-6 xl:gap-8 items-start">
         {/* ── Left Panel: Input Forms ────────────────────────────────────── */}
@@ -444,8 +533,15 @@ export const QAWeeklyReport: React.FC = () => {
 
           {/* Sticky action bar */}
           <div className="sticky bottom-4 z-20 flex items-center gap-3 p-4 rounded-3xl glass-panel border border-white/10 shadow-2xl">
-            <FloatingButton onClick={handleGenerate} className="flex-1">
-              <FileText className="w-4 h-4 mr-2" /> Launch Executive Dashboard
+            <FloatingButton onClick={handleGenerate} className="flex-1" disabled={isLaunching}>
+              {isLaunching ? (
+                <span className="flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
+                  Launching...
+                </span>
+              ) : (
+                <><FileText className="w-4 h-4 mr-2" /> Launch Executive Dashboard</>
+              )}
             </FloatingButton>
             <button
               onClick={handleReset}
@@ -487,6 +583,111 @@ export const QAWeeklyReport: React.FC = () => {
           <ReportHistory />
         </div>
       </div>
+
+      {/* ── Premium Launch Animation Overlay ── */}
+      <AnimatePresence>
+        {isLaunching && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center overflow-hidden pointer-events-auto launch-overlay"
+          >
+            {/* Soft expanding glowing background orb */}
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: [0.8, 1.4, 1.2], opacity: [0, 0.4, 0.25] }}
+              transition={{ duration: 0.9, ease: 'easeOut' }}
+              className="absolute w-[450px] h-[450px] rounded-full bg-accent-gold/20 blur-[100px] pointer-events-none"
+            />
+
+            {/* Light streaks/particles moving upward */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ y: '100%', x: `${15 + i * 15}%`, opacity: 0, scaleY: 0.5 }}
+                  animate={{ y: '-20%', opacity: [0, 1, 0], scaleY: [0.5, 1.5, 0.5] }}
+                  transition={{
+                    duration: 0.8,
+                    ease: 'easeOut',
+                    delay: i * 0.05
+                  }}
+                  className="absolute w-[1px] h-32 bg-gradient-to-t from-transparent via-accent-gold to-transparent"
+                />
+              ))}
+            </div>
+
+            {/* Dashboard Icon & Animation */}
+            <div className="relative flex items-center justify-center mb-8">
+              {/* Ripple circles */}
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0.6 }}
+                animate={{ scale: 2.2, opacity: 0 }}
+                transition={{ duration: 0.75, ease: 'easeOut' }}
+                className="absolute w-24 h-24 rounded-full border border-accent-gold/30"
+              />
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0.5 }}
+                animate={{ scale: 1.6, opacity: 0 }}
+                transition={{ duration: 0.75, ease: 'easeOut', delay: 0.15 }}
+                className="absolute w-24 h-24 rounded-full border border-accent-gold/20"
+              />
+
+              {/* Glowing core wrapper */}
+              <motion.div
+                animate={{
+                  rotate: [0, 3, -3, 0],
+                  scale: [1, 1.1, 1.05, 1],
+                  boxShadow: [
+                    '0 0 20px rgba(212,175,55,0.1)',
+                    '0 0 40px rgba(212,175,55,0.3)',
+                    '0 0 20px rgba(212,175,55,0.1)'
+                  ]
+                }}
+                transition={{ duration: 0.9, ease: 'easeInOut' }}
+                className="w-20 h-20 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center z-10 backdrop-blur-md"
+              >
+                <FileText className="w-10 h-10 text-accent-gold" />
+              </motion.div>
+            </div>
+
+            {/* Messages */}
+            <div className="z-10 text-center flex flex-col gap-2.5 px-6 max-w-sm">
+              <motion.h4
+                key={launchMessage}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+                className="text-base font-extrabold text-white tracking-wide min-h-[48px] flex items-center justify-center"
+              >
+                {launchMessage}
+              </motion.h4>
+              
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.4 }}
+                transition={{ delay: 0.2, duration: 0.4 }}
+                className="text-xs text-white/50 font-medium"
+              >
+                QA Executive Analytics Suite
+              </motion.p>
+
+              {/* Premium Progress Bar */}
+              <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden mt-4 mx-auto">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: '100%' }}
+                  transition={{ duration: 0.9, ease: 'easeInOut' }}
+                  className="h-full bg-accent-gold shadow-[0_0_8px_#d4af37]"
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

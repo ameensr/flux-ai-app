@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { FloatingButton } from '@/components/ui/FloatingButton'
 import { useQAReportStore } from '../store'
@@ -266,6 +267,17 @@ export const ReportPreview: React.FC = () => {
   const [viewRaw, setViewRaw] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  useEffect(() => {
+    if (fullscreen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [fullscreen])
+
   const handlePrint = () => {
     const win = window.open('', '_blank')!
     win.document.write(buildFullHTML(mdToHtml(generatedReport), mdStyles, buildMetricsSection(form), buildDefectDistributionSection(form), form.projectName || 'QA Report'))
@@ -278,6 +290,7 @@ export const ReportPreview: React.FC = () => {
       id, markdown: generatedReport, form,
       week: `${form.weekStart} – ${form.weekEnd}`,
       project: form.projectName,
+      projectId: form.projectId,
       generatedDate: new Date().toISOString(),
       createdBy: profile?.full_name || profile?.email || 'Unknown',
       status: 'Final',
@@ -289,8 +302,8 @@ export const ReportPreview: React.FC = () => {
 
   if (!generatedReport) return null
 
-  return (
-    <div className={cn('flex flex-col gap-4', fullscreen && 'fixed inset-0 z-50 bg-background p-6 overflow-auto')}>
+  const previewContent = (
+    <div className={cn('flex flex-col gap-4', fullscreen && 'fixed inset-0 z-50 bg-background p-6 overflow-y-auto')}>
       {/* Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
@@ -305,7 +318,7 @@ export const ReportPreview: React.FC = () => {
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-input border border-border text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-hover transition-all"><Printer className="w-3 h-3" /> Print</button>
           <button onClick={handleSave} className={cn('flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all', saved ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-accent/10 border-accent/20 text-accent hover:bg-accent/20')}>
-            {saved ? <CheckCircle2 className="w-3 h-3" /> : <Save className="w-3 h-3" />} {saved ? 'Saved' : 'Save'}
+            {saved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />} {saved ? 'Saved' : 'Save'}
           </button>
         </div>
       </div>
@@ -323,4 +336,10 @@ export const ReportPreview: React.FC = () => {
       </GlassCard>
     </div>
   )
+
+  if (fullscreen) {
+    return createPortal(previewContent, document.body)
+  }
+
+  return previewContent
 }
