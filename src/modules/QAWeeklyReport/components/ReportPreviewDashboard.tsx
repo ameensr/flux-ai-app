@@ -132,6 +132,7 @@ import { toast } from '@/hooks/use-toast'
 import { AIService } from '@/services/ai/ai-service'
 import { useQAReportStore } from '../store'
 import { ensureFormData } from '../types'
+import { getSectionVisibility } from './DashboardSectionToggles'
 import type { QAReportForm, SupportTicket, ReleaseItem, HistoricalDefect } from '../types'
 import { useTheme } from '@/context/ThemeContext'
 
@@ -176,7 +177,7 @@ const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '' }) => {
     const handlePrintChange = (mql: MediaQueryListEvent | MediaQueryList) => {
       setIsPrinting(mql.matches)
     }
-    
+
     // Modern browsers
     mediaQueryList.addEventListener('change', handlePrintChange)
     if (mediaQueryList.matches) {
@@ -292,6 +293,9 @@ const ReportPreviewDashboardContent: React.FC = () => {
     return ensureFormData(null)
   })
   const [isLoaded, setIsLoaded] = useState(() => !!localStorage.getItem('current-qa-report-data'))
+  const vis = getSectionVisibility(data)
+  // Helper: returns null if section is disabled
+  const gated = (key: string, content: React.ReactNode) => vis[key] !== false ? content : null
   const { theme: globalTheme } = useTheme()
   const theme = globalTheme === 'light' ? 'light' : 'dark'
   const [enableParticles, setEnableParticles] = useState<boolean>(localStorage.getItem('qaly-enable-particles') !== 'false')
@@ -838,27 +842,27 @@ Do not return markdown wraps, only raw JSON text.
   const timelineData = data.customTimeline && data.customTimeline.length > 0
     ? data.customTimeline
     : activeHistory.slice(-5).map((h, i, arr) => {
-        let emailChange = '➜'
-        if (i > 0) {
-          const prev = arr[i - 1].form.supportEmails
-          const diff = h.form.supportEmails - prev
-          if (diff > 0) emailChange = `▲ +${Math.round((diff / (prev || 1)) * 100)}%`
-          else if (diff < 0) emailChange = `▼ ${Math.round((diff / (prev || 1)) * 100)}%`
-        }
+      let emailChange = '➜'
+      if (i > 0) {
+        const prev = arr[i - 1].form.supportEmails
+        const diff = h.form.supportEmails - prev
+        if (diff > 0) emailChange = `▲ +${Math.round((diff / (prev || 1)) * 100)}%`
+        else if (diff < 0) emailChange = `▼ ${Math.round((diff / (prev || 1)) * 100)}%`
+      }
 
-        return {
-          id: h.id,
-          week: h.week || `${h.form.weekStart} – ${h.form.weekEnd}`,
-          emails: h.form.supportEmails,
-          features: h.form.newFeatures,
-          fixes: h.form.codeFixes,
-          openDefects: h.form.defectsLastWeek.open,
-          closedDefects: h.form.defectsLastWeek.closed,
-          healthScore: calculateQAScore(h.form).score,
-          emailChange,
-          rawForm: h.form
-        }
-      })
+      return {
+        id: h.id,
+        week: h.week || `${h.form.weekStart} – ${h.form.weekEnd}`,
+        emails: h.form.supportEmails,
+        features: h.form.newFeatures,
+        fixes: h.form.codeFixes,
+        openDefects: h.form.defectsLastWeek.open,
+        closedDefects: h.form.defectsLastWeek.closed,
+        healthScore: calculateQAScore(h.form).score,
+        emailChange,
+        rawForm: h.form
+      }
+    })
 
   // ── Historical Analytics Charts Data ──
   const historicalChartsData = activeHistory.map(h => {
@@ -1515,6 +1519,7 @@ Do not return markdown wraps, only raw JSON text.
           variants={sectionVariants}
           ref={sectionsRef.overview}
           className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 items-center pt-2 relative"
+          style={{ display: vis.show_hero === false ? 'none' : undefined }}
         >
           {/* Floating tech background elements */}
           <motion.div
@@ -1652,6 +1657,7 @@ Do not return markdown wraps, only raw JSON text.
           variants={sectionVariants}
           ref={sectionsRef.kpis}
           className="flex flex-col gap-5"
+          style={{ display: vis.show_kpiCards === false ? 'none' : undefined }}
         >
           <div className="flex items-center gap-2">
             <Activity className="w-5 h-5 text-accent-gold" />
@@ -1724,6 +1730,7 @@ Do not return markdown wraps, only raw JSON text.
           whileInView="show"
           viewport={{ once: true, margin: "-80px" }}
           className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+          style={{ display: vis.show_sprintHealth === false ? 'none' : undefined }}
         >
           {/* ── Sprint Health Dashboard ── */}
           <div ref={sectionsRef.sprintHealth} className={`p-6 rounded-3xl border flex flex-col gap-4 ${tS.card} ${tS.border} ${tS.glow}`}>
@@ -1873,6 +1880,7 @@ Do not return markdown wraps, only raw JSON text.
           viewport={{ once: true, margin: "-80px" }}
           ref={sectionsRef.releaseTesting}
           className="flex flex-col gap-5"
+          style={{ display: vis.show_releaseTable === false ? 'none' : undefined }}
         >
           <div className="flex items-center gap-2">
             <CheckCheck className="w-5 h-5 text-accent-gold" />
@@ -1919,6 +1927,83 @@ Do not return markdown wraps, only raw JSON text.
         </motion.section>
 
         {/* ════════════════════════════════════════════════════════════
+            RELEASE BUG STATUS (from uploaded Excel)
+        ════════════════════════════════════════════════════════════ */}
+
+        {data.releaseBugStatus && vis.show_releaseBugStatus !== false && (
+          <motion.section
+            variants={sectionVariants}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: "-80px" }}
+            className="flex flex-col gap-5"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-accent-gold" />
+              <h2 className="text-2xl font-extrabold font-clash">Release Bug Status</h2>
+            </div>
+
+            {/* Release Health */}
+            <div className={`flex items-center gap-4 p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+              <span className="text-3xl">{data.releaseBugStatus.releaseHealth.emoji}</span>
+              <div>
+                <span className={`text-lg font-extrabold ${data.releaseBugStatus.releaseHealth.color}`}>{data.releaseBugStatus.releaseHealth.label}</span>
+                <span className={`text-xs block ${theme === 'dark' ? 'text-white/50' : 'text-slate-500'}`}>Health Score: {data.releaseBugStatus.releaseHealth.score}% · {data.releaseBugStatus.metrics.totalBugs} Total Defects</span>
+              </div>
+            </div>
+
+            {/* KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+              {[
+                { label: 'Total Bugs', val: data.releaseBugStatus.metrics.totalBugs, color: 'text-blue-400' },
+                { label: 'Completed', val: data.releaseBugStatus.metrics.completedBugs, color: 'text-green-400' },
+                { label: 'Resolved', val: data.releaseBugStatus.metrics.resolvedBugs, color: 'text-emerald-400' },
+                { label: 'Active', val: data.releaseBugStatus.metrics.activeBugs, color: 'text-red-400' },
+                { label: 'Closure %', val: `${data.releaseBugStatus.metrics.closurePercentage.toFixed(1)}%`, color: 'text-accent-gold' },
+              ].map(kpi => (
+                <div key={kpi.label} className={`p-4 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.02] border-white/5' : 'bg-white border-slate-200'}`}>
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted block">{kpi.label}</span>
+                  <span className={`text-2xl font-black ${kpi.color}`}>{kpi.val}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Status Table */}
+            <div className={`overflow-x-auto rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+              <table className="w-full border-collapse text-left">
+                <thead>
+                  <tr className={`border-b ${theme === 'dark' ? 'border-white/5 bg-[#0f0f12] text-white/55' : 'border-slate-200 bg-slate-50 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
+                    <th className="py-3.5 px-5">Status</th>
+                    <th className="py-3.5 px-5 text-right">Count</th>
+                    <th className="py-3.5 px-5 text-right">%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.releaseBugStatus.statusDistribution.map((row: any) => (
+                    <tr key={row.status} className={`border-b text-xs ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'}`}>
+                      <td className={`py-3 px-5 font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{row.status}</td>
+                      <td className="py-3 px-5 text-right font-bold text-text-secondary">{row.count}</td>
+                      <td className="py-3 px-5 text-right text-text-muted">{((row.count / data.releaseBugStatus.metrics.totalBugs) * 100).toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* AI Summary */}
+            <div className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="w-4 h-4 text-accent-gold" />
+                <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Bug Analysis Summary</span>
+              </div>
+              <p className={`text-sm leading-relaxed ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>
+                {data.releaseBugStatus.aiSummary}
+              </p>
+            </div>
+          </motion.section>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════
             SUPPORT & EXCEPTION LOG
         ════════════════════════════════════════════════════════════ */}
 
@@ -1930,6 +2015,7 @@ Do not return markdown wraps, only raw JSON text.
           viewport={{ once: true, margin: "-80px" }}
           ref={sectionsRef.supportLog}
           className="flex flex-col gap-5"
+          style={{ display: vis.show_supportLog === false ? 'none' : undefined }}
         >
           <div className="flex items-center gap-2">
             <Mail className="w-5 h-5 text-accent-gold" />
@@ -1987,6 +2073,7 @@ Do not return markdown wraps, only raw JSON text.
           viewport={{ once: true, margin: "-80px" }}
           ref={sectionsRef.defects}
           className="flex flex-col gap-5"
+          style={{ display: vis.show_defectAnalysis === false ? 'none' : undefined }}
         >
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-accent-gold" />
@@ -2037,298 +2124,299 @@ Do not return markdown wraps, only raw JSON text.
         ════════════════════════════════════════════════════════════ */}
 
         {/* ── SECTION 8: AI EXECUTIVE SUMMARY ── */}
-        {data.showAIInsights !== false && (
+        {data.showAIInsights !== false && vis.showAIInsights !== false && (
           <>
             <motion.section
-            variants={sectionVariants}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, margin: "-80px" }}
-            ref={sectionsRef.aiSummary}
-            className="flex flex-col gap-5"
-          >
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-accent-gold" />
-              <h2 className="text-2xl font-extrabold font-clash">AI Insights</h2>
-            </div>
-            <button
-              onClick={handleAIGenerate}
-              disabled={isGeneratingAI}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-tr from-accent-gold to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-extrabold text-xs uppercase tracking-widest transition-all disabled:opacity-50"
+              variants={sectionVariants}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, margin: "-80px" }}
+              ref={sectionsRef.aiSummary}
+              className="flex flex-col gap-5"
             >
-              {isGeneratingAI ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Synthesizing...</> : <><Sparkles className="w-3.5 h-3.5" /> Regenerate</>}
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            {[
-              { title: '🏆 Major Achievements', list: aiSummary.achievements, color: 'border-green-500/20 text-green-400', bg: 'bg-green-500/[0.03]' },
-              { title: '⚠ Risks & Impediments', list: aiSummary.risks, color: 'border-red-500/20 text-red-400', bg: 'bg-red-500/[0.03]', isInternal: true },
-              { title: '📈 Identified Trends', list: aiSummary.trends, color: 'border-blue-500/20 text-blue-400', bg: 'bg-blue-500/[0.03]' },
-              { title: '💡 Recommendations', list: aiSummary.recommendations, color: 'border-purple-500/20 text-purple-400', bg: 'bg-purple-500/[0.03]' }
-            ].filter(card => !clientMode || !card.isInternal).map(card => (
-              <div key={card.title} className={`p-5 rounded-2xl border flex flex-col gap-3 ${card.bg} ${theme === 'dark' ? `border-white/5 ${card.color.split(' ')[0]}` : `border-slate-200`}`}>
-                <span className={`text-xs font-black tracking-wide ${card.color.split(' ')[1]}`}>{card.title}</span>
-                <ul className="flex flex-col gap-2">
-                  {card.list.map((item, idx) => (
-                    <motion.li
-                      key={idx}
-                      initial={{ opacity: 0, x: -15 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.08, ease: 'easeOut' }}
-                      className="flex gap-2 items-start text-xs leading-relaxed"
-                    >
-                      <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-accent-gold" />
-                      <span className={theme === 'dark' ? 'text-white/80' : 'text-slate-700'}>{item}</span>
-                    </motion.li>
-                  ))}
-                </ul>
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-accent-gold" />
+                  <h2 className="text-2xl font-extrabold font-clash">AI Insights</h2>
+                </div>
+                <button
+                  onClick={handleAIGenerate}
+                  disabled={isGeneratingAI}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-tr from-accent-gold to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-extrabold text-xs uppercase tracking-widest transition-all disabled:opacity-50"
+                >
+                  {isGeneratingAI ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Synthesizing...</> : <><Sparkles className="w-3.5 h-3.5" /> Regenerate</>}
+                </button>
               </div>
-            ))}
-          </div>
-        </motion.section>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                {[
+                  { title: '🏆 Major Achievements', list: aiSummary.achievements, color: 'border-green-500/20 text-green-400', bg: 'bg-green-500/[0.03]' },
+                  { title: '⚠ Risks & Impediments', list: aiSummary.risks, color: 'border-red-500/20 text-red-400', bg: 'bg-red-500/[0.03]', isInternal: true },
+                  { title: '📈 Identified Trends', list: aiSummary.trends, color: 'border-blue-500/20 text-blue-400', bg: 'bg-blue-500/[0.03]' },
+                  { title: '💡 Recommendations', list: aiSummary.recommendations, color: 'border-purple-500/20 text-purple-400', bg: 'bg-purple-500/[0.03]' }
+                ].filter(card => !clientMode || !card.isInternal).map(card => (
+                  <div key={card.title} className={`p-5 rounded-2xl border flex flex-col gap-3 ${card.bg} ${theme === 'dark' ? `border-white/5 ${card.color.split(' ')[0]}` : `border-slate-200`}`}>
+                    <span className={`text-xs font-black tracking-wide ${card.color.split(' ')[1]}`}>{card.title}</span>
+                    <ul className="flex flex-col gap-2">
+                      {card.list.map((item, idx) => (
+                        <motion.li
+                          key={idx}
+                          initial={{ opacity: 0, x: -15 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.08, ease: 'easeOut' }}
+                          className="flex gap-2 items-start text-xs leading-relaxed"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-accent-gold" />
+                          <span className={theme === 'dark' ? 'text-white/80' : 'text-slate-700'}>{item}</span>
+                        </motion.li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </motion.section>
 
-        {/* ════════════════════════════════════════════════════════════
+            {/* ════════════════════════════════════════════════════════════
             HISTORICAL COMPARISON
         ════════════════════════════════════════════════════════════ */}
 
-        {/* ── SECTION 9: WoW COMPARISON ── */}
-        <motion.section
-          variants={sectionVariants}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, margin: "-80px" }}
-          ref={sectionsRef.comparison}
-          className="flex flex-col gap-5"
-        >
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-accent-gold" />
-              <h2 className="text-2xl font-extrabold font-clash">Week-over-Week KPI Comparison</h2>
-            </div>
-            {activeHistory.length >= 2 && (
-              <button
-                onClick={() => setCompareMode(v => !v)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${compareMode ? 'bg-accent-gold text-black border-accent-gold' : 'bg-white/5 border-white/10 text-text-secondary hover:text-white'}`}
-              >
-                <GitCompare className="w-4 h-4" />
-                {compareMode ? 'Show WoW Cards' : 'Compare Saved Reports'}
-              </button>
-            )}
-          </div>
-
-          {compareMode ? (
-            <div className={`p-6 rounded-3xl border flex flex-col gap-6 ${tS.card} ${tS.border} ${tS.glow}`}>
-              <div className="flex items-center justify-between flex-wrap gap-4 border-b border-white/5 pb-4">
-                <div>
-                  <h3 className="text-lg font-bold font-clash">Snapshot Comparison Mode</h3>
-                  <p className="text-xs text-text-muted">Select any two saved reports to see differences side-by-side.</p>
+            {/* ── SECTION 9: WoW COMPARISON ── */}
+            <motion.section
+              variants={sectionVariants}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, margin: "-80px" }}
+              ref={sectionsRef.comparison}
+              className="flex flex-col gap-5"
+              style={{ display: vis.show_wowComparison === false ? 'none' : undefined }}
+            >
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-accent-gold" />
+                  <h2 className="text-2xl font-extrabold font-clash">Week-over-Week KPI Comparison</h2>
                 </div>
-
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[9px] uppercase font-bold text-text-muted">Report A (Baseline)</span>
-                    <select
-                      value={compareReportA}
-                      onChange={e => setCompareReportA(e.target.value)}
-                      className="bg-[#1a1a1a] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none"
-                    >
-                      <option value="">Choose Report A...</option>
-                      {activeHistory.map(r => (
-                        <option key={r.id} value={r.id}>{r.week || r.form.weekStart} - {r.form.projectName}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <span className="text-text-muted mt-4">vs</span>
-
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[9px] uppercase font-bold text-text-muted">Report B (Comparison)</span>
-                    <select
-                      value={compareReportB}
-                      onChange={e => setCompareReportB(e.target.value)}
-                      className="bg-[#1a1a1a] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none"
-                    >
-                      <option value="">Choose Report B...</option>
-                      {activeHistory.map(r => (
-                        <option key={r.id} value={r.id}>{r.week || r.form.weekStart} - {r.form.projectName}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                {activeHistory.length >= 2 && (
+                  <button
+                    onClick={() => setCompareMode(v => !v)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${compareMode ? 'bg-accent-gold text-black border-accent-gold' : 'bg-white/5 border-white/10 text-text-secondary hover:text-white'}`}
+                  >
+                    <GitCompare className="w-4 h-4" />
+                    {compareMode ? 'Show WoW Cards' : 'Compare Saved Reports'}
+                  </button>
+                )}
               </div>
 
-              {/* Compare Results Display */}
-              {(() => {
-                const repA = activeHistory.find(r => r.id === compareReportA)?.form
-                const repB = activeHistory.find(r => r.id === compareReportB)?.form
-
-                if (!repA || !repB) {
-                  return (
-                    <div className="p-8 text-center text-xs text-text-muted border border-dashed border-white/5 rounded-2xl">
-                      Select two reports from the dropdowns above to calculate snapshots.
-                    </div>
-                  )
-                }
-
-                const winner = getComparisonWinner(repA, repB)
-                const biggestImp = getBiggestImprovement(repA, repB)
-
-                const metricsCompare = [
-                  { name: 'Support Tickets', valA: repA.supportEmails, valB: repB.supportEmails, type: 'lower' },
-                  { name: 'Defects Reported', valA: repA.defectsLastWeek.reported, valB: repB.defectsLastWeek.reported, type: 'lower' },
-                  { name: 'Open Defects', valA: repA.defectsLastWeek.open, valB: repB.defectsLastWeek.open, type: 'lower' },
-                  { name: 'Features Completed', valA: repA.newFeatures, valB: repB.newFeatures, type: 'higher' },
-                  { name: 'Testing Completed', valA: repA.releaseItems.length, valB: repB.releaseItems.length, type: 'higher' }
-                ]
-
-                return (
-                  <div className="flex flex-col gap-6">
-                    {/* Insights Summary Widgets */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="p-4 rounded-2xl bg-green-500/5 border border-green-500/10 flex flex-col justify-between">
-                        <span className="text-[9px] uppercase font-bold text-green-400 tracking-wider">Overall Winner</span>
-                        <span className="text-sm font-extrabold mt-1 text-white">{winner}</span>
-                      </div>
-                      <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex flex-col justify-between">
-                        <span className="text-[9px] uppercase font-bold text-blue-400 tracking-wider">Biggest Improvement</span>
-                        <span className="text-sm font-extrabold mt-1 text-white">{biggestImp}</span>
-                      </div>
+              {compareMode ? (
+                <div className={`p-6 rounded-3xl border flex flex-col gap-6 ${tS.card} ${tS.border} ${tS.glow}`}>
+                  <div className="flex items-center justify-between flex-wrap gap-4 border-b border-white/5 pb-4">
+                    <div>
+                      <h3 className="text-lg font-bold font-clash">Snapshot Comparison Mode</h3>
+                      <p className="text-xs text-text-muted">Select any two saved reports to see differences side-by-side.</p>
                     </div>
 
-                    {/* Comparison table grid */}
-                    <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.01]">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead>
-                          <tr className="border-b border-white/5 bg-white/5 text-[10px] font-black uppercase text-text-muted">
-                            <th className="p-4">Metric</th>
-                            <th className="p-4">Report A (Baseline)</th>
-                            <th className="p-4">Report B (Comparison)</th>
-                            <th className="p-4">Difference</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {metricsCompare.map((m, idx) => {
-                            const diff = m.valB - m.valA
-                            const pct = m.valA !== 0 ? Math.round((diff / m.valA) * 100) : 0
-                            const isLowerBetter = m.type === 'lower'
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[9px] uppercase font-bold text-text-muted">Report A (Baseline)</span>
+                        <select
+                          value={compareReportA}
+                          onChange={e => setCompareReportA(e.target.value)}
+                          className="bg-[#1a1a1a] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none"
+                        >
+                          <option value="">Choose Report A...</option>
+                          {activeHistory.map(r => (
+                            <option key={r.id} value={r.id}>{r.week || r.form.weekStart} - {r.form.projectName}</option>
+                          ))}
+                        </select>
+                      </div>
 
-                            let isImproved = false
-                            if (diff !== 0) {
-                              isImproved = isLowerBetter ? diff < 0 : diff > 0
-                            }
+                      <span className="text-text-muted mt-4">vs</span>
 
-                            return (
-                              <motion.tr
-                                key={m.name}
-                                initial={{ opacity: 0, y: 8 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true }}
-                                transition={{ delay: idx * 0.04, duration: 0.3 }}
-                                className="border-b border-white/5"
-                              >
-                                <td className="p-4 font-bold text-white">{m.name}</td>
-                                <td className="p-4 text-text-secondary">{m.valA}</td>
-                                <td className="p-4 text-white font-extrabold">{m.valB}</td>
-                                <td className="p-4">
-                                  {diff === 0 ? (
-                                    <span className="text-text-muted">▬ No Change</span>
-                                  ) : (
-                                    <span className={`font-bold px-2 py-0.5 rounded ${isImproved ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-                                      {diff > 0 ? '▲' : '▼'} {Math.abs(pct)}% {isImproved ? 'Improved' : 'Worse'}
-                                    </span>
-                                  )}
-                                </td>
-                              </motion.tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[9px] uppercase font-bold text-text-muted">Report B (Comparison)</span>
+                        <select
+                          value={compareReportB}
+                          onChange={e => setCompareReportB(e.target.value)}
+                          className="bg-[#1a1a1a] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none"
+                        >
+                          <option value="">Choose Report B...</option>
+                          {activeHistory.map(r => (
+                            <option key={r.id} value={r.id}>{r.week || r.form.weekStart} - {r.form.projectName}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
-                )
-              })()}
-            </div>
-          ) : !prevReport ? (
-            <div className={`p-8 rounded-2xl border text-center text-sm ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 text-white/50' : 'bg-white border-slate-200 text-slate-500'}`}>
-              <p className="font-semibold text-accent-gold mb-1">No previous report available for comparison</p>
-              <p className="text-xs">Save your first report to start tracking week-over-week performance changes.</p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {comparisons.map((card, idx) => {
-                  const isImproved = card.trend === 'improved'
-                  const isRegression = card.trend === 'regression'
-                  const isNeutral = card.trend === 'neutral'
 
-                  const badgeColor = isImproved
-                    ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                    : isRegression
-                      ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                      : 'bg-amber-500/10 text-accent-gold border-accent-gold/20'
+                  {/* Compare Results Display */}
+                  {(() => {
+                    const repA = activeHistory.find(r => r.id === compareReportA)?.form
+                    const repB = activeHistory.find(r => r.id === compareReportB)?.form
 
-                  const glowColor = isImproved
-                    ? 'shadow-[0_0_20px_rgba(74,222,128,0.05)] border-green-500/10'
-                    : isRegression
-                      ? 'shadow-[0_0_20px_rgba(248,113,113,0.05)] border-red-500/10'
-                      : 'shadow-none border-white/5'
+                    if (!repA || !repB) {
+                      return (
+                        <div className="p-8 text-center text-xs text-text-muted border border-dashed border-white/5 rounded-2xl">
+                          Select two reports from the dropdowns above to calculate snapshots.
+                        </div>
+                      )
+                    }
 
-                  return (
-                    <motion.div
-                      key={card.name}
-                      initial={{ opacity: 0, y: 15 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: idx * 0.05 }}
-                      className={`p-6 rounded-2xl border flex flex-col justify-between gap-4 group transition-all duration-300 ${glowColor} ${theme === 'dark' ? 'bg-white/[0.01] hover:border-white/20 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:shadow-lg hover:border-slate-300'}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className={`text-xs font-extrabold ${theme === 'dark' ? 'text-white/80' : 'text-slate-700'}`}>{card.name}</span>
-                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${badgeColor}`}>
-                          {card.badgeText}
-                        </span>
+                    const winner = getComparisonWinner(repA, repB)
+                    const biggestImp = getBiggestImprovement(repA, repB)
+
+                    const metricsCompare = [
+                      { name: 'Support Tickets', valA: repA.supportEmails, valB: repB.supportEmails, type: 'lower' },
+                      { name: 'Defects Reported', valA: repA.defectsLastWeek.reported, valB: repB.defectsLastWeek.reported, type: 'lower' },
+                      { name: 'Open Defects', valA: repA.defectsLastWeek.open, valB: repB.defectsLastWeek.open, type: 'lower' },
+                      { name: 'Features Completed', valA: repA.newFeatures, valB: repB.newFeatures, type: 'higher' },
+                      { name: 'Testing Completed', valA: repA.releaseItems.length, valB: repB.releaseItems.length, type: 'higher' }
+                    ]
+
+                    return (
+                      <div className="flex flex-col gap-6">
+                        {/* Insights Summary Widgets */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="p-4 rounded-2xl bg-green-500/5 border border-green-500/10 flex flex-col justify-between">
+                            <span className="text-[9px] uppercase font-bold text-green-400 tracking-wider">Overall Winner</span>
+                            <span className="text-sm font-extrabold mt-1 text-white">{winner}</span>
+                          </div>
+                          <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex flex-col justify-between">
+                            <span className="text-[9px] uppercase font-bold text-blue-400 tracking-wider">Biggest Improvement</span>
+                            <span className="text-sm font-extrabold mt-1 text-white">{biggestImp}</span>
+                          </div>
+                        </div>
+
+                        {/* Comparison table grid */}
+                        <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.01]">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="border-b border-white/5 bg-white/5 text-[10px] font-black uppercase text-text-muted">
+                                <th className="p-4">Metric</th>
+                                <th className="p-4">Report A (Baseline)</th>
+                                <th className="p-4">Report B (Comparison)</th>
+                                <th className="p-4">Difference</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {metricsCompare.map((m, idx) => {
+                                const diff = m.valB - m.valA
+                                const pct = m.valA !== 0 ? Math.round((diff / m.valA) * 100) : 0
+                                const isLowerBetter = m.type === 'lower'
+
+                                let isImproved = false
+                                if (diff !== 0) {
+                                  isImproved = isLowerBetter ? diff < 0 : diff > 0
+                                }
+
+                                return (
+                                  <motion.tr
+                                    key={m.name}
+                                    initial={{ opacity: 0, y: 8 }}
+                                    whileInView={{ opacity: 1, y: 0 }}
+                                    viewport={{ once: true }}
+                                    transition={{ delay: idx * 0.04, duration: 0.3 }}
+                                    className="border-b border-white/5"
+                                  >
+                                    <td className="p-4 font-bold text-white">{m.name}</td>
+                                    <td className="p-4 text-text-secondary">{m.valA}</td>
+                                    <td className="p-4 text-white font-extrabold">{m.valB}</td>
+                                    <td className="p-4">
+                                      {diff === 0 ? (
+                                        <span className="text-text-muted">▬ No Change</span>
+                                      ) : (
+                                        <span className={`font-bold px-2 py-0.5 rounded ${isImproved ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                          {diff > 0 ? '▲' : '▼'} {Math.abs(pct)}% {isImproved ? 'Improved' : 'Worse'}
+                                        </span>
+                                      )}
+                                    </td>
+                                  </motion.tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-
-                      <div className="flex items-center justify-between py-2">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Last Week</span>
-                          <span className={`text-xl font-bold ${theme === 'dark' ? 'text-white/60' : 'text-slate-500'}`}>
-                            {card.lastVal}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-col items-center justify-center text-text-muted">
-                          <span className="text-xs">↓</span>
-                        </div>
-
-                        <div className="flex flex-col items-end">
-                          <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">This Week</span>
-                          <span className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-                            <CountUpNumber end={card.thisVal} />
-                          </span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )
-                })}
-              </div>
-
-              {/* WoW AI Insights Summary box */}
-              <div className={`p-5 rounded-2xl border flex items-start gap-4 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}>
-                <div className="p-2 rounded-xl bg-accent-gold/10 text-accent-gold shrink-0">
-                  <Sparkles className="w-5 h-5" />
+                    )
+                  })()}
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold">WoW AI Summary</span>
-                  <p className={`text-xs leading-relaxed ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>
-                    {generateWowSummary(comparisons)}
-                  </p>
+              ) : !prevReport ? (
+                <div className={`p-8 rounded-2xl border text-center text-sm ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 text-white/50' : 'bg-white border-slate-200 text-slate-500'}`}>
+                  <p className="font-semibold text-accent-gold mb-1">No previous report available for comparison</p>
+                  <p className="text-xs">Save your first report to start tracking week-over-week performance changes.</p>
                 </div>
-              </div>
-            </div>
-          )}
-        </motion.section>
+              ) : (
+                <div className="flex flex-col gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {comparisons.map((card, idx) => {
+                      const isImproved = card.trend === 'improved'
+                      const isRegression = card.trend === 'regression'
+                      const isNeutral = card.trend === 'neutral'
+
+                      const badgeColor = isImproved
+                        ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                        : isRegression
+                          ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                          : 'bg-amber-500/10 text-accent-gold border-accent-gold/20'
+
+                      const glowColor = isImproved
+                        ? 'shadow-[0_0_20px_rgba(74,222,128,0.05)] border-green-500/10'
+                        : isRegression
+                          ? 'shadow-[0_0_20px_rgba(248,113,113,0.05)] border-red-500/10'
+                          : 'shadow-none border-white/5'
+
+                      return (
+                        <motion.div
+                          key={card.name}
+                          initial={{ opacity: 0, y: 15 }}
+                          whileInView={{ opacity: 1, y: 0 }}
+                          viewport={{ once: true }}
+                          transition={{ delay: idx * 0.05 }}
+                          className={`p-6 rounded-2xl border flex flex-col justify-between gap-4 group transition-all duration-300 ${glowColor} ${theme === 'dark' ? 'bg-white/[0.01] hover:border-white/20 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:shadow-lg hover:border-slate-300'}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs font-extrabold ${theme === 'dark' ? 'text-white/80' : 'text-slate-700'}`}>{card.name}</span>
+                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${badgeColor}`}>
+                              {card.badgeText}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between py-2">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Last Week</span>
+                              <span className={`text-xl font-bold ${theme === 'dark' ? 'text-white/60' : 'text-slate-500'}`}>
+                                {card.lastVal}
+                              </span>
+                            </div>
+
+                            <div className="flex flex-col items-center justify-center text-text-muted">
+                              <span className="text-xs">↓</span>
+                            </div>
+
+                            <div className="flex flex-col items-end">
+                              <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">This Week</span>
+                              <span className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                                <CountUpNumber end={card.thisVal} />
+                              </span>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )
+                    })}
+                  </div>
+
+                  {/* WoW AI Insights Summary box */}
+                  <div className={`p-5 rounded-2xl border flex items-start gap-4 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}>
+                    <div className="p-2 rounded-xl bg-accent-gold/10 text-accent-gold shrink-0">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-black uppercase tracking-widest text-accent-gold">WoW AI Summary</span>
+                      <p className={`text-xs leading-relaxed ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>
+                        {generateWowSummary(comparisons)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.section>
           </>
         )}
 
@@ -2342,55 +2430,55 @@ Do not return markdown wraps, only raw JSON text.
             ref={sectionsRef.aiSummary}
             className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-8"
           >
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-accent-gold" />
-              <h2 className="text-2xl font-extrabold font-clash">AI Summary</h2>
-            </div>
-            <p className={`text-sm leading-relaxed ${theme === 'dark' ? 'text-white/60' : 'text-slate-600'}`}>
-              Synthesizing current weekly data against the last 5 saved history reports to map trends, regression vectors, and resource workloads.
-            </p>
-            <button
-              onClick={handleAIGenerate}
-              disabled={isGeneratingAI}
-              className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-tr from-accent-gold to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-extrabold text-xs uppercase tracking-widest transition-all mt-2 disabled:opacity-50"
-            >
-              {isGeneratingAI ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" /> Synthesizing data...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" /> Regenerate summary
-                </>
-              )}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[
-              { title: '🏆 Major Achievements', list: aiSummary.achievements, color: 'border-green-500/20 text-green-400' },
-              { title: '⚠ Risks & Impediments', list: aiSummary.risks, color: 'border-red-500/20 text-red-400', isInternal: true },
-              { title: '📈 Identified Trends', list: aiSummary.trends, color: 'border-blue-500/20 text-blue-400' },
-              { title: '💡 Recommendations', list: aiSummary.recommendations, color: 'border-purple-500/20 text-purple-400' }
-            ].filter(card => !clientMode || !card.isInternal).map(card => (
-              <div
-                key={card.title}
-                className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}
-              >
-                <span className={`text-sm font-black tracking-wide ${card.color}`}>{card.title}</span>
-                <ul className="flex flex-col gap-2">
-                  {card.list.map((item, idx) => (
-                    <li key={idx} className="flex gap-2 items-start text-xs leading-normal">
-                      <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-accent-gold" />
-                      <span className={theme === 'dark' ? 'text-white/80' : 'text-slate-700'}>{item}</span>
-                    </li>
-                  ))}
-                </ul>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-accent-gold" />
+                <h2 className="text-2xl font-extrabold font-clash">AI Summary</h2>
               </div>
-            ))}
-          </div>
-        </motion.section>
+              <p className={`text-sm leading-relaxed ${theme === 'dark' ? 'text-white/60' : 'text-slate-600'}`}>
+                Synthesizing current weekly data against the last 5 saved history reports to map trends, regression vectors, and resource workloads.
+              </p>
+              <button
+                onClick={handleAIGenerate}
+                disabled={isGeneratingAI}
+                className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-tr from-accent-gold to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-extrabold text-xs uppercase tracking-widest transition-all mt-2 disabled:opacity-50"
+              >
+                {isGeneratingAI ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" /> Synthesizing data...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" /> Regenerate summary
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { title: '🏆 Major Achievements', list: aiSummary.achievements, color: 'border-green-500/20 text-green-400' },
+                { title: '⚠ Risks & Impediments', list: aiSummary.risks, color: 'border-red-500/20 text-red-400', isInternal: true },
+                { title: '📈 Identified Trends', list: aiSummary.trends, color: 'border-blue-500/20 text-blue-400' },
+                { title: '💡 Recommendations', list: aiSummary.recommendations, color: 'border-purple-500/20 text-purple-400' }
+              ].filter(card => !clientMode || !card.isInternal).map(card => (
+                <div
+                  key={card.title}
+                  className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}
+                >
+                  <span className={`text-sm font-black tracking-wide ${card.color}`}>{card.title}</span>
+                  <ul className="flex flex-col gap-2">
+                    {card.list.map((item, idx) => (
+                      <li key={idx} className="flex gap-2 items-start text-xs leading-normal">
+                        <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-accent-gold" />
+                        <span className={theme === 'dark' ? 'text-white/80' : 'text-slate-700'}>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </motion.section>
         )}
 
         {/* ── SECTION 4: HISTORICAL PROGRESS TIMELINE ── */}
@@ -2402,148 +2490,148 @@ Do not return markdown wraps, only raw JSON text.
             viewport={{ once: true, margin: "-80px" }}
             className="flex flex-col gap-6"
           >
-          {(() => {
-            const getTimelineFilteredData = () => {
-              switch (timelineFilter) {
-                case 'sprint':
-                  return timelineData.filter((_, idx) => idx % 2 === 0).map(t => ({ ...t, week: `Sprint ${t.week.replace(/\D/g, '') || 'Cycle'}` }))
-                case 'monthly':
-                  return timelineData.filter((_, idx) => idx % 4 === 0).map(t => ({ ...t, week: `Month: ${new Date(t.rawForm?.weekStart || Date.now()).toLocaleString('default', { month: 'long' })}` }))
-                case 'quarterly':
-                  return timelineData.filter((_, idx) => idx % 8 === 0).map(t => ({ ...t, week: `Quarterly Review Q${Math.floor(new Date(t.rawForm?.weekStart || Date.now()).getMonth() / 3) + 1}` }))
-                case 'weekly':
-                default:
-                  return timelineData
+            {(() => {
+              const getTimelineFilteredData = () => {
+                switch (timelineFilter) {
+                  case 'sprint':
+                    return timelineData.filter((_, idx) => idx % 2 === 0).map(t => ({ ...t, week: `Sprint ${t.week.replace(/\D/g, '') || 'Cycle'}` }))
+                  case 'monthly':
+                    return timelineData.filter((_, idx) => idx % 4 === 0).map(t => ({ ...t, week: `Month: ${new Date(t.rawForm?.weekStart || Date.now()).toLocaleString('default', { month: 'long' })}` }))
+                  case 'quarterly':
+                    return timelineData.filter((_, idx) => idx % 8 === 0).map(t => ({ ...t, week: `Quarterly Review Q${Math.floor(new Date(t.rawForm?.weekStart || Date.now()).getMonth() / 3) + 1}` }))
+                  case 'weekly':
+                  default:
+                    return timelineData
+                }
               }
-            }
 
-            const filteredTimeline = getTimelineFilteredData()
+              const filteredTimeline = getTimelineFilteredData()
 
-            return (
-              <>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <History className="w-5 h-5 text-accent-gold" />
-                    <h2 className="text-2xl font-extrabold font-clash">Weekly QA Progress Timeline</h2>
-                  </div>
+              return (
+                <>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <History className="w-5 h-5 text-accent-gold" />
+                      <h2 className="text-2xl font-extrabold font-clash">Weekly QA Progress Timeline</h2>
+                    </div>
 
-                  <div className="flex items-center gap-1.5 p-1 bg-white/5 border border-white/5 rounded-2xl text-[10px]">
-                    {(['weekly', 'sprint', 'monthly', 'quarterly'] as const).map(tab => (
-                      <button
-                        key={tab}
-                        onClick={() => setTimelineFilter(tab)}
-                        className={`px-3 py-1.5 rounded-xl font-bold uppercase tracking-wider transition-all ${timelineFilter === tab ? 'bg-[#d4af37] text-black shadow-lg' : 'text-text-muted hover:text-white'}`}
-                      >
-                        {tab}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="relative pl-6 flex flex-col gap-8 ml-2 pt-2">
-                  {/* Dynamic drawing connecting line */}
-                  <motion.div
-                    initial={{ height: hasPlayed ? '100%' : 0 }}
-                    whileInView={{ height: '100%' }}
-                    viewport={{ once: true }}
-                    transition={{ duration: hasPlayed ? 0 : 1.2, ease: 'easeOut' }}
-                    className={`absolute left-0 top-4 w-[1px] ${theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'} origin-top`}
-                  />
-                  {filteredTimeline.map((week, idx) => {
-                    const isExpanded = !!expandedTimelineWeeks[week.id]
-                    return (
-                      <div key={week.id} className="flex flex-col gap-3">
-                        <motion.div
-                          initial={{ opacity: hasPlayed ? 1 : 0, x: hasPlayed ? 0 : -20 }}
-                          whileInView={{ opacity: 1, x: 0 }}
-                          viewport={{ once: true }}
-                          transition={{ delay: hasPlayed ? 0 : idx * 0.08, duration: hasPlayed ? 0 : 0.5, ease: 'easeOut' }}
-                          onClick={() => {
-                            setExpandedTimelineWeeks(prev => ({ ...prev, [week.id]: !prev[week.id] }))
-                          }}
-                          className={`relative group p-4 rounded-2xl border cursor-pointer transition-all duration-300 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 hover:border-white/20 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:shadow-md'}`}
+                    <div className="flex items-center gap-1.5 p-1 bg-white/5 border border-white/5 rounded-2xl text-[10px]">
+                      {(['weekly', 'sprint', 'monthly', 'quarterly'] as const).map(tab => (
+                        <button
+                          key={tab}
+                          onClick={() => setTimelineFilter(tab)}
+                          className={`px-3 py-1.5 rounded-xl font-bold uppercase tracking-wider transition-all ${timelineFilter === tab ? 'bg-[#d4af37] text-black shadow-lg' : 'text-text-muted hover:text-white'}`}
                         >
-                          {/* Timeline node marker */}
+                          {tab}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="relative pl-6 flex flex-col gap-8 ml-2 pt-2">
+                    {/* Dynamic drawing connecting line */}
+                    <motion.div
+                      initial={{ height: hasPlayed ? '100%' : 0 }}
+                      whileInView={{ height: '100%' }}
+                      viewport={{ once: true }}
+                      transition={{ duration: hasPlayed ? 0 : 1.2, ease: 'easeOut' }}
+                      className={`absolute left-0 top-4 w-[1px] ${theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'} origin-top`}
+                    />
+                    {filteredTimeline.map((week, idx) => {
+                      const isExpanded = !!expandedTimelineWeeks[week.id]
+                      return (
+                        <div key={week.id} className="flex flex-col gap-3">
                           <motion.div
-                            whileHover={{ scale: 1.3 }}
-                            animate={hasPlayed ? {} : { scale: [1, 1.4, 1] }}
-                            transition={{ duration: 0.6, ease: 'easeOut', delay: 0.8 }}
-                            className={`absolute left-[-31px] top-6 z-10 w-3.5 h-3.5 rounded-full border-2 transition-transform duration-300 group-hover:scale-125 ${week.healthScore >= 90 ? 'bg-green-400 border-green-500/20' : week.healthScore >= 70 ? 'bg-yellow-400 border-yellow-500/20' : 'bg-red-400 border-red-500/20'}`}
-                          />
-
-                          <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-black uppercase tracking-widest text-accent-gold">{week.week}</span>
-                              <span className="text-[10px] text-text-muted">({isExpanded ? 'Collapse' : 'Expand Details'})</span>
-                            </div>
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${week.healthScore >= 90 ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
-                              Health Index: {week.healthScore}%
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 pt-2 border-t border-white/5">
-                            <div>
-                              <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Emails</span>
-                              <span className="text-sm font-bold">{week.emails} <span className="text-[10px] text-green-400">{week.emailChange}</span></span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Features</span>
-                              <span className="text-sm font-bold">{week.features}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Fixes</span>
-                              <span className="text-sm font-bold">{week.fixes}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Open Bugs</span>
-                              <span className="text-sm font-bold text-red-400">{week.openDefects}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Closed Bugs</span>
-                              <span className="text-sm font-bold text-green-400">{week.closedDefects}</span>
-                            </div>
-                          </div>
-                        </motion.div>
-
-                        <AnimatePresence>
-                          {isExpanded && (
+                            initial={{ opacity: hasPlayed ? 1 : 0, x: hasPlayed ? 0 : -20 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: hasPlayed ? 0 : idx * 0.08, duration: hasPlayed ? 0 : 0.5, ease: 'easeOut' }}
+                            onClick={() => {
+                              setExpandedTimelineWeeks(prev => ({ ...prev, [week.id]: !prev[week.id] }))
+                            }}
+                            className={`relative group p-4 rounded-2xl border cursor-pointer transition-all duration-300 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 hover:border-white/20 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:shadow-md'}`}
+                          >
+                            {/* Timeline node marker */}
                             <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="overflow-hidden pl-4 border-l border-white/5 flex flex-col gap-3 mb-4"
-                            >
-                              {week.rawForm && (
-                                <div className="flex items-center gap-3">
-                                  <button
-                                    onClick={() => {
-                                      setData(ensureFormData(week.rawForm))
-                                      toast({ title: 'Report Loaded', description: `Swapped active dashboard to ${week.week}` })
-                                    }}
-                                    className="px-4 py-2 rounded-xl bg-[#d4af37]/10 border border-[#d4af37]/20 text-accent-gold text-xs font-bold hover:bg-[#d4af37]/20 transition-all"
-                                  >
-                                    Load Active Workspace
-                                  </button>
-                                </div>
-                              )}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    )
-                  })}
-                  {timelineData.length === 0 && (
-                    <p className="text-xs text-text-muted">No historical reports saved yet. Save reports to construct timeline.</p>
-                  )}
-                </div>
-              </>
-            )
-          })()}
-        </motion.section>
+                              whileHover={{ scale: 1.3 }}
+                              animate={hasPlayed ? {} : { scale: [1, 1.4, 1] }}
+                              transition={{ duration: 0.6, ease: 'easeOut', delay: 0.8 }}
+                              className={`absolute left-[-31px] top-6 z-10 w-3.5 h-3.5 rounded-full border-2 transition-transform duration-300 group-hover:scale-125 ${week.healthScore >= 90 ? 'bg-green-400 border-green-500/20' : week.healthScore >= 70 ? 'bg-yellow-400 border-yellow-500/20' : 'bg-red-400 border-red-500/20'}`}
+                            />
+
+                            <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-black uppercase tracking-widest text-accent-gold">{week.week}</span>
+                                <span className="text-[10px] text-text-muted">({isExpanded ? 'Collapse' : 'Expand Details'})</span>
+                              </div>
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${week.healthScore >= 90 ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
+                                Health Index: {week.healthScore}%
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 pt-2 border-t border-white/5">
+                              <div>
+                                <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Emails</span>
+                                <span className="text-sm font-bold">{week.emails} <span className="text-[10px] text-green-400">{week.emailChange}</span></span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Features</span>
+                                <span className="text-sm font-bold">{week.features}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Fixes</span>
+                                <span className="text-sm font-bold">{week.fixes}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Open Bugs</span>
+                                <span className="text-sm font-bold text-red-400">{week.openDefects}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Closed Bugs</span>
+                                <span className="text-sm font-bold text-green-400">{week.closedDefects}</span>
+                              </div>
+                            </div>
+                          </motion.div>
+
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="overflow-hidden pl-4 border-l border-white/5 flex flex-col gap-3 mb-4"
+                              >
+                                {week.rawForm && (
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      onClick={() => {
+                                        setData(ensureFormData(week.rawForm))
+                                        toast({ title: 'Report Loaded', description: `Swapped active dashboard to ${week.week}` })
+                                      }}
+                                      className="px-4 py-2 rounded-xl bg-[#d4af37]/10 border border-[#d4af37]/20 text-accent-gold text-xs font-bold hover:bg-[#d4af37]/20 transition-all"
+                                    >
+                                      Load Active Workspace
+                                    </button>
+                                  </div>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )
+                    })}
+                    {timelineData.length === 0 && (
+                      <p className="text-xs text-text-muted">No historical reports saved yet. Save reports to construct timeline.</p>
+                    )}
+                  </div>
+                </>
+              )
+            })()}
+          </motion.section>
         )}
 
         {/* ── SECTION 5: HISTORICAL ANALYTICS DASHBOARD ── */}
-        {data.showHistoricalAnalytics !== false && (
+        {data.showHistoricalAnalytics !== false && vis.showHistoricalAnalytics !== false && (
           <motion.section
             variants={sectionVariants}
             initial="hidden"
@@ -2552,178 +2640,178 @@ Do not return markdown wraps, only raw JSON text.
             ref={sectionsRef.historyDashboard}
             className="flex flex-col gap-6"
           >
-          <div className="flex items-center gap-2">
-            <LayoutGrid className="w-5 h-5 text-accent-gold" />
-            <h2 className="text-2xl font-extrabold font-clash">Historical Analytics</h2>
-          </div>
-
-          {historicalChartsData.length < 2 ? (
-            <div className={`p-8 rounded-2xl border text-center text-sm ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 text-white/50' : 'bg-white border-slate-200 text-slate-500'}`}>
-              <p className="font-semibold text-accent-gold mb-1">Insufficient Historical Data</p>
-              <p className="text-xs">At least 2 saved reports are required to calculate trend performance charts.</p>
+            <div className="flex items-center gap-2">
+              <LayoutGrid className="w-5 h-5 text-accent-gold" />
+              <h2 className="text-2xl font-extrabold font-clash">Historical Analytics</h2>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-              {/* 1. Monthly KPI Trend (Line) */}
-              <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: true, margin: "-45px" }}
-                transition={{ duration: 0.5 }}
-                className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
-              >
-                <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Monthly KPI Trend</span>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <XAxis dataKey="name" stroke={chartText} fontSize={9} />
-                      <YAxis stroke={chartText} fontSize={9} />
-                      <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Line type="monotone" dataKey="emails" name="Support Emails" stroke="#3b82f6" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                      <Line type="monotone" dataKey="features" name="Features Tested" stroke="#facc15" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                      <Line type="monotone" dataKey="fixes" name="Code Fixes" stroke="#a855f7" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
+            {historicalChartsData.length < 2 ? (
+              <div className={`p-8 rounded-2xl border text-center text-sm ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 text-white/50' : 'bg-white border-slate-200 text-slate-500'}`}>
+                <p className="font-semibold text-accent-gold mb-1">Insufficient Historical Data</p>
+                <p className="text-xs">At least 2 saved reports are required to calculate trend performance charts.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-              {/* 2. Defect Closure Trend (Area) */}
-              <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: true, margin: "-45px" }}
-                transition={{ duration: 0.5, delay: 0.05 }}
-                className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
-              >
-                <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Defect Closure Trend</span>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="reportedGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f87171" stopOpacity={0.2} />
-                          <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
-                        </linearGradient>
-                        <linearGradient id="closedGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="name" stroke={chartText} fontSize={9} />
-                      <YAxis stroke={chartText} fontSize={9} />
-                      <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Area type="monotone" dataKey="reportedDefects" name="Reported Defects" stroke="#f87171" fill="url(#reportedGrad)" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                      <Area type="monotone" dataKey="closedDefects" name="Closed Defects" stroke="#10b981" fill="url(#closedGrad)" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
+                {/* 1. Monthly KPI Trend (Line) */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ once: true, margin: "-45px" }}
+                  transition={{ duration: 0.5 }}
+                  className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                >
+                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Monthly KPI Trend</span>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <XAxis dataKey="name" stroke={chartText} fontSize={9} />
+                        <YAxis stroke={chartText} fontSize={9} />
+                        <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Line type="monotone" dataKey="emails" name="Support Emails" stroke="#3b82f6" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <Line type="monotone" dataKey="features" name="Features Tested" stroke="#facc15" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <Line type="monotone" dataKey="fixes" name="Code Fixes" stroke="#a855f7" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </motion.div>
 
-              {/* 3. Production Issue Trend (Stacked Area) */}
-              <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: true, margin: "-45px" }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-                className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
-              >
-                <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Production Issue Categories Trend</span>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <XAxis dataKey="name" stroke={chartText} fontSize={9} />
-                      <YAxis stroke={chartText} fontSize={9} />
-                      <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Area type="monotone" dataKey="escapedIssueProd" stackId="1" name="Escaped Issue" stroke="#d4af37" fill="#d4af37" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                      <Area type="monotone" dataKey="supportFixProd" stackId="1" name="Support Fix" stroke="#eab308" fill="#eab308" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                      <Area type="monotone" dataKey="changeRequestProd" stackId="1" name="Change Req" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                      <Area type="monotone" dataKey="dataIssueProd" stackId="1" name="Data Issue" stroke="#f87171" fill="#f87171" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                      <Area type="monotone" dataKey="backendUpdationProd" stackId="1" name="Backend Update" stroke="#10b981" fill="#10b981" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
+                {/* 2. Defect Closure Trend (Area) */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ once: true, margin: "-45px" }}
+                  transition={{ duration: 0.5, delay: 0.05 }}
+                  className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                >
+                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Defect Closure Trend</span>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="reportedGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#f87171" stopOpacity={0.2} />
+                            <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
+                          </linearGradient>
+                          <linearGradient id="closedGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="name" stroke={chartText} fontSize={9} />
+                        <YAxis stroke={chartText} fontSize={9} />
+                        <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Area type="monotone" dataKey="reportedDefects" name="Reported Defects" stroke="#f87171" fill="url(#reportedGrad)" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="closedDefects" name="Closed Defects" stroke="#10b981" fill="url(#closedGrad)" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </motion.div>
 
-              {/* 4. Support Ticket Volume (Line) */}
-              <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: true, margin: "-45px" }}
-                transition={{ duration: 0.5, delay: 0.15 }}
-                className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
-              >
-                <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Weekly Support Ticket Trend</span>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <XAxis dataKey="name" stroke={chartText} fontSize={9} />
-                      <YAxis stroke={chartText} fontSize={9} />
-                      <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Line type="monotone" dataKey="emails" name="Support tickets" stroke="#06b6d4" strokeWidth={2.5} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
+                {/* 3. Production Issue Trend (Stacked Area) */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ once: true, margin: "-45px" }}
+                  transition={{ duration: 0.5, delay: 0.1 }}
+                  className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                >
+                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Production Issue Categories Trend</span>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <XAxis dataKey="name" stroke={chartText} fontSize={9} />
+                        <YAxis stroke={chartText} fontSize={9} />
+                        <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Area type="monotone" dataKey="escapedIssueProd" stackId="1" name="Escaped Issue" stroke="#d4af37" fill="#d4af37" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="supportFixProd" stackId="1" name="Support Fix" stroke="#eab308" fill="#eab308" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="changeRequestProd" stackId="1" name="Change Req" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="dataIssueProd" stackId="1" name="Data Issue" stroke="#f87171" fill="#f87171" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="backendUpdationProd" stackId="1" name="Backend Update" stroke="#10b981" fill="#10b981" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </motion.div>
 
-              {/* 5. QA Health Score & Team Size (Composed) */}
-              <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: true, margin: "-45px" }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
-              >
-                <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">QA Health vs Team Size Trend</span>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <XAxis dataKey="name" stroke={chartText} fontSize={9} />
-                      <YAxis stroke={chartText} fontSize={9} />
-                      <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="teamSize" name="Allocated Engineers" fill="rgba(212,175,55,0.2)" radius={[4, 4, 0, 0]} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                      <Line type="monotone" dataKey="healthScore" name="QA Health Score %" stroke="#10b981" strokeWidth={2.5} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
+                {/* 4. Support Ticket Volume (Line) */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ once: true, margin: "-45px" }}
+                  transition={{ duration: 0.5, delay: 0.15 }}
+                  className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                >
+                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Weekly Support Ticket Trend</span>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <XAxis dataKey="name" stroke={chartText} fontSize={9} />
+                        <YAxis stroke={chartText} fontSize={9} />
+                        <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Line type="monotone" dataKey="emails" name="Support tickets" stroke="#06b6d4" strokeWidth={2.5} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </motion.div>
 
-              {/* 6. Feature Completion Status (Stacked Bar) */}
-              <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: true, margin: "-45px" }}
-                transition={{ duration: 0.5, delay: 0.25 }}
-                className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
-              >
-                <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Feature Completion Trend</span>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <XAxis dataKey="name" stroke={chartText} fontSize={9} />
-                      <YAxis stroke={chartText} fontSize={9} />
-                      <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="passFeatures" name="Passed" stackId="a" fill="#10b981" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                      <Bar dataKey="failFeatures" name="Failed" stackId="a" fill="#f87171" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                      <Bar dataKey="blockedFeatures" name="Blocked" stackId="a" fill="#fb923c" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
+                {/* 5. QA Health Score & Team Size (Composed) */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ once: true, margin: "-45px" }}
+                  transition={{ duration: 0.5, delay: 0.2 }}
+                  className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                >
+                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">QA Health vs Team Size Trend</span>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <XAxis dataKey="name" stroke={chartText} fontSize={9} />
+                        <YAxis stroke={chartText} fontSize={9} />
+                        <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Bar dataKey="teamSize" name="Allocated Engineers" fill="rgba(212,175,55,0.2)" radius={[4, 4, 0, 0]} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <Line type="monotone" dataKey="healthScore" name="QA Health Score %" stroke="#10b981" strokeWidth={2.5} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </motion.div>
 
-            </div>
-          )}
-        </motion.section>
+                {/* 6. Feature Completion Status (Stacked Bar) */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ once: true, margin: "-45px" }}
+                  transition={{ duration: 0.5, delay: 0.25 }}
+                  className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                >
+                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Feature Completion Trend</span>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <XAxis dataKey="name" stroke={chartText} fontSize={9} />
+                        <YAxis stroke={chartText} fontSize={9} />
+                        <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Bar dataKey="passFeatures" name="Passed" stackId="a" fill="#10b981" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <Bar dataKey="failFeatures" name="Failed" stackId="a" fill="#f87171" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <Bar dataKey="blockedFeatures" name="Blocked" stackId="a" fill="#fb923c" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </motion.div>
+
+              </div>
+            )}
+          </motion.section>
         )}
 
         {/* ── SECTION 6: WEEKLY ANCHORED CHARTS ── */}
-        <section ref={sectionsRef.charts} className="flex flex-col gap-6">
+        <section ref={sectionsRef.charts} className="flex flex-col gap-6" style={{ display: vis.show_weeklyCharts === false ? 'none' : undefined }}>
           <div className="flex items-center gap-2">
             <LayoutGrid className="w-5 h-5 text-accent-gold" />
             <h2 className="text-2xl font-extrabold font-clash">Weekly Charts & Distribution</h2>
@@ -2806,7 +2894,7 @@ Do not return markdown wraps, only raw JSON text.
         </section>
 
         {/* ── SECTION 8: TEAM RESOURCE ALLOCATION ── */}
-        <section ref={sectionsRef.team} className="flex flex-col gap-6">
+        <section ref={sectionsRef.team} className="flex flex-col gap-6" style={{ display: vis.show_teamAllocation === false ? 'none' : undefined }}>
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-accent-gold" />
             <h2 className="text-2xl font-extrabold font-clash">Team Resource Allocation</h2>
@@ -2853,6 +2941,7 @@ Do not return markdown wraps, only raw JSON text.
           viewport={{ once: true, margin: "-80px" }}
           ref={sectionsRef.roadmap}
           className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8"
+          style={{ display: (vis.showTimeline === false && vis.show_nextPriorities === false) ? 'none' : undefined }}
         >
 
           {/* Daily Milestone Logs */}

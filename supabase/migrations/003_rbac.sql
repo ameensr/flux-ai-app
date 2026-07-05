@@ -22,7 +22,7 @@ create policy "roles_read_all" on public.roles
 
 create policy "roles_admin_write" on public.roles
   for all using (
-    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'super_admin'))
   );
 
 -- 2. modules
@@ -137,7 +137,7 @@ insert into public.permissions (permission_key, permission_name, description) va
   ('can_delete',       'Delete',         'Can delete items'),
   ('can_export',       'Export',         'Can export data (Jira, Slack, CSV)'),
   ('can_generate_ai',  'Generate AI',    'Can use AI generation features'),
-  ('can_manage',       'Manage',         'Can manage settings and configurations'),
+  ('can_configure',    'Configure',      'Can modify module settings and configurations'),
   ('can_use_advanced_ai', 'Advanced AI', 'Can use advanced/premium AI models')
 on conflict (permission_key) do nothing;
 
@@ -164,7 +164,7 @@ begin
   select id into p_delete  from public.permissions where permission_key = 'can_delete';
   select id into p_export  from public.permissions where permission_key = 'can_export';
   select id into p_gen_ai  from public.permissions where permission_key = 'can_generate_ai';
-  select id into p_manage  from public.permissions where permission_key = 'can_manage';
+  select id into p_manage  from public.permissions where permission_key = 'can_configure';
   select id into p_adv_ai  from public.permissions where permission_key = 'can_use_advanced_ai';
 
   -- ── ADMIN: full access to everything ──────────────────────

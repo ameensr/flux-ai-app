@@ -4,12 +4,13 @@ import { cn } from '@/lib/utils'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { FloatingButton } from '@/components/ui/FloatingButton'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
+import { usePermissions } from '@/hooks/usePermissions'
 import { AIService } from '@/services/ai/ai-service'
 import { QUICK_ACTION_PROMPTS, TONES, type ToneResults } from '@/ai/prompts/writingPrompt'
 import {
   Sparkles, Copy, RefreshCw, Zap, CheckCheck,
   Scissors, Expand, SpellCheck, Briefcase, Smile,
-  AlignLeft, Wand2, AlertCircle
+  AlignLeft, Wand2, AlertCircle, Lock
 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
@@ -91,6 +92,9 @@ export const WritingAssistant = () => {
   const [quickLoading, setQuickLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const { can } = usePermissions()
+  const canGenerateAI = can('writing-assistant', 'can_generate_ai')
+  const canExport = can('writing-assistant', 'can_export')
 
   const autoResize = useCallback(() => {
     const el = textareaRef.current
@@ -102,6 +106,10 @@ export const WritingAssistant = () => {
   useEffect(() => { autoResize() }, [input, autoResize])
 
   const handleGenerate = async () => {
+    if (!canGenerateAI) {
+      toast({ title: 'Permission Denied', description: "You don't have permission to use AI generation.", variant: 'destructive' })
+      return
+    }
     if (!input.trim()) {
       toast({ title: 'Input Required', description: 'Type or paste some text first.', variant: 'destructive' })
       return
@@ -151,6 +159,10 @@ export const WritingAssistant = () => {
   }
 
   const handleQuickAction = async (actionId: string) => {
+    if (!canGenerateAI) {
+      toast({ title: 'Permission Denied', description: "You don't have permission to use AI generation.", variant: 'destructive' })
+      return
+    }
     if (!input.trim()) {
       toast({ title: 'Input Required', description: 'Type or paste some text first.', variant: 'destructive' })
       return
@@ -218,7 +230,7 @@ export const WritingAssistant = () => {
                 <button
                   key={id}
                   onClick={() => handleQuickAction(id)}
-                  disabled={!!quickLoading || isGenerating}
+                  disabled={!!quickLoading || isGenerating || !canGenerateAI}
                   className={cn(
                     'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-200',
                     quickLoading === id
@@ -237,12 +249,14 @@ export const WritingAssistant = () => {
             <p className="text-[10px] text-text-muted hidden sm:block">⌘ + Enter to generate</p>
             <FloatingButton
               onClick={handleGenerate}
-              disabled={isGenerating || !input.trim()}
+              disabled={isGenerating || !input.trim() || !canGenerateAI}
               className="ml-auto"
             >
-              {isGenerating
-                ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Refining {loadedCount}/{TONES.length}...</>
-                : <><Sparkles className="w-4 h-4 mr-2" /> Refine in All Tones</>}
+              {!canGenerateAI
+                ? <><Lock className="w-4 h-4 mr-2 opacity-60" /> AI Generation Locked</>
+                : isGenerating
+                  ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Refining {loadedCount}/{TONES.length}...</>
+                  : <><Sparkles className="w-4 h-4 mr-2" /> Refine in All Tones</>}
             </FloatingButton>
           </div>
         </GlassCard>

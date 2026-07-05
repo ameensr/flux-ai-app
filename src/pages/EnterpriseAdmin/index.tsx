@@ -8,7 +8,8 @@ import { UserManagement } from './UserManagement'
 import { RoleManagement } from './RoleManagement'
 import { PermissionTemplates } from './PermissionTemplates'
 import { AuditLogs } from './AuditLogs'
-import { Users, Shield, Layers, Activity, RefreshCw, ChevronLeft } from 'lucide-react'
+import { MaintenanceSettings } from './MaintenanceSettings'
+import { Users, Shield, Layers, Activity, RefreshCw, ChevronLeft, Wrench } from 'lucide-react'
 import { ROUTES } from '@/lib/routes'
 import { SilentBoundary } from '@/components/ErrorBoundary'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -56,6 +57,7 @@ const TABS = [
   { path: ROUTES.enterpriseRoles, label: 'Roles & Permissions', icon: Shield, short: 'Roles' },
   { path: ROUTES.enterpriseTemplates, label: 'Permission Templates', icon: Layers, short: 'Templates' },
   { path: ROUTES.enterpriseAudit, label: 'Audit Logs', icon: Activity, short: 'Audit' },
+  { path: ROUTES.enterpriseMaintenance, label: 'Maintenance Mode', icon: Wrench, short: 'Maintenance' },
 ] as const
 
 export function EnterpriseAdmin() {
@@ -70,6 +72,7 @@ export function EnterpriseAdmin() {
       case ROUTES.enterpriseRoles: return <TabBoundary><RoleManagement /></TabBoundary>
       case ROUTES.enterpriseTemplates: return <TabBoundary><PermissionTemplates /></TabBoundary>
       case ROUTES.enterpriseAudit: return <TabBoundary><AuditLogs /></TabBoundary>
+      case ROUTES.enterpriseMaintenance: return <TabBoundary><MaintenanceSettings /></TabBoundary>
       default: return <TabBoundary><UserManagement /></TabBoundary>
     }
   }

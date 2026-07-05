@@ -2,6 +2,7 @@ import React from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { Sidebar } from './Sidebar'
 import { Footer } from './Footer'
+import { MaintenanceBanner } from '../ui/MaintenanceBanner'
 import { Menu, Sun, Moon } from 'lucide-react'
 import { useTheme } from '@/context/ThemeContext'
 import { Logo } from '../ui/Logo'
@@ -22,6 +23,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       className="min-h-screen"
       style={{ backgroundColor: 'var(--bg)', color: 'var(--text-primary)' }}
     >
+      <MaintenanceBanner />
       <Sidebar />
 
       {/* Mobile top bar */}

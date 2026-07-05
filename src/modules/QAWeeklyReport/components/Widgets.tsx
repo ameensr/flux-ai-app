@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
+import { usePermissions } from '@/hooks/usePermissions'
 import { Trash2, ExternalLink, Search, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
@@ -95,12 +96,12 @@ export const DashboardWidgets: React.FC = () => {
   const passCount = releaseItems.filter(i => i.status === 'Pass').length
 
   const slices: PieSlice[] = [
-    { label: 'Support Tickets', value: form.supportEmails, color: 'bg-blue-400',   hex: '#60a5fa' },
-    { label: 'New Features',    value: form.newFeatures,   color: 'bg-yellow-400', hex: '#facc15' },
-    { label: 'Code Fixes',      value: form.codeFixes,     color: 'bg-purple-400', hex: '#c084fc' },
-    { label: 'Reported',        value: d.reported,         color: 'bg-red-400',    hex: '#f87171' },
-    { label: 'Open Defects',    value: d.open,             color: 'bg-orange-400', hex: '#fb923c' },
-    { label: 'Closed Defects',  value: d.closed,           color: 'bg-green-400',  hex: '#4ade80' },
+    { label: 'Support Tickets', value: form.supportEmails, color: 'bg-blue-400', hex: '#60a5fa' },
+    { label: 'New Features', value: form.newFeatures, color: 'bg-yellow-400', hex: '#facc15' },
+    { label: 'Code Fixes', value: form.codeFixes, color: 'bg-purple-400', hex: '#c084fc' },
+    { label: 'Reported', value: d.reported, color: 'bg-red-400', hex: '#f87171' },
+    { label: 'Open Defects', value: d.open, color: 'bg-orange-400', hex: '#fb923c' },
+    { label: 'Closed Defects', value: d.closed, color: 'bg-green-400', hex: '#4ade80' },
   ]
 
   return (
@@ -183,6 +184,8 @@ export const DefectChart: React.FC = () => {
 
 export const ReportHistory: React.FC = () => {
   const { savedReports, deleteReport, setGeneratedReport, setForm, historySearch, setHistorySearch, projects, form, fetchReports } = useQAReportStore()
+  const { can } = usePermissions()
+  const canDelete = can('qa-report', 'can_delete')
   const [page, setPage] = useState(1)
   const PER_PAGE = 5
 
@@ -283,12 +286,12 @@ export const ReportHistory: React.FC = () => {
           <div key={r.id} className="flex items-center justify-between gap-2 p-3 rounded-2xl bg-hover/20 border border-border hover:border-accent/20 transition-all group">
             <div className="min-w-0">
               <p className="text-sm font-bold text-text-primary truncate">{r.project}</p>
-              <p className="text-[11px] text-text-muted">{r.week} · {new Date(r.generatedDate).toLocaleDateString()}</p>
+              <p className="text-[11px] text-text-muted">{r.week} · {new Date(r.generatedDate).toLocaleDateString()} at {new Date(r.generatedDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
             </div>
             <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={() => open(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-accent-gold transition-all" title="Open"><ExternalLink className="w-3.5 h-3.5" /></button>
               <button onClick={() => duplicate(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-text-primary transition-all" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
-              <button onClick={() => deleteReport(r.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+              {canDelete && <button onClick={() => deleteReport(r.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>}
             </div>
           </div>
         ))}

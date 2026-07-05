@@ -26,7 +26,7 @@ export const QAReportConfig: React.FC = () => {
   } = useQAReportStore()
 
   // Authorization Check via RBAC
-  const isAuthorized = can('qa-report', 'can_manage')
+  const isAuthorized = can('qa-report', 'can_configure')
 
   // Form states
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -43,7 +43,7 @@ export const QAReportConfig: React.FC = () => {
 
   useEffect(() => {
     if (!isAuthorized) return
-    
+
     setLoading(true)
     fetchProjects(false).then(() => setLoading(false)) // Fetch all (including inactive)
 

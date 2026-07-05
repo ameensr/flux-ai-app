@@ -31,7 +31,7 @@ create policy "daily_report_configs_all_admin" on public.daily_report_dropdown_c
     where p.id = auth.uid()
       and (
         p.role = 'super_admin' or
-        public.check_module_permission(p.role, 'daily-report', 'can_manage')
+        public.check_module_permission(p.role, 'daily-report', 'can_configure')
       )
   )
 );
@@ -218,7 +218,7 @@ begin
   select id into p_edit    from public.permissions where permission_key = 'can_edit';
   select id into p_delete  from public.permissions where permission_key = 'can_delete';
   select id into p_export  from public.permissions where permission_key = 'can_export';
-  select id into p_manage  from public.permissions where permission_key = 'can_manage';
+  select id into p_manage  from public.permissions where permission_key = 'can_configure';
 
   -- ADMIN: full access
   if r_admin is not null and m_daily is not null then

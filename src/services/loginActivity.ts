@@ -39,7 +39,7 @@ function parseOS(ua: string): string {
 // ── Config ─────────────────────────────────────────────────────────────────────
 
 /** Maximum login events stored per user. Older entries are pruned on each login. */
-const MAX_EVENTS_PER_USER = 3
+const MAX_EVENTS_PER_USER = 5
 
 // ── Log a login event ─────────────────────────────────────────────────────────
 
@@ -61,6 +61,14 @@ export async function logLoginEvent(
       ip_address: null,
     })
 
+    // Update profiles.last_login_at so admins always have a fallback
+    if (eventType === 'sign_in') {
+      await supabase
+        .from('profiles')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('id', userId)
+    }
+
     // Prune old events — keep only the latest MAX_EVENTS_PER_USER
     const { data: recent } = await supabase
       .from('login_events')
@@ -69,7 +77,7 @@ export async function logLoginEvent(
       .order('created_at', { ascending: false })
       .limit(MAX_EVENTS_PER_USER)
 
-    if (recent && recent.length === MAX_EVENTS_PER_USER) {
+    if (recent && recent.length >= MAX_EVENTS_PER_USER) {
       const keepIds = recent.map((r: { id: string }) => r.id)
       await supabase
         .from('login_events')

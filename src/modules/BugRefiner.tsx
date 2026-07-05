@@ -4,17 +4,19 @@ import { GlassCard } from "@/components/ui/GlassCard"
 import { FloatingButton } from "@/components/ui/FloatingButton"
 import { CinematicHeading } from "@/components/ui/CinematicHeading"
 import { RoleGuard } from "@/components/ui/RoleGuard"
+import { usePermissions } from "@/hooks/usePermissions"
 import { AIService } from "@/services/ai/ai-service"
 import { BUG_PROMPT } from "@/ai/prompts/bugPrompt"
-import { 
-  Bug, 
-  Sparkles, 
-  Copy, 
-  RefreshCw, 
-  Download, 
+import {
+  Bug,
+  Sparkles,
+  Copy,
+  RefreshCw,
+  Download,
   Send,
   Zap,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 
@@ -23,8 +25,15 @@ export const BugRefiner = () => {
   const [result, setResult] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [confidence, setConfidence] = useState(0)
+  const { can } = usePermissions()
+  const canGenerateAI = can('bug-refiner', 'can_generate_ai')
+  const canExport = can('bug-refiner', 'can_export')
 
   const handleGenerate = async () => {
+    if (!canGenerateAI) {
+      toast({ title: "Permission Denied", description: "You don't have permission to use AI generation.", variant: "destructive" })
+      return
+    }
     if (!input.trim()) {
       toast({
         title: "Input Required",
@@ -36,17 +45,17 @@ export const BugRefiner = () => {
 
     setIsGenerating(true)
     setResult('')
-    
+
     try {
       const response = await AIService.callAI({
         prompt: input,
         options: { module: 'bug-refiner', systemPrompt: BUG_PROMPT }
       })
-      
+
       // Simulate AI typing effect for cinematic feel
       setResult(response)
       setConfidence(Math.floor(Math.random() * (98 - 85 + 1)) + 85)
-      
+
       toast({
         title: "Bug Refined!",
         description: "Your professional bug report is ready."
@@ -87,8 +96,8 @@ export const BugRefiner = () => {
       exit={{ opacity: 0 }}
       className="py-6 sm:py-12"
     >
-      <CinematicHeading 
-        title="Bug Refiner" 
+      <CinematicHeading
+        title="Bug Refiner"
         subtitle="Transform rough logs and messy notes into professional, JIRA-ready bug reports with AI precision."
         align="left"
       />
@@ -109,13 +118,18 @@ export const BugRefiner = () => {
               className="w-full h-48 sm:h-64 lg:h-[400px] bg-transparent border-none focus:ring-0 text-text-primary placeholder:text-text-muted resize-none font-montreal leading-relaxed text-base sm:text-lg"
             />
             <div className="mt-4 sm:absolute sm:bottom-6 sm:right-6">
-              <FloatingButton 
+              <FloatingButton
                 onClick={handleGenerate}
-                disabled={isGenerating}
+                disabled={isGenerating || !canGenerateAI}
                 className="w-full sm:w-auto"
               >
                 {isGenerating ? (
                   <RefreshCw className="w-5 h-5 animate-spin" />
+                ) : !canGenerateAI ? (
+                  <>
+                    <Lock className="w-4 h-4 mr-2 opacity-60" />
+                    AI Generation Locked
+                  </>
                 ) : (
                   <>
                     <Sparkles className="w-5 h-5 mr-2" />
@@ -147,25 +161,27 @@ export const BugRefiner = () => {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <button 
+                      <button
                         onClick={() => copyToClipboard(result)}
                         className="p-2 hover:bg-white/5 rounded-lg text-text-secondary hover:text-white transition-all"
                       >
                         <Copy className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => downloadReport(result)}
-                        className="p-2 hover:bg-white/5 rounded-lg text-text-secondary hover:text-white transition-all"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
+                      {canExport && (
+                        <button
+                          onClick={() => downloadReport(result)}
+                          className="p-2 hover:bg-white/5 rounded-lg text-text-secondary hover:text-white transition-all"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
                   <div className="font-montreal text-text-primary whitespace-pre-wrap leading-relaxed">
                     {result}
                   </div>
-                  
+
                   <div className="mt-12 pt-8 border-t border-white/5 flex gap-4">
                     <RoleGuard permission={{ module: 'bug-refiner', key: 'can_export' }} fallback={
                       <button disabled className="flex-1 px-4 py-3 rounded-xl bg-white/5 text-xs font-bold uppercase tracking-widest opacity-30 cursor-not-allowed">Export to Jira 🔒</button>

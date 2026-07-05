@@ -93,6 +93,7 @@ export interface QAReportForm {
   automationTeam: string[]
   supportTickets: SupportTicket[]
   releaseItems: ReleaseItem[]
+  releaseBugStatus?: any // ReleaseBugAnalytics — stored as JSON
   defectsLastWeek: DefectMetrics
   defectsMTD: DefectMetrics
   historicalDefects: HistoricalDefect[]
@@ -102,6 +103,7 @@ export interface QAReportForm {
   showHistoricalAnalytics?: boolean
   showTimeline?: boolean
   customTimeline?: TimelineNode[]
+  dashboardSections?: Record<string, boolean>
 }
 
 export interface SavedReport {
@@ -136,10 +138,10 @@ export const ensureFormData = (form: any): QAReportForm => {
       backendUpdation: Number(f.lastWeek?.backendUpdation) || 0,
       completedCR: Number(f.lastWeek?.completedCR) || 0,
       support: (Number(f.lastWeek?.escapedIssue ?? f.lastWeek?.codeFix) || 0) +
-               (Number(f.lastWeek?.supportFix) || 0) +
-               (Number(f.lastWeek?.changeRequest) || 0) +
-               (Number(f.lastWeek?.dataIssue) || 0) +
-               (Number(f.lastWeek?.backendUpdation) || 0),
+        (Number(f.lastWeek?.supportFix) || 0) +
+        (Number(f.lastWeek?.changeRequest) || 0) +
+        (Number(f.lastWeek?.dataIssue) || 0) +
+        (Number(f.lastWeek?.backendUpdation) || 0),
     },
     monthToDate: {
       escapedIssue: Number(f.monthToDate?.escapedIssue ?? f.monthToDate?.codeFix) || 0,
@@ -149,11 +151,11 @@ export const ensureFormData = (form: any): QAReportForm => {
       dataIssue: Number(f.monthToDate?.dataIssue) || 0,
       backendUpdation: Number(f.monthToDate?.backendUpdation) || 0,
       support: (Number(f.monthToDate?.escapedIssue ?? f.monthToDate?.codeFix) || 0) +
-               (Number(f.monthToDate?.supportFix) || 0) +
-               (Number(f.monthToDate?.changeRequest) || 0) +
-               (Number(f.monthToDate?.completedCR) || 0) +
-               (Number(f.monthToDate?.dataIssue) || 0) +
-               (Number(f.monthToDate?.backendUpdation) || 0),
+        (Number(f.monthToDate?.supportFix) || 0) +
+        (Number(f.monthToDate?.changeRequest) || 0) +
+        (Number(f.monthToDate?.completedCR) || 0) +
+        (Number(f.monthToDate?.dataIssue) || 0) +
+        (Number(f.monthToDate?.backendUpdation) || 0),
     },
     newFeatureTeam: Array.isArray(f.newFeatureTeam) ? f.newFeatureTeam.filter(Boolean) : [],
     supportTeam: Array.isArray(f.supportTeam) ? f.supportTeam.filter(Boolean) : [],
@@ -176,6 +178,7 @@ export const ensureFormData = (form: any): QAReportForm => {
       priority: item?.priority || 'Medium',
       remarks: item?.remarks || ''
     })) : [],
+    releaseBugStatus: f.releaseBugStatus || null,
     defectsLastWeek: {
       reported: Number(f.defectsLastWeek?.reported) || 0,
       open: Number(f.defectsLastWeek?.open) || 0,
@@ -217,5 +220,6 @@ export const ensureFormData = (form: any): QAReportForm => {
       emailChange: t?.emailChange || '➜',
       rawForm: t?.rawForm
     })) : [],
+    dashboardSections: f.dashboardSections || null,
   }
 }

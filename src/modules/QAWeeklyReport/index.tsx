@@ -9,12 +9,15 @@ import { HeaderSection, KPICards } from './components/HeaderSection'
 import { ProductionIssues } from './components/ProductionIssues'
 import { TeamAllocation } from './components/TeamAllocation'
 import { SupportLog } from './components/SupportLog'
+import { ReportPreviewDrawer } from './components/ReportPreviewDrawer'
 import { ReleaseTable } from './components/ReleaseTable'
+import { ReleaseBugStatus } from './components/ReleaseBugStatus'
+import { DashboardSectionToggles } from './components/DashboardSectionToggles'
 import { DefectAnalysis, HistoricalProgress, NextPriorities } from './components/Metrics'
 import { ReportPreview } from './components/ReportPreview'
 import { DashboardWidgets, DefectChart, ReportHistory } from './components/Widgets'
 import { toast } from '@/hooks/use-toast'
-import { FileText, RefreshCw, RotateCcw, AlertCircle, Plus, Trash, History as HistoryIcon, Settings } from 'lucide-react'
+import { FileText, RefreshCw, RotateCcw, AlertCircle, Plus, Trash, History as HistoryIcon, Settings, Eye, Lock } from 'lucide-react'
 import type { QAReportForm, TimelineNode } from './types'
 import { ROUTES } from '@/lib/routes'
 import { calculateQAScore } from './utils/qualityCalculator'
@@ -105,6 +108,47 @@ function buildMarkdown(f: QAReportForm): string {
     f.releaseItems.forEach(i => lines.push(`| ${i.taskId} | ${i.featureName} | ${i.assignee} | ${i.status} | ${i.priority} | ${i.remarks} |`))
   }
 
+  // Release Bug Status
+  if (f.releaseBugStatus) {
+    const rbs = f.releaseBugStatus
+    lines.push('\n## Release Bug Status')
+    if (rbs.uploadedFileName) lines.push(`**Source:** ${rbs.uploadedFileName}`)
+    if (rbs.metrics) {
+      const m = rbs.metrics
+      lines.push(`\n**Release Health:** ${rbs.releaseHealth?.emoji || ''} ${rbs.releaseHealth?.label || 'N/A'} (Score: ${rbs.releaseHealth?.score ?? '—'}%)`)
+      lines.push('\n| Metric | Value |')
+      lines.push('|---|---|')
+      lines.push(`| Total Bugs | **${m.totalBugs}** |`)
+      lines.push(`| Completed (Closed/Verified) | ${m.completedBugs} (${m.closurePercentage}%) |`)
+      lines.push(`| Resolved (Ready for QA) | ${m.resolvedBugs} |`)
+      lines.push(`| Active (Open/In Progress) | ${m.activeBugs} (${m.activePercentage}%) |`)
+      lines.push(`| Deferred | ${m.deferredBugs} (${m.deferredPercentage}%) |`)
+      lines.push(`| Invalid/Rejected | ${m.invalidBugs} (${m.invalidPercentage}%) |`)
+    }
+    if (rbs.severityDistribution?.length) {
+      lines.push('\n### Severity Distribution')
+      lines.push('| Severity | Count |')
+      lines.push('|---|---|')
+      rbs.severityDistribution.forEach((s: any) => lines.push(`| ${s.severity} | ${s.count} |`))
+    }
+    if (rbs.priorityDistribution?.length) {
+      lines.push('\n### Priority Distribution')
+      lines.push('| Priority | Count |')
+      lines.push('|---|---|')
+      rbs.priorityDistribution.forEach((p: any) => lines.push(`| ${p.priority} | ${p.count} |`))
+    }
+    if (rbs.statusDistribution?.length) {
+      lines.push('\n### Bug Status Distribution')
+      lines.push('| Status | Count |')
+      lines.push('|---|---|')
+      rbs.statusDistribution.forEach((s: any) => lines.push(`| ${s.status} | ${s.count} |`))
+    }
+    if (rbs.aiSummary) {
+      lines.push('\n### AI Analysis')
+      lines.push(rbs.aiSummary)
+    }
+  }
+
   // Defect Analysis
   lines.push('\n## Internal Defect Analysis')
   lines.push('| Metric | Last Week | Month To Date |')
@@ -155,36 +199,7 @@ function validate(form: QAReportForm): string[] {
   return errors
 }
 
-function ReportDisplayToggles() {
-  const { form, setForm } = useQAReportStore()
-
-  return (
-    <div className="p-6 rounded-3xl border glass-panel flex flex-col gap-4 text-left">
-      <div>
-        <h3 className="text-sm font-bold text-white">Dashboard Display Sections</h3>
-        <p className="text-[11px] text-text-muted">Choose which sections to display on the Executive Dashboard preview.</p>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { key: 'showAISummary', label: 'AI Summary' },
-          { key: 'showAIInsights', label: 'AI Insights' },
-          { key: 'showHistoricalAnalytics', label: 'Historical Analytics' },
-          { key: 'showTimeline', label: 'Weekly QA Timeline' },
-        ].map((opt) => (
-          <label key={opt.key} className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all">
-            <input
-              type="checkbox"
-              checked={!!(form as any)[opt.key]}
-              onChange={(e) => setForm({ [opt.key]: e.target.checked })}
-              className="w-4 h-4 rounded border-white/10 bg-black text-[#d4af37] focus:ring-[#d4af37]"
-            />
-            <span className="text-xs font-semibold text-text-secondary">{opt.label}</span>
-          </label>
-        ))}
-      </div>
-    </div>
-  )
-}
+// ReportDisplayToggles replaced by DashboardSectionToggles component
 
 function TimelineBuilder() {
   const { form, setForm, savedReports } = useQAReportStore()
@@ -380,10 +395,17 @@ export const QAWeeklyReport: React.FC = () => {
   const { form, setForm, setGeneratedReport, generatedReport, resetForm, fetchReports, fetchProjects } = useQAReportStore()
   const { can } = usePermissions()
   const navigate = useNavigate()
-  const isAuthorizedToConfig = can('qa-report', 'can_manage')
+  const isAuthorizedToConfig = can('qa-report', 'can_configure')
+  const canCreate = can('qa-report', 'can_create')
+  const canDelete = can('qa-report', 'can_delete')
+  const canExport = can('qa-report', 'can_export')
+  const canGenerateAI = can('qa-report', 'can_generate_ai')
   const [errors, setErrors] = useState<string[]>([])
   const [isLaunching, setIsLaunching] = useState(false)
   const [launchMessage, setLaunchMessage] = useState('')
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [isPreviewed, setIsPreviewed] = useState(false)
+  const [isSaved, setIsSaved] = useState(false)
 
   React.useEffect(() => {
     fetchProjects(true).then(() => {
@@ -403,14 +425,38 @@ export const QAWeeklyReport: React.FC = () => {
     })
   }, [])
 
+  const handlePreview = () => {
+    const errs = validate(form)
+    setErrors(errs)
+    if (errs.length) return
+
+    // Generate markdown for the preview drawer
+    const md = buildMarkdown(form)
+    setGeneratedReport(md)
+    setIsPreviewed(true)
+    setDrawerOpen(true)
+  }
+
+  const handleDrawerSaved = () => {
+    setIsSaved(true)
+  }
+
   const handleGenerate = () => {
+    if (!isSaved) {
+      toast({
+        variant: 'destructive',
+        title: 'Preview & Save Required',
+        description: 'Please preview and save your report before launching the Executive Dashboard.',
+      })
+      return
+    }
+
     const errs = validate(form)
     setErrors(errs)
     if (errs.length) return
 
     // Save to local storage for the dashboard preview tab to pick up
     localStorage.setItem('current-qa-report-data', JSON.stringify(form))
-    setGeneratedReport(buildMarkdown(form))
 
     // Start premium animation experience
     setIsLaunching(true)
@@ -434,6 +480,8 @@ export const QAWeeklyReport: React.FC = () => {
     if (!confirm('Reset all form data?')) return
     resetForm(form.projectId, form.projectName)
     setErrors([])
+    setIsPreviewed(false)
+    setIsSaved(false)
     localStorage.removeItem('current-qa-report-data')
     toast({ title: 'Form Reset', description: 'All fields have been cleared (project preserved).' })
   }
@@ -453,22 +501,24 @@ export const QAWeeklyReport: React.FC = () => {
           {/* New Report Button */}
           <button
             onClick={() => {
-              const isFormEmpty = 
-                !form.weekStart && 
-                !form.weekEnd && 
-                !form.subtitle && 
-                form.supportEmails === 0 && 
-                form.newFeatures === 0 && 
-                form.codeFixes === 0 && 
-                form.releaseItems.length === 0 && 
-                form.supportTickets.length === 0 && 
-                form.defectsLastWeek.reported === 0 && 
-                form.defectsLastWeek.open === 0 && 
+              const isFormEmpty =
+                !form.weekStart &&
+                !form.weekEnd &&
+                !form.subtitle &&
+                form.supportEmails === 0 &&
+                form.newFeatures === 0 &&
+                form.codeFixes === 0 &&
+                form.releaseItems.length === 0 &&
+                form.supportTickets.length === 0 &&
+                form.defectsLastWeek.reported === 0 &&
+                form.defectsLastWeek.open === 0 &&
                 form.defectsLastWeek.closed === 0
 
               const executeReset = () => {
                 resetForm(form.projectId, form.projectName)
                 setErrors([])
+                setIsPreviewed(false)
+                setIsSaved(false)
                 localStorage.removeItem('current-qa-report-data')
                 toast({ title: 'New Report Initialized', description: 'Form fields have been reset, project preserved.' })
               }
@@ -502,13 +552,17 @@ export const QAWeeklyReport: React.FC = () => {
         {/* ── Left Panel: Input Forms ────────────────────────────────────── */}
         <div className="flex flex-col gap-6">
           <HeaderSection />
-          <ReportDisplayToggles />
+          <DashboardSectionToggles />
           <TimelineBuilder />
           <KPICards />
           <ProductionIssues />
           <TeamAllocation />
           <SupportLog />
           <ReleaseTable />
+          <ReleaseBugStatus
+            analytics={form.releaseBugStatus}
+            onChange={(data) => setForm({ releaseBugStatus: data })}
+          />
           <DefectAnalysis />
           <HistoricalProgress />
           <NextPriorities />
@@ -533,16 +587,39 @@ export const QAWeeklyReport: React.FC = () => {
 
           {/* Sticky action bar */}
           <div className="sticky bottom-4 z-20 flex items-center gap-3 p-4 rounded-3xl glass-panel border border-white/10 shadow-2xl">
-            <FloatingButton onClick={handleGenerate} className="flex-1" disabled={isLaunching}>
-              {isLaunching ? (
-                <span className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
-                  Launching...
-                </span>
-              ) : (
-                <><FileText className="w-4 h-4 mr-2" /> Launch Executive Dashboard</>
+            {/* Preview Button */}
+            <button
+              onClick={handlePreview}
+              className="flex items-center gap-2 px-5 py-3 rounded-full bg-white/5 border border-accent-gold/30 text-sm font-bold text-accent-gold hover:bg-accent-gold/10 transition-all active:scale-[0.97]"
+            >
+              <Eye className="w-4 h-4" /> Preview
+            </button>
+
+            {/* Launch Button - disabled until saved */}
+            <div className="flex-1 relative group">
+              <FloatingButton
+                onClick={handleGenerate}
+                className="w-full"
+                disabled={isLaunching || !isSaved}
+              >
+                {isLaunching ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
+                    Launching...
+                  </span>
+                ) : !isSaved ? (
+                  <><Lock className="w-4 h-4 mr-2 opacity-60" /> Launch Executive Dashboard</>
+                ) : (
+                  <><FileText className="w-4 h-4 mr-2" /> Launch Executive Dashboard</>
+                )}
+              </FloatingButton>
+              {!isSaved && (
+                <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg bg-black/90 border border-white/10 text-[11px] text-white/70 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  Preview & save your report first
+                </div>
               )}
-            </FloatingButton>
+            </div>
+
             <button
               onClick={handleReset}
               className="flex items-center gap-2 px-4 py-3 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white hover:bg-white/10 transition-all"
@@ -583,6 +660,14 @@ export const QAWeeklyReport: React.FC = () => {
           <ReportHistory />
         </div>
       </div>
+
+      {/* ── Report Preview Drawer ── */}
+      <ReportPreviewDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        markdown={generatedReport}
+        onSaved={handleDrawerSaved}
+      />
 
       {/* ── Premium Launch Animation Overlay ── */}
       <AnimatePresence>
@@ -665,7 +750,7 @@ export const QAWeeklyReport: React.FC = () => {
               >
                 {launchMessage}
               </motion.h4>
-              
+
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 0.4 }}

@@ -8,18 +8,20 @@ import { motion, AnimatePresence } from "framer-motion"
 import { GlassCard } from "@/components/ui/GlassCard"
 import { FloatingButton } from "@/components/ui/FloatingButton"
 import { CinematicHeading } from "@/components/ui/CinematicHeading"
+import { usePermissions } from "@/hooks/usePermissions"
 import { AIService } from "@/services/ai/ai-service"
 import { TEST_CASE_PROMPT } from "@/ai/prompts/testCasePrompt"
-import { 
-  FileText, 
-  Sparkles, 
-  Download, 
+import {
+  FileText,
+  Sparkles,
+  Download,
   Plus,
   Search,
   Filter,
   CheckCircle2,
   AlertTriangle,
-  Code
+  Code,
+  Lock
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
@@ -36,6 +38,9 @@ export const TestCaseGenerator = () => {
   const [isGenerating, setIsGenerating] = useState(false)
   const [streamingOutput, setStreamingOutput] = useState('')
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const { can } = usePermissions()
+  const canGenerateAI = can('test-generator', 'can_generate_ai')
+  const canExport = can('test-generator', 'can_export')
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -70,6 +75,10 @@ export const TestCaseGenerator = () => {
   }
 
   const handleGenerate = async () => {
+    if (!canGenerateAI) {
+      toast({ title: "Permission Denied", description: "You don't have permission to use AI generation.", variant: "destructive" })
+      return
+    }
     if (!input.trim()) {
       toast({ title: "Input Required", description: "Please enter a requirement or feature description.", variant: "destructive" })
       return
@@ -122,8 +131,8 @@ export const TestCaseGenerator = () => {
       exit={{ opacity: 0 }}
       className="py-6 sm:py-12"
     >
-      <CinematicHeading 
-        title="Test Architect" 
+      <CinematicHeading
+        title="Test Architect"
         subtitle="Generate comprehensive test suites with intelligent edge cases, risk analysis, and automation scripts."
         align="left"
       />
@@ -142,11 +151,11 @@ export const TestCaseGenerator = () => {
               className="w-full h-48 sm:h-64 bg-transparent border-none focus:ring-0 text-text-primary placeholder:text-text-muted resize-none font-montreal leading-relaxed"
             />
             <div className="mt-6 flex flex-col gap-3">
-              <FloatingButton 
+              <FloatingButton
                 onClick={handleGenerate}
-                disabled={isGenerating}
+                disabled={isGenerating || !canGenerateAI}
               >
-                {isGenerating ? "Analyzing..." : "Generate Test Suite"}
+                {isGenerating ? "Analyzing..." : !canGenerateAI ? (<><Lock className="w-4 h-4 mr-2 opacity-60" />AI Generation Locked</>) : "Generate Test Suite"}
               </FloatingButton>
               <input
                 ref={fileInputRef}
@@ -182,12 +191,14 @@ export const TestCaseGenerator = () => {
                 <span className="text-xs font-bold uppercase tracking-widest text-text-muted">Filter</span>
               </div>
             </div>
-            
+
             <div className="flex gap-2">
               <Badge variant="outline" className="bg-white/5 border-white/10 text-text-muted">Total: {testCases.length}</Badge>
-              <button className="p-2 glass-panel hover:bg-white/10 transition-all">
-                <Download className="w-4 h-4" />
-              </button>
+              {canExport && (
+                <button className="p-2 glass-panel hover:bg-white/10 transition-all">
+                  <Download className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -219,7 +230,7 @@ export const TestCaseGenerator = () => {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-3">
                         <button className="p-2 rounded-lg hover:bg-white/5 text-text-muted hover:text-accent-gold transition-all">
                           <Code className="w-4 h-4" />

@@ -29,7 +29,7 @@ create policy "projects_write" on public.projects for all using (
       and (
         p.role = 'super_admin' or
         p.role = 'admin' or
-        public.check_module_permission(p.role, 'qa-report', 'can_manage')
+        public.check_module_permission(p.role, 'qa-report', 'can_configure')
       )
   )
 );

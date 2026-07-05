@@ -4,6 +4,8 @@
 // Falls back to env variable VITE_OPENROUTER_API_KEY if no DB config found.
 
 import { supabase } from '@/lib/supabase'
+import { useAppStore } from '@/store/useAppStore'
+import { hasModulePermission } from '@/lib/rbac'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
@@ -13,6 +15,7 @@ const RETRY_DELAY_MS = 1500
 const TRANSIENT_STATUS_CODES = [429, 500, 502, 503, 504]
 
 const DEFAULT_MODEL = 'openai/gpt-4o-mini'
+const BASIC_MODEL = 'openai/gpt-4o-mini'  // Free-tier/basic model for users without advanced AI
 const DEFAULT_MAX_TOKENS = 4096
 const DEFAULT_TEMPERATURE = 0.7
 
@@ -95,6 +98,29 @@ export function invalidateProviderCache(): void {
   cachedMaxTokens = DEFAULT_MAX_TOKENS
   cachedTemperature = DEFAULT_TEMPERATURE
   cacheTimestamp = 0
+}
+
+/**
+ * Check if the current user has can_use_advanced_ai permission for the given module.
+ * Admins/super_admins always have access. Falls back to basic model if permission denied.
+ */
+function canUseAdvancedModel(module?: string): boolean {
+  const { role, permissionMap } = useAppStore.getState()
+  if (role === 'admin' || role === 'super_admin') return true
+  if (!module) return true // if no module context, allow (backward compat)
+  return hasModulePermission(permissionMap, module, 'can_use_advanced_ai')
+}
+
+/**
+ * Resolves the effective model for the request — downgrades to basic model
+ * if the user lacks can_use_advanced_ai permission for the calling module.
+ */
+function resolveModel(configModel: string, module?: string): string {
+  if (canUseAdvancedModel(module)) return configModel
+  // If configured model is the same as basic, no change needed
+  if (configModel === BASIC_MODEL) return configModel
+  // Downgrade to basic model
+  return BASIC_MODEL
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -294,6 +320,7 @@ export async function callAIGateway(payload: {
   module?: string
 }): Promise<string> {
   const config = await getProviderConfig()
+  const effectiveModel = resolveModel(config.model, payload.module)
   let lastError = ''
 
   const messages: { role: string; content: string }[] = []
@@ -313,7 +340,7 @@ export async function callAIGateway(payload: {
           'X-Title': SITE_NAME,
         },
         body: JSON.stringify({
-          model: config.model,
+          model: effectiveModel,
           messages,
           max_tokens: config.maxTokens,
           temperature: config.temperature,
@@ -365,6 +392,7 @@ export async function callAIGatewayStream(payload: {
   systemPrompt?: string
 }): Promise<ReadableStream<Uint8Array>> {
   const config = await getProviderConfig()
+  const effectiveModel = resolveModel(config.model, payload.module)
 
   const messages: { role: string; content: string }[] = []
   if (payload.systemPrompt) {
@@ -382,7 +410,7 @@ export async function callAIGatewayStream(payload: {
         'X-Title': SITE_NAME,
       },
       body: JSON.stringify({
-        model: config.model,
+        model: effectiveModel,
         messages,
         max_tokens: config.maxTokens,
         temperature: config.temperature,

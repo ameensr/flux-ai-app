@@ -14,6 +14,7 @@ import { ROUTES } from '@/lib/routes'
 import { useIdleTimeout } from '@/hooks/useIdleTimeout'
 import { SessionTimeoutWarning } from '@/components/ui/SessionTimeoutWarning'
 import { logLoginEvent } from '@/services/loginActivity'
+import { useMaintenanceStore } from '@/store/useMaintenanceStore'
 
 // ── Idle timeout context ──────────────────────────────────────────────────────
 type RegisterOperationFn = (key: string) => () => void
@@ -38,6 +39,7 @@ const DailyUpdateReport = lazy(() => import('@/modules/DailyUpdateReport').then(
 const DailyReportConfig = lazy(() => import('@/modules/DailyUpdateReport/DailyReportConfig').then(m => ({ default: m.DailyReportConfig })))
 const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINews })))
 const AnnouncementsPage = lazy(() => import('@/modules/Announcements/AnnouncementsPage').then(m => ({ default: m.AnnouncementsPage })))
+const MaintenancePage = lazy(() => import('@/pages/MaintenancePage').then(m => ({ default: m.MaintenancePage })))
 
 // ── Loaders ───────────────────────────────────────────────────────────────────
 function PageLoader() {
@@ -77,6 +79,14 @@ function RedirectIfAuth({ children }: { children: React.ReactNode }) {
 // ── Dashboard Layout wrapper (renders <Outlet /> for child routes) ─────────────
 function DashboardWrapper() {
   const { phase, secondsLeft, stayLoggedIn, logoutNow, registerOperation } = useIdleTimeout()
+  const { role } = useAppStore()
+  const { isRoleLocked, loading: maintenanceLoading } = useMaintenanceStore()
+  const location = useLocation()
+
+  // Redirect locked roles to maintenance page
+  if (!maintenanceLoading && isRoleLocked(role)) {
+    return <Navigate to={ROUTES.maintenance} replace />
+  }
 
   return (
     <IdleContext.Provider value={registerOperation}>
@@ -161,6 +171,9 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
     }
     checkInitialSession()
 
+    // Load maintenance config on startup
+    useMaintenanceStore.getState().fetchConfig()
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION') return
       if (event === 'SIGNED_IN' && session?.user) {
@@ -198,6 +211,9 @@ export default function App() {
 
           {/* Report Preview — standalone page, no sidebar */}
           <Route path={ROUTES.reportPreview} element={<RequireAuth><ReportPreviewWrapper /></RequireAuth>} />
+
+          {/* Maintenance page — standalone, no sidebar */}
+          <Route path={ROUTES.maintenance} element={<RequireAuth><MaintenancePage /></RequireAuth>} />
 
           {/* Protected dashboard routes — uses layout with sidebar */}
           <Route element={<RequireAuth><DashboardWrapper /></RequireAuth>}>

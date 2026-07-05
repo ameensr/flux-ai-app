@@ -30,6 +30,8 @@ const toastVariants = cva(
         default: "border bg-background text-foreground",
         destructive:
           "destructive group border-destructive bg-destructive text-destructive-foreground",
+        success:
+          "group border-emerald-500/20 bg-gradient-to-r from-emerald-50 to-green-50 text-emerald-900 dark:from-emerald-950/90 dark:to-green-950/80 dark:text-emerald-50 dark:border-emerald-500/30 [&_[toast-close]]:text-emerald-600/60 [&_[toast-close]]:hover:text-emerald-900 dark:[&_[toast-close]]:text-emerald-200/60 dark:[&_[toast-close]]:hover:text-emerald-50 shadow-[0_4px_24px_rgba(16,185,129,0.12)] dark:shadow-[0_4px_24px_rgba(16,185,129,0.15)]",
       },
     },
     defaultVariants: {
@@ -41,7 +43,7 @@ const toastVariants = cva(
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
-    VariantProps<typeof toastVariants>
+  VariantProps<typeof toastVariants>
 >(({ className, variant, ...props }, ref) => {
   return (
     <ToastPrimitives.Root

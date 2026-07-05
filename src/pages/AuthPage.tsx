@@ -326,14 +326,14 @@ export const AuthPage = () => {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
         pandaSend({ type: 'LOGIN_SUCCESS' })
-        toast({ title: 'Welcome back', description: 'Authenticated successfully.' })
+        toast({ variant: 'success', title: '✓ Welcome back', description: 'Authenticated successfully.' })
       } else {
         const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
         if (data.user && data.session) {
           await supabase.from('profiles').upsert({ id: data.user.id, email }, { onConflict: 'id' })
           pandaSend({ type: 'LOGIN_SUCCESS' })
-          toast({ title: 'Account created', description: 'Welcome! You are now logged in.' })
+          toast({ variant: 'success', title: '✓ Account created', description: 'Welcome! You are now logged in.' })
         } else {
           pandaSend({ type: 'LOGIN_SUCCESS' })
           toast({ title: 'Verify your email', description: 'Check your inbox to confirm your account.' })

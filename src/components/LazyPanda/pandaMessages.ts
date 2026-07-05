@@ -39,15 +39,15 @@ export interface SmartMessagesConfig {
 
 export const DEFAULT_MESSAGES: SmartMessage[] = [
   // Weekend - Work-Life Balance
-  { id: 'w1',  text: 'Working on a weekend?', emoji: '👀', category: 'weekend', animation: 'scratch', enabled: true },
-  { id: 'w2',  text: 'Even I took a nap... are you sure you want to work?', emoji: '🐼', category: 'weekend', animation: 'yawn', enabled: true },
-  { id: 'w3',  text: 'Weekend? More like "work-end"?', emoji: '☕', category: 'weekend', animation: 'coffee', enabled: true },
-  { id: 'w4',  text: 'Did your manager send you here?', emoji: '😴', category: 'weekend', animation: 'scratch', enabled: true },
-  { id: 'w5',  text: 'Overtime mode detected...', emoji: '💼', category: 'weekend', animation: 'laptop', enabled: true },
-  { id: 'w6',  text: "Shouldn't you be relaxing today?", emoji: '🌴', category: 'weekend', animation: 'stretch', enabled: true },
-  { id: 'w7',  text: 'Weekend login? Hope there\'s pizza involved!', emoji: '🍕', category: 'weekend', animation: 'smile', enabled: true },
-  { id: 'w8',  text: 'Sunshine is outside... just saying.', emoji: '🌞', category: 'weekend', animation: 'point', enabled: true },
-  { id: 'w9',  text: 'I was sleeping... you woke me up!', emoji: '🐼', category: 'weekend', animation: 'yawn', enabled: true },
+  { id: 'w1', text: 'Working on a weekend?', emoji: '👀', category: 'weekend', animation: 'scratch', enabled: true },
+  { id: 'w2', text: 'Even I took a nap... are you sure you want to work?', emoji: '🐼', category: 'weekend', animation: 'yawn', enabled: true },
+  { id: 'w3', text: 'Weekend? More like "work-end"?', emoji: '☕', category: 'weekend', animation: 'coffee', enabled: true },
+  { id: 'w4', text: 'Did your manager send you here?', emoji: '😴', category: 'weekend', animation: 'scratch', enabled: true },
+  { id: 'w5', text: 'Overtime mode detected...', emoji: '💼', category: 'weekend', animation: 'laptop', enabled: true },
+  { id: 'w6', text: "Shouldn't you be relaxing today?", emoji: '🌴', category: 'weekend', animation: 'stretch', enabled: true },
+  { id: 'w7', text: 'Weekend login? Hope there\'s pizza involved!', emoji: '🍕', category: 'weekend', animation: 'smile', enabled: true },
+  { id: 'w8', text: 'Sunshine is outside... just saying.', emoji: '🌞', category: 'weekend', animation: 'point', enabled: true },
+  { id: 'w9', text: 'I was sleeping... you woke me up!', emoji: '🐼', category: 'weekend', animation: 'yawn', enabled: true },
   { id: 'w10', text: 'Bug hunting on a Saturday?', emoji: '🤔', category: 'weekend', animation: 'scratch', enabled: true },
   { id: 'w11', text: 'Deploying greatness this weekend?', emoji: '🚀', category: 'weekend', animation: 'sign', enabled: true },
   { id: 'w12', text: 'Another production emergency?', emoji: '💻', category: 'weekend', animation: 'laptop', enabled: true },
@@ -132,14 +132,29 @@ function loadMessagesConfig(): SmartMessagesConfig {
     const raw = localStorage.getItem(CONFIG_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
-      return { ...DEFAULT_MESSAGES_CONFIG, ...parsed, messages: parsed.messages?.length ? parsed.messages : DEFAULT_MESSAGES }
+      // Merge with defaults, but only use parsed values that are actually defined
+      // This prevents undefined/null values in stored config from overwriting defaults
+      const merged: SmartMessagesConfig = {
+        enabled: parsed.enabled ?? DEFAULT_MESSAGES_CONFIG.enabled,
+        activeDays: {
+          saturday: parsed.activeDays?.saturday ?? DEFAULT_MESSAGES_CONFIG.activeDays.saturday,
+          sunday: parsed.activeDays?.sunday ?? DEFAULT_MESSAGES_CONFIG.activeDays.sunday,
+        },
+        frequency: parsed.frequency ?? DEFAULT_MESSAGES_CONFIG.frequency,
+        randomize: parsed.randomize ?? DEFAULT_MESSAGES_CONFIG.randomize,
+        lateNightEnabled: parsed.lateNightEnabled ?? DEFAULT_MESSAGES_CONFIG.lateNightEnabled,
+        earlyMorningEnabled: parsed.earlyMorningEnabled ?? DEFAULT_MESSAGES_CONFIG.earlyMorningEnabled,
+        firstOfWeekEnabled: parsed.firstOfWeekEnabled ?? DEFAULT_MESSAGES_CONFIG.firstOfWeekEnabled,
+        messages: parsed.messages?.length ? parsed.messages : DEFAULT_MESSAGES,
+      }
+      return merged
     }
-  } catch {}
+  } catch { }
   return DEFAULT_MESSAGES_CONFIG
 }
 
 function saveMessagesConfig(config: SmartMessagesConfig): void {
-  try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)) } catch {}
+  try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)) } catch { }
 }
 
 /** Check if the message should be shown based on frequency */
@@ -156,7 +171,7 @@ export function shouldShowMessage(frequency: ShowFrequency): boolean {
       case 'once_per_day': return data.date !== today
       case 'once_per_session': return data.session !== sessionStorage.getItem('qaly-session-id')
     }
-  } catch {}
+  } catch { }
   return true
 }
 
@@ -167,7 +182,7 @@ export function markMessageShown(): void {
     let sessionId = sessionStorage.getItem('qaly-session-id')
     if (!sessionId) { sessionId = Date.now().toString(); sessionStorage.setItem('qaly-session-id', sessionId) }
     localStorage.setItem(SHOWN_KEY, JSON.stringify({ date: today, session: sessionId }))
-  } catch {}
+  } catch { }
 }
 
 /** Get last shown message ID to avoid repeats */
@@ -176,7 +191,7 @@ function getLastMessageId(): string | null {
 }
 
 function setLastMessageId(id: string): void {
-  try { localStorage.setItem(LAST_MSG_KEY, id) } catch {}
+  try { localStorage.setItem(LAST_MSG_KEY, id) } catch { }
 }
 
 // ── Context Detection ─────────────────────────────────────────────────────────

@@ -27,7 +27,7 @@ begin
   select id into p_delete  from public.permissions where permission_key = 'can_delete';
   select id into p_export  from public.permissions where permission_key = 'can_export';
   select id into p_gen_ai  from public.permissions where permission_key = 'can_generate_ai';
-  select id into p_manage  from public.permissions where permission_key = 'can_manage';
+  select id into p_manage  from public.permissions where permission_key = 'can_configure';
   select id into p_adv_ai  from public.permissions where permission_key = 'can_use_advanced_ai';
 
   -- ADMIN: full access

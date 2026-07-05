@@ -4,6 +4,7 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { FloatingButton } from '@/components/ui/FloatingButton'
 import { useQAReportStore } from '../store'
 import { useAppStore } from '@/store/useAppStore'
+import { usePermissions } from '@/hooks/usePermissions'
 import { toast } from '@/hooks/use-toast'
 import type { QAReportForm } from '../types'
 import {
@@ -23,8 +24,8 @@ function mdToHtml(md: string): string {
 
     // Headings
     if (/^### /.test(line)) { inTable = false; out.push(`<h3 class="md-h3">${line.slice(4)}</h3>`); continue }
-    if (/^## /.test(line))  { inTable = false; out.push(`<h2 class="md-h2">${line.slice(3)}</h2>`); continue }
-    if (/^# /.test(line))   { inTable = false; out.push(`<h1 class="md-h1">${line.slice(2)}</h1>`); continue }
+    if (/^## /.test(line)) { inTable = false; out.push(`<h2 class="md-h2">${line.slice(3)}</h2>`); continue }
+    if (/^# /.test(line)) { inTable = false; out.push(`<h1 class="md-h1">${line.slice(2)}</h1>`); continue }
 
     // HR
     if (/^---$/.test(line)) { inTable = false; out.push('<hr class="md-hr" />'); continue }
@@ -122,11 +123,11 @@ function buildMetricsSection(form: QAReportForm): string {
   const d = form.defectsLastWeek
   const slices: ChartSlice[] = [
     { label: 'Support Tickets', value: form.supportEmails, hex: '#60a5fa' },
-    { label: 'New Features',    value: form.newFeatures,   hex: '#facc15' },
-    { label: 'Code Fixes',      value: form.codeFixes,     hex: '#c084fc' },
-    { label: 'Reported',        value: d.reported,         hex: '#f87171' },
-    { label: 'Open Defects',    value: d.open,             hex: '#fb923c' },
-    { label: 'Closed Defects',  value: d.closed,           hex: '#4ade80' },
+    { label: 'New Features', value: form.newFeatures, hex: '#facc15' },
+    { label: 'Code Fixes', value: form.codeFixes, hex: '#c084fc' },
+    { label: 'Reported', value: d.reported, hex: '#f87171' },
+    { label: 'Open Defects', value: d.open, hex: '#fb923c' },
+    { label: 'Closed Defects', value: d.closed, hex: '#4ade80' },
   ]
   const total = slices.reduce((s, x) => s + x.value, 0) || 1
   const legend = slices.map(s => `
@@ -173,9 +174,9 @@ function buildDefectDistributionSection(form: QAReportForm): string {
   const mtd = form.defectsMTD
   const bars = [
     { label: 'Reported', lw: lw.reported, mtd: mtd.reported },
-    { label: 'Open',     lw: lw.open,     mtd: mtd.open     },
-    { label: 'Fixed',    lw: lw.fixed,    mtd: mtd.fixed    },
-    { label: 'Closed',   lw: lw.closed,   mtd: mtd.closed   },
+    { label: 'Open', lw: lw.open, mtd: mtd.open },
+    { label: 'Fixed', lw: lw.fixed, mtd: mtd.fixed },
+    { label: 'Closed', lw: lw.closed, mtd: mtd.closed },
   ]
   const maxVal = Math.max(...bars.flatMap(b => [b.lw, b.mtd]), 1)
   const W = 540, H = 200, PAD_L = 36, PAD_B = 32, PAD_T = 16, PAD_R = 16
@@ -263,6 +264,8 @@ ${bodyContent}
 export const ReportPreview: React.FC = () => {
   const { generatedReport, form, saveReport } = useQAReportStore()
   const { profile } = useAppStore()
+  const { can } = usePermissions()
+  const canExport = can('qa-report', 'can_export')
   const [fullscreen, setFullscreen] = useState(false)
   const [viewRaw, setViewRaw] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -316,7 +319,7 @@ export const ReportPreview: React.FC = () => {
           </button>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-input border border-border text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-hover transition-all"><Printer className="w-3 h-3" /> Print</button>
+          {canExport && <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-input border border-border text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-hover transition-all"><Printer className="w-3 h-3" /> Print</button>}
           <button onClick={handleSave} className={cn('flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all', saved ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-accent/10 border-accent/20 text-accent hover:bg-accent/20')}>
             {saved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />} {saved ? 'Saved' : 'Save'}
           </button>

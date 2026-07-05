@@ -410,7 +410,7 @@ const LoginActivity = () => {
     let cancelled = false
     const fetchActivity = async () => {
       setLoading(true)
-      const data = await getLoginActivity(10)
+      const data = await getLoginActivity(5)
       if (!cancelled) {
         setEvents(data)
         setLoading(false)

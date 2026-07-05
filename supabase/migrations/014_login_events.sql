@@ -37,6 +37,6 @@ CREATE POLICY "Admins can view all login events"
         EXISTS (
             SELECT 1 FROM profiles
             WHERE profiles.id = auth.uid()
-            AND profiles.role = 'admin'
+            AND profiles.role IN ('admin', 'super_admin')
         )
     );

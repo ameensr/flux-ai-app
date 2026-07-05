@@ -7,6 +7,7 @@ export const ROUTES = {
   landing: '/',
   login: '/login',
   signup: '/signup',
+  maintenance: '/maintenance',
 
   // Authenticated — app shell
   dashboard: '/dashboard',
@@ -43,6 +44,7 @@ export const ROUTES = {
   enterpriseRoles: '/admin/enterprise/roles',
   enterpriseTemplates: '/admin/enterprise/templates',
   enterpriseAudit: '/admin/enterprise/audit',
+  enterpriseMaintenance: '/admin/enterprise/maintenance',
 
   // Daily Update Report & Config
   dailyReport: '/daily-report',
