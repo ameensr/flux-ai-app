@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import DOMPurify from 'dompurify'
 import { useQAReportStore } from '../store'
 import { useAppStore } from '@/store/useAppStore'
 import { toast } from '@/hooks/use-toast'
@@ -189,7 +190,7 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
       })
       setSaved(true)
       onSaved()
-      toast({ title: 'Report Saved!', description: 'Report saved to history. You can now launch the Executive Dashboard.' })
+      // Don't auto-close, let user see the success state and close manually
     } catch {
       toast({ variant: 'destructive', title: 'Save Failed', description: 'Could not save report. Please try again.' })
     } finally {
@@ -259,47 +260,55 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
             {/* Content - scrollable */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
               <style>{drawerStyles}</style>
-              <div className="drw-content" dangerouslySetInnerHTML={{ __html: mdToHtml(markdown) }} />
+              <div className="drw-content" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(mdToHtml(markdown)) }} />
             </div>
 
             {/* Footer Actions */}
             <div
-              className="shrink-0 px-6 py-4 flex items-center gap-3"
+              className="shrink-0 px-6 py-4 flex flex-col gap-3"
               style={{ borderTop: '1px solid var(--border)', background: 'var(--surface-secondary)' }}
             >
-              <button
-                onClick={handleSave}
-                disabled={saving || saved}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all',
-                  saved && 'cursor-default',
-                  saving && 'opacity-60 cursor-wait'
-                )}
-                style={{
-                  background: saved ? 'rgba(34,197,94,0.1)' : 'var(--hover)',
-                  border: saved ? '1px solid rgba(34,197,94,0.3)' : '1px solid var(--accent)',
-                  color: saved ? '#22c55e' : 'var(--accent)',
-                }}
-              >
-                {saved ? (
-                  <><CheckCircle2 className="w-4 h-4" /> Saved to History</>
-                ) : saving ? (
-                  <><div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} /> Saving...</>
-                ) : (
-                  <><Save className="w-4 h-4" /> Save Report</>
-                )}
-              </button>
-              <button
-                onClick={handleClose}
-                className="px-5 py-3 rounded-xl text-sm font-bold transition-all"
-                style={{
-                  background: 'var(--hover)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                Close
-              </button>
+              {saved && (
+                <div className="px-4 py-2.5 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
+                  <p className="text-xs font-bold text-green-500 mb-1">✓ Report Saved to History</p>
+                  <p className="text-[10px] text-green-500/70">You can now close this and launch the Executive Dashboard</p>
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleSave}
+                  disabled={saving || saved}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all',
+                    saved && 'cursor-not-allowed opacity-50',
+                    saving && 'opacity-60 cursor-wait'
+                  )}
+                  style={{
+                    background: saved ? 'rgba(34,197,94,0.1)' : 'var(--accent)',
+                    border: saved ? '1px solid rgba(34,197,94,0.3)' : '1px solid var(--accent)',
+                    color: saved ? '#22c55e' : '#000',
+                  }}
+                >
+                  {saved ? (
+                    <><CheckCircle2 className="w-4 h-4" /> Saved</>
+                  ) : saving ? (
+                    <><div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: '#000' }} /> Saving...</>
+                  ) : (
+                    <><Save className="w-4 h-4" /> Save Report</>
+                  )}
+                </button>
+                <button
+                  onClick={handleClose}
+                  className="px-5 py-3 rounded-xl text-sm font-bold transition-all"
+                  style={{
+                    background: 'var(--hover)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </motion.div>
         </>

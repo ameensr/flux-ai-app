@@ -143,7 +143,7 @@ export function AnnouncementsWidget() {
           </div>
         </div>
         <button
-          onClick={() => navigate(ROUTES.announcements)}
+          onClick={() => navigate(ROUTES.adminAnnouncements)}
           className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg transition-all"
           style={{ color: 'var(--accent)' }}
           onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--hover)' }}

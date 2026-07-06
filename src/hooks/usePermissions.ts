@@ -18,6 +18,18 @@ export function usePermissions() {
       if (isAdmin) return true
       return hasModulePermission(permissionMap, moduleKey, permissionKey)
     },
+    canCreate: (moduleKey: string) => {
+      if (isAdmin) return true
+      return hasModulePermission(permissionMap, moduleKey, 'can_create')
+    },
+    canEdit: (moduleKey: string) => {
+      if (isAdmin) return true
+      return hasModulePermission(permissionMap, moduleKey, 'can_edit')
+    },
+    canDelete: (moduleKey: string) => {
+      if (isAdmin) return true
+      return hasModulePermission(permissionMap, moduleKey, 'can_delete')
+    },
     canExport: (moduleKey: string) => {
       if (isAdmin) return true
       return hasModulePermission(permissionMap, moduleKey, 'can_export')

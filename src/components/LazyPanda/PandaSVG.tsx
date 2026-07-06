@@ -45,6 +45,7 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
   const isSuccess = state === 'SUCCESS'
   const isError = state === 'ERROR'
   const isLoading = state === 'LOGIN_LOADING'
+  const isWalking = state === 'WALKING'
 
   // Eye state
   const eyeScaleY = isBlinking || isSleeping ? 0.1 : 1
@@ -78,8 +79,8 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
         cy="150"
         rx={isSuccess ? 22 : 18}
         ry="4"
-        fill="rgba(0,0,0,0.15)"
-        animate={{ rx: isSleeping ? 22 : 18, opacity: isSleeping ? 0.1 : 0.15 }}
+        fill="rgba(0,0,0,0.2)"
+        animate={{ rx: isSleeping ? 22 : 18, opacity: isSleeping ? 0.15 : 0.2 }}
         transition={{ duration: 0.4 }}
       />
 
@@ -88,32 +89,38 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
         animate={{
           y: isSuccess ? -8 : isSleeping ? 5 : 0,
           rotate: isSleeping ? -5 : 0,
+          x: isWalking ? [0, 2, 0, -2, 0] : 0,
         }}
-        transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+        transition={{
+          type: 'spring',
+          stiffness: 200,
+          damping: 15,
+          x: isWalking ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}
+        }}
         style={{ originX: '80px', originY: '140px' }}
       >
-        {/* Body (round) */}
-        <ellipse cx="80" cy="115" rx="30" ry="32" fill="#FAFAFA" stroke="#E0E0E0" strokeWidth="1" />
+        {/* Body (round) with enhanced visibility */}
+        <ellipse cx="80" cy="115" rx="30" ry="32" fill="#FFFFFF" stroke="#D1D5DB" strokeWidth="1.5" />
 
         {/* Belly patch */}
-        <ellipse cx="80" cy="120" rx="18" ry="20" fill="#F5F5F5" />
+        <ellipse cx="80" cy="120" rx="18" ry="20" fill="#F9FAFB" />
 
-        {/* ── Tail ── */}
+        {/* ── Tail ── with better contrast */}
         <motion.circle
           cx="50"
           cy="130"
           r="6"
-          fill="#2D2D2D"
+          fill="#1F2937"
           variants={tailVariant}
           animate="animate"
           style={{ originX: '56px', originY: '130px' }}
         />
 
-        {/* ── Legs ── */}
-        <ellipse cx="68" cy="142" rx="9" ry="6" fill="#2D2D2D" />
-        <ellipse cx="92" cy="142" rx="9" ry="6" fill="#2D2D2D" />
+        {/* ── Legs ── with better contrast */}
+        <ellipse cx="68" cy="142" rx="9" ry="6" fill="#1F2937" />
+        <ellipse cx="92" cy="142" rx="9" ry="6" fill="#1F2937" />
 
-        {/* ── Arms / Paws ── */}
+        {/* ── Arms / Paws ── with better contrast */}
         <motion.g
           animate={{
             y: isHandsUp || isOneEyeOpen ? -30 : 0,
@@ -123,8 +130,8 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
           style={{ originX: '60px', originY: '110px' }}
         >
           {/* Left arm */}
-          <ellipse cx="55" cy="110" rx="8" ry="12" fill="#2D2D2D" />
-          <ellipse cx="55" cy="104" rx="6" ry="5" fill="#4A4A4A" />
+          <ellipse cx="55" cy="110" rx="8" ry="12" fill="#1F2937" />
+          <ellipse cx="55" cy="104" rx="6" ry="5" fill="#374151" />
         </motion.g>
 
         <motion.g
@@ -136,8 +143,8 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
           style={{ originX: '100px', originY: '110px' }}
         >
           {/* Right arm */}
-          <ellipse cx="105" cy="110" rx="8" ry="12" fill="#2D2D2D" />
-          <ellipse cx="105" cy="104" rx="6" ry="5" fill="#4A4A4A" />
+          <ellipse cx="105" cy="110" rx="8" ry="12" fill="#1F2937" />
+          <ellipse cx="105" cy="104" rx="6" ry="5" fill="#374151" />
         </motion.g>
 
         {/* ── Head ── */}
@@ -146,18 +153,18 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
           transition={{ duration: DURATIONS.headRotate, ease: EASING.smooth }}
           style={{ originX: '80px', originY: '80px' }}
         >
-          {/* Head shape */}
-          <circle cx="80" cy="72" r="32" fill="#FAFAFA" stroke="#E0E0E0" strokeWidth="1" />
+          {/* Head shape with enhanced visibility */}
+          <circle cx="80" cy="72" r="32" fill="#FFFFFF" stroke="#D1D5DB" strokeWidth="1.5" />
 
-          {/* Ears */}
-          <circle cx="56" cy="50" r="12" fill="#2D2D2D" />
-          <circle cx="56" cy="50" r="7" fill="#4A4A4A" />
-          <circle cx="104" cy="50" r="12" fill="#2D2D2D" />
-          <circle cx="104" cy="50" r="7" fill="#4A4A4A" />
+          {/* Ears with better contrast */}
+          <circle cx="56" cy="50" r="12" fill="#1F2937" />
+          <circle cx="56" cy="50" r="7" fill="#374151" />
+          <circle cx="104" cy="50" r="12" fill="#1F2937" />
+          <circle cx="104" cy="50" r="7" fill="#374151" />
 
-          {/* Eye patches (dark circles around eyes) */}
-          <ellipse cx="68" cy="72" rx="12" ry="11" fill="#2D2D2D" />
-          <ellipse cx="92" cy="72" rx="12" ry="11" fill="#2D2D2D" />
+          {/* Eye patches (dark circles around eyes) with enhanced contrast */}
+          <ellipse cx="68" cy="72" rx="12" ry="11" fill="#1F2937" />
+          <ellipse cx="92" cy="72" rx="12" ry="11" fill="#1F2937" />
 
           {/* ── Eyes ── */}
           <motion.g
@@ -180,13 +187,13 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
                 cx="69"
                 cy="73"
                 r="2.5"
-                fill="#1A1A1A"
+                fill="#0F172A"
                 animate={{ opacity: leftEyeOpen }}
               />
             )}
-            {/* Eye shine */}
+            {/* Eye shine - brighter for contrast */}
             {leftEyeOpen > 0 && !isBlinking && (
-              <circle cx="67" cy="70" r="1.2" fill="white" opacity="0.8" />
+              <circle cx="67" cy="70" r="1.3" fill="white" opacity="0.95" />
             )}
 
             {/* Right eye */}
@@ -205,23 +212,23 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
                 cx="93"
                 cy="73"
                 r="2.5"
-                fill="#1A1A1A"
+                fill="#0F172A"
                 animate={{ opacity: rightEyeOpen }}
               />
             )}
             {rightEyeOpen > 0 && !isBlinking && (
-              <circle cx="91" cy="70" r="1.2" fill="white" opacity="0.8" />
+              <circle cx="91" cy="70" r="1.3" fill="white" opacity="0.95" />
             )}
           </motion.g>
 
-          {/* Nose */}
-          <ellipse cx="80" cy="82" rx="4" ry="3" fill="#2D2D2D" />
+          {/* Nose with better contrast */}
+          <ellipse cx="80" cy="82" rx="4" ry="3" fill="#1F2937" />
 
-          {/* Mouth */}
+          {/* Mouth with darker stroke */}
           <motion.path
             d={getMouthPath()}
-            stroke="#2D2D2D"
-            strokeWidth="1.5"
+            stroke="#1F2937"
+            strokeWidth="2"
             strokeLinecap="round"
             fill="none"
             animate={{ d: getMouthPath() }}
@@ -245,15 +252,15 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
             </motion.g>
           )}
 
-          {/* One eyebrow raised (password show) */}
+          {/* One eyebrow raised (password show) with better visibility */}
           {isOneEyeOpen && (
             <motion.line
               x1="87"
               y1="62"
               x2="97"
               y2="60"
-              stroke="#2D2D2D"
-              strokeWidth="2"
+              stroke="#1F2937"
+              strokeWidth="2.5"
               strokeLinecap="round"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

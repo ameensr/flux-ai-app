@@ -31,35 +31,79 @@ export const PandaSpeechBubble: React.FC<PandaSpeechBubbleProps> = ({ className 
 
   // Detect and pick message on mount
   useEffect(() => {
-    if (!globalConfig.enabled || !messagesConfig.enabled) return
-    if (!shouldShowMessage(messagesConfig.frequency)) return
+    console.log('[PandaSpeechBubble] Initializing...')
+    console.log('[PandaSpeechBubble] globalConfig.enabled:', globalConfig.enabled)
+    console.log('[PandaSpeechBubble] messagesConfig.enabled:', messagesConfig.enabled)
+
+    if (!globalConfig.enabled || !messagesConfig.enabled) {
+      console.log('[PandaSpeechBubble] Disabled, not showing message')
+      return
+    }
+
+    if (!shouldShowMessage(messagesConfig.frequency)) {
+      console.log('[PandaSpeechBubble] shouldShowMessage returned false')
+      return
+    }
 
     const picked = pickMessage(messagesConfig)
+    console.log('[PandaSpeechBubble] Picked message:', picked)
+
     if (picked) {
       setMessage(picked)
       markMessageShown()
+      console.log('[PandaSpeechBubble] Message set, category:', picked.category)
     }
   }, [])
 
   // Get interactive responses for the category
   const responses = useMemo(() => {
-    if (!message) return null
-    return INTERACTIVE_RESPONSES[message.category] ?? null
+    if (!message) {
+      console.log('[PandaSpeechBubble] responses: No message')
+      return null
+    }
+
+    console.log('[PandaSpeechBubble] Looking for responses for category:', message.category)
+    console.log('[PandaSpeechBubble] Available categories in INTERACTIVE_RESPONSES:', Object.keys(INTERACTIVE_RESPONSES))
+
+    const found = INTERACTIVE_RESPONSES[message.category] ?? null
+    console.log('[PandaSpeechBubble] Found responses:', found)
+
+    return found
   }, [message])
 
   const handleDismiss = () => {
     setDismissed(true)
   }
 
-  const handleResponse = (reply: string) => {
-    setSelectedResponse(reply)
+  const handleResponse = (option: { label: string; emoji: string; reply: string }) => {
+    console.log('[PandaSpeechBubble] handleResponse called with:', option)
+    setSelectedResponse(option.reply)
     setShowReply(true)
+    console.log('[PandaSpeechBubble] showReply set to true, reply:', option.reply)
     // Auto-dismiss after showing reply
-    setTimeout(() => setDismissed(true), 4000)
+    setTimeout(() => {
+      console.log('[PandaSpeechBubble] Auto-dismissing after reply')
+      setDismissed(true)
+    }, 3500)
   }
 
   // Don't render if no message, dismissed, or globally disabled
-  if (!message || dismissed || !globalConfig.enabled || !messagesConfig.enabled) return null
+  if (!message || dismissed || !globalConfig.enabled || !messagesConfig.enabled) {
+    console.log('[PandaSpeechBubble] Not rendering:', {
+      hasMessage: !!message,
+      dismissed,
+      globalEnabled: globalConfig.enabled,
+      messagesEnabled: messagesConfig.enabled
+    })
+    return null
+  }
+
+  console.log('[PandaSpeechBubble] Rendering with:', {
+    message: message.text,
+    category: message.category,
+    hasResponses: !!responses,
+    showReply
+  })
 
   return (
     <AnimatePresence>
@@ -119,7 +163,7 @@ export const PandaSpeechBubble: React.FC<PandaSpeechBubbleProps> = ({ className 
                       {responses.options.map((opt, i) => (
                         <button
                           key={i}
-                          onClick={() => handleResponse(opt.reply)}
+                          onClick={() => handleResponse(opt)}
                           className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all text-left w-full"
                           style={{ background: 'var(--hover)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
                           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--text-primary)' }}

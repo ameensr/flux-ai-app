@@ -32,7 +32,19 @@ const mapDailySupportToQA = (rows: SupportLogRecord[]): SupportTicket[] => rows.
   description: [row.description, row.bug_id ? `Bug ID: ${row.bug_id}` : '', row.branch ? `Branch: ${row.branch}` : '', row.received_date ? `Received: ${row.received_date}` : ''].filter(Boolean).join(' | '),
   assignedQA: row.qa || '',
   status: (() => {
-    const normalized = (row.status || '').toLowerCase()
+    // Preserve exact status from Daily Report if it matches QA Report options
+    const dailyStatus = row.status || ''
+    const qaStatusOptions = ['Open', 'In Progress', 'Resolved', 'Closed']
+
+    // Check if the daily status matches any QA status (case-insensitive)
+    const matchedStatus = qaStatusOptions.find(
+      qaStatus => qaStatus.toLowerCase() === dailyStatus.toLowerCase()
+    )
+
+    if (matchedStatus) return matchedStatus
+
+    // Fallback: Use keyword matching only if no exact match
+    const normalized = dailyStatus.toLowerCase()
     if (['resolved', 'closed', 'passed', 'completed', 'done'].some(v => normalized.includes(v))) return 'Resolved'
     if (['in progress', 'progress', 'working', 'ongoing'].some(v => normalized.includes(v))) return 'In Progress'
     return 'Open'

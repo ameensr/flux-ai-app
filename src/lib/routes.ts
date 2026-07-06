@@ -22,8 +22,7 @@ export const ROUTES = {
   // AI News
   aiNews: '/ai-news',
 
-  // Announcements
-  announcements: '/announcements',
+  // Announcements (Admin-only, no standalone route)
   adminAnnouncements: '/admin/announcements',
 
   // Lazy Panda Config (super_admin only)
@@ -66,7 +65,6 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.qaReportConfig]: 'qa-report',
   [ROUTES.reportPreview]: 'qa-report',
   [ROUTES.settings]: 'settings',
-  [ROUTES.announcements]: 'announcements',
   [ROUTES.adminAnnouncements]: 'admin',
   [ROUTES.admin]: 'admin',
   [ROUTES.adminUsers]: 'admin',

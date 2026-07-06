@@ -12,9 +12,9 @@ import { SupportLog } from './components/SupportLog'
 import { ReportPreviewDrawer } from './components/ReportPreviewDrawer'
 import { ReleaseTable } from './components/ReleaseTable'
 import { ReleaseBugStatus } from './components/ReleaseBugStatus'
+import { TeamCapacityUpload } from './components/TeamCapacity'
 import { DashboardSectionToggles } from './components/DashboardSectionToggles'
 import { DefectAnalysis, HistoricalProgress, NextPriorities } from './components/Metrics'
-import { ReportPreview } from './components/ReportPreview'
 import { DashboardWidgets, DefectChart, ReportHistory } from './components/Widgets'
 import { toast } from '@/hooks/use-toast'
 import { FileText, RefreshCw, RotateCcw, AlertCircle, Plus, Trash, History as HistoryIcon, Settings, Eye, Lock } from 'lucide-react'
@@ -391,8 +391,19 @@ function TimelineBuilder() {
   )
 }
 
+// Helper to create a form snapshot (excluding dashboard sections which are display-only preferences)
+function createFormSnapshot(form: QAReportForm): string {
+  const snapshot = { ...form }
+  delete (snapshot as any).dashboardSections // Exclude display preferences
+  delete (snapshot as any).showAIInsights
+  delete (snapshot as any).showAISummary
+  delete (snapshot as any).showHistoricalAnalytics
+  delete (snapshot as any).showTimeline
+  return JSON.stringify(snapshot)
+}
+
 export const QAWeeklyReport: React.FC = () => {
-  const { form, setForm, setGeneratedReport, generatedReport, resetForm, fetchReports, fetchProjects } = useQAReportStore()
+  const { form, setForm, setGeneratedReport, generatedReport, resetForm, fetchReports, fetchProjects, savedReports } = useQAReportStore()
   const { can } = usePermissions()
   const navigate = useNavigate()
   const isAuthorizedToConfig = can('qa-report', 'can_configure')
@@ -406,6 +417,9 @@ export const QAWeeklyReport: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [isPreviewed, setIsPreviewed] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
+  const [lastSavedSnapshot, setLastSavedSnapshot] = useState<string>('')
+  const [loadedFromHistory, setLoadedFromHistory] = useState(false)
+  const [hasChangedSinceLoad, setHasChangedSinceLoad] = useState(false)
 
   React.useEffect(() => {
     fetchProjects(true).then(() => {
@@ -425,6 +439,34 @@ export const QAWeeklyReport: React.FC = () => {
     })
   }, [])
 
+  // Check if current form matches a saved report in history
+  React.useEffect(() => {
+    const currentSnapshot = createFormSnapshot(form)
+
+    // Find if this exact report exists in history
+    const matchingReport = savedReports.find(report => {
+      const savedSnapshot = createFormSnapshot(report.form)
+      return savedSnapshot === currentSnapshot && report.status === 'Final'
+    })
+
+    if (matchingReport) {
+      // Report already exists in history - allow direct launch
+      setIsSaved(true)
+      setLastSavedSnapshot(currentSnapshot)
+
+      // If we haven't explicitly marked it as changed, it's in sync
+      if (!hasChangedSinceLoad && loadedFromHistory) {
+        setHasChangedSinceLoad(false)
+      }
+    } else if (lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot) {
+      // Form has changed since last save - require new save
+      setIsSaved(false)
+      if (loadedFromHistory) {
+        setHasChangedSinceLoad(true)
+      }
+    }
+  }, [form, savedReports, lastSavedSnapshot, hasChangedSinceLoad, loadedFromHistory])
+
   const handlePreview = () => {
     const errs = validate(form)
     setErrors(errs)
@@ -438,7 +480,31 @@ export const QAWeeklyReport: React.FC = () => {
   }
 
   const handleDrawerSaved = () => {
+    const currentSnapshot = createFormSnapshot(form)
     setIsSaved(true)
+    setLastSavedSnapshot(currentSnapshot)
+    setLoadedFromHistory(true)
+    setHasChangedSinceLoad(false)
+    toast({
+      title: 'Report Saved Successfully!',
+      description: 'You can now launch the Executive Dashboard. The report has been added to History.',
+    })
+  }
+
+  const handleDrawerClose = () => {
+    setDrawerOpen(false)
+    // If user closes without saving and form doesn't match history, they need to preview again
+    if (!isSaved) {
+      setIsPreviewed(false)
+    }
+  }
+
+  const handleReportLoadedFromHistory = () => {
+    const currentSnapshot = createFormSnapshot(form)
+    setLoadedFromHistory(true)
+    setHasChangedSinceLoad(false)
+    setLastSavedSnapshot(currentSnapshot)
+    // The useEffect will set isSaved to true if the form matches history
   }
 
   const handleGenerate = () => {
@@ -482,6 +548,9 @@ export const QAWeeklyReport: React.FC = () => {
     setErrors([])
     setIsPreviewed(false)
     setIsSaved(false)
+    setLastSavedSnapshot('')
+    setLoadedFromHistory(false)
+    setHasChangedSinceLoad(false)
     localStorage.removeItem('current-qa-report-data')
     toast({ title: 'Form Reset', description: 'All fields have been cleared (project preserved).' })
   }
@@ -563,6 +632,10 @@ export const QAWeeklyReport: React.FC = () => {
             analytics={form.releaseBugStatus}
             onChange={(data) => setForm({ releaseBugStatus: data })}
           />
+          <TeamCapacityUpload
+            capacityData={form.teamCapacity}
+            onChange={(data) => setForm({ teamCapacity: data })}
+          />
           <DefectAnalysis />
           <HistoricalProgress />
           <NextPriorities />
@@ -614,8 +687,8 @@ export const QAWeeklyReport: React.FC = () => {
                 )}
               </FloatingButton>
               {!isSaved && (
-                <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg bg-black/90 border border-white/10 text-[11px] text-white/70 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                  Preview & save your report first
+                <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-2 rounded-lg bg-black/95 border border-white/10 text-[11px] text-white/90 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl z-10">
+                  Save report first (or check if already in History)
                 </div>
               )}
             </div>
@@ -629,42 +702,185 @@ export const QAWeeklyReport: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Right Panel: Preview + Widgets ────────────────────────────── */}
+        {/* ── Right Panel: Widgets + History ────────────────────────────── */}
         <div className="flex flex-col gap-6">
           <DashboardWidgets />
           <DefectChart />
 
-          {/* Preview placeholder / live preview */}
-          <AnimatePresence mode="wait">
-            {!generatedReport ? (
-              <motion.div
-                key="placeholder"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex flex-col items-center justify-center text-center p-12 glass-panel border-dashed min-h-[240px]"
-              >
-                <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                  <FileText className="w-7 h-7 text-text-muted" />
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2">Report Preview</h3>
-                <p className="text-text-secondary text-sm">Fill in the form and click Generate Report.</p>
-              </motion.div>
-            ) : (
-              <motion.div key="preview" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                <ReportPreview />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Info card about preview workflow */}
+          {/* Smart Workflow Status Card */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-start justify-start text-left p-6 glass-panel border gap-4"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-accent-gold/10 flex items-center justify-center shrink-0">
+                <Eye className="w-5 h-5 text-accent-gold" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white mb-1">Workflow Status</h3>
+                <p className="text-text-muted text-xs leading-relaxed">Current report status and next steps</p>
+              </div>
+            </div>
 
-          <ReportHistory />
+            {/* Contextual Status Messages */}
+            <AnimatePresence mode="wait">
+              {loadedFromHistory && !hasChangedSinceLoad && isSaved ? (
+                // Report loaded from history and no changes
+                <motion.div
+                  key="ready-to-launch"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="w-full p-4 rounded-xl bg-green-500/10 border-2 border-green-500/30"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-green-400">Ready to Launch</h4>
+                  </div>
+                  <p className="text-xs text-green-300/90 leading-relaxed mb-3">
+                    This report was loaded from History and is ready to launch immediately.
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-green-400/70">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    <span className="font-semibold">Click "Launch Executive Dashboard" to view</span>
+                  </div>
+                </motion.div>
+              ) : loadedFromHistory && hasChangedSinceLoad ? (
+                // Report was loaded but has been modified
+                <motion.div
+                  key="changes-detected"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="w-full p-4 rounded-xl bg-orange-500/10 border-2 border-orange-500/30"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-orange-400">Changes Detected</h4>
+                  </div>
+                  <p className="text-xs text-orange-300/90 leading-relaxed mb-3">
+                    You've modified the report data. Preview and save to update.
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-orange-400/70 font-semibold">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 text-[10px] font-bold">1</span>
+                      Preview
+                    </span>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 text-[10px] font-bold">2</span>
+                      Save
+                    </span>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 text-[10px] font-bold">3</span>
+                      Launch
+                    </span>
+                  </div>
+                </motion.div>
+              ) : isSaved ? (
+                // Newly created and saved report
+                <motion.div
+                  key="saved-ready"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="w-full p-4 rounded-xl bg-green-500/10 border-2 border-green-500/30"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-green-400">Report Saved</h4>
+                  </div>
+                  <p className="text-xs text-green-300/90 leading-relaxed mb-3">
+                    Your report has been saved successfully and is ready to launch.
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-green-400/70">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    <span className="font-semibold">Click "Launch Executive Dashboard" to view</span>
+                  </div>
+                </motion.div>
+              ) : (
+                // New report or needs save
+                <motion.div
+                  key="needs-save"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="w-full p-4 rounded-xl bg-blue-500/10 border-2 border-blue-500/30"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-blue-400">Save Required</h4>
+                  </div>
+                  <p className="text-xs text-blue-300/90 leading-relaxed mb-3">
+                    Preview and save your report before launching the dashboard.
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-blue-400/70 font-semibold">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-[10px] font-bold">1</span>
+                      Preview
+                    </span>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-[10px] font-bold">2</span>
+                      Save
+                    </span>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-[10px] font-bold">3</span>
+                      Launch
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Info box about display toggles */}
+            <div className="w-full px-3 py-2.5 rounded-lg bg-white/5 border border-white/10">
+              <p className="text-[11px] text-text-muted leading-relaxed">
+                <strong className="text-text-secondary font-semibold">Smart Save:</strong> Display toggle changes don't require re-saving. Only data changes need a new save.
+              </p>
+            </div>
+          </motion.div>
+
+          <ReportHistory onReportLoaded={handleReportLoadedFromHistory} />
         </div>
       </div>
 
       {/* ── Report Preview Drawer ── */}
       <ReportPreviewDrawer
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={handleDrawerClose}
         markdown={generatedReport}
         onSaved={handleDrawerSaved}
       />

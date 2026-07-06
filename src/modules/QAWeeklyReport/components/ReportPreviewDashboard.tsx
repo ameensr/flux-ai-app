@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Variants } from 'framer-motion'
+import DOMPurify from 'dompurify'
 import {
   TrendingUp, TrendingDown, Mail, Zap, Wrench, Shield, Check,
   AlertTriangle, Play, HelpCircle, Activity, Sun, Moon, Maximize2,
   Minimize2, Download, Printer, Copy, RefreshCw, X, ChevronRight,
   BookOpen, Star, Sparkles, FileText, LayoutGrid, Users, History, CheckCheck,
   ArrowRightLeft, GitCompare, Eye, EyeOff, Palette, Lock, Unlock,
-  Cpu, GitBranch, Terminal, Code2, ChevronDown
+  Cpu, GitBranch, Terminal, Code2, ChevronDown, Info
 } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
 import { BRAND } from '@/lib/brand'
@@ -135,6 +136,13 @@ import { ensureFormData } from '../types'
 import { getSectionVisibility } from './DashboardSectionToggles'
 import type { QAReportForm, SupportTicket, ReleaseItem, HistoricalDefect } from '../types'
 import { useTheme } from '@/context/ThemeContext'
+import { TeamCapacityDisplay } from './TeamCapacity'
+import { DefectStatusModal } from './DefectStatusModal'
+import { WorkDistributionModal } from './WorkDistributionModal'
+import { ProductionIssuesModal } from './ProductionIssuesModal'
+import { ReleaseReadinessModal } from './ReleaseReadinessModal'
+import { TeamCapacityModal } from './TeamCapacityModal'
+import { ExecutiveQualityScoreModal } from './ExecutiveQualityScoreModal'
 
 // Report preview has its own isolated theme system — independent of the global dark/light toggle.
 type ReportThemeId = 'light' | 'dark'
@@ -308,6 +316,13 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const [compareReportB, setCompareReportB] = useState<string>('')
   const [isPresentation, setIsPresentation] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  const [showDefectModal, setShowDefectModal] = useState(false)
+  const [showWorkDistributionModal, setShowWorkDistributionModal] = useState(false)
+  const [showProductionIssuesModal, setShowProductionIssuesModal] = useState(false)
+  const [showReleaseReadinessModal, setShowReleaseReadinessModal] = useState(false)
+  const [showTeamCapacityModal, setShowTeamCapacityModal] = useState(false)
+  const [showQualityScoreModal, setShowQualityScoreModal] = useState(false)
+  const [hoveredKPI, setHoveredKPI] = useState<string | null>(null)
   const [aiSummary, setAiSummary] = useState({
     achievements: [
       'Successfully validated the core checkout flows, bringing mobile friction down by 14% month-over-month.',
@@ -418,12 +433,20 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const sprintHealthScore = totalCases > 0 ? Math.round((passedCases / totalCases) * 100) : 100
 
   // ── Release Readiness Meter calculations ──
-  const openBugsCount = data.defectsLastWeek.open
+  // Use Release Bug Status data if available, otherwise fall back to manual defects
+  const releaseBugData = data.releaseBugStatus?.metrics
+  const openBugsCount = releaseBugData?.activeBugs ?? data.defectsLastWeek.open
+  const closureRate = releaseBugData?.closurePercentage ??
+    (data.defectsLastWeek.reported > 0 ? (data.defectsLastWeek.closed / data.defectsLastWeek.reported) * 100 : 100)
+
   const passPctFactor = totalCases > 0 ? passedCases / totalCases : 1.0
   const openBugsFactor = 1 - openBugsCount / (openBugsCount + 5)
   const blockersFactor = 1 - blockedCases / (blockedCases + 3)
+  const closureFactor = closureRate / 100  // 0-1 scale
+
+  // Enhanced formula: Pass Rate (50%) + Bugs (20%) + Blockers (15%) + Closure (15%)
   const releaseReadinessScore = Math.max(0, Math.min(100, Math.round(
-    (passPctFactor * 60) + (openBugsFactor * 25) + (blockersFactor * 15)
+    (passPctFactor * 50) + (openBugsFactor * 20) + (blockersFactor * 15) + (closureFactor * 15)
   )))
 
   // ── WoW Comparison Calculations ──
@@ -901,13 +924,24 @@ Do not return markdown wraps, only raw JSON text.
     ...(data.monthToDate.completedCR ? [{ category: 'Completed CR', lastWeek: 0, mtd: data.monthToDate.completedCR }] : [])
   ]
 
+  // Work Distribution - using actual data from tables
+  const supportTicketsCount = data.supportTickets?.length || 0
+  const newFeaturesCount = data.releaseItems?.length || 0
+
   const workDistributionData = [
-    { name: 'Support Tickets', value: data.supportEmails, hex: '#60a5fa' },
-    { name: 'New Features', value: data.newFeatures * 2, hex: '#facc15' },
-    { name: 'Code Fixes', value: data.codeFixes * 1.5, hex: '#a855f7' }
+    { name: 'Support Tickets Fix', value: supportTicketsCount, hex: '#60a5fa' },
+    { name: 'New Features', value: newFeaturesCount, hex: '#facc15' }
   ]
 
-  const defectStatusData = [
+  // Use Release Bug Status data if available, otherwise fall back to manual entry
+  const releaseBugMetrics = data.releaseBugStatus?.metrics
+  const defectStatusData = releaseBugMetrics ? [
+    { name: 'Active Defects', value: releaseBugMetrics.activeBugs, hex: '#f87171' },
+    { name: 'Resolved (Ready for QA)', value: releaseBugMetrics.resolvedBugs, hex: '#fb923c' },
+    { name: 'Completed', value: releaseBugMetrics.completedBugs, hex: '#10b981' },
+    ...(releaseBugMetrics.deferredBugs > 0 ? [{ name: 'Deferred', value: releaseBugMetrics.deferredBugs, hex: '#eab308' }] : []),
+    ...(releaseBugMetrics.invalidBugs > 0 ? [{ name: 'Invalid/Won\'t Fix', value: releaseBugMetrics.invalidBugs, hex: '#64748b' }] : [])
+  ] : [
     { name: 'Open Defects', value: data.defectsLastWeek.open, hex: '#f87171' },
     { name: 'Fixed Defects', value: data.defectsLastWeek.fixed, hex: '#fb923c' },
     { name: 'Closed Defects', value: data.defectsLastWeek.closed, hex: '#10b981' }
@@ -1270,7 +1304,7 @@ Do not return markdown wraps, only raw JSON text.
         />
       ))}
 
-      <style dangerouslySetInnerHTML={{ __html: getCustomStyles(theme) }} />
+      <style dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(getCustomStyles(theme), { FORCE_BODY: true }) }} />
 
       {/* ── Canvas Animated Particles ── */}
       <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none print:hidden" />
@@ -1585,15 +1619,31 @@ Do not return markdown wraps, only raw JSON text.
             </div>
           </div>
 
-          {/* Executive Quality Score Gauge */}
+          {/* Executive Quality Score Gauge - Interactive Modal */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 100, damping: 15 }}
-            className={`p-6 rounded-3xl border flex flex-col items-center justify-between text-center relative overflow-hidden shadow-2xl ${theme === 'dark' ? 'bg-white/[0.02] border-white/10' : 'bg-white border-slate-200'}`}
+            onClick={() => setShowQualityScoreModal(true)}
+            className={`p-6 rounded-3xl border flex flex-col items-center justify-between text-center relative overflow-hidden shadow-2xl cursor-pointer group ${theme === 'dark' ? 'bg-white/[0.02] border-white/10 hover:border-accent-gold/30 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:border-accent-gold/40 hover:shadow-3xl'} transition-all duration-300`}
           >
             <div className="absolute inset-0 bg-gradient-to-tr from-accent-gold/5 to-blue-500/5 pointer-events-none" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-2">Executive Quality Score</span>
+
+            {/* Hover Glow Effect */}
+            <div className="absolute inset-0 bg-gradient-to-br from-accent-gold/10 via-transparent to-green-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+            {/* Click Indicator */}
+            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-gold/10 border border-accent-gold/20">
+                <span className="text-[9px] font-bold text-accent-gold uppercase tracking-wider">Click to Expand</span>
+                <svg className="w-3 h-3 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </div>
+            </div>
+
+            <span className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-2 relative z-10">Executive Quality Score</span>
             <div className="relative w-36 h-36 flex items-center justify-center my-3">
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="40" fill="none" stroke={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} strokeWidth="8" strokeDasharray="188.4 251.2" strokeLinecap="round" />
@@ -1625,7 +1675,7 @@ Do not return markdown wraps, only raw JSON text.
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.8 }}
-              className={`p-3 rounded-xl border text-xs leading-normal w-full ${qualityStats.color}`}
+              className={`p-3 rounded-xl border text-xs leading-normal w-full ${qualityStats.color} relative z-10`}
             >
               <p className="font-semibold">{qualityStats.desc}</p>
             </motion.div>
@@ -1664,18 +1714,50 @@ Do not return markdown wraps, only raw JSON text.
             <h2 className="text-2xl font-extrabold font-clash">Key Performance Indicators</h2>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 items-stretch">
-            {[
-              { label: 'Support Emails', val: data.supportEmails, icon: Mail, color: 'text-blue-400', desc: 'Active support exceptions', sparklineData: getHistoricalValues(f => f.supportEmails) },
-              { label: 'New Features', val: data.newFeatures, icon: Zap, color: 'text-accent-gold', desc: 'Sprint modules tested', sparklineData: getHistoricalValues(f => f.newFeatures) },
-              { label: 'Code Fixes', val: data.codeFixes, icon: Wrench, color: 'text-purple-400', desc: 'Regression patches verified', sparklineData: getHistoricalValues(f => f.codeFixes) },
-              { label: 'Defects Reported', val: data.defectsLastWeek.reported, icon: AlertTriangle, color: 'text-red-400', desc: 'Bugs raised last week', sparklineData: getHistoricalValues(f => f.defectsLastWeek.reported) },
-              { label: 'Defects Closed', val: data.defectsLastWeek.closed, icon: Check, color: 'text-green-400', desc: 'Bugs resolved/closed', sparklineData: getHistoricalValues(f => f.defectsLastWeek.closed) },
-              { label: 'Open Defects', val: data.defectsLastWeek.open, icon: Shield, color: 'text-orange-400', desc: 'Backlog open defect count', sparklineData: getHistoricalValues(f => f.defectsLastWeek.open), pulse: data.defectsLastWeek.open > 5, isInternal: true },
-              { label: 'Team Size', val: data.newFeatureTeam.length + data.supportTeam.length + data.automationTeam.length, icon: Users, color: 'text-teal-400', desc: 'Active verification specialists', sparklineData: getHistoricalValues(f => f.newFeatureTeam.length + f.supportTeam.length + f.automationTeam.length), isInternal: true },
-              { label: 'Backend Updates', val: data.lastWeek.backendUpdation, icon: History, color: 'text-pink-400', desc: 'Hotfixes & schema mods', sparklineData: getHistoricalValues(f => f.lastWeek.backendUpdation), isInternal: true },
-              { label: 'Change Requests', val: data.lastWeek.changeRequest, icon: LayoutGrid, color: 'text-indigo-400', desc: 'Scope amendments verified', sparklineData: getHistoricalValues(f => f.lastWeek.changeRequest) },
-              { label: 'QA Health Score', val: qualityStats.score, suffix: '%', icon: Star, color: 'text-amber-400', desc: 'Executive QA Quality Score index', sparklineData: getHistoricalValues(f => calculateQAScore(f).score) }
-            ].filter(kpi => !clientMode || !kpi.isInternal).map((kpi, idx) => (
+            {(() => {
+              // Calculate KPIs from Release Bug Status, Release Testing Status, and Support & Exception Log
+              const releaseBugMetrics = data.releaseBugStatus?.metrics
+              const releaseTestingPassed = data.releaseItems?.filter(i => i?.status === 'Pass').length || 0
+              const releaseTestingFailed = data.releaseItems?.filter(i => i?.status === 'Fail').length || 0
+              const releaseTestingBlocked = data.releaseItems?.filter(i => i?.status === 'Blocked').length || 0
+              const releaseTestingTotal = data.releaseItems?.length || 0
+              const supportTicketsTotal = data.supportTickets?.length || 0
+              const supportCritical = data.supportTickets?.filter(t => t?.priority === 'Critical').length || 0
+              const supportHigh = data.supportTickets?.filter(t => t?.priority === 'High').length || 0
+              const supportResolved = data.supportTickets?.filter(t => t?.status === 'Resolved' || t?.status === 'Closed').length || 0
+
+              return [
+                // Release Bug Status KPIs (if available)
+                ...(releaseBugMetrics ? [
+                  { label: 'Total Bugs', val: releaseBugMetrics.totalBugs, icon: AlertTriangle, color: 'text-blue-400', desc: 'Release bug count', sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.totalBugs || 0), tooltip: 'All tracked bugs for this release' },
+                  { label: 'Active Bugs', val: releaseBugMetrics.activeBugs, icon: AlertTriangle, color: 'text-red-400', desc: 'Currently active bugs', sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.activeBugs || 0), pulse: releaseBugMetrics.activeBugs > 5, tooltip: 'Bugs awaiting fix • Immediate attention' },
+                  { label: 'Completed Bugs', val: releaseBugMetrics.completedBugs, icon: CheckCheck, color: 'text-green-400', desc: 'Bugs verified and closed', sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.completedBugs || 0), tooltip: 'Fixed, tested & fully resolved' },
+                  { label: 'Bug Closure Rate', val: Math.round(releaseBugMetrics.closurePercentage * 100) / 100, suffix: '%', icon: TrendingUp, color: 'text-accent-gold', desc: 'Bug resolution efficiency', sparklineData: getHistoricalValues(f => Math.round((f.releaseBugStatus?.metrics?.closurePercentage || 0) * 100) / 100), tooltip: 'Resolution efficiency • Higher is better' },
+                ] : []),
+
+                // Release Testing Status KPIs
+                { label: 'Tests Passed', val: releaseTestingPassed, icon: Check, color: 'text-green-400', desc: 'Release tests passed', sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => i?.status === 'Pass').length || 0), tooltip: 'Successfully validated test cases' },
+                { label: 'Tests Failed', val: releaseTestingFailed, icon: X, color: 'text-red-400', desc: 'Release tests failed', sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => i?.status === 'Fail').length || 0), pulse: releaseTestingFailed > 3, tooltip: 'Tests requiring fixes before release' },
+                { label: 'Tests Blocked', val: releaseTestingBlocked, icon: Shield, color: 'text-orange-400', desc: 'Release tests blocked', sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => i?.status === 'Blocked').length || 0), tooltip: 'Blocked by dependencies or environment' },
+                {
+                  label: 'Pass Rate', val: releaseTestingTotal > 0 ? Math.round((releaseTestingPassed / releaseTestingTotal) * 100) : 0, suffix: '%', icon: Star, color: 'text-accent-gold', desc: 'Test success percentage', sparklineData: getHistoricalValues(f => {
+                    const total = f.releaseItems?.length || 0
+                    const passed = f.releaseItems?.filter((i: any) => i?.status === 'Pass').length || 0
+                    return total > 0 ? Math.round((passed / total) * 100) : 0
+                  }), tooltip: 'Production readiness • Target: 90%+'
+                },
+
+                // Support & Exception Log KPIs
+                { label: 'Support Tickets', val: supportTicketsTotal, icon: Mail, color: 'text-blue-400', desc: 'Total support tickets', sparklineData: getHistoricalValues(f => f.supportTickets?.length || 0), tooltip: 'Active support queue • All priorities' },
+                { label: 'Critical Tickets', val: supportCritical, icon: AlertTriangle, color: 'text-red-500', desc: 'Critical priority tickets', sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => t?.priority === 'Critical').length || 0), pulse: supportCritical > 3, tooltip: 'Production outages • Immediate action' },
+                { label: 'High Priority', val: supportHigh, icon: Zap, color: 'text-orange-400', desc: 'High priority tickets', sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => t?.priority === 'High').length || 0), tooltip: 'Key issues impacting multiple users' },
+                { label: 'Resolved Tickets', val: supportResolved, icon: CheckCheck, color: 'text-green-400', desc: 'Resolved/closed tickets', sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => t?.status === 'Resolved' || t?.status === 'Closed').length || 0), tooltip: 'Successfully resolved & closed' },
+
+                // Additional useful metrics
+                { label: 'Team Size', val: data.newFeatureTeam.length + data.supportTeam.length + data.automationTeam.length, icon: Users, color: 'text-teal-400', desc: 'Active QA team members', sparklineData: getHistoricalValues(f => f.newFeatureTeam.length + f.supportTeam.length + f.automationTeam.length), isInternal: true, tooltip: 'Active QA engineers across all teams' },
+                { label: 'QA Health Score', val: qualityStats.score, suffix: '%', icon: Star, color: 'text-purple-400', desc: 'Executive quality index', sparklineData: getHistoricalValues(f => calculateQAScore(f).score), tooltip: 'Overall quality health • Multi-factor' }
+              ]
+            })().filter(kpi => !clientMode || !kpi.isInternal).map((kpi, idx) => (
               <motion.div
                 key={kpi.label}
                 initial="initial"
@@ -1688,10 +1770,61 @@ Do not return markdown wraps, only raw JSON text.
                 }}
                 viewport={{ once: true }}
                 transition={{ delay: idx * 0.04 }}
-                className={`p-5 rounded-2xl border flex flex-col justify-between gap-3 group relative overflow-hidden transition-all duration-300 min-h-[140px] ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme === 'dark' ? 'bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+                className={`p-5 rounded-2xl border flex flex-col justify-between gap-3 group relative overflow-visible transition-all duration-300 min-h-[140px] ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme === 'dark' ? 'bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+                onMouseEnter={() => kpi.tooltip && setHoveredKPI(kpi.label)}
+                onMouseLeave={() => setHoveredKPI(null)}
               >
+                {/* Premium Tooltip */}
+                <AnimatePresence>
+                  {kpi.tooltip && hoveredKPI === kpi.label && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                      className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 z-50 pointer-events-none"
+                    >
+                      <div
+                        className={`px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-xl max-w-[200px] relative ${theme === 'dark'
+                            ? 'bg-gradient-to-br from-[#1a1a1a] via-[#1a1a1a] to-[#0a0a0a] border border-white/10'
+                            : 'bg-gradient-to-br from-white via-white to-slate-50 border border-slate-200 shadow-slate-200/50'
+                          }`}
+                        style={{
+                          boxShadow: theme === 'dark'
+                            ? '0 20px 40px -15px rgba(0,0,0,0.8), 0 0 0 1px rgba(212,175,55,0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+                            : '0 20px 40px -15px rgba(0,0,0,0.15), 0 0 0 1px rgba(212,175,55,0.1), inset 0 1px 0 rgba(255,255,255,0.8)'
+                        }}
+                      >
+                        {/* Glow effect */}
+                        <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-accent-gold/5 via-transparent to-blue-500/5 pointer-events-none" />
+
+                        <p className={`text-[11px] font-medium leading-relaxed relative z-10 ${theme === 'dark' ? 'text-white/90' : 'text-slate-700'}`}>
+                          {kpi.tooltip}
+                        </p>
+
+                        {/* Premium arrow */}
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-[1px]">
+                          <div
+                            className={`w-2.5 h-2.5 rotate-45 ${theme === 'dark'
+                                ? 'bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border-r border-b border-white/10'
+                                : 'bg-gradient-to-br from-white to-slate-50 border-r border-b border-slate-200'
+                              }`}
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 {/* Gradient Border Glow */}
                 <div className="absolute inset-0 border border-transparent bg-gradient-to-tr from-accent-gold/25 via-blue-500/25 to-transparent rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }} />
+
+                {/* Info Icon Indicator */}
+                {kpi.tooltip && (
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <Info className="w-3.5 h-3.5 text-accent-gold" />
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <motion.div variants={{ hover: { rotate: [0, -8, 8, 0], scale: 1.15 } }} transition={{ duration: 0.4 }}>
@@ -1797,9 +1930,25 @@ Do not return markdown wraps, only raw JSON text.
             </div>
           </div>
 
-          {/* Release Readiness Meter (Radial Gauge) */}
-          <div className={`p-6 rounded-3xl border flex flex-col justify-between gap-4 ${tS.card} ${tS.border} ${tS.glow}`}>
-            <div className="flex flex-col gap-1">
+          {/* Release Readiness Meter (Radial Gauge) - Interactive Modal */}
+          <div
+            onClick={() => setShowReleaseReadinessModal(true)}
+            className={`p-6 rounded-3xl border flex flex-col justify-between gap-4 cursor-pointer group relative overflow-hidden ${tS.card} ${tS.border} ${tS.glow} transition-all duration-300 hover:border-green-500/30`}>
+            {/* Hover Glow Effect */}
+            <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+            {/* Click Indicator */}
+            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-gold/10 border border-accent-gold/20">
+                <span className="text-[9px] font-bold text-accent-gold uppercase tracking-wider">Click to Expand</span>
+                <svg className="w-3 h-3 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1 relative z-10">
               <span className="text-[10px] text-text-muted uppercase font-black tracking-widest block">Deployment Approval Index</span>
               <h3 className="text-xl font-extrabold font-clash">Release Readiness Meter</h3>
             </div>
@@ -2062,61 +2211,84 @@ Do not return markdown wraps, only raw JSON text.
         </motion.section>
 
         {/* ════════════════════════════════════════════════════════════
-            DEFECTS ANALYSIS
+            DEFECTS ANALYSIS (Manual Entry Only)
         ════════════════════════════════════════════════════════════ */}
 
-        {/* ── SECTION 6: DEFECTS ANALYSIS ── */}
-        <motion.section
-          variants={sectionVariants}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, margin: "-80px" }}
-          ref={sectionsRef.defects}
-          className="flex flex-col gap-5"
-          style={{ display: vis.show_defectAnalysis === false ? 'none' : undefined }}
-        >
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-accent-gold" />
-            <h2 className="text-2xl font-extrabold font-clash">Defects Analysis</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {[
-              { title: 'Last Week', d: data.defectsLastWeek },
-              { title: 'Month to Date', d: data.defectsMTD }
-            ].map(({ title, d }) => (
-              <div key={title} className={`p-6 rounded-2xl border flex flex-col gap-4 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
-                <span className="text-[10px] font-black uppercase tracking-widest text-accent-gold">{title}</span>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: 'Reported', val: d.reported, color: theme === 'dark' ? 'text-white' : 'text-slate-800' },
-                    { label: 'Open', val: d.open, color: theme === 'dark' ? 'text-red-400' : 'text-red-600' },
-                    { label: 'Fixed', val: d.fixed, color: theme === 'dark' ? 'text-yellow-400' : 'text-amber-600' },
-                    { label: 'Closed', val: d.closed, color: theme === 'dark' ? 'text-green-400' : 'text-green-600' }
-                  ].map(item => (
-                    <div key={item.label} className={`p-3 rounded-xl border ${theme === 'dark' ? 'border-white/5 bg-white/[0.02]' : 'border-slate-100 bg-slate-50'} flex flex-col gap-1`}>
-                      <span className="text-[9px] uppercase font-bold tracking-wider text-text-muted">{item.label}</span>
-                      <span className={`text-2xl font-black ${item.color}`}><CountUpNumber end={item.val} /></span>
+        {/* ── SECTION 6: DEFECTS ANALYSIS (Only shown if manual defect data entered) ── */}
+        {vis.show_defectAnalysis !== false && (() => {
+          // Check if any manual defect data has been entered
+          const hasLastWeekData = data.defectsLastWeek.reported > 0 || data.defectsLastWeek.open > 0 || data.defectsLastWeek.fixed > 0 || data.defectsLastWeek.closed > 0
+          const hasMTDData = data.defectsMTD.reported > 0 || data.defectsMTD.open > 0 || data.defectsMTD.fixed > 0 || data.defectsMTD.closed > 0
+
+          return hasLastWeekData || hasMTDData
+        })() && (
+            <motion.section
+              variants={sectionVariants}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, margin: "-80px" }}
+              ref={sectionsRef.defects}
+              className="flex flex-col gap-5"
+            >
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-accent-gold" />
+                <h2 className="text-2xl font-extrabold font-clash">Defects Analysis</h2>
+                <span className="px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  Manual Entry
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {[
+                  { title: 'Last Week', d: data.defectsLastWeek },
+                  { title: 'Month to Date', d: data.defectsMTD }
+                ].map(({ title, d }) => (
+                  <div key={title} className={`p-6 rounded-2xl border flex flex-col gap-4 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-accent-gold">{title}</span>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: 'Reported', val: d.reported, color: theme === 'dark' ? 'text-white' : 'text-slate-800' },
+                        { label: 'Open', val: d.open, color: theme === 'dark' ? 'text-red-400' : 'text-red-600' },
+                        { label: 'Fixed', val: d.fixed, color: theme === 'dark' ? 'text-yellow-400' : 'text-amber-600' },
+                        { label: 'Closed', val: d.closed, color: theme === 'dark' ? 'text-green-400' : 'text-green-600' }
+                      ].map(item => (
+                        <div key={item.label} className={`p-3 rounded-xl border ${theme === 'dark' ? 'border-white/5 bg-white/[0.02]' : 'border-slate-100 bg-slate-50'} flex flex-col gap-1`}>
+                          <span className="text-[9px] uppercase font-bold tracking-wider text-text-muted">{item.label}</span>
+                          <span className={`text-2xl font-black ${item.color}`}><CountUpNumber end={item.val} /></span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                <div className="pt-2 border-t border-white/5">
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-text-muted">Closure Rate</span>
-                    <span className="font-bold text-green-400">{d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%</span>
+                    <div className="pt-2 border-t border-white/5">
+                      <div className="flex justify-between text-xs mb-1.5">
+                        <span className="text-text-muted">Closure Rate</span>
+                        <span className="font-bold text-green-400">{d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%</span>
+                      </div>
+                      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <motion.div
+                          initial={{ width: hasPlayed ? `${d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%` : 0 }}
+                          animate={{ width: `${d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%` }}
+                          transition={{ duration: hasPlayed ? 0 : 0.8, ease: 'easeOut' }}
+                          className="h-full bg-green-400 rounded-full"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: hasPlayed ? `${d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%` : 0 }}
-                      animate={{ width: `${d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%` }}
-                      transition={{ duration: hasPlayed ? 0 : 0.8, ease: 'easeOut' }}
-                      className="h-full bg-green-400 rounded-full"
-                    />
+                ))}
+              </div>
+
+              {/* Note about manual entry */}
+              <div className={`p-4 rounded-xl border ${theme === 'dark' ? 'bg-amber-500/5 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="text-sm font-semibold text-amber-400 mb-1">Manual Defect Entry</h4>
+                    <p className="text-xs text-text-muted leading-relaxed">
+                      This section displays manually entered defect data. For automated bug tracking from uploaded files, use the Release Bug Status feature.
+                    </p>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </motion.section>
+            </motion.section>
+          )}
 
 
         {/* ════════════════════════════════════════════════════════════
@@ -2481,8 +2653,8 @@ Do not return markdown wraps, only raw JSON text.
           </motion.section>
         )}
 
-        {/* ── SECTION 4: HISTORICAL PROGRESS TIMELINE ── */}
-        {data.showTimeline !== false && (
+        {/* ── SECTION 4: TEAM CAPACITY OVERVIEW ── */}
+        {data.teamCapacity && vis.show_teamCapacity !== false && (
           <motion.section
             variants={sectionVariants}
             initial="hidden"
@@ -2490,143 +2662,12 @@ Do not return markdown wraps, only raw JSON text.
             viewport={{ once: true, margin: "-80px" }}
             className="flex flex-col gap-6"
           >
-            {(() => {
-              const getTimelineFilteredData = () => {
-                switch (timelineFilter) {
-                  case 'sprint':
-                    return timelineData.filter((_, idx) => idx % 2 === 0).map(t => ({ ...t, week: `Sprint ${t.week.replace(/\D/g, '') || 'Cycle'}` }))
-                  case 'monthly':
-                    return timelineData.filter((_, idx) => idx % 4 === 0).map(t => ({ ...t, week: `Month: ${new Date(t.rawForm?.weekStart || Date.now()).toLocaleString('default', { month: 'long' })}` }))
-                  case 'quarterly':
-                    return timelineData.filter((_, idx) => idx % 8 === 0).map(t => ({ ...t, week: `Quarterly Review Q${Math.floor(new Date(t.rawForm?.weekStart || Date.now()).getMonth() / 3) + 1}` }))
-                  case 'weekly':
-                  default:
-                    return timelineData
-                }
-              }
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-accent-gold" />
+              <h2 className="text-2xl font-extrabold font-clash">Team Capacity Overview</h2>
+            </div>
 
-              const filteredTimeline = getTimelineFilteredData()
-
-              return (
-                <>
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <History className="w-5 h-5 text-accent-gold" />
-                      <h2 className="text-2xl font-extrabold font-clash">Weekly QA Progress Timeline</h2>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 p-1 bg-white/5 border border-white/5 rounded-2xl text-[10px]">
-                      {(['weekly', 'sprint', 'monthly', 'quarterly'] as const).map(tab => (
-                        <button
-                          key={tab}
-                          onClick={() => setTimelineFilter(tab)}
-                          className={`px-3 py-1.5 rounded-xl font-bold uppercase tracking-wider transition-all ${timelineFilter === tab ? 'bg-[#d4af37] text-black shadow-lg' : 'text-text-muted hover:text-white'}`}
-                        >
-                          {tab}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="relative pl-6 flex flex-col gap-8 ml-2 pt-2">
-                    {/* Dynamic drawing connecting line */}
-                    <motion.div
-                      initial={{ height: hasPlayed ? '100%' : 0 }}
-                      whileInView={{ height: '100%' }}
-                      viewport={{ once: true }}
-                      transition={{ duration: hasPlayed ? 0 : 1.2, ease: 'easeOut' }}
-                      className={`absolute left-0 top-4 w-[1px] ${theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'} origin-top`}
-                    />
-                    {filteredTimeline.map((week, idx) => {
-                      const isExpanded = !!expandedTimelineWeeks[week.id]
-                      return (
-                        <div key={week.id} className="flex flex-col gap-3">
-                          <motion.div
-                            initial={{ opacity: hasPlayed ? 1 : 0, x: hasPlayed ? 0 : -20 }}
-                            whileInView={{ opacity: 1, x: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: hasPlayed ? 0 : idx * 0.08, duration: hasPlayed ? 0 : 0.5, ease: 'easeOut' }}
-                            onClick={() => {
-                              setExpandedTimelineWeeks(prev => ({ ...prev, [week.id]: !prev[week.id] }))
-                            }}
-                            className={`relative group p-4 rounded-2xl border cursor-pointer transition-all duration-300 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 hover:border-white/20 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:shadow-md'}`}
-                          >
-                            {/* Timeline node marker */}
-                            <motion.div
-                              whileHover={{ scale: 1.3 }}
-                              animate={hasPlayed ? {} : { scale: [1, 1.4, 1] }}
-                              transition={{ duration: 0.6, ease: 'easeOut', delay: 0.8 }}
-                              className={`absolute left-[-31px] top-6 z-10 w-3.5 h-3.5 rounded-full border-2 transition-transform duration-300 group-hover:scale-125 ${week.healthScore >= 90 ? 'bg-green-400 border-green-500/20' : week.healthScore >= 70 ? 'bg-yellow-400 border-yellow-500/20' : 'bg-red-400 border-red-500/20'}`}
-                            />
-
-                            <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-black uppercase tracking-widest text-accent-gold">{week.week}</span>
-                                <span className="text-[10px] text-text-muted">({isExpanded ? 'Collapse' : 'Expand Details'})</span>
-                              </div>
-                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${week.healthScore >= 90 ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
-                                Health Index: {week.healthScore}%
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 pt-2 border-t border-white/5">
-                              <div>
-                                <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Emails</span>
-                                <span className="text-sm font-bold">{week.emails} <span className="text-[10px] text-green-400">{week.emailChange}</span></span>
-                              </div>
-                              <div>
-                                <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Features</span>
-                                <span className="text-sm font-bold">{week.features}</span>
-                              </div>
-                              <div>
-                                <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Fixes</span>
-                                <span className="text-sm font-bold">{week.fixes}</span>
-                              </div>
-                              <div>
-                                <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Open Bugs</span>
-                                <span className="text-sm font-bold text-red-400">{week.openDefects}</span>
-                              </div>
-                              <div>
-                                <span className="text-[10px] text-text-muted block uppercase font-bold tracking-wider">Closed Bugs</span>
-                                <span className="text-sm font-bold text-green-400">{week.closedDefects}</span>
-                              </div>
-                            </div>
-                          </motion.div>
-
-                          <AnimatePresence>
-                            {isExpanded && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                exit={{ opacity: 0, height: 0 }}
-                                className="overflow-hidden pl-4 border-l border-white/5 flex flex-col gap-3 mb-4"
-                              >
-                                {week.rawForm && (
-                                  <div className="flex items-center gap-3">
-                                    <button
-                                      onClick={() => {
-                                        setData(ensureFormData(week.rawForm))
-                                        toast({ title: 'Report Loaded', description: `Swapped active dashboard to ${week.week}` })
-                                      }}
-                                      className="px-4 py-2 rounded-xl bg-[#d4af37]/10 border border-[#d4af37]/20 text-accent-gold text-xs font-bold hover:bg-[#d4af37]/20 transition-all"
-                                    >
-                                      Load Active Workspace
-                                    </button>
-                                  </div>
-                                )}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      )
-                    })}
-                    {timelineData.length === 0 && (
-                      <p className="text-xs text-text-muted">No historical reports saved yet. Save reports to construct timeline.</p>
-                    )}
-                  </div>
-                </>
-              )
-            })()}
+            <TeamCapacityDisplay data={data.teamCapacity} onOpenModal={() => setShowTeamCapacityModal(true)} />
           </motion.section>
         )}
 
@@ -2819,15 +2860,30 @@ Do not return markdown wraps, only raw JSON text.
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
-            {/* 1. Work Distribution (Pie) */}
+            {/* 1. Work Distribution (Pie) - Interactive Modal */}
             <motion.div
               initial={{ opacity: 0, y: 20, scale: 0.98 }}
               whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true, margin: "-45px" }}
               transition={{ duration: 0.5 }}
-              className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+              onClick={() => setShowWorkDistributionModal(true)}
+              className={`p-5 rounded-2xl border cursor-pointer group relative overflow-hidden ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 hover:border-accent-gold/30 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:border-accent-gold/40 hover:shadow-2xl'} transition-all duration-300`}
             >
-              <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Work Distribution</span>
+              {/* Hover Glow Effect */}
+              <div className="absolute inset-0 bg-gradient-to-br from-accent-gold/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+              {/* Click Indicator */}
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-gold/10 border border-accent-gold/20">
+                  <span className="text-[9px] font-bold text-accent-gold uppercase tracking-wider">Click to Expand</span>
+                  <svg className="w-3 h-3 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </div>
+              </div>
+
+              <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block relative z-10">Work Distribution</span>
               <div className="h-64 flex justify-center items-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -2843,15 +2899,30 @@ Do not return markdown wraps, only raw JSON text.
               </div>
             </motion.div>
 
-            {/* 2. Production Issues Comparison (Bar) */}
+            {/* 2. Production Issues Comparison (Bar) - Interactive Modal */}
             <motion.div
               initial={{ opacity: 0, y: 20, scale: 0.98 }}
               whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true, margin: "-45px" }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+              onClick={() => setShowProductionIssuesModal(true)}
+              className={`p-5 rounded-2xl border cursor-pointer group relative overflow-hidden ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 hover:border-accent-gold/30 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:border-accent-gold/40 hover:shadow-2xl'} transition-all duration-300`}
             >
-              <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Production Issue Categories</span>
+              {/* Hover Glow Effect */}
+              <div className="absolute inset-0 bg-gradient-to-br from-accent-gold/5 via-transparent to-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+              {/* Click Indicator */}
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-gold/10 border border-accent-gold/20">
+                  <span className="text-[9px] font-bold text-accent-gold uppercase tracking-wider">Click to Expand</span>
+                  <svg className="w-3 h-3 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </div>
+              </div>
+
+              <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block relative z-10">Production Issue Categories</span>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={prodIssuesData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
@@ -2866,16 +2937,31 @@ Do not return markdown wraps, only raw JSON text.
               </div>
             </motion.div>
 
-            {/* 3. Defect Status (Doughnut) */}
+            {/* 3. Defect Status (Doughnut) - Interactive Modal */}
             <motion.div
               initial={{ opacity: 0, y: 20, scale: 0.98 }}
               whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true, margin: "-45px" }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+              onClick={() => setShowDefectModal(true)}
+              className={`p-5 rounded-2xl border cursor-pointer group relative overflow-hidden ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 hover:border-accent-gold/30 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:border-accent-gold/40 hover:shadow-2xl'} transition-all duration-300`}
             >
-              <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Defect Status Breakdown</span>
-              <div className="h-64">
+              {/* Hover Glow Effect */}
+              <div className="absolute inset-0 bg-gradient-to-br from-accent-gold/5 via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+              {/* Click Indicator */}
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-gold/10 border border-accent-gold/20">
+                  <span className="text-[9px] font-bold text-accent-gold uppercase tracking-wider">Click to Expand</span>
+                  <svg className="w-3 h-3 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </div>
+              </div>
+
+              <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block relative z-10">Defect Status Breakdown</span>
+              <div className="h-64 relative z-10">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={defectStatusData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} dataKey="value" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out">
@@ -2904,7 +2990,7 @@ Do not return markdown wraps, only raw JSON text.
             {[
               { role: 'New Feature Testing', members: data.newFeatureTeam, barColor: 'bg-blue-500', metrics: '8 items tested' },
               { role: 'Production Support', members: data.supportTeam, barColor: 'bg-green-500', metrics: '3 log exceptions resolved' },
-              { role: 'Automation Engineering', members: data.automationTeam, barColor: 'bg-purple-500', metrics: 'Avg regression coverage: 76%' }
+              { role: 'Automation Engineering', members: data.automationTeam, barColor: 'bg-purple-500', metrics: '' }
             ].map(group => (
               <div
                 key={group.role}
@@ -2933,70 +3019,22 @@ Do not return markdown wraps, only raw JSON text.
           </div>
         </section>
 
-        {/* ── SECTION 9: TIMELINE ROADMAP & NEXT PRIORITIES ── */}
-        <motion.section
-          variants={sectionVariants}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, margin: "-80px" }}
-          ref={sectionsRef.roadmap}
-          className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8"
-          style={{ display: (vis.showTimeline === false && vis.show_nextPriorities === false) ? 'none' : undefined }}
-        >
-
-          {/* Daily Milestone Logs */}
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-2">
-              <History className="w-5 h-5 text-accent-gold" />
-              <h2 className="text-2xl font-extrabold font-clash">Weekly QA Progress Timeline</h2>
-            </div>
-
-            <div className="relative pl-6 flex flex-col gap-8 ml-2 pt-2">
-              <motion.div
-                initial={{ scaleY: 0 }}
-                whileInView={{ scaleY: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 1.2, ease: "easeOut" }}
-                className="absolute left-0 top-2 bottom-2 w-px bg-white/10 origin-top"
-              />
-              {[
-                { day: 'Monday', title: 'Support & Exception Triage', desc: 'Analyzed Safari mobile checkout logs and established debug tickets.' },
-                { day: 'Tuesday', title: 'Automation Test coverage review', desc: 'Executed baseline pipeline regression checks and identified missing webhooks.' },
-                { day: 'Wednesday', title: 'Profile Redesign Verification failure', desc: 'Flagged REL-103 build issues and initiated feedback cycles.' },
-                { day: 'Thursday', title: 'Stress test run & latency logs', desc: 'Validated EUR/GBP multi-currency cache queries, reporting 40% drops.' },
-                { day: 'Friday', title: 'Sprint release candidate lock', desc: 'Closed Safari regression exceptions, signing off 3 critical integrations.' }
-              ].map((event, idx) => (
-                <motion.div
-                  key={event.day}
-                  initial={{ opacity: 0, x: -20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: idx * 0.1, duration: 0.5 }}
-                  className="relative group pl-2"
-                >
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    whileInView={{ scale: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: idx * 0.15 + 0.1, type: "spring", stiffness: 350, damping: 15 }}
-                    className="absolute left-[-31px] top-1.5 w-2.5 h-2.5 rounded-full bg-accent-gold shadow-[0_0_8px_rgba(212,175,55,0.8)] transition-transform duration-300 group-hover:scale-125"
-                  />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-accent-gold block">{event.day}</span>
-                  <h3 className={`text-sm font-extrabold mt-0.5 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{event.title}</h3>
-                  <p className="text-xs text-text-secondary mt-1">{event.desc}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-
-          {/* Next Priorities List */}
-          <div className="flex flex-col gap-4">
+        {/* ── SECTION 9: NEXT PRIORITIES ── */}
+        {vis.show_nextPriorities !== false && (
+          <motion.section
+            variants={sectionVariants}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: "-80px" }}
+            ref={sectionsRef.roadmap}
+            className="flex flex-col gap-5"
+          >
             <div className="flex items-center gap-2">
               <Star className="w-5 h-5 text-accent-gold" />
-              <h2 className="text-xl font-extrabold font-clash">Next Week Priorities</h2>
+              <h2 className="text-2xl font-extrabold font-clash">Next Week Priorities</h2>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {data.nextPriorities.map((priority, idx) => (
                 <div
                   key={priority.id}
@@ -3014,11 +3052,11 @@ Do not return markdown wraps, only raw JSON text.
                 </div>
               ))}
               {data.nextPriorities.length === 0 && (
-                <div className="p-8 text-center text-xs text-text-muted">No priorities set for next week.</div>
+                <div className="col-span-full p-8 text-center text-xs text-text-muted">No priorities set for next week.</div>
               )}
             </div>
-          </div>
-        </motion.section>
+          </motion.section>
+        )}
 
       </motion.div>
 
@@ -3038,7 +3076,65 @@ Do not return markdown wraps, only raw JSON text.
           </span>
         </div>
       </footer>
-    </div>
+
+      {/* ── Defect Status Modal ── */}
+      <DefectStatusModal
+        isOpen={showDefectModal}
+        onClose={() => setShowDefectModal(false)}
+        releaseBugStatus={data.releaseBugStatus}
+        fallbackData={data.defectsLastWeek}
+        projectName={data.projectName}
+      />
+
+      {/* ── Work Distribution Modal ── */}
+      <WorkDistributionModal
+        isOpen={showWorkDistributionModal}
+        onClose={() => setShowWorkDistributionModal(false)}
+        workDistributionData={workDistributionData}
+        projectName={data.projectName}
+      />
+
+      {/* ── Production Issues Modal ── */}
+      <ProductionIssuesModal
+        isOpen={showProductionIssuesModal}
+        onClose={() => setShowProductionIssuesModal(false)}
+        prodIssuesData={prodIssuesData}
+        projectName={data.projectName}
+      />
+
+      {/* ── Release Readiness Modal ── */}
+      <ReleaseReadinessModal
+        isOpen={showReleaseReadinessModal}
+        onClose={() => setShowReleaseReadinessModal(false)}
+        releaseReadinessScore={releaseReadinessScore}
+        passedCases={passedCases}
+        totalCases={totalCases}
+        openBugsCount={openBugsCount}
+        blockedCases={blockedCases}
+        closureRate={closureRate}
+        projectName={data.projectName}
+      />
+
+      {/* ── Team Capacity Modal ── */}
+      {data.teamCapacity && (
+        <TeamCapacityModal
+          isOpen={showTeamCapacityModal}
+          onClose={() => setShowTeamCapacityModal(false)}
+          data={data.teamCapacity}
+          projectName={data.projectName}
+        />
+      )}
+
+      {/* ── Executive Quality Score Modal ── */}
+      <ExecutiveQualityScoreModal
+        isOpen={showQualityScoreModal}
+        onClose={() => setShowQualityScoreModal(false)}
+        data={data}
+        score={qualityStats.score}
+        label={qualityStats.label}
+        color={qualityStats.color}
+      />
+    </div >
   )
 }
 

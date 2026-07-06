@@ -12,9 +12,11 @@ interface Props {
   children: React.ReactNode
   /** Require admin role */
   adminOnly?: boolean
+  /** Check module permission via RBAC (more flexible than adminOnly) */
+  moduleKey?: string
 }
 
-export function ProtectedRoute({ children, adminOnly = false }: Props) {
+export function ProtectedRoute({ children, adminOnly = false, moduleKey }: Props) {
   const { isAuthenticated, role } = useAppStore()
   const { canView, permissionsLoaded } = usePermissions()
   const { isRoleLocked } = useMaintenanceStore()
@@ -40,14 +42,19 @@ export function ProtectedRoute({ children, adminOnly = false }: Props) {
     return <Navigate to={ROUTES.maintenance} replace />
   }
 
-  // Admin-only routes
+  // Module-level RBAC check (works for any role with permission)
+  if (moduleKey && !canView(moduleKey)) {
+    return <AccessDenied />
+  }
+
+  // Admin-only routes (legacy support)
   if (adminOnly && role !== 'admin' && role !== 'super_admin') {
     return <AccessDenied />
   }
 
-  // Module-level RBAC check
-  const moduleKey = ROUTE_MODULE_KEY[location.pathname as AppRoute]
-  if (moduleKey && role !== 'admin' && role !== 'super_admin' && !canView(moduleKey)) {
+  // Module-level RBAC check from route path
+  const routeModuleKey = ROUTE_MODULE_KEY[location.pathname as AppRoute]
+  if (routeModuleKey && role !== 'admin' && role !== 'super_admin' && !canView(routeModuleKey)) {
     return <AccessDenied />
   }
 

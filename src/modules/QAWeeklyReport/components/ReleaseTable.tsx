@@ -30,11 +30,23 @@ const mapDailyReleaseToQA = (rows: ReleaseTestingRecord[]): ReleaseItem[] => row
   featureName: [row.description, row.scope_of_testing_for_smoke ? `Smoke Scope: ${row.scope_of_testing_for_smoke}` : '', row.overall_scope_of_testing ? `Overall Scope: ${row.overall_scope_of_testing}` : ''].filter(Boolean).join(' | '),
   assignee: row.qa || '',
   status: (() => {
-    const normalized = (row.smoke_testing_status || '').toLowerCase()
-    if (['passed', 'pass', 'completed'].some(v => normalized.includes(v))) return 'Pass'
+    // Preserve exact status from Daily Report if it matches QA Report options
+    const dailyStatus = row.smoke_testing_status || ''
+    const qaStatusOptions = ['Not Started', 'In Progress', 'Pass', 'Fail', 'Blocked']
+
+    // Check if the daily status matches any QA status (case-insensitive)
+    const matchedStatus = qaStatusOptions.find(
+      qaStatus => qaStatus.toLowerCase() === dailyStatus.toLowerCase()
+    )
+
+    if (matchedStatus) return matchedStatus
+
+    // Fallback: Use keyword matching only if no exact match
+    const normalized = dailyStatus.toLowerCase()
+    if (['passed', 'pass', 'completed', 'success'].some(v => normalized.includes(v))) return 'Pass'
     if (['blocked', 'blocker'].some(v => normalized.includes(v))) return 'Blocked'
-    if (['fail', 'failed'].some(v => normalized.includes(v))) return 'Fail'
-    if (['in progress', 'progress', 'ongoing'].some(v => normalized.includes(v))) return 'In Progress'
+    if (['fail', 'failed', 'failure'].some(v => normalized.includes(v))) return 'Fail'
+    if (['in progress', 'progress', 'ongoing', 'working'].some(v => normalized.includes(v))) return 'In Progress'
     return 'Not Started'
   })(),
   priority: 'Medium',

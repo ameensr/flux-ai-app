@@ -182,7 +182,7 @@ export const DefectChart: React.FC = () => {
 
 // ── Report History ────────────────────────────────────────────────────────────
 
-export const ReportHistory: React.FC = () => {
+export const ReportHistory: React.FC<{ onReportLoaded?: () => void }> = ({ onReportLoaded }) => {
   const { savedReports, deleteReport, setGeneratedReport, setForm, historySearch, setHistorySearch, projects, form, fetchReports } = useQAReportStore()
   const { can } = usePermissions()
   const canDelete = can('qa-report', 'can_delete')
@@ -216,6 +216,10 @@ export const ReportHistory: React.FC = () => {
     setGeneratedReport(r.markdown)
     setForm(r.form)
     toast({ title: 'Report Loaded', description: `${r.project} — ${r.week}` })
+    // Notify parent that a report was loaded from history
+    if (onReportLoaded) {
+      onReportLoaded()
+    }
   }
 
   const duplicate = (r: typeof savedReports[0]) => {

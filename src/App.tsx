@@ -38,7 +38,6 @@ const AICopilot = lazy(() => import('@/components/ai/AICopilot').then(m => ({ de
 const DailyUpdateReport = lazy(() => import('@/modules/DailyUpdateReport').then(m => ({ default: m.DailyUpdateReport })))
 const DailyReportConfig = lazy(() => import('@/modules/DailyUpdateReport/DailyReportConfig').then(m => ({ default: m.DailyReportConfig })))
 const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINews })))
-const AnnouncementsPage = lazy(() => import('@/modules/Announcements/AnnouncementsPage').then(m => ({ default: m.AnnouncementsPage })))
 const MaintenancePage = lazy(() => import('@/pages/MaintenancePage').then(m => ({ default: m.MaintenancePage })))
 
 // ── Loaders ───────────────────────────────────────────────────────────────────
@@ -226,7 +225,6 @@ export default function App() {
             <Route path={ROUTES.dailyReportConfig} element={<DailyReportConfig />} />
             <Route path={ROUTES.qaReportConfig} element={<QAReportConfig />} />
             <Route path={ROUTES.aiNews} element={<AINews />} />
-            <Route path={ROUTES.announcements} element={<AnnouncementsPage />} />
             <Route path={ROUTES.settings} element={<Settings />} />
             <Route path={ROUTES.admin} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
             <Route path={`${ROUTES.admin}/*`} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />

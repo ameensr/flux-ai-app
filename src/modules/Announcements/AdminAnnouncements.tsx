@@ -6,12 +6,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
 import { useAppStore } from '@/store/useAppStore'
+import { usePermissions } from '@/hooks/usePermissions'
 import { cn } from '@/lib/utils'
 import {
   Megaphone, Plus, Edit2, Trash2, Pin, PinOff, Eye, EyeOff,
   Archive, Send, Search, RefreshCw, X, Save, ExternalLink,
   Paperclip, BarChart3, Users, CheckCircle, Clock, AlertTriangle,
-  FileText, ChevronDown,
+  FileText, ChevronDown, Lock,
 } from 'lucide-react'
 import { useAnnouncementsStore } from './store'
 import {
@@ -262,13 +263,40 @@ function FormModal({ announcement, onClose, onSaved }: FormModalProps) {
 
 export function AdminAnnouncements() {
   const { toast } = useToast()
+  const { user, role } = useAppStore()
   const { allAnnouncements, adminLoading, readCounts, ackCounts, fetchForAdmin } = useAnnouncementsStore()
+
+  // Permission checks
+  const { canView, canCreate, canEdit, canDelete } = usePermissions()
+  const hasViewPerm = canView('announcements')
+  const hasCreatePerm = canCreate('announcements')
+  const hasEditPerm = canEdit('announcements')
+  const hasDeletePerm = canDelete('announcements')
+  const isAdmin = role === 'admin' || role === 'super_admin'
+
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterPriority, setFilterPriority] = useState('')
   const [formModal, setFormModal] = useState<{ open: boolean; announcement: Announcement | null }>({ open: false, announcement: null })
 
   useEffect(() => { fetchForAdmin() }, [])
+
+  // Early exit if no view permission
+  if (!hasViewPerm) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6" style={{ background: 'var(--surface)' }}>
+          <Lock className="w-8 h-8" style={{ color: 'var(--accent)' }} />
+        </div>
+        <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
+          No Permission
+        </h3>
+        <p style={{ color: 'var(--text-muted)' }}>
+          You don't have permission to view announcements.
+        </p>
+      </div>
+    )
+  }
 
   const handleDelete = async (a: Announcement) => {
     if (!confirm(`Delete "${a.title}"? This cannot be undone.`)) return
@@ -347,12 +375,14 @@ export function AdminAnnouncements() {
             <button onClick={() => fetchForAdmin()} className="p-2 rounded-xl transition-all" style={{ color: 'var(--text-muted)' }}>
               <RefreshCw className={cn('w-4 h-4', adminLoading && 'animate-spin')} />
             </button>
-            <button
-              onClick={() => setFormModal({ open: true, announcement: null })}
-              className="btn-accent text-xs"
-            >
-              <Plus className="w-3.5 h-3.5" /> New Announcement
-            </button>
+            {hasCreatePerm && (
+              <button
+                onClick={() => setFormModal({ open: true, announcement: null })}
+                className="btn-accent text-xs"
+              >
+                <Plus className="w-3.5 h-3.5" /> New Announcement
+              </button>
+            )}
           </div>
         </div>
 
@@ -435,21 +465,36 @@ export function AdminAnnouncements() {
                         <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Acks</span>
                       </div>
                       <div className="flex gap-1">
-                        <button onClick={() => handleTogglePin(a)} title={a.is_pinned ? 'Unpin' : 'Pin'} className="p-1.5 rounded-lg transition-all" style={{ color: a.is_pinned ? 'var(--accent)' : 'var(--text-muted)' }}>
-                          {a.is_pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
-                        </button>
-                        <button onClick={() => handlePublish(a)} title={a.status === 'published' ? 'Unpublish' : 'Publish'} className="p-1.5 rounded-lg transition-all" style={{ color: a.status === 'published' ? 'var(--accent)' : 'var(--text-muted)' }}>
-                          {a.status === 'published' ? <EyeOff className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
-                        </button>
-                        <button onClick={() => handleArchive(a)} title="Archive" className="p-1.5 rounded-lg transition-all" style={{ color: 'var(--text-muted)' }}>
-                          <Archive className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => setFormModal({ open: true, announcement: a })} title="Edit" className="p-1.5 rounded-lg transition-all" style={{ color: 'var(--text-muted)' }}>
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => handleDelete(a)} title="Delete" className="p-1.5 rounded-lg hover:text-red-400 transition-all" style={{ color: 'var(--text-muted)' }}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {/* Pin/Unpin - admins only */}
+                        {isAdmin && (
+                          <button onClick={() => handleTogglePin(a)} title={a.is_pinned ? 'Unpin' : 'Pin'} className="p-1.5 rounded-lg transition-all" style={{ color: a.is_pinned ? 'var(--accent)' : 'var(--text-muted)' }}>
+                            {a.is_pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                        {/* Publish - admins or own announcement */}
+                        {(isAdmin || a.author_id === user?.id) && (
+                          <button onClick={() => handlePublish(a)} title={a.status === 'published' ? 'Unpublish' : 'Publish'} className="p-1.5 rounded-lg transition-all" style={{ color: a.status === 'published' ? 'var(--accent)' : 'var(--text-muted)' }}>
+                            {a.status === 'published' ? <EyeOff className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                        {/* Archive - admins only */}
+                        {isAdmin && (
+                          <button onClick={() => handleArchive(a)} title="Archive" className="p-1.5 rounded-lg transition-all" style={{ color: 'var(--text-muted)' }}>
+                            <Archive className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {/* Edit - permission check + (own announcement or admin) */}
+                        {hasEditPerm && (a.author_id === user?.id || isAdmin) && (
+                          <button onClick={() => setFormModal({ open: true, announcement: a })} title="Edit" className="p-1.5 rounded-lg transition-all" style={{ color: 'var(--text-muted)' }}>
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {/* Delete - permission check (usually admin-only) */}
+                        {hasDeletePerm && (
+                          <button onClick={() => handleDelete(a)} title="Delete" className="p-1.5 rounded-lg hover:text-red-400 transition-all" style={{ color: 'var(--text-muted)' }}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

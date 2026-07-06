@@ -125,6 +125,9 @@ function resolveModel(configModel: string, module?: string): string {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Trusted domains for AI API calls */
+const ALLOWED_HOSTS = ['openrouter.ai']
+
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -133,11 +136,24 @@ function isTransientError(status: number): boolean {
   return TRANSIENT_STATUS_CODES.includes(status)
 }
 
+function validateUrl(url: string): void {
+  try {
+    const parsed = new URL(url)
+    if (!ALLOWED_HOSTS.includes(parsed.hostname)) {
+      throw new Error(`Blocked request to untrusted host: ${parsed.hostname}`)
+    }
+  } catch (e: any) {
+    if (e.message.startsWith('Blocked')) throw e
+    throw new Error('Invalid URL provided for AI request')
+  }
+}
+
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
   timeoutMs: number,
 ): Promise<Response> {
+  validateUrl(url)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
   try {

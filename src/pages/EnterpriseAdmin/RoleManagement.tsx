@@ -5,13 +5,14 @@ import { supabase } from '@/lib/supabase'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
 import { invalidatePermissionCache } from '@/lib/rbac'
+import { getModulePermissions, PERMISSION_LABELS } from '@/lib/modulePermissions'
 import { cn } from '@/lib/utils'
 import {
   Shield, Plus, Copy, Edit2, Trash2, ChevronDown, ChevronRight,
   Check, X, RefreshCw, Save, Users, ArrowDown, Search, UserCircle,
 } from 'lucide-react'
 import type { EnterpriseRole, ModuleRow, PermRow, RMPRow } from './types'
-import { PERM_LABELS, STATUS_CONFIG } from './types'
+import { STATUS_CONFIG } from './types'
 
 interface MatrixData {
   roles: EnterpriseRole[]
@@ -336,7 +337,15 @@ function PermissionCard({
   onToggle: (moduleId: string, permId: string) => void
 }) {
   const [expanded, setExpanded] = useState(true)
-  const enabledCount = isAdmin ? permissions.length : permissions.filter(p => localState[`${roleId}:${module.id}:${p.id}`]).length
+
+  // Get only the permissions that this module actually supports
+  const supportedPermissionKeys = getModulePermissions(module.module_key)
+  const filteredPermissions = permissions.filter(p => supportedPermissionKeys.includes(p.permission_key as any))
+
+  // If no permissions are supported, don't render this module
+  if (filteredPermissions.length === 0) return null
+
+  const enabledCount = isAdmin ? filteredPermissions.length : filteredPermissions.filter(p => localState[`${roleId}:${module.id}:${p.id}`]).length
 
   return (
     <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden">
@@ -353,7 +362,7 @@ function PermissionCard({
           'text-[10px] px-2 py-0.5 rounded-full font-bold',
           isAdmin ? 'bg-green-500/10 text-green-400' : enabledCount > 0 ? 'bg-accent-gold/10 text-accent-gold' : 'bg-white/5 text-text-muted'
         )}>
-          {enabledCount}/{permissions.length}
+          {enabledCount}/{filteredPermissions.length}
         </span>
       </button>
 
@@ -367,7 +376,7 @@ function PermissionCard({
             className="overflow-hidden"
           >
             <div className="px-5 pb-4 flex flex-wrap gap-3 border-t border-white/5 pt-4">
-              {permissions.map(perm => {
+              {filteredPermissions.map(perm => {
                 const key = `${roleId}:${module.id}:${perm.id}`
                 const enabled = isAdmin ? true : (localState[key] ?? false)
                 const isSaving = saving === key
@@ -391,7 +400,7 @@ function PermissionCard({
                       ? <Check className="w-3 h-3" />
                       : <X className="w-3 h-3" />
                     }
-                    {PERM_LABELS[perm.permission_key] ?? perm.permission_name}
+                    {PERMISSION_LABELS[perm.permission_key as keyof typeof PERMISSION_LABELS] ?? perm.permission_name}
                   </button>
                 )
               })}

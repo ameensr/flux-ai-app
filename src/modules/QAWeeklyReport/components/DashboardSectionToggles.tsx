@@ -40,6 +40,7 @@ const SECTIONS: DashboardSectionConfig[] = [
   { key: 'show_supportLog', label: 'Support & Exception Log', description: 'Support tickets table', icon: FileText, category: 'Support', defaultEnabled: true },
   { key: 'show_productionIssues', label: 'Production Issues', description: 'Issue categories breakdown table', icon: Bug, category: 'Support', defaultEnabled: true },
   { key: 'show_teamAllocation', label: 'Team Allocation', description: 'Team resource cards with members', icon: Users, category: 'Support', defaultEnabled: true },
+  { key: 'show_teamCapacity', label: 'Team Capacity Overview', description: 'Weekly team availability and testing capacity', icon: Activity, category: 'Support', defaultEnabled: true },
 
   // Defects
   { key: 'show_defectAnalysis', label: 'Defect Analysis', description: 'Last week + MTD defect counts', icon: Bug, category: 'Defects', defaultEnabled: true },
@@ -50,7 +51,6 @@ const SECTIONS: DashboardSectionConfig[] = [
   { key: 'showHistoricalAnalytics', label: 'Historical Analytics', description: 'Trend charts across saved reports', icon: BarChart3, category: 'Analytics', defaultEnabled: true },
 
   // Planning
-  { key: 'showTimeline', label: 'Weekly Timeline', description: 'Day-by-day progress log', icon: Calendar, category: 'Planning', defaultEnabled: true },
   { key: 'show_nextPriorities', label: 'Next Priorities', description: 'Upcoming week priority cards', icon: Briefcase, category: 'Planning', defaultEnabled: true },
 
   // AI Insights

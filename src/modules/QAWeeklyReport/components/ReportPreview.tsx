@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import DOMPurify from 'dompurify'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { FloatingButton } from '@/components/ui/FloatingButton'
 import { useQAReportStore } from '../store'
@@ -333,7 +334,7 @@ export const ReportPreview: React.FC = () => {
         ) : (
           <>
             <style>{mdStyles}</style>
-            <div dangerouslySetInnerHTML={{ __html: mdToHtml(generatedReport) }} />
+            <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(mdToHtml(generatedReport)) }} />
           </>
         )}
       </GlassCard>

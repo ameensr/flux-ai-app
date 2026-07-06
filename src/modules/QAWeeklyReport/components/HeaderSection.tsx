@@ -63,16 +63,40 @@ export const HeaderSection: React.FC = () => {
 
 export const KPICards: React.FC = () => {
   const { form, setForm } = useQAReportStore()
+
+  // Auto-populate functions
+  const autoPopulateNewFeatures = () => {
+    const count = form.releaseItems?.length || 0
+    setForm({ newFeatures: count })
+  }
+
+  const autoPopulateCodeFixes = () => {
+    const count = form.supportTickets?.length || 0
+    setForm({ codeFixes: count })
+  }
+
   const kpis = [
-    { key: 'supportEmails' as const, label: 'Support Emails', icon: Mail, color: 'text-blue-400' },
-    { key: 'newFeatures' as const, label: 'New Features', icon: Zap, color: 'text-accent-gold' },
-    { key: 'codeFixes' as const, label: 'Code Fixes Testing', icon: Wrench, color: 'text-green-400' },
+    { key: 'supportEmails' as const, label: 'Support Emails', icon: Mail, color: 'text-blue-400', hasAuto: false },
+    { key: 'newFeatures' as const, label: 'New Features', icon: Zap, color: 'text-accent-gold', hasAuto: true, autoFn: autoPopulateNewFeatures, autoTooltip: 'Auto-populate from Release Testing Status' },
+    { key: 'codeFixes' as const, label: 'Code Fixes Testing', icon: Wrench, color: 'text-green-400', hasAuto: true, autoFn: autoPopulateCodeFixes, autoTooltip: 'Auto-populate from Support & Exception Log' },
   ]
+
   return (
     <div className="grid grid-cols-3 gap-3">
-      {kpis.map(({ key, label, icon: Icon, color }) => (
-        <GlassCard key={key} hoverEffect={false} className="p-4 flex flex-col gap-2">
-          <Icon className={`w-4 h-4 ${color}`} />
+      {kpis.map(({ key, label, icon: Icon, color, hasAuto, autoFn, autoTooltip }) => (
+        <GlassCard key={key} hoverEffect={false} className="p-4 flex flex-col gap-2 relative">
+          <div className="flex items-center justify-between">
+            <Icon className={`w-4 h-4 ${color}`} />
+            {hasAuto && autoFn && (
+              <button
+                onClick={autoFn}
+                title={autoTooltip}
+                className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-accent-gold/10 hover:bg-accent-gold/20 text-accent-gold border border-accent-gold/20 hover:border-accent-gold/40 transition-all"
+              >
+                Auto
+              </button>
+            )}
+          </div>
           <input
             type="number" min={0}
             className="bg-transparent text-2xl font-bold text-white w-full focus:outline-none"

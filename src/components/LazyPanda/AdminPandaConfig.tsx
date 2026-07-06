@@ -6,10 +6,10 @@ import { motion } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { cn } from '@/lib/utils'
 import {
-  PawPrint, Eye, EyeOff, Sparkles, Calendar, Plus, Trash2,
-  RotateCcw, Monitor, Moon, Sun, Smartphone, MessageSquare, Edit2,
+  PawPrint, Eye, EyeOff, Sparkles, Plus, Trash2,
+  RotateCcw, Monitor, Moon, Sun, MessageSquare,
 } from 'lucide-react'
-import { usePandaConfigStore, type PandaFeatureToggles, type SeasonalTheme } from './pandaConfig'
+import { usePandaConfigStore, type PandaFeatureToggles } from './pandaConfig'
 import { usePandaMessagesStore, type SmartMessage, type ShowFrequency } from './pandaMessages'
 import { AdminEventGreetings } from './AdminEventGreetings'
 import { PandaSVG } from './PandaSVG'
@@ -31,7 +31,7 @@ function Toggle({ enabled, onChange, label, description }: {
       </div>
       <button
         onClick={() => onChange(!enabled)}
-        className="relative w-10 h-5 rounded-full shrink-0 transition-colors duration-200"
+        className="relative w-11 h-6 rounded-full shrink-0 transition-colors duration-200"
         style={{
           background: enabled ? 'var(--accent)' : 'var(--hover)',
           border: `1px solid ${enabled ? 'var(--accent)' : 'var(--border)'}`,
@@ -41,7 +41,7 @@ function Toggle({ enabled, onChange, label, description }: {
         aria-label={label}
       >
         <span
-          className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200"
+          className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
           style={{ transform: enabled ? 'translateX(20px)' : 'translateX(0)' }}
         />
       </button>
@@ -63,7 +63,6 @@ const FEATURE_LABELS: Record<keyof PandaFeatureToggles, { label: string; descrip
   loadingAnimation: { label: 'Loading Animation', description: 'Laptop + coffee during auth' },
   easterEggs: { label: 'Easter Eggs', description: 'Hidden interactions on click/tap' },
   microAnimations: { label: 'Micro Animations', description: 'Blinking, ear twitch, tail, breathing' },
-  soundEffects: { label: 'Sound Effects (Future)', description: 'Audio feedback — not yet implemented' },
 }
 
 // ── Live Preview ──────────────────────────────────────────────────────────────
@@ -150,6 +149,15 @@ function LivePreview() {
 
 // ── Weekend / Smart Messages Section ──────────────────────────────────────────
 
+// Auto-emoji map by category
+const CATEGORY_EMOJI: Record<string, string> = {
+  weekend: '👀',
+  late_night: '🌙',
+  early_morning: '☕',
+  first_of_week: '🏆',
+  general: '🐼',
+}
+
 function WeekendMessagesSection() {
   const {
     config: msgConfig,
@@ -161,6 +169,7 @@ function WeekendMessagesSection() {
     addMessage,
     updateMessage,
     removeMessage,
+    setBroadcast,
     resetToDefaults: resetMessages,
   } = usePandaMessagesStore()
 
@@ -168,12 +177,38 @@ function WeekendMessagesSection() {
   const [newEmoji, setNewEmoji] = useState('')
   const [newCategory, setNewCategory] = useState<string>('weekend')
 
+  // Broadcast local state — sync from store
+  const [broadcastText, setBroadcastText] = useState(msgConfig.broadcast?.text || '')
+  const [broadcastEmoji, setBroadcastEmoji] = useState(msgConfig.broadcast?.emoji || '📢')
+
+  // Auto-fill emoji when category changes if user hasn't typed one
+  const handleCategoryChange = (cat: string) => {
+    setNewCategory(cat)
+    if (!newEmoji) {
+      setNewEmoji(CATEGORY_EMOJI[cat] || '🐼')
+    }
+  }
+
+  // Auto-fill emoji when text starts being typed if still empty
+  const handleTextChange = (text: string) => {
+    setNewText(text)
+    if (!newEmoji && text.length === 1) {
+      setNewEmoji(CATEGORY_EMOJI[newCategory] || '🐼')
+    }
+  }
+
   const handleAddMessage = () => {
     if (!newText.trim()) return
+    // Auto-add emoji if empty
+    const finalEmoji = newEmoji.trim() || CATEGORY_EMOJI[newCategory] || '🐼'
+    const finalText = newText.trim()
+    // Automatically add emoji to the start of text if not already present
+    const textWithEmoji = finalText.startsWith(finalEmoji) ? finalText : `${finalEmoji} ${finalText}`
+
     addMessage({
       id: `custom_${Date.now()}`,
-      text: newText.trim(),
-      emoji: newEmoji || '🐼',
+      text: textWithEmoji,
+      emoji: finalEmoji,
       category: newCategory as any,
       animation: 'wave',
       enabled: true,
@@ -182,9 +217,41 @@ function WeekendMessagesSection() {
     setNewEmoji('')
   }
 
+  // Broadcast toggle handler
+  const handleBroadcastToggle = () => {
+    const willEnable = !msgConfig.broadcast?.enabled
+    const text = broadcastText.trim() || 'Welcome everyone!'
+    const emoji = broadcastEmoji || '📢'
+    // Auto-add emoji to broadcast text if not present
+    const textWithEmoji = text.startsWith(emoji) ? text : `${emoji} ${text}`
+    setBroadcast({ enabled: willEnable, text: textWithEmoji, emoji })
+    if (willEnable && !broadcastText.trim()) setBroadcastText('Welcome everyone!')
+    if (willEnable && !broadcastEmoji) setBroadcastEmoji('📢')
+  }
+
+  // Save broadcast on blur
+  const saveBroadcast = () => {
+    const text = broadcastText.trim() || 'Welcome everyone!'
+    const emoji = broadcastEmoji || '📢'
+    // Auto-add emoji to broadcast text
+    const textWithEmoji = text.startsWith(emoji) ? text : `${emoji} ${text}`
+    setBroadcast({
+      enabled: msgConfig.broadcast?.enabled ?? false,
+      text: textWithEmoji,
+      emoji,
+    })
+  }
+
+  // Auto-emoji for broadcast when text typed
+  const handleBroadcastTextChange = (text: string) => {
+    setBroadcastText(text)
+    if (!broadcastEmoji && text.length === 1) setBroadcastEmoji('📢')
+  }
+
   return (
     <GlassCard hoverEffect={false}>
-      <div className="flex items-center justify-between mb-4">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
           <MessageSquare className="w-4 h-4" style={{ color: 'var(--accent)' }} />
           <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Weekend & Smart Messages</h3>
@@ -199,20 +266,25 @@ function WeekendMessagesSection() {
           role="switch"
           aria-checked={msgConfig.enabled}
         >
-          <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200" style={{ transform: msgConfig.enabled ? 'translateX(20px)' : 'translateX(0)' }} />
+          <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200"
+            style={{ transform: msgConfig.enabled ? 'translateX(20px)' : 'translateX(0)' }} />
         </button>
       </div>
 
-      {/* Frequency */}
+      {/* Show Frequency */}
       <div className="mb-4">
-        <label className="text-[10px] font-bold uppercase tracking-widest block mb-1.5" style={{ color: 'var(--text-muted)' }}>Show Frequency</label>
-        <div className="flex gap-1.5">
-          {([['every_login', 'Every Login'], ['once_per_day', 'Once/Day'], ['once_per_session', 'Once/Session']] as [ShowFrequency, string][]).map(([val, label]) => (
+        <label className="text-[10px] font-bold uppercase tracking-widest block mb-2" style={{ color: 'var(--text-muted)' }}>Show Frequency</label>
+        <div className="flex gap-2">
+          {([['every_login', 'Every Login'], ['once_per_day', 'Once / Day'], ['once_per_session', 'Once / Session']] as [ShowFrequency, string][]).map(([val, label]) => (
             <button
               key={val}
               onClick={() => setFrequency(val)}
-              className={cn('px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all', msgConfig.frequency === val ? 'bg-accent text-white' : '')}
-              style={msgConfig.frequency !== val ? { background: 'var(--hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' } : {}}
+              className="flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-all"
+              style={{
+                background: msgConfig.frequency === val ? 'var(--accent)' : 'var(--hover)',
+                color: msgConfig.frequency === val ? '#fff' : 'var(--text-primary)',
+                border: `1px solid ${msgConfig.frequency === val ? 'var(--accent)' : 'var(--border)'}`,
+              }}
             >
               {label}
             </button>
@@ -220,51 +292,163 @@ function WeekendMessagesSection() {
         </div>
       </div>
 
-      {/* Active Days + Context */}
-      <div className="grid grid-cols-2 gap-x-4 mb-4">
-        <Toggle enabled={msgConfig.activeDays.saturday} onChange={v => setActiveDay('saturday', v)} label="Saturday" />
-        <Toggle enabled={msgConfig.activeDays.sunday} onChange={v => setActiveDay('sunday', v)} label="Sunday" />
-        <Toggle enabled={msgConfig.lateNightEnabled} onChange={v => setContextEnabled('lateNightEnabled', v)} label="Late Night (10PM+)" />
-        <Toggle enabled={msgConfig.earlyMorningEnabled} onChange={v => setContextEnabled('earlyMorningEnabled', v)} label="Early Morning (<6AM)" />
-        <Toggle enabled={msgConfig.firstOfWeekEnabled} onChange={v => setContextEnabled('firstOfWeekEnabled', v)} label="First of Week" />
-        <Toggle enabled={msgConfig.randomize} onChange={v => setRandomize(v)} label="Randomize" />
+      {/* Active Contexts */}
+      <div className="mb-4 p-3 rounded-xl" style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}>
+        <label className="text-[10px] font-bold uppercase tracking-widest block mb-2" style={{ color: 'var(--text-muted)' }}>Active Contexts</label>
+        <div className="grid grid-cols-2 gap-0">
+          <Toggle enabled={msgConfig.activeDays.saturday} onChange={v => setActiveDay('saturday', v)} label="Saturday" />
+          <Toggle enabled={msgConfig.activeDays.sunday} onChange={v => setActiveDay('sunday', v)} label="Sunday" />
+          <Toggle enabled={msgConfig.lateNightEnabled} onChange={v => setContextEnabled('lateNightEnabled', v)} label="Late Night" />
+          <Toggle enabled={msgConfig.earlyMorningEnabled} onChange={v => setContextEnabled('earlyMorningEnabled', v)} label="Early Morning" />
+          <Toggle enabled={msgConfig.firstOfWeekEnabled} onChange={v => setContextEnabled('firstOfWeekEnabled', v)} label="First of Week" />
+          <Toggle enabled={msgConfig.randomize} onChange={v => setRandomize(v)} label="Randomize" />
+        </div>
       </div>
 
       {/* Message List */}
-      <div className="mb-3 max-h-56 overflow-y-auto space-y-1.5 pr-1">
-        {msgConfig.messages.map(msg => (
-          <div key={msg.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg" style={{ background: 'var(--hover)' }}>
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xs shrink-0">{msg.emoji || '🐼'}</span>
-              <span className="text-[10px] truncate" style={{ color: msg.enabled ? 'var(--text-primary)' : 'var(--text-muted)' }}>{msg.text}</span>
+      <div className="mb-3">
+        <label className="text-[10px] font-bold uppercase tracking-widest block mb-1.5" style={{ color: 'var(--text-muted)' }}>Messages ({msgConfig.messages.length})</label>
+        <div className="max-h-48 overflow-y-auto space-y-1 pr-0.5">
+          {msgConfig.messages.map(msg => (
+            <div key={msg.id} className="flex items-center gap-2 py-2 px-2.5 rounded-lg" style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}>
+              <span className="text-base shrink-0 w-6 text-center">{msg.emoji || '🐼'}</span>
+              <span className="text-xs flex-1 truncate font-medium" style={{ color: msg.enabled ? 'var(--text-primary)' : 'var(--text-muted)' }}>{msg.text}</span>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => updateMessage(msg.id, { enabled: !msg.enabled })}
+                  className="p-1.5 rounded transition-colors"
+                  style={{ color: msg.enabled ? 'var(--accent)' : 'var(--text-muted)' }}
+                  title={msg.enabled ? 'Disable' : 'Enable'}
+                >
+                  {msg.enabled ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  onClick={() => removeMessage(msg.id)}
+                  className="p-1.5 rounded hover:text-red-400 transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  title="Remove"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button onClick={() => updateMessage(msg.id, { enabled: !msg.enabled })} className="p-1 rounded" style={{ color: msg.enabled ? 'var(--accent)' : 'var(--text-muted)' }}>
-                {msg.enabled ? <Eye className="w-2.5 h-2.5" /> : <EyeOff className="w-2.5 h-2.5" />}
-              </button>
-              <button onClick={() => removeMessage(msg.id)} className="p-1 rounded hover:text-red-400" style={{ color: 'var(--text-muted)' }}>
-                <Trash2 className="w-2.5 h-2.5" />
-              </button>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
-      {/* Add message */}
-      <div className="p-2.5 rounded-xl space-y-2" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
-        <div className="grid grid-cols-[32px_1fr_80px] gap-1.5">
-          <input value={newEmoji} onChange={e => setNewEmoji(e.target.value)} placeholder="🐼" className="field-input text-center text-xs h-7" maxLength={2} />
-          <input value={newText} onChange={e => setNewText(e.target.value)} placeholder="Message text..." className="field-input text-xs h-7" />
-          <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className="field-input text-[9px] h-7">
-            <option value="weekend">Weekend</option>
-            <option value="late_night">Night</option>
-            <option value="early_morning">Morning</option>
-            <option value="first_of_week">Monday</option>
-          </select>
+      {/* ── Broadcast Message ── */}
+      <div
+        className="mb-3 p-3 rounded-xl"
+        style={{
+          background: msgConfig.broadcast?.enabled ? 'rgba(234,179,8,0.06)' : 'var(--card-bg)',
+          border: `1px solid ${msgConfig.broadcast?.enabled ? 'rgba(234,179,8,0.25)' : 'var(--border)'}`,
+        }}
+      >
+        {/* Broadcast header */}
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <span className="text-[11px] font-bold block" style={{ color: msgConfig.broadcast?.enabled ? '#eab308' : 'var(--text-primary)' }}>
+              📢 Broadcast Message
+            </span>
+            <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+              Overrides all messages when ON
+            </span>
+          </div>
+          <button
+            onClick={handleBroadcastToggle}
+            className="relative rounded-full shrink-0 transition-colors duration-200"
+            style={{
+              width: 36, height: 18,
+              background: msgConfig.broadcast?.enabled ? '#eab308' : 'var(--hover)',
+              border: `1px solid ${msgConfig.broadcast?.enabled ? '#eab308' : 'var(--border)'}`,
+            }}
+            role="switch"
+            aria-checked={!!msgConfig.broadcast?.enabled}
+          >
+            <span
+              className="absolute top-0.5 left-0.5 rounded-full bg-white shadow transition-transform duration-200"
+              style={{ width: 14, height: 14, transform: msgConfig.broadcast?.enabled ? 'translateX(18px)' : 'translateX(0)' }}
+            />
+          </button>
         </div>
-        <button onClick={handleAddMessage} disabled={!newText.trim()} className="btn-accent w-full text-[10px] h-7 disabled:opacity-40">
-          <Plus className="w-3 h-3" /> Add Message
-        </button>
+        {/* Broadcast inputs */}
+        <div className="flex gap-1.5">
+          <input
+            value={broadcastEmoji}
+            onChange={e => setBroadcastEmoji(e.target.value)}
+            onBlur={saveBroadcast}
+            placeholder="📢"
+            maxLength={2}
+            className="field-input text-center text-sm h-8 w-10 shrink-0"
+            style={{ fontWeight: '600' }}
+          />
+          <input
+            value={broadcastText}
+            onChange={e => handleBroadcastTextChange(e.target.value)}
+            onBlur={saveBroadcast}
+            placeholder="e.g. Happy Birthday Ameen! 🎂"
+            className="field-input text-xs h-8 flex-1 min-w-0"
+            style={{
+              color: 'var(--text-primary)',
+              fontWeight: '500',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ── Add New Message ── */}
+      <div className="p-3 rounded-xl space-y-2" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
+        <label className="text-[10px] font-bold uppercase tracking-widest block" style={{ color: 'var(--text-muted)' }}>Add Message</label>
+        {/* Row 1: emoji + text */}
+        <div className="flex gap-1.5">
+          <input
+            value={newEmoji}
+            onChange={e => setNewEmoji(e.target.value)}
+            placeholder={CATEGORY_EMOJI[newCategory] || '🐼'}
+            maxLength={2}
+            className="field-input text-center text-sm h-8 w-10 shrink-0"
+            style={{ fontWeight: '600' }}
+          />
+          <input
+            value={newText}
+            onChange={e => handleTextChange(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAddMessage()}
+            placeholder="Message text..."
+            className="field-input text-xs h-8 flex-1 min-w-0"
+            style={{
+              color: 'var(--text-primary)',
+              fontWeight: '500',
+            }}
+          />
+        </div>
+        {/* Row 2: category select + add button */}
+        <div className="flex gap-1.5">
+          <select
+            value={newCategory}
+            onChange={e => handleCategoryChange(e.target.value)}
+            className="field-input text-xs h-8 flex-1"
+            style={{
+              color: 'var(--text-primary)',
+              background: 'var(--input-bg)',
+              padding: '0 8px',
+              fontWeight: '500',
+            }}
+          >
+            <option value="weekend" style={{ background: 'var(--card-bg)', color: 'var(--text-primary)' }}>🏖 Weekend</option>
+            <option value="late_night" style={{ background: 'var(--card-bg)', color: 'var(--text-primary)' }}>🌙 Late Night</option>
+            <option value="early_morning" style={{ background: 'var(--card-bg)', color: 'var(--text-primary)' }}>☕ Early Morning</option>
+            <option value="first_of_week" style={{ background: 'var(--card-bg)', color: 'var(--text-primary)' }}>🏆 First of Week</option>
+            <option value="general" style={{ background: 'var(--card-bg)', color: 'var(--text-primary)' }}>🐼 General</option>
+          </select>
+          <button
+            onClick={handleAddMessage}
+            disabled={!newText.trim()}
+            className="flex items-center gap-1 px-3 h-8 rounded-lg text-xs font-bold transition-all disabled:opacity-40"
+            style={{ background: 'var(--accent)', color: '#fff' }}
+          >
+            <Plus className="w-3 h-3" /> Add
+          </button>
+        </div>
       </div>
     </GlassCard>
   )
@@ -277,40 +461,8 @@ export function AdminPandaConfig() {
     config,
     setEnabled,
     setFeature,
-    setSeasonalEnabled,
-    updateSeasonalTheme,
-    addSeasonalTheme,
-    removeSeasonalTheme,
     resetToDefaults,
   } = usePandaConfigStore()
-
-  const [newThemeName, setNewThemeName] = useState('')
-  const [newThemeEmoji, setNewThemeEmoji] = useState('')
-  const [newThemeStart, setNewThemeStart] = useState('')
-  const [newThemeEnd, setNewThemeEnd] = useState('')
-
-  // Inline editing state for seasonal themes
-  const [editingThemeId, setEditingThemeId] = useState<string | null>(null)
-  const [editThemeName, setEditThemeName] = useState('')
-  const [editThemeEmoji, setEditThemeEmoji] = useState('')
-  const [editThemeStart, setEditThemeStart] = useState('')
-  const [editThemeEnd, setEditThemeEnd] = useState('')
-
-  const handleAddTheme = () => {
-    if (!newThemeName.trim() || !newThemeStart || !newThemeEnd) return
-    addSeasonalTheme({
-      id: newThemeName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
-      name: newThemeName.trim(),
-      emoji: newThemeEmoji || '🎉',
-      enabled: true,
-      startDate: newThemeStart,
-      endDate: newThemeEnd,
-    })
-    setNewThemeName('')
-    setNewThemeEmoji('')
-    setNewThemeStart('')
-    setNewThemeEnd('')
-  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -385,196 +537,6 @@ export function AdminPandaConfig() {
             </div>
           </GlassCard>
 
-          {/* Seasonal Themes */}
-          <GlassCard hoverEffect={false}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4" style={{ color: 'var(--accent)' }} />
-                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Seasonal Themes</h3>
-              </div>
-              <button
-                onClick={() => setSeasonalEnabled(!config.seasonalEnabled)}
-                className="relative w-10 h-5 rounded-full shrink-0 transition-colors duration-200"
-                style={{
-                  background: config.seasonalEnabled ? 'var(--accent)' : 'var(--hover)',
-                  border: `1px solid ${config.seasonalEnabled ? 'var(--accent)' : 'var(--border)'}`,
-                }}
-                role="switch"
-                aria-checked={config.seasonalEnabled}
-                aria-label="Enable Seasonal Themes"
-              >
-                <span
-                  className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200"
-                  style={{ transform: config.seasonalEnabled ? 'translateX(20px)' : 'translateX(0)' }}
-                />
-              </button>
-            </div>
-
-            {/* Theme list */}
-            <div className="space-y-2 mb-4">
-              {config.seasonalThemes.map(theme => {
-                const isEditing = editingThemeId === theme.id
-                return (
-                  <div
-                    key={theme.id}
-                    className="p-3 rounded-xl"
-                    style={{ background: 'var(--hover)', border: `1px solid ${isEditing ? 'var(--accent)' : 'var(--border)'}` }}
-                  >
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-[36px_1fr] gap-2">
-                          <input
-                            value={editThemeEmoji}
-                            onChange={e => setEditThemeEmoji(e.target.value)}
-                            className="field-input text-center text-sm h-8"
-                            maxLength={2}
-                          />
-                          <input
-                            value={editThemeName}
-                            onChange={e => setEditThemeName(e.target.value)}
-                            className="field-input text-xs h-8"
-                            placeholder="Theme name"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            value={editThemeStart}
-                            onChange={e => setEditThemeStart(e.target.value)}
-                            className="field-input text-xs h-8"
-                            placeholder="Start (MM-DD)"
-                            maxLength={5}
-                          />
-                          <input
-                            value={editThemeEnd}
-                            onChange={e => setEditThemeEnd(e.target.value)}
-                            className="field-input text-xs h-8"
-                            placeholder="End (MM-DD)"
-                            maxLength={5}
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              updateSeasonalTheme(theme.id, {
-                                name: editThemeName.trim() || theme.name,
-                                emoji: editThemeEmoji || theme.emoji,
-                                startDate: editThemeStart || theme.startDate,
-                                endDate: editThemeEnd || theme.endDate,
-                              })
-                              setEditingThemeId(null)
-                            }}
-                            className="btn-accent flex-1 text-[10px] h-7"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => setEditingThemeId(null)}
-                            className="btn-ghost flex-1 text-[10px] h-7"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="text-base">{theme.emoji}</span>
-                          <div className="min-w-0">
-                            <span className="text-xs font-semibold block truncate" style={{ color: 'var(--text-primary)' }}>{theme.name}</span>
-                            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                              {theme.startDate} → {theme.endDate}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            onClick={() => updateSeasonalTheme(theme.id, { enabled: !theme.enabled })}
-                            className="p-1.5 rounded-lg transition-all"
-                            style={{ color: theme.enabled ? 'var(--accent)' : 'var(--text-muted)' }}
-                            title={theme.enabled ? 'Disable' : 'Enable'}
-                          >
-                            {theme.enabled ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingThemeId(theme.id)
-                              setEditThemeName(theme.name)
-                              setEditThemeEmoji(theme.emoji)
-                              setEditThemeStart(theme.startDate)
-                              setEditThemeEnd(theme.endDate)
-                            }}
-                            className="p-1.5 rounded-lg transition-all"
-                            style={{ color: 'var(--text-muted)' }}
-                            title="Edit"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => removeSeasonalTheme(theme.id)}
-                            className="p-1.5 rounded-lg transition-all hover:text-red-400"
-                            style={{ color: 'var(--text-muted)' }}
-                            title="Remove"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Add new theme */}
-            <div className="p-3 rounded-xl space-y-2" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
-              <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Add Seasonal Theme</span>
-              <div className="grid grid-cols-[40px_1fr] gap-2">
-                <input
-                  value={newThemeEmoji}
-                  onChange={e => setNewThemeEmoji(e.target.value)}
-                  placeholder="🎉"
-                  className="field-input text-center text-sm h-8"
-                  maxLength={2}
-                />
-                <input
-                  value={newThemeName}
-                  onChange={e => setNewThemeName(e.target.value)}
-                  placeholder="Theme name"
-                  className="field-input text-xs h-8"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[9px] uppercase font-bold tracking-widest" style={{ color: 'var(--text-muted)' }}>Start (MM-DD)</label>
-                  <input
-                    value={newThemeStart}
-                    onChange={e => setNewThemeStart(e.target.value)}
-                    placeholder="12-01"
-                    className="field-input text-xs h-8 mt-1"
-                    maxLength={5}
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] uppercase font-bold tracking-widest" style={{ color: 'var(--text-muted)' }}>End (MM-DD)</label>
-                  <input
-                    value={newThemeEnd}
-                    onChange={e => setNewThemeEnd(e.target.value)}
-                    placeholder="12-31"
-                    className="field-input text-xs h-8 mt-1"
-                    maxLength={5}
-                  />
-                </div>
-              </div>
-              <button
-                onClick={handleAddTheme}
-                disabled={!newThemeName.trim() || !newThemeStart || !newThemeEnd}
-                className="btn-accent w-full text-xs h-8 disabled:opacity-40"
-              >
-                <Plus className="w-3 h-3" /> Add Theme
-              </button>
-            </div>
-          </GlassCard>
-
           {/* ── Smart Messages Config ── */}
           <WeekendMessagesSection />
 
@@ -587,26 +549,6 @@ export function AdminPandaConfig() {
         {/* Right column — Live Preview */}
         <div className="space-y-5">
           <LivePreview />
-
-          {/* Active seasonal theme indicator */}
-          {(() => {
-            const active = usePandaConfigStore.getState().getActiveSeasonalTheme()
-            return active ? (
-              <GlassCard hoverEffect={false}>
-                <div className="flex items-center gap-2 text-center">
-                  <span className="text-2xl">{active.emoji}</span>
-                  <div>
-                    <span className="text-xs font-bold block" style={{ color: 'var(--accent)' }}>Currently Active</span>
-                    <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{active.name}</span>
-                  </div>
-                </div>
-              </GlassCard>
-            ) : (
-              <GlassCard hoverEffect={false}>
-                <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>No seasonal theme active today.</p>
-              </GlassCard>
-            )
-          })()}
         </div>
       </div>
     </motion.div>

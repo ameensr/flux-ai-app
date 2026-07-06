@@ -9,29 +9,45 @@ import { Cpu, ShieldCheck, Megaphone, PawPrint } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import { useAppStore } from '@/store/useAppStore'
+import { usePermissions } from '@/hooks/usePermissions'
 
 const AdminAISettings = lazy(() => import('@/pages/AdminAISettings').then(m => ({ default: m.AdminAISettings })))
 const AdminAnnouncements = lazy(() => import('@/modules/Announcements/AdminAnnouncements').then(m => ({ default: m.AdminAnnouncements })))
 const AdminPandaConfig = lazy(() => import('@/components/LazyPanda/AdminPandaConfig').then(m => ({ default: m.AdminPandaConfig })))
 
-const BASE_TABS = [
-  { path: ROUTES.adminAI, label: 'AI Providers', icon: Cpu },
-  { path: ROUTES.enterprise, label: 'Enterprise RBAC', icon: ShieldCheck },
-  { path: ROUTES.adminAnnouncements, label: 'Announcements', icon: Megaphone },
-] as const
-
 export const AdminPanel = () => {
   const { theme } = useTheme()
   const { role } = useAppStore()
+  const { canView } = usePermissions()
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
   const isSuperAdmin = role === 'super_admin'
 
-  // Panda tab only visible to super_admin (Events embedded inside Panda Config)
+  // Check permissions for announcements module
+  const canViewAnnouncements = canView('announcements')
+
+  // Build tabs based on permissions
+  type TabItem = {
+    path: string
+    label: string
+    icon: React.ForwardRefExoticComponent<any>
+  }
+
+  const baseTabs: TabItem[] = [
+    { path: ROUTES.adminAI, label: 'AI Providers', icon: Cpu },
+    { path: ROUTES.enterprise, label: 'Enterprise RBAC', icon: ShieldCheck },
+  ]
+
+  // Add Announcements tab only if user has permission
+  if (canViewAnnouncements) {
+    baseTabs.push({ path: ROUTES.adminAnnouncements, label: 'Announcements', icon: Megaphone })
+  }
+
+  // Panda tab only visible to super_admin
   const TABS = isSuperAdmin
-    ? [...BASE_TABS, { path: ROUTES.adminPanda, label: 'Lazy Panda', icon: PawPrint }] as const
-    : BASE_TABS
+    ? [...baseTabs, { path: ROUTES.adminPanda, label: 'Lazy Panda', icon: PawPrint }]
+    : baseTabs
 
   const activeTab = pathname.startsWith(ROUTES.enterprise)
     ? ROUTES.enterprise
@@ -88,7 +104,7 @@ export const AdminPanel = () => {
         </Suspense>
       )}
       {activeTab === ROUTES.enterprise && <Navigate to={ROUTES.enterpriseUsers} replace />}
-      {activeTab === ROUTES.adminAnnouncements && (
+      {activeTab === ROUTES.adminAnnouncements && canViewAnnouncements && (
         <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" /></div>}>
           <AdminAnnouncements />
         </Suspense>

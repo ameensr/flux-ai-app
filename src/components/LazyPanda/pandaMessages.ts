@@ -33,6 +33,12 @@ export interface SmartMessagesConfig {
   earlyMorningEnabled: boolean // before 6 AM
   firstOfWeekEnabled: boolean
   messages: SmartMessage[]
+  // Broadcast message — overrides all regular messages when active
+  broadcast: {
+    enabled: boolean
+    text: string
+    emoji: string
+  } | null
 }
 
 // ── Default Messages ──────────────────────────────────────────────────────────
@@ -75,6 +81,11 @@ export const DEFAULT_MESSAGES: SmartMessage[] = [
   // First of week
   { id: 'fw1', text: "Let's make this a productive week!", emoji: '🏆', category: 'first_of_week', animation: 'wave', enabled: true },
   { id: 'fw2', text: 'New week, new deployments!', emoji: '🚀', category: 'first_of_week', animation: 'sign', enabled: true },
+  // General (shown any time as fallback)
+  { id: 'g1', text: 'Ready to ship quality today?', emoji: '🚀', category: 'general', animation: 'wave', enabled: true },
+  { id: 'g2', text: 'Building something great today?', emoji: '💪', category: 'general', animation: 'sign', enabled: true },
+  { id: 'g3', text: 'Another productive day ahead!', emoji: '⚡', category: 'general', animation: 'smile', enabled: true },
+  { id: 'g4', text: 'Quality never takes a day off!', emoji: '🎯', category: 'general', animation: 'point', enabled: true },
 ]
 
 export const INTERACTIVE_RESPONSES: Record<string, { question: string; options: MessageResponse[] }> = {
@@ -119,6 +130,7 @@ export const DEFAULT_MESSAGES_CONFIG: SmartMessagesConfig = {
   earlyMorningEnabled: true,
   firstOfWeekEnabled: true,
   messages: DEFAULT_MESSAGES,
+  broadcast: null,
 }
 
 // ── Storage & Frequency Logic ─────────────────────────────────────────────────
@@ -146,6 +158,7 @@ function loadMessagesConfig(): SmartMessagesConfig {
         earlyMorningEnabled: parsed.earlyMorningEnabled ?? DEFAULT_MESSAGES_CONFIG.earlyMorningEnabled,
         firstOfWeekEnabled: parsed.firstOfWeekEnabled ?? DEFAULT_MESSAGES_CONFIG.firstOfWeekEnabled,
         messages: parsed.messages?.length ? parsed.messages : DEFAULT_MESSAGES,
+        broadcast: parsed.broadcast ?? null,
       }
       return merged
     }
@@ -201,38 +214,90 @@ export function detectMessageCategory(): MessageCategory | null {
   const day = now.getDay() // 0=Sun, 6=Sat
   const hour = now.getHours()
 
-  if (day === 0 || day === 6) return 'weekend'
-  if (hour >= 22 || hour < 4) return 'late_night'
-  if (hour >= 4 && hour < 6) return 'early_morning'
-  if (day === 1 && hour < 12) return 'first_of_week'
-  return null
+  console.log('[detectMessageCategory] Current time:', { day, hour, dayName: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day] })
+
+  if (day === 0 || day === 6) {
+    console.log('[detectMessageCategory] Detected: weekend')
+    return 'weekend'
+  }
+  if (hour >= 22 || hour < 4) {
+    console.log('[detectMessageCategory] Detected: late_night')
+    return 'late_night'
+  }
+  if (hour >= 4 && hour < 6) {
+    console.log('[detectMessageCategory] Detected: early_morning')
+    return 'early_morning'
+  }
+  if (day === 1 && hour < 12) {
+    console.log('[detectMessageCategory] Detected: first_of_week')
+    return 'first_of_week'
+  }
+  console.log('[detectMessageCategory] Detected: general (no interactive responses)')
+  return 'general'
 }
 
 /** Pick a random message for the detected category */
 export function pickMessage(config: SmartMessagesConfig): SmartMessage | null {
+  console.log('[pickMessage] Starting...')
+
+  // If broadcast is active, show it instead of any regular message
+  if (config.broadcast?.enabled && config.broadcast.text) {
+    console.log('[pickMessage] Broadcast active, returning broadcast message')
+    return {
+      id: 'broadcast',
+      text: config.broadcast.text,
+      emoji: config.broadcast.emoji || '📢',
+      category: 'general',
+      animation: 'wave',
+      enabled: true,
+    }
+  }
+
   const category = detectMessageCategory()
-  if (!category) return null
+  console.log('[pickMessage] Detected category:', category)
+
+  if (!category) {
+    console.log('[pickMessage] No category detected')
+    return null
+  }
 
   // Check if category is enabled
   if (category === 'weekend') {
     const dayName = new Date().getDay() === 0 ? 'sunday' : 'saturday'
+    console.log('[pickMessage] Weekend detected, checking if', dayName, 'is active:', config.activeDays[dayName as keyof typeof config.activeDays])
     if (!config.activeDays[dayName as keyof typeof config.activeDays]) return null
   }
-  if (category === 'late_night' && !config.lateNightEnabled) return null
-  if (category === 'early_morning' && !config.earlyMorningEnabled) return null
-  if (category === 'first_of_week' && !config.firstOfWeekEnabled) return null
+  if (category === 'late_night' && !config.lateNightEnabled) {
+    console.log('[pickMessage] Late night disabled')
+    return null
+  }
+  if (category === 'early_morning' && !config.earlyMorningEnabled) {
+    console.log('[pickMessage] Early morning disabled')
+    return null
+  }
+  if (category === 'first_of_week' && !config.firstOfWeekEnabled) {
+    console.log('[pickMessage] First of week disabled')
+    return null
+  }
 
   const eligible = config.messages.filter(m => m.enabled && m.category === category)
-  if (eligible.length === 0) return null
+  console.log('[pickMessage] Eligible messages for', category, ':', eligible.length)
+
+  if (eligible.length === 0) {
+    console.log('[pickMessage] No eligible messages')
+    return null
+  }
 
   if (config.randomize) {
     const lastId = getLastMessageId()
     const filtered = eligible.length > 1 ? eligible.filter(m => m.id !== lastId) : eligible
     const chosen = filtered[Math.floor(Math.random() * filtered.length)]
+    console.log('[pickMessage] Randomly chose message:', chosen.id, chosen.text)
     setLastMessageId(chosen.id)
     return chosen
   }
 
+  console.log('[pickMessage] Returning first eligible message:', eligible[0].id, eligible[0].text)
   return eligible[0]
 }
 
@@ -248,6 +313,7 @@ interface PandaMessagesStore {
   addMessage: (msg: SmartMessage) => void
   updateMessage: (id: string, updates: Partial<SmartMessage>) => void
   removeMessage: (id: string) => void
+  setBroadcast: (broadcast: SmartMessagesConfig['broadcast']) => void
   resetToDefaults: () => void
 }
 
@@ -284,6 +350,10 @@ export const usePandaMessagesStore = create<PandaMessagesStore>((set) => ({
 
   removeMessage: (id) => set(s => {
     const next = { ...s.config, messages: s.config.messages.filter(m => m.id !== id) }; saveMessagesConfig(next); return { config: next }
+  }),
+
+  setBroadcast: (broadcast) => set(s => {
+    const next = { ...s.config, broadcast }; saveMessagesConfig(next); return { config: next }
   }),
 
   resetToDefaults: () => { saveMessagesConfig(DEFAULT_MESSAGES_CONFIG); set({ config: DEFAULT_MESSAGES_CONFIG }) },

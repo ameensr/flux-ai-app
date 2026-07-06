@@ -101,7 +101,7 @@ export async function getLoginActivity(limit = MAX_EVENTS_PER_USER): Promise<Log
     .limit(limit)
 
   if (error) {
-    console.warn('[LoginActivity] Failed to fetch:', error.message)
+    console.warn('[LoginActivity] Failed to fetch:', String(error.message).replace(/[\r\n]/g, ' '))
     return []
   }
 

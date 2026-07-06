@@ -29,7 +29,7 @@ export async function fetchActiveAnnouncements(userRole: string): Promise<Announ
   }
 
   const { data, error } = await query.limit(20)
-  if (error) { console.warn('[Announcements] fetch error:', error.message); return [] }
+  if (error) { console.warn('[Announcements] fetch error:', String(error.message).replace(/[\r\n]/g, ' ')); return [] }
   return (data ?? []) as AnnouncementWithMeta[]
 }
 

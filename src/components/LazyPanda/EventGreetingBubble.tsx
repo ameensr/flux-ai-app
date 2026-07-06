@@ -10,6 +10,7 @@ import {
   getActiveEvent,
   markEventShown,
   type GreetingEvent,
+  type EventAction,
 } from './eventGreetings'
 import { usePandaConfigStore } from './pandaConfig'
 
@@ -22,6 +23,8 @@ export const EventGreetingBubble: React.FC<EventGreetingBubbleProps> = ({ classN
   const eventConfig = useEventGreetingsStore(s => s.config)
   const [event, setEvent] = useState<GreetingEvent | null>(null)
   const [dismissed, setDismissed] = useState(false)
+  const [showReply, setShowReply] = useState(false)
+  const [replyMessage, setReplyMessage] = useState<string>('')
   const autoDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Find active event on mount
@@ -49,9 +52,24 @@ export const EventGreetingBubble: React.FC<EventGreetingBubbleProps> = ({ classN
     setDismissed(true)
   }
 
-  const handleAction = (actionType: string) => {
+  const handleAction = (action: EventAction) => {
+    // Show reply based on action type
+    const replies: Record<string, string> = {
+      'Celebrate!': 'Let\'s make this year amazing! 🎉',
+      'Merry Christmas!': 'May your code be merry and bright! 🎄',
+      'Happy Diwali!': 'Shine bright like your code! ✨',
+      'Eid Mubarak!': 'Wishing you joy and success! 🌙',
+      'Bug-free!': 'That\'s the spirit! Keep testing! 🐞',
+      "Let's ship it!": 'Deploy with confidence! 🚀',
+    }
+
+    const reply = replies[action.label] || 'Got it! Have a great day! 🐼'
+    setReplyMessage(reply)
+    setShowReply(true)
+
+    // Mark as shown and auto-dismiss after reply
     if (event) markEventShown(event.id, true)
-    setDismissed(true)
+    setTimeout(() => setDismissed(true), 3500)
   }
 
   if (!event || dismissed || !globalConfig.enabled || !eventConfig.enabled) return null
@@ -92,34 +110,59 @@ export const EventGreetingBubble: React.FC<EventGreetingBubbleProps> = ({ classN
               style={{ background: 'var(--surface)', borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}
             />
 
-            {/* Message */}
-            <p className="text-sm font-medium pr-5 mb-3" style={{ color: 'var(--text-primary)' }}>
-              <span className="mr-1.5 text-base">{event.emoji}</span>
-              {event.message}
-            </p>
+            <AnimatePresence mode="wait">
+              {!showReply ? (
+                <motion.div
+                  key="question"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {/* Message */}
+                  <p className="text-sm font-medium pr-5 mb-3" style={{ color: 'var(--text-primary)' }}>
+                    <span className="mr-1.5 text-base">{event.emoji}</span>
+                    {event.message}
+                  </p>
 
-            {/* Action buttons */}
-            {event.actions.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {event.actions.map((action, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleAction(action.type)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
-                    style={{
-                      background: i === 0 ? 'rgba(99,102,241,0.12)' : 'var(--hover)',
-                      color: i === 0 ? 'var(--accent)' : 'var(--text-secondary)',
-                      border: `1px solid ${i === 0 ? 'rgba(99,102,241,0.25)' : 'var(--border)'}`,
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.85' }}
-                    onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
-                  >
-                    <span>{action.emoji}</span>
-                    <span>{action.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+                  {/* Action buttons */}
+                  {event.actions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {event.actions.map((action, i) => (
+                        <button
+                          key={i}
+                          onClick={() => handleAction(action)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
+                          style={{
+                            background: i === 0 ? 'rgba(99,102,241,0.12)' : 'var(--hover)',
+                            color: i === 0 ? 'var(--accent)' : 'var(--text-secondary)',
+                            border: `1px solid ${i === 0 ? 'rgba(99,102,241,0.25)' : 'var(--border)'}`,
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = '0.85' }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
+                        >
+                          <span>{action.emoji}</span>
+                          <span>{action.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="reply"
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {/* Panda's reply */}
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                    🐼 {replyMessage}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Auto-dismiss indicator */}
             {event.autoDismissSeconds && (

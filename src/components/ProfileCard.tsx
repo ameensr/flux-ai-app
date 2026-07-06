@@ -6,11 +6,14 @@ import { useAppStore } from '@/store/useAppStore'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { GlassCard } from '@/components/ui/GlassCard'
+import { usePermissions } from '@/hooks/usePermissions'
 import { cn } from '@/lib/utils'
 import { Pencil, X, Check, User, Mail, Phone, Lock } from 'lucide-react'
 
 export const ProfileCard: React.FC = () => {
   const { profile, setProfile } = useAppStore()
+  const { canEdit } = usePermissions()
+  const canEditSettings = canEdit('settings')
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [name, setName] = useState(profile?.full_name || '')
@@ -70,7 +73,7 @@ export const ProfileCard: React.FC = () => {
         <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
           Profile
         </h3>
-        {!editing ? (
+        {canEditSettings && !editing ? (
           <button
             onClick={() => setEditing(true)}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
@@ -78,7 +81,7 @@ export const ProfileCard: React.FC = () => {
           >
             <Pencil className="w-3 h-3" /> Edit
           </button>
-        ) : (
+        ) : canEditSettings && editing ? (
           <div className="flex items-center gap-1.5">
             <button
               onClick={handleSave}
@@ -96,7 +99,7 @@ export const ProfileCard: React.FC = () => {
               <X className="w-3 h-3" /> Cancel
             </button>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Avatar */}
@@ -125,8 +128,9 @@ export const ProfileCard: React.FC = () => {
         <div>
           <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--text-muted)' }}>
             <User className="w-3 h-3" /> Full Name
+            {!canEditSettings && <Lock className="w-2.5 h-2.5 opacity-50" />}
           </label>
-          {editing ? (
+          {editing && canEditSettings ? (
             <input
               type="text"
               value={name}
@@ -156,8 +160,9 @@ export const ProfileCard: React.FC = () => {
         <div>
           <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--text-muted)' }}>
             <Phone className="w-3 h-3" /> Phone Number
+            {!canEditSettings && <Lock className="w-2.5 h-2.5 opacity-50" />}
           </label>
-          {editing ? (
+          {editing && canEditSettings ? (
             <input
               type="tel"
               value={phone}

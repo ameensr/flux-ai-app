@@ -37,13 +37,13 @@ interface DailyReportState {
   syncing: boolean
   isDbAvailable: boolean
   syncStatus: 'synced' | 'saving' | 'local' | 'error'
-  
+
   // Actions
   fetchDropdownConfigs: () => Promise<void>
   saveDropdownConfig: (config: Omit<DropdownConfig, 'id'> & { id?: string }) => Promise<void>
   deleteDropdownConfig: (id: string) => Promise<void>
   reorderDropdownConfigs: (category: ConfigCategory, configs: DropdownConfig[]) => Promise<void>
-  
+
   fetchReportRows: () => Promise<void>
   setSupportRows: (rows: SupportLogRecord[], forceSync?: boolean) => Promise<void>
   setReleaseRows: (rows: ReleaseTestingRecord[], forceSync?: boolean) => Promise<void>
@@ -99,7 +99,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
   saveDropdownConfig: async (config) => {
     const user = useAppStore.getState().user
     const isEdit = !!config.id && !config.id.startsWith('seed-')
-    
+
     if (get().isDbAvailable && user) {
       const payload: any = {
         category: config.category,
@@ -123,7 +123,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         .select()
 
       if (error) {
-        console.error('[DailyReportStore] saveDropdownConfig failed:', error)
+        console.error('[DailyReportStore] saveDropdownConfig failed:', String(error).replace(/[\r\n]/g, ' '))
         throw error
       }
     }
@@ -154,7 +154,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         .eq('id', id)
 
       if (error) {
-        console.error('[DailyReportStore] deleteDropdownConfig failed:', error)
+        console.error('[DailyReportStore] deleteDropdownConfig failed:', String(error).replace(/[\r\n]/g, ' '))
         throw error
       }
     }
@@ -199,11 +199,11 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
   fetchReportRows: async () => {
     set({ loading: true })
     const user = useAppStore.getState().user
-    
+
     // Load local storage drafts first as immediately responsive state
     const localSupport = localStorage.getItem('flux-daily-support-rows')
     const localRelease = localStorage.getItem('flux-daily-release-rows')
-    
+
     if (localSupport) set({ supportRows: JSON.parse(localSupport) })
     if (localRelease) set({ releaseRows: JSON.parse(localRelease) })
 
@@ -226,7 +226,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
           set({ supportRows: supportRes.data as SupportLogRecord[] })
           localStorage.setItem('flux-daily-support-rows', JSON.stringify(supportRes.data))
         }
-        
+
         if (!releaseRes.error && releaseRes.data && releaseRes.data.length > 0) {
           set({ releaseRows: releaseRes.data as ReleaseTestingRecord[] })
           localStorage.setItem('flux-daily-release-rows', JSON.stringify(releaseRes.data))
@@ -247,7 +247,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
   setSupportRows: async (rows, forceSync = false) => {
     set({ supportRows: rows, syncStatus: 'saving' })
     localStorage.setItem('flux-daily-support-rows', JSON.stringify(rows))
-    
+
     if (forceSync) {
       await get().syncRowsToDatabase()
     } else {
@@ -313,14 +313,14 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         .from('daily_support_logs')
         .delete()
         .eq('user_id', user.id)
-      
+
       await supabase
         .from('daily_release_testing_status')
         .delete()
         .eq('user_id', user.id)
 
       const insertPromises: any[] = []
-      
+
       if (supportPayload.length > 0) {
         insertPromises.push(
           supabase
@@ -329,7 +329,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
             .select()
         )
       }
-      
+
       if (releasePayload.length > 0) {
         insertPromises.push(
           supabase
@@ -340,10 +340,10 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
       }
 
       const results = await Promise.all(insertPromises)
-      
+
       // Update local states with actual database assigned IDs
       const stateUpdate: Partial<DailyReportState> = { syncStatus: 'synced', syncing: false }
-      
+
       let resIdx = 0
       if (supportPayload.length > 0) {
         const res = results[resIdx++]
