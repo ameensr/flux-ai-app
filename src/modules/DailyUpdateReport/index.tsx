@@ -106,7 +106,6 @@ export const DailyUpdateReport: React.FC = () => {
 
   return (
     <div className="py-6 sm:py-12">
-
       {/* Header bar */}
       <div className="flex items-center justify-between flex-wrap gap-4 mb-8">
         <div>
@@ -146,29 +145,52 @@ export const DailyUpdateReport: React.FC = () => {
         </div>
       </div>
 
-      {/* Project Filter */}
+      {/* Project Filter - Layer 3: UI Feedback */}
       <div className="mb-8">
         <GlassCard hoverEffect={false} className="p-5">
           <div className="flex items-center gap-4">
             <label className="text-sm font-bold text-[var(--text-primary)] shrink-0">
               Filter by Project:
             </label>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="flex-1 max-w-md px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-accent-gold/50 transition-all"
-            >
-              <option value="">-- All Projects --</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.project_name} ({p.project_code})
-                </option>
-              ))}
-            </select>
-            {selectedProjectId && (
-              <span className="text-xs text-text-muted">
-                Showing updates from project members only
-              </span>
+
+            {/* Empty State Feedback */}
+            {projects.length === 0 ? (
+              <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/5">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-amber-200 font-medium">
+                    No projects assigned to you
+                  </p>
+                  <p className="text-xs text-amber-300/70 mt-0.5">
+                    Contact your manager or QA lead to get assigned to a project
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  className="flex-1 max-w-md px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-accent-gold/50 transition-all"
+                >
+                  <option value="">-- Select a Project --</option>
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.project_name} ({p.project_code})
+                    </option>
+                  ))}
+                </select>
+                {selectedProjectId && (
+                  <span className="text-xs text-text-muted shrink-0">
+                    Showing updates from project members only
+                  </span>
+                )}
+                {projects.length > 1 && (
+                  <span className="text-xs text-emerald-400 shrink-0 font-medium">
+                    {projects.length} projects available
+                  </span>
+                )}
+              </>
             )}
           </div>
         </GlassCard>
@@ -297,3 +319,4 @@ export const DailyUpdateReport: React.FC = () => {
     </div>
   )
 }
+

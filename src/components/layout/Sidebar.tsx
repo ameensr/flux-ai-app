@@ -50,6 +50,7 @@ export const Sidebar = () => {
   const { pathname } = useLocation()
   const { isSidebarOpen, setSidebarOpen, profile, setUser, setProfile } = useAppStore()
   const { canView, permissionsLoaded } = usePermissions()
+
   useEffect(() => {
     if (window.innerWidth < 1024) setSidebarOpen(false)
   }, [pathname])

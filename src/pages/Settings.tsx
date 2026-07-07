@@ -2,11 +2,14 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { ProfileCard } from '@/components/ProfileCard'
+import { ProjectMembershipCard } from '@/modules/DailyUpdateReport/components/ProjectMembershipCard'
 import { Shield, Sparkles, CheckCircle2, Sun, Moon, Monitor, PawPrint } from 'lucide-react'
 import { useTheme } from '@/context/ThemeContext'
 import { cn } from '@/lib/utils'
 import { SecuritySettings } from '@/components/SecuritySettings'
 import { usePandaEnabled } from '@/components/LazyPanda'
+import { useDailyReportStore } from '@/modules/DailyUpdateReport/store'
+import { useEffect } from 'react'
 
 // ── Appearance mode card ──────────────────────────────────────────────────────
 const ModeCard = ({
@@ -116,6 +119,12 @@ const LazyPandaToggle = () => {
 // ── Settings ──────────────────────────────────────────────────────────────────
 export const Settings = () => {
   const { theme, setTheme } = useTheme()
+  const { fetchProjects } = useDailyReportStore()
+
+  // Fetch projects on mount
+  useEffect(() => {
+    fetchProjects()
+  }, [])
 
   return (
     <motion.div
@@ -136,9 +145,10 @@ export const Settings = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
-        {/* ── Left: Profile Card ── */}
-        <div className="lg:sticky lg:top-8">
+        {/* ── Left: Profile Card & Projects ── */}
+        <div className="lg:sticky lg:top-8 space-y-5">
           <ProfileCard />
+          <ProjectMembershipCard />
         </div>
 
         {/* ── Right: Settings ── */}

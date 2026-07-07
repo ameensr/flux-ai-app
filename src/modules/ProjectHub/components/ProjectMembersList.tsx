@@ -45,10 +45,12 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
   }
 
   const handleChangeRole = async (memberId: string, newRole: ProjectRole) => {
+    setActiveMenu(null)
+
     try {
       setLoading(true)
       await updateMemberRole(memberId, newRole)
-      toast({ title: 'Success', description: 'Member role updated' })
+      toast({ title: 'Success', description: 'Member role updated successfully' })
       onUpdate()
     } catch (error: any) {
       toast({
@@ -58,12 +60,15 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
       })
     } finally {
       setLoading(false)
-      setActiveMenu(null)
     }
   }
 
   const handleRemoveMember = async (memberId: string, memberName: string) => {
-    if (!confirm(`Remove ${memberName} from this project?`)) return
+    setActiveMenu(null)
+
+    if (!confirm(`Remove ${memberName} from this project? This action cannot be undone.`)) {
+      return
+    }
 
     try {
       setLoading(true)
@@ -78,13 +83,12 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
       })
     } finally {
       setLoading(false)
-      setActiveMenu(null)
     }
   }
 
   if (members.length === 0) {
     return (
-      <div className="text-center py-8 text-white/60">
+      <div className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
         <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
         <p className="text-sm">No members assigned to this project yet</p>
       </div>
@@ -92,66 +96,125 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
   }
 
   return (
-    <div className="space-y-2">
-      {members.map(member => {
-        const RoleIcon = getRoleIcon(member.project_role)
-        const isCurrentUser = user?.id === member.user_id
-        const canModify = (canManageRoles || canAssignMembers) && !isCurrentUser
+    <>
+      <div className="space-y-3">
+        {members.map(member => {
+          const RoleIcon = getRoleIcon(member.project_role)
+          const isCurrentUser = user?.id === member.user_id
+          const canModify = (canManageRoles || canAssignMembers) && !isCurrentUser
+          const isMenuOpen = activeMenu === member.id
 
-        return (
-          <div
-            key={member.id}
-            className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors"
-          >
-            <div className="flex items-center gap-3 flex-1">
+          return (
+            <div
+              key={member.id}
+              className="flex items-center gap-3 p-4 rounded-xl border transition-all"
+              style={{
+                background: 'var(--surface-secondary)',
+                borderColor: 'var(--border)'
+              }}
+            >
               {/* Avatar */}
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent-gold to-accent-purple flex items-center justify-center text-white font-semibold">
+              <div
+                className="w-11 h-11 rounded-full bg-gradient-to-br from-accent-gold to-accent-purple flex items-center justify-center text-base font-bold shrink-0"
+                style={{ color: 'var(--accent-fg)' }}
+              >
                 {member.profile.full_name?.[0]?.toUpperCase() || member.profile.email[0].toUpperCase()}
               </div>
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium text-white truncate">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
                     {member.profile.full_name || member.profile.email}
-                    {isCurrentUser && (
-                      <span className="ml-2 text-xs text-accent-gold">(You)</span>
-                    )}
                   </p>
+                  {isCurrentUser && (
+                    <span className="text-xs font-bold text-accent-gold shrink-0">(You)</span>
+                  )}
                 </div>
-                <p className="text-sm text-white/50 truncate">
+                <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
                   {member.profile.email}
                 </p>
               </div>
 
               {/* Role Badge */}
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg">
+              <div
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border shrink-0"
+                style={{
+                  background: 'var(--hover)',
+                  borderColor: 'var(--border)'
+                }}
+              >
                 <RoleIcon className={`w-4 h-4 ${getRoleColor(member.project_role)}`} />
-                <span className="text-sm text-white/80">
+                <span className="text-sm font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
                   {PROJECT_ROLE_LABELS[member.project_role]}
                 </span>
               </div>
+
+              {/* Actions Menu */}
+              {canModify && (
+                <div className="relative shrink-0">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setActiveMenu(isMenuOpen ? null : member.id)
+                    }}
+                    className="p-2 rounded-lg transition-all"
+                    style={{
+                      background: isMenuOpen ? 'var(--hover)' : 'transparent',
+                      color: 'var(--text-secondary)'
+                    }}
+                    disabled={loading}
+                    title="Manage member"
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
+          )
+        })}
+      </div>
 
-            {/* Actions */}
-            {canModify && (
-              <div className="relative ml-2">
-                <button
-                  onClick={() => setActiveMenu(activeMenu === member.id ? null : member.id)}
-                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                  disabled={loading}
-                >
-                  <MoreVertical className="w-4 h-4 text-white/60" />
-                </button>
+      {/* Dropdown menu rendered at root level to avoid overflow issues */}
+      {activeMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setActiveMenu(null)}
+        >
+          <div
+            className="w-64 rounded-xl shadow-2xl border overflow-hidden"
+            style={{
+              background: 'var(--surface)',
+              borderColor: 'var(--border)',
+              position: 'absolute',
+              right: '2rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              maxHeight: '80vh',
+              overflowY: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(() => {
+              const member = members.find(m => m.id === activeMenu)
+              if (!member) return null
 
-                {activeMenu === member.id && (
-                  <div className="absolute right-0 top-10 w-56 bg-[#0A0118] border border-white/10 rounded-lg shadow-xl z-10 overflow-hidden">
-                    {/* Change Role */}
-                    {canManageRoles && (
-                      <>
-                        <div className="px-3 py-2 text-xs font-medium text-white/50 border-b border-white/10">
-                          Change Role
-                        </div>
+              return (
+                <>
+                  {/* Change Role Section */}
+                  {canManageRoles && (
+                    <div>
+                      <div
+                        className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider border-b"
+                        style={{
+                          color: 'var(--text-muted)',
+                          background: 'var(--hover)',
+                          borderColor: 'var(--divider)'
+                        }}
+                      >
+                        Change Role
+                      </div>
+                      <div className="py-1">
                         {(Object.keys(PROJECT_ROLE_LABELS) as ProjectRole[])
                           .filter(role => role !== member.project_role)
                           .map(role => {
@@ -159,41 +222,54 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
                             return (
                               <button
                                 key={role}
-                                onClick={() => handleChangeRole(member.id, role)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleChangeRole(member.id, role)
+                                }}
                                 disabled={loading}
-                                className="w-full px-4 py-2.5 text-left text-sm hover:bg-white/5 flex items-center gap-2 text-white/80 disabled:opacity-50"
+                                className="w-full px-4 py-3 text-left flex items-start gap-3 transition-all disabled:opacity-50 hover:bg-[var(--hover)]"
+                                style={{
+                                  color: 'var(--text-primary)'
+                                }}
                               >
-                                <Icon className={`w-4 h-4 ${getRoleColor(role)}`} />
-                                <div>
-                                  <div>{PROJECT_ROLE_LABELS[role]}</div>
-                                  <div className="text-xs text-white/40">
+                                <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${getRoleColor(role)}`} />
+                                <div className="flex-1">
+                                  <div className="text-sm font-semibold mb-0.5">
+                                    {PROJECT_ROLE_LABELS[role]}
+                                  </div>
+                                  <div className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                                     {PROJECT_ROLE_DESCRIPTIONS[role]}
                                   </div>
                                 </div>
                               </button>
                             )
                           })}
-                      </>
-                    )}
+                      </div>
+                    </div>
+                  )}
 
-                    {/* Remove */}
-                    {canAssignMembers && (
+                  {/* Remove Section */}
+                  {canAssignMembers && (
+                    <div className="border-t" style={{ borderColor: 'var(--divider)' }}>
                       <button
-                        onClick={() => handleRemoveMember(member.id, member.profile.full_name || member.profile.email)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRemoveMember(member.id, member.profile.full_name || member.profile.email)
+                        }}
                         disabled={loading}
-                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-500/10 flex items-center gap-2 text-red-400 disabled:opacity-50 border-t border-white/10"
+                        className="w-full px-4 py-3 text-left flex items-center gap-2.5 text-red-500 disabled:opacity-50 transition-all font-medium text-sm hover:bg-red-500/10"
                       >
                         <Trash2 className="w-4 h-4" />
                         Remove from Project
                       </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
           </div>
-        )
-      })}
-    </div>
+        </div>
+      )}
+    </>
   )
 }

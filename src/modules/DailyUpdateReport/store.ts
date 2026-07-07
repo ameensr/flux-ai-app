@@ -152,24 +152,104 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
 
   fetchProjects: async () => {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('id, name, project_code')
-        .eq('status', 'active')
-        .order('name', { ascending: true })
+      const user = useAppStore.getState().user
+      const role = useAppStore.getState().role
 
-      if (error) throw error
+      console.log('[DailyReportStore] fetchProjects called')
+      console.log('[DailyReportStore] User ID:', user?.id)
+      console.log('[DailyReportStore] User Role:', role)
+
+      if (!user) {
+        console.log('[DailyReportStore] No user found, returning empty projects')
+        set({ projects: [] })
+        return
+      }
+
+      // Layer 1: Database-level filtering - only fetch projects where user is a member
+      // Exception: Only admins and managers see all projects
+      // QA Leads now follow membership rules (strict access control)
+      const adminRoles = ['admin', 'super_admin', 'manager']
+      const isAdmin = adminRoles.includes(role)
+
+      console.log('[DailyReportStore] Is Admin?', isAdmin)
+
+      let data: any[] = []
+      let error: any = null
+
+      if (isAdmin) {
+        // Admins and managers see all active projects
+        console.log('[DailyReportStore] Fetching as admin - all active projects')
+        const response = await supabase
+          .from('projects')
+          .select('id, name, project_code')
+          .eq('status', 'active')
+          .order('name', { ascending: true })
+
+        data = response.data || []
+        error = response.error
+        console.log('[DailyReportStore] Admin query result:', { data, error })
+      } else {
+        // Regular users (including QA leads) only see projects they're members of
+        console.log('[DailyReportStore] Fetching as regular user - membership-based query')
+
+        // TEMPORARY TEST: Try direct project_members query without inner join
+        const testResponse = await supabase
+          .from('project_members')
+          .select('*')
+          .eq('user_id', user.id)
+        console.log('[DailyReportStore] TEST - Raw project_members rows:', testResponse)
+
+        const response = await supabase
+          .from('project_members')
+          .select(`
+            project_id,
+            projects!inner (
+              id,
+              name,
+              project_code,
+              status
+            )
+          `)
+          .eq('user_id', user.id)
+          .eq('projects.status', 'active')
+
+        console.log('[DailyReportStore] Raw membership query response:', response)
+
+        if (response.data) {
+          // Transform the joined data structure
+          data = response.data.map((item: any) => ({
+            id: item.projects.id,
+            name: item.projects.name,
+            project_code: item.projects.project_code
+          }))
+          console.log('[DailyReportStore] Transformed data:', data)
+        }
+        error = response.error
+      }
+
+      if (error) {
+        console.error('[DailyReportStore] Database error:', error)
+        throw error
+      }
+
       if (data) {
         const mapped = data.map(p => ({
           id: p.id,
           project_name: p.name,
           project_code: p.project_code
         }))
+        console.log('[DailyReportStore] Final mapped projects:', mapped)
         set({ projects: mapped })
+
         // Auto-select first project if available and none selected
         const currentProjectId = get().selectedProjectId
         if (!currentProjectId && mapped.length > 0) {
+          console.log('[DailyReportStore] Auto-selecting first project:', mapped[0].id)
           get().setSelectedProjectId(mapped[0].id)
+        } else if (currentProjectId && !mapped.find(p => p.id === currentProjectId)) {
+          // Layer 2: If currently selected project is not in user's list, clear selection
+          console.log('[DailyReportStore] Current project not in list, clearing selection')
+          set({ selectedProjectId: '' })
         }
       }
     } catch (e) {
