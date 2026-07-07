@@ -12,6 +12,16 @@ export type PermissionKey =
   | 'can_use_advanced_ai'
   | 'can_share'
   | 'can_configure'
+  | 'can_assign_members'
+  | 'can_manage_roles'
+  | 'can_manage_users'
+  | 'can_manage_permissions'
+  | 'can_manage_ai_providers'
+  | 'can_manage_announcements'
+  | 'can_view_audit_logs'
+  | 'can_manage_templates'
+  | 'can_manage_maintenance'
+  | 'can_manage_system'
 
 export interface ModulePermissionDefinition {
   moduleKey: string
@@ -219,6 +229,42 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
     ],
     description: 'User activity history'
   },
+
+  // ── Project Hub ───────────────────────────────────────────────────────────
+
+  'project-hub': {
+    moduleKey: 'project-hub',
+    moduleName: 'Project Hub',
+    supportedPermissions: [
+      'can_view',
+      'can_create',
+      'can_edit',
+      'can_delete',
+      'can_assign_members',
+      'can_manage_roles',
+    ],
+    description: 'Project management and team collaboration'
+  },
+
+  // ── Admin Hub ─────────────────────────────────────────────────────────────
+
+  'admin-hub': {
+    moduleKey: 'admin-hub',
+    moduleName: 'Admin Hub',
+    supportedPermissions: [
+      'can_view',
+      'can_manage_users',
+      'can_manage_roles',
+      'can_manage_permissions',
+      'can_manage_ai_providers',
+      'can_manage_announcements',
+      'can_view_audit_logs',
+      'can_manage_templates',
+      'can_manage_maintenance',
+      'can_manage_system',
+    ],
+    description: 'Central administration hub for system management'
+  },
 }
 
 /**
@@ -263,6 +309,16 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   can_use_advanced_ai: 'Advanced AI',
   can_share: 'Share',
   can_configure: 'Configure',
+  can_assign_members: 'Assign Members',
+  can_manage_roles: 'Manage Roles',
+  can_manage_users: 'Manage Users',
+  can_manage_permissions: 'Manage Permissions',
+  can_manage_ai_providers: 'Manage AI Providers',
+  can_manage_announcements: 'Manage Announcements',
+  can_view_audit_logs: 'View Audit Logs',
+  can_manage_templates: 'Manage Templates',
+  can_manage_maintenance: 'Manage Maintenance',
+  can_manage_system: 'Manage System',
 }
 
 /**
@@ -278,4 +334,14 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   can_use_advanced_ai: 'Can use advanced/premium AI models',
   can_share: 'Can share items with external stakeholders',
   can_configure: 'Can modify module settings and configurations',
+  can_assign_members: 'Can add and remove project members',
+  can_manage_roles: 'Can change member roles within projects',
+  can_manage_users: 'Can create, edit, and delete user accounts',
+  can_manage_permissions: 'Can assign module permissions to roles',
+  can_manage_ai_providers: 'Can configure AI provider settings and API keys',
+  can_manage_announcements: 'Can create, publish, and delete announcements',
+  can_view_audit_logs: 'Can view system audit logs and security events',
+  can_manage_templates: 'Can create and edit permission templates',
+  can_manage_maintenance: 'Can configure maintenance mode settings',
+  can_manage_system: 'Can perform system-level configuration (super admin only)',
 }

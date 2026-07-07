@@ -20,6 +20,7 @@ const CATEGORIES: { key: ConfigCategory; label: string; desc: string }[] = [
   { key: 'status', label: 'Statuses', desc: 'Track progress flow for support tasks and logs.' },
   { key: 'retesting_status', label: 'Retesting Statuses', desc: 'Phases of validation (e.g. Open, Retesting, Fixed).' },
   { key: 'smoke_status', label: 'Smoke Testing Statuses', desc: 'Status checks specifically assigned to smoke runs.' },
+  { key: 'issue_source', label: 'Issue Sources', desc: 'Origin or source of issues (e.g. Missed by QA, Backend Update, Customer Reported).' },
 ]
 
 export const DailyReportConfig: React.FC = () => {

@@ -35,7 +35,7 @@ interface QAReportStore {
   fetchReports: (projectId?: string) => Promise<void>
   historySearch: string
   setHistorySearch: (s: string) => void
-  
+
   // Project Master actions
   projects: ProjectConfig[]
   fetchProjects: (activeOnly?: boolean) => Promise<void>
@@ -65,27 +65,26 @@ export const useQAReportStore = create<QAReportStore>()(
         try {
           let query = supabase
             .from('projects')
-            .select('*')
-            .is('deleted_at', null)
+            .select('id, name, project_code, description, status, created_by, created_at, updated_at')
 
           if (activeOnly) {
-            query = query.eq('is_active', true)
+            query = query.eq('status', 'active')
           }
 
-          const { data, error } = await query.order('project_name', { ascending: true })
+          const { data, error } = await query.order('name', { ascending: true })
           if (error) throw error
           if (data) {
             const mapped: ProjectConfig[] = data.map(p => ({
               id: p.id,
-              projectName: p.project_name,
+              projectName: p.name,
               projectCode: p.project_code,
               description: p.description || '',
-              status: p.status as 'Active' | 'Inactive',
-              isActive: p.is_active,
+              status: p.status === 'active' ? 'Active' : 'Inactive',
+              isActive: p.status === 'active',
               createdBy: p.created_by,
               createdAt: p.created_at,
               updatedAt: p.updated_at,
-              deletedAt: p.deleted_at
+              deletedAt: null
             }))
             set({ projects: mapped })
           }
@@ -99,11 +98,10 @@ export const useQAReportStore = create<QAReportStore>()(
         if (!user) return
         try {
           const payload = {
-            project_name: project.projectName,
+            name: project.projectName,
             project_code: project.projectCode,
             description: project.description,
-            status: project.status,
-            is_active: project.isActive,
+            status: project.status === 'Active' ? 'active' : 'archived',
             updated_at: new Date().toISOString()
           } as any
 
@@ -133,15 +131,13 @@ export const useQAReportStore = create<QAReportStore>()(
           const { error } = await supabase
             .from('projects')
             .update({
-              deleted_at: new Date().toISOString(),
-              status: 'Inactive',
-              is_active: false
+              status: 'archived'
             })
             .eq('id', id)
           if (error) throw error
           await get().fetchProjects(false)
         } catch (e) {
-          console.error('Error soft-deleting project from Supabase:', String(e).replace(/[\r\n]/g, ' '))
+          console.error('Error archiving project from Supabase:', String(e).replace(/[\r\n]/g, ' '))
           throw e
         }
       },

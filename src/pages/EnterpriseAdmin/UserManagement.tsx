@@ -352,13 +352,16 @@ export function UserManagement() {
       if (!confirm(`Delete ${user.full_name || user.email}? This cannot be undone.`)) return
       try {
         const { data: { session } } = await supabase.auth.getSession()
+        if (!session || !session.access_token) {
+          throw new Error('Your session has expired. Please refresh the page or sign in again.')
+        }
         const resp = await fetch(
           `${SUPABASE_URL}/functions/v1/admin-permissions?action=delete_user`,
           {
             method: 'DELETE',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${session?.access_token}`,
+              Authorization: `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({ user_id: user.id }),
           }

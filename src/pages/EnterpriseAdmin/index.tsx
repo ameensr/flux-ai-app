@@ -9,8 +9,7 @@ import { RoleManagement } from './RoleManagement'
 import { PermissionTemplates } from './PermissionTemplates'
 import { AuditLogs } from './AuditLogs'
 import { MaintenanceSettings } from './MaintenanceSettings'
-import { TeamManagement } from './TeamManagement'
-import { Users, Shield, Layers, Activity, RefreshCw, ChevronLeft, Wrench, UsersRound } from 'lucide-react'
+import { Users, Shield, Layers, Activity, RefreshCw, ChevronLeft, Wrench } from 'lucide-react'
 import { ROUTES } from '@/lib/routes'
 import { SilentBoundary } from '@/components/ErrorBoundary'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -55,7 +54,6 @@ function TabBoundary({ children }: { children: React.ReactNode }) {
 
 const TABS = [
   { path: ROUTES.enterpriseUsers, label: 'User Management', icon: Users, short: 'Users' },
-  { path: ROUTES.enterpriseTeams, label: 'Teams', icon: UsersRound, short: 'Teams' },
   { path: ROUTES.enterpriseRoles, label: 'Roles & Permissions', icon: Shield, short: 'Roles' },
   { path: ROUTES.enterpriseTemplates, label: 'Permission Templates', icon: Layers, short: 'Templates' },
   { path: ROUTES.enterpriseAudit, label: 'Audit Logs', icon: Activity, short: 'Audit' },
@@ -71,7 +69,6 @@ export function EnterpriseAdmin() {
   const renderContent = () => {
     switch (activeTab) {
       case ROUTES.enterpriseUsers: return <TabBoundary><UserManagement /></TabBoundary>
-      case ROUTES.enterpriseTeams: return <TabBoundary><TeamManagement /></TabBoundary>
       case ROUTES.enterpriseRoles: return <TabBoundary><RoleManagement /></TabBoundary>
       case ROUTES.enterpriseTemplates: return <TabBoundary><PermissionTemplates /></TabBoundary>
       case ROUTES.enterpriseAudit: return <TabBoundary><AuditLogs /></TabBoundary>

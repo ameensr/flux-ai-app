@@ -11,6 +11,7 @@ export const ROUTES = {
 
   // Authenticated — app shell
   dashboard: '/dashboard',
+  projectHub: '/project-hub',
   bugRefiner: '/bug-refiner',
   testGenerator: '/test-generator',
   writingAssistant: '/writing-assistant',
@@ -59,6 +60,7 @@ export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES]
 /** Map a route path back to the RBAC module key used by usePermissions */
 export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.dashboard]: 'dashboard',
+  [ROUTES.projectHub]: 'project-hub',
   [ROUTES.bugRefiner]: 'bug-refiner',
   [ROUTES.testGenerator]: 'test-generator',
   [ROUTES.writingAssistant]: 'writing-assistant',

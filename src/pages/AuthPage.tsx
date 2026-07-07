@@ -7,6 +7,7 @@ import { GlassCard } from "@/components/ui/GlassCard"
 import { FloatingButton } from "@/components/ui/FloatingButton"
 import {
   Mail,
+  MailOpen,
   Lock,
   Eye,
   EyeOff,
@@ -273,21 +274,24 @@ const staggerItem = {
 
 const mapAuthError = (message: string): { field: 'email' | 'password' | 'general'; text: string } => {
   const m = message.toLowerCase()
-  if (m.includes('invalid login credentials') || m.includes('invalid credentials'))
+  if (m.includes('invalid login credentials') || m.includes('invalid credentials') || m.includes('invalid_credentials'))
     return { field: 'general', text: 'Incorrect email or password.' }
-  if (m.includes('email not confirmed'))
+  if (m.includes('email not confirmed') || m.includes('email_not_confirmed') || m.includes('email not verified'))
     return { field: 'email', text: 'Please verify your email before signing in.' }
   if (m.includes('user not found') || m.includes('no user found'))
     return { field: 'email', text: 'No account found with this email.' }
   if (m.includes('password') && m.includes('weak'))
     return { field: 'password', text: 'Password is too weak. Use at least 8 characters.' }
-  if (m.includes('already registered') || m.includes('already exists'))
+  if (m.includes('already registered') || m.includes('already exists') || m.includes('email_exists'))
     return { field: 'email', text: 'An account with this email already exists.' }
   if (m.includes('too many requests') || m.includes('rate limit'))
     return { field: 'general', text: 'Too many attempts. Please wait a moment and try again.' }
   if (m.includes('network') || m.includes('fetch'))
     return { field: 'general', text: 'Network error. Check your connection and try again.' }
-  return { field: 'general', text: 'Something went wrong. Please try again.' }
+  if (m.includes('email_address_invalid') || m.includes('invalid email address') || m.includes('email address is invalid') || m.includes('domain not allowed'))
+    return { field: 'email', text: 'Only @duvips.com email addresses are allowed.' }
+
+  return { field: 'general', text: message || 'Something went wrong. Please try again.' }
 }
 
 // ── Main AuthPage component ───────────────────────────────────────────────────
@@ -309,6 +313,8 @@ export const AuthPage = () => {
   const pandaReady = useCallback((send: (event: PandaEvent) => void) => { pandaSendRef.current = send }, [])
   const pandaSend = (event: PandaEvent) => pandaSendRef.current?.(event)
 
+  const [signupSuccessEmail, setSignupSuccessEmail] = useState<string | null>(null)
+
   const clearErrors = () => setFieldError({})
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -323,8 +329,22 @@ export const AuthPage = () => {
     pandaSend({ type: 'LOGIN_START' })
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
+
+        if (data.user) {
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('status')
+            .eq('id', data.user.id)
+            .single()
+
+          if (!profileError && profile && profile.status === 'inactive') {
+            await supabase.auth.signOut()
+            throw new Error('Your account has been disabled. Please contact support.')
+          }
+        }
+
         pandaSend({ type: 'LOGIN_SUCCESS' })
         toast({ variant: 'success', title: '✓ Welcome back', description: 'Authenticated successfully.' })
       } else {
@@ -336,10 +356,12 @@ export const AuthPage = () => {
           toast({ variant: 'success', title: '✓ Account created', description: 'Welcome! You are now logged in.' })
         } else {
           pandaSend({ type: 'LOGIN_SUCCESS' })
+          setSignupSuccessEmail(email)
           toast({ title: 'Verify your email', description: 'Check your inbox to confirm your account.' })
         }
       }
     } catch (error: any) {
+      console.error('[AuthPage] Authentication failed:', error)
       pandaSend({ type: 'LOGIN_ERROR' })
       const mapped = mapAuthError(error?.message ?? '')
       setFieldError({ [mapped.field]: mapped.text })
@@ -379,6 +401,54 @@ export const AuthPage = () => {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (signupSuccessEmail) {
+    return (
+      <div className="min-h-screen bg-background relative overflow-hidden flex items-center justify-center">
+        {/* Animated Background Layers */}
+        <FloatingOrbs />
+        <AnimatedGrid />
+        <SparkleParticles />
+        <FloatingParticles />
+
+        <motion.div
+          initial={{ opacity: 0, y: 40, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full max-w-[480px] px-4 relative z-10"
+        >
+          <AnimatedBorderCard>
+            <div className="p-8 sm:p-10 text-center space-y-6">
+              <div className="w-16 h-16 bg-accent-gold/10 border border-accent-gold/20 rounded-full flex items-center justify-center mx-auto text-accent-gold">
+                <MailOpen className="w-8 h-8" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-clash font-bold text-text-primary tracking-tight">Confirm Your Email</h2>
+                <p className="text-sm text-text-secondary font-montreal">
+                  Check your inbox for a verification email
+                </p>
+              </div>
+              <p className="text-xs text-text-muted font-montreal leading-relaxed">
+                We have sent a verification link to <strong className="text-text-primary">{signupSuccessEmail}</strong>.
+                Please click the link in the email to activate your account and start using Qaly AI Engine.
+              </p>
+              <div className="pt-4">
+                <FloatingButton
+                  onClick={() => {
+                    setSignupSuccessEmail(null)
+                    navigate(ROUTES.login, { replace: true })
+                  }}
+                  className="w-full py-4 rounded-2xl text-xs uppercase tracking-widest font-bold"
+                >
+                  Back to Sign In
+                </FloatingButton>
+              </div>
+            </div>
+          </AnimatedBorderCard>
+        </motion.div>
+      </div>
+    )
   }
 
   return (
@@ -473,7 +543,7 @@ export const AuthPage = () => {
                             )}
                           </AnimatePresence>
                           <div className={cn(
-                            "absolute left-4 top-1/2 -translate-y-1/2 transition-all duration-300 z-10",
+                            "absolute left-4 top-1/2 -translate-y-1/2 transition-all duration-300 z-10 pointer-events-none",
                             fieldError.email ? "text-red-400" : focusedField === 'email' ? "text-accent scale-110" : "text-text-muted"
                           )}>
                             <Mail className="w-4 h-4" />
@@ -482,6 +552,8 @@ export const AuthPage = () => {
                             type="email"
                             placeholder="Email address"
                             value={email}
+                            tabIndex={1}
+                            autoComplete="email"
                             onFocus={() => { setFocusedField('email'); pandaSend({ type: 'EMAIL_FOCUS' }) }}
                             onBlur={() => { setFocusedField(null); pandaSend({ type: 'EMAIL_BLUR' }) }}
                             onChange={(e) => { setEmail(e.target.value); pandaSend({ type: 'EMAIL_TYPING' }); if (fieldError.email) clearErrors() }}
@@ -525,7 +597,7 @@ export const AuthPage = () => {
                             )}
                           </AnimatePresence>
                           <div className={cn(
-                            "absolute left-4 top-1/2 -translate-y-1/2 transition-all duration-300 z-10",
+                            "absolute left-4 top-1/2 -translate-y-1/2 transition-all duration-300 z-10 pointer-events-none",
                             fieldError.password ? "text-red-400" : focusedField === 'password' ? "text-accent scale-110" : "text-text-muted"
                           )}>
                             <Lock className="w-4 h-4" />
@@ -534,6 +606,8 @@ export const AuthPage = () => {
                             type={showPassword ? "text" : "password"}
                             placeholder="Password"
                             value={password}
+                            tabIndex={2}
+                            autoComplete={isLogin ? "current-password" : "new-password"}
                             onFocus={() => { setFocusedField('password'); pandaSend({ type: 'PASSWORD_FOCUS' }) }}
                             onBlur={() => { setFocusedField(null); pandaSend({ type: 'PASSWORD_BLUR' }) }}
                             onChange={(e) => { setPassword(e.target.value); if (fieldError.password) clearErrors() }}
@@ -546,10 +620,19 @@ export const AuthPage = () => {
                           />
                           <motion.button
                             type="button"
-                            onClick={() => { const next = !showPassword; setShowPassword(next); pandaSend({ type: 'PASSWORD_SHOW_TOGGLE', visible: next }) }}
-                            whileHover={{ scale: 1.2 }}
-                            whileTap={{ scale: 0.9 }}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors z-10"
+                            tabIndex={-1}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              const next = !showPassword
+                              setShowPassword(next)
+                              pandaSend({ type: 'PASSWORD_SHOW_TOGGLE', visible: next })
+                            }}
+                            onMouseDown={(e) => e.preventDefault()}
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors z-10 cursor-pointer p-1 rounded-lg hover:bg-white/5 active:bg-white/10"
+                            aria-label={showPassword ? "Hide password" : "Show password"}
                           >
                             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </motion.button>
@@ -573,12 +656,17 @@ export const AuthPage = () => {
                     {isLogin && (
                       <motion.div variants={staggerItem} className="flex items-center justify-between px-1">
                         <label className="flex items-center gap-2 cursor-pointer group">
-                          <input type="checkbox" className="w-4 h-4 rounded border-border bg-white/5 text-accent focus:ring-accent/20" />
+                          <input
+                            type="checkbox"
+                            tabIndex={3}
+                            className="w-4 h-4 rounded border-border bg-white/5 text-accent focus:ring-accent/20"
+                          />
                           <span className="text-xs text-text-muted group-hover:text-text-secondary transition-colors font-montreal">Remember me</span>
                         </label>
                         <motion.button
                           onClick={handleForgotPassword}
                           type="button"
+                          tabIndex={4}
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
                           className="text-xs text-accent/80 hover:text-accent transition-colors font-bold uppercase tracking-widest"
@@ -591,6 +679,7 @@ export const AuthPage = () => {
                     <motion.div variants={staggerItem}>
                       <FloatingButton
                         type="submit"
+                        tabIndex={5}
                         className="w-full py-4 rounded-2xl text-sm"
                         disabled={isLoading}
                       >

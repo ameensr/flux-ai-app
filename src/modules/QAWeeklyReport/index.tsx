@@ -588,16 +588,7 @@ export const QAWeeklyReport: React.FC = () => {
             New Report
           </button>
 
-          {/* Configuration Button */}
-          {isAuthorizedToConfig && (
-            <button
-              onClick={() => navigate(ROUTES.qaReportConfig)}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-accent-gold text-black hover:opacity-90 transition-all font-black uppercase tracking-wider"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              Configuration
-            </button>
-          )}
+
         </div>
       </div>
 

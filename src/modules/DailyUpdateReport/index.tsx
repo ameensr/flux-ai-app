@@ -27,7 +27,11 @@ export const DailyUpdateReport: React.FC = () => {
     syncRowsToDatabase,
     syncStatus,
     overdueOnlyFilter,
-    setOverdueOnlyFilter
+    setOverdueOnlyFilter,
+    projects,
+    selectedProjectId,
+    fetchProjects,
+    setSelectedProjectId
   } = useDailyReportStore()
 
   // Active Tab state
@@ -36,8 +40,15 @@ export const DailyUpdateReport: React.FC = () => {
   // Load initial configurations and user records on mount
   useEffect(() => {
     fetchDropdownConfigs()
-    fetchReportRows()
+    fetchProjects()
   }, [])
+
+  // Fetch report rows when project changes
+  useEffect(() => {
+    if (selectedProjectId) {
+      fetchReportRows()
+    }
+  }, [selectedProjectId])
 
   // Check if role is authorized to view dropdown configuration manager
   const isAuthorizedToConfig = can('daily-report', 'can_configure')
@@ -62,7 +73,7 @@ export const DailyUpdateReport: React.FC = () => {
   const overdueTasksCount = supportRows.filter(r => {
     if (r.actual_end_date) return false
     if (!r.planned_end_date) return false
-    return r.planned_end_date <= todayStr
+    return r.planned_end_date < todayStr  // Changed: < instead of <= (excludes today)
   }).length
 
   // Estimate hrs = support estimation + support retesting + release initial + release smoke + release overall
@@ -135,6 +146,34 @@ export const DailyUpdateReport: React.FC = () => {
         </div>
       </div>
 
+      {/* Project Filter */}
+      <div className="mb-8">
+        <GlassCard hoverEffect={false} className="p-5">
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-bold text-[var(--text-primary)] shrink-0">
+              Filter by Project:
+            </label>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="flex-1 max-w-md px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-accent-gold/50 transition-all"
+            >
+              <option value="">-- All Projects --</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.project_name} ({p.project_code})
+                </option>
+              ))}
+            </select>
+            {selectedProjectId && (
+              <span className="text-xs text-text-muted">
+                Showing updates from project members only
+              </span>
+            )}
+          </div>
+        </GlassCard>
+      </div>
+
       {/* Summary Dashboard widgets */}
       <div className={`grid grid-cols-2 md:grid-cols-4 ${activeTab === 'support' ? 'lg:grid-cols-8' : 'lg:grid-cols-7'} gap-4 mb-10`}>
         {(activeTab === 'support' ? [
@@ -169,10 +208,10 @@ export const DailyUpdateReport: React.FC = () => {
                 }
               }}
               className={`p-4 rounded-2xl border ${isSelected
-                  ? 'border-rose-500/60 bg-rose-500/[0.06] shadow-lg shadow-rose-500/[0.05]'
-                  : card.isClickable
-                    ? 'border-[var(--border)] bg-[var(--surface-secondary)]/50 hover:bg-rose-500/[0.02] hover:border-rose-500/25 hover:shadow-lg cursor-pointer'
-                    : 'border-[var(--border)] bg-[var(--surface-secondary)]/50 hover:bg-[var(--surface-secondary)]/90 hover:border-accent-gold/25 hover:shadow-lg'
+                ? 'border-rose-500/60 bg-rose-500/[0.06] shadow-lg shadow-rose-500/[0.05]'
+                : card.isClickable
+                  ? 'border-[var(--border)] bg-[var(--surface-secondary)]/50 hover:bg-rose-500/[0.02] hover:border-rose-500/25 hover:shadow-lg cursor-pointer'
+                  : 'border-[var(--border)] bg-[var(--surface-secondary)]/50 hover:bg-[var(--surface-secondary)]/90 hover:border-accent-gold/25 hover:shadow-lg'
                 } flex flex-col justify-between transition-all duration-300 relative overflow-hidden`}
             >
               <div className="flex items-center justify-between">

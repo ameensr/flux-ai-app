@@ -15,12 +15,21 @@ function json(body: unknown, status = 200) {
 
 async function requireAdmin(req: Request) {
   const jwt = req.headers.get('Authorization')?.replace('Bearer ', '')
-  if (!jwt) throw new Error('Unauthorized')
+  if (!jwt) {
+    console.error('[requireAdmin] Authorization header is missing or empty')
+    throw new Error('Unauthorized')
+  }
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
   const { data: { user }, error } = await supabase.auth.getUser(jwt)
-  if (error || !user) throw new Error('Unauthorized')
+  if (error || !user) {
+    console.error('[requireAdmin] getUser failed to validate JWT:', error)
+    throw new Error('Unauthorized')
+  }
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (!profile || !['admin', 'super_admin'].includes(profile.role)) throw new Error('Forbidden')
+  if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
+    console.error(`[requireAdmin] User ${user.id} has role ${profile?.role} and is forbidden`)
+    throw new Error('Forbidden')
+  }
   return { userId: user.id, supabase }
 }
 
@@ -97,9 +106,14 @@ Deno.serve(async (req) => {
     if (req.method === 'DELETE' && action === 'delete_user') {
       const { user_id } = await req.json()
       if (!user_id) return json({ error: 'Missing user_id' }, 400)
-      // auth.admin.deleteUser cascades to profiles via FK on delete cascade
+      
+      // Delete from profiles first to prevent foreign key constraint violation on auth.users deletion
+      const { error: profileError } = await supabase.from('profiles').delete().eq('id', user_id)
+      if (profileError) throw profileError
+
       const { error } = await supabase.auth.admin.deleteUser(user_id)
       if (error) throw error
+      
       return json({ success: true })
     }
 

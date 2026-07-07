@@ -14,6 +14,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
   admin: {},
   pro: {
     dashboard: { can_view: true, can_generate_ai: true },
+    'project-hub': { can_view: true, can_create: true, can_edit: true },
     'bug-refiner': { can_view: true, can_generate_ai: true, can_export: true },
     'test-generator': { can_view: true, can_generate_ai: true, can_export: true },
     'writing-assistant': { can_view: true, can_generate_ai: true },
@@ -24,6 +25,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
   },
   free: {
     dashboard: { can_view: true, can_generate_ai: true },
+    'project-hub': { can_view: true },
     'bug-refiner': { can_view: true, can_generate_ai: true },
     'test-generator': { can_view: true, can_generate_ai: true },
     'writing-assistant': { can_view: true, can_generate_ai: true },

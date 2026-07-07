@@ -7,7 +7,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import {
   LayoutDashboard, Bug, FileText, PenTool, Settings,
   ChevronLeft, Shield, LogOut, ClipboardList,
-  ClipboardCheck,
+  ClipboardCheck, FolderKanban,
 } from 'lucide-react'
 import { Logo } from '../ui/Logo'
 import { supabase } from '@/lib/supabase'
@@ -21,6 +21,7 @@ const ALL_MENU_ITEMS = [
   { path: ROUTES.qaReport, label: 'QA Weekly Report', icon: ClipboardList, moduleKey: 'qa-report' },
   { path: ROUTES.dailyReport, label: 'Daily Update Report', icon: ClipboardCheck, moduleKey: 'daily-report' },
   { path: ROUTES.settings, label: 'Settings', icon: Settings, moduleKey: 'settings' },
+  { path: ROUTES.projectHub, label: 'Project Hub', icon: FolderKanban, moduleKey: 'project-hub' },
   { path: ROUTES.admin, label: 'Admin Panel', icon: Shield, moduleKey: 'admin' },
 ]
 
@@ -74,8 +75,8 @@ export const Sidebar = () => {
     pathname === itemPath || pathname.startsWith(itemPath + '/')
 
   // Split nav into main + bottom items
-  const mainItems = visibleItems.filter(i => !['settings', 'admin'].includes(i.moduleKey))
-  const bottomItems = visibleItems.filter(i => ['settings', 'admin'].includes(i.moduleKey))
+  const mainItems = visibleItems.filter(i => !['settings', 'project-hub', 'admin'].includes(i.moduleKey))
+  const bottomItems = visibleItems.filter(i => ['settings', 'project-hub', 'admin'].includes(i.moduleKey))
 
   const NavItem = ({ item }: { item: typeof ALL_MENU_ITEMS[0] }) => {
     const active = isActive(item.path)

@@ -30,6 +30,7 @@ const COLUMNS = [
   { id: 'blocked_hours', label: 'Blocked Hours', type: 'number', defaultWidth: 120 },
   { id: 'retesting_status', label: 'Retesting Status', type: 'select', category: 'retesting_status', defaultWidth: 140 },
   { id: 'retesting_estimation_hrs', label: 'Retesting Est (Hrs)', type: 'number', defaultWidth: 140 },
+  { id: 'issue_source', label: 'Issue Source', type: 'select', category: 'issue_source', defaultWidth: 150 },
 ]
 
 export const SupportExceptionLog: React.FC = () => {
@@ -71,7 +72,7 @@ export const SupportExceptionLog: React.FC = () => {
     const p = new Date(plannedDateStr).getTime()
     const diffTime = t - p
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    
+
     if (diffDays < 0) return ''
     if (diffDays === 0) return 'Today'
     if (diffDays === 1) return '1 day overdue'
@@ -93,7 +94,7 @@ export const SupportExceptionLog: React.FC = () => {
   const [showTemplateMenu, setShowTemplateMenu] = useState(false)
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
-  
+
   // Cell inline editor state
   const [activeCell, setActiveCell] = useState<{ rowId: string; colId: string } | null>(null)
   const editorInputRef = useRef<any>(null)
@@ -155,7 +156,8 @@ export const SupportExceptionLog: React.FC = () => {
   const deleteSelected = () => {
     if (!canDelete) return
     if (selectedIds.size === 0) return
-    setSupportRows(supportRows.filter(r => !selectedIds.has(r.id)))
+    // Force immediate sync to prevent rows from reappearing on refresh
+    setSupportRows(supportRows.filter(r => !selectedIds.has(r.id)), true)
     setSelectedIds(new Set())
   }
 
@@ -230,7 +232,7 @@ export const SupportExceptionLog: React.FC = () => {
     e.preventDefault()
     const raw = e.clipboardData.getData('Text')
     const lines = raw.split(/\r?\n/).filter(line => line.length > 0)
-    
+
     // Map lines to new records
     const newRecords: SupportLogRecord[] = lines.map(line => {
       const parts = line.split('\t')
@@ -262,7 +264,7 @@ export const SupportExceptionLog: React.FC = () => {
   const exportToCSV = () => {
     const activeHeaders = COLUMNS.filter(c => visibleColumns[c.id])
     const headerRow = activeHeaders.map(h => `"${h.label.replace(/"/g, '""')}"`).join(',')
-    
+
     const rows = filteredRows.map(row => {
       return activeHeaders.map(h => {
         const val = (row as any)[h.id] ?? ''
@@ -303,7 +305,7 @@ export const SupportExceptionLog: React.FC = () => {
       html += `</tr>`
     })
     html += `</tbody></table></body></html>`
-    
+
     const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -364,7 +366,7 @@ export const SupportExceptionLog: React.FC = () => {
       html += `<script>window.onload = function() { window.print(); }</script>`
     }
     html += `</body></html>`
-    
+
     printWindow.document.write(html)
     printWindow.document.close()
   }
@@ -485,6 +487,12 @@ export const SupportExceptionLog: React.FC = () => {
                 rowErrors.push(`Retesting Status '${record.retesting_status}' is not configured.`)
               }
             }
+            if (record.issue_source) {
+              const issueSources = getDropdownOptions('issue_source').map(i => i.toLowerCase())
+              if (!issueSources.includes(record.issue_source.toLowerCase())) {
+                rowErrors.push(`Issue Source '${record.issue_source}' is not configured.`)
+              }
+            }
 
             if (rowErrors.length > 0) {
               record.errors = rowErrors
@@ -500,7 +508,8 @@ export const SupportExceptionLog: React.FC = () => {
             alert(`Successfully imported ${imported.length} rows!`)
           }
 
-          setSupportRows([...supportRows, ...imported])
+          // Force immediate sync to prevent data loss on navigation
+          setSupportRows([...supportRows, ...imported], true)
         } catch (error: any) {
           alert(`Failed to import Excel file: ${error?.message || error || "Unknown error parsing Excel sheet structure"}`)
         }
@@ -608,6 +617,12 @@ export const SupportExceptionLog: React.FC = () => {
                 rowErrors.push(`Retesting Status '${record.retesting_status}' is not configured.`)
               }
             }
+            if (record.issue_source) {
+              const issueSources = getDropdownOptions('issue_source').map(i => i.toLowerCase())
+              if (!issueSources.includes(record.issue_source.toLowerCase())) {
+                rowErrors.push(`Issue Source '${record.issue_source}' is not configured.`)
+              }
+            }
 
             if (rowErrors.length > 0) {
               record.errors = rowErrors
@@ -623,7 +638,8 @@ export const SupportExceptionLog: React.FC = () => {
             alert(`Successfully imported ${imported.length} rows!`)
           }
 
-          setSupportRows([...supportRows, ...imported])
+          // Force immediate sync to prevent data loss on navigation
+          setSupportRows([...supportRows, ...imported], true)
         } catch (error: any) {
           alert(`Failed to import CSV file: ${error?.message || error}`)
         }
@@ -646,7 +662,7 @@ export const SupportExceptionLog: React.FC = () => {
       return
     }
     const headers = COLUMNS.map(c => c.label)
-    
+
     // Create a realistic sample row
     const sampleRow = COLUMNS.map(col => {
       switch (col.id) {
@@ -665,6 +681,7 @@ export const SupportExceptionLog: React.FC = () => {
         case 'blocked_hours': return 0
         case 'retesting_status': return getDropdownOptions('retesting_status')[0] || 'Pending'
         case 'retesting_estimation_hrs': return 1
+        case 'issue_source': return getDropdownOptions('issue_source')[0] || 'Internal Testing'
         default: return ''
       }
     })
@@ -674,7 +691,7 @@ export const SupportExceptionLog: React.FC = () => {
     if (format === 'csv') {
       const csvWS = XLSX.utils.aoa_to_sheet(aoaData)
       const csvContent = XLSX.utils.sheet_to_csv(csvWS)
-      
+
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -686,7 +703,7 @@ export const SupportExceptionLog: React.FC = () => {
     } else {
       const wb = XLSX.utils.book_new()
       const ws = XLSX.utils.aoa_to_sheet(aoaData)
-      
+
       // Auto-fit column widths
       const colWidths = COLUMNS.map(col => {
         const labelLen = col.label.length
@@ -804,7 +821,7 @@ export const SupportExceptionLog: React.FC = () => {
   const filteredRows = supportRows
     .filter(row => {
       if (overdueOnlyFilter) {
-        const isOverdue = !row.actual_end_date && row.planned_end_date && row.planned_end_date <= todayStr
+        const isOverdue = !row.actual_end_date && row.planned_end_date && row.planned_end_date < todayStr  // Changed: < instead of <=
         if (!isOverdue) return false
       }
 
@@ -814,7 +831,7 @@ export const SupportExceptionLog: React.FC = () => {
         (row.qa || '').toLowerCase().includes(search.toLowerCase()) ||
         (row.description || '').toLowerCase().includes(search.toLowerCase()) ||
         (row.comments || '').toLowerCase().includes(search.toLowerCase())
-      
+
       const matchStatus = statusFilter === '' || row.status === statusFilter
       return matchSearch && matchStatus
     })
@@ -822,7 +839,7 @@ export const SupportExceptionLog: React.FC = () => {
       if (!sortColumn) return 0
       const aVal = (a as any)[sortColumn] ?? ''
       const bVal = (b as any)[sortColumn] ?? ''
-      
+
       if (typeof aVal === 'number' && typeof bVal === 'number') {
         return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
       }
@@ -843,11 +860,11 @@ export const SupportExceptionLog: React.FC = () => {
 
   return (
     <GlassCard hoverEffect={false} className="flex flex-col gap-4 overflow-visible relative">
-      
+
       {/* Grid Toolbar Controls */}
       <div className="flex items-center justify-between flex-wrap gap-4 border-b border-white/5 pb-4">
         <div className="flex items-center gap-3 flex-wrap flex-1 min-w-[280px]">
-          
+
           {/* Search bar */}
           <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10 text-xs flex-1 max-w-xs transition-all focus-within:border-accent-gold/40">
             <Search className="w-3.5 h-3.5 text-text-muted shrink-0" />
@@ -879,7 +896,7 @@ export const SupportExceptionLog: React.FC = () => {
 
         {/* Action button grouping */}
         <div className="flex items-center gap-2 flex-wrap text-xs">
-          
+
           {/* Column Customizer button */}
           <div className="relative">
             <button
@@ -1074,7 +1091,7 @@ export const SupportExceptionLog: React.FC = () => {
       </div>
 
       {/* Spreadsheet grid container */}
-      <div 
+      <div
         className="w-full overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] relative focus:outline-none shadow-sm"
         onPaste={handleClipboardPaste}
         tabIndex={0}
@@ -1098,7 +1115,7 @@ export const SupportExceptionLog: React.FC = () => {
                 if (!visibleColumns[col.id]) return null
                 const width = columnWidths[col.id] || col.defaultWidth
                 const isSorted = sortColumn === col.id
-                
+
                 return (
                   <th
                     key={col.id}
@@ -1171,7 +1188,7 @@ export const SupportExceptionLog: React.FC = () => {
                     const isEditing = activeCell?.rowId === row.id && activeCell?.colId === col.id
                     const width = columnWidths[col.id] || col.defaultWidth
                     const cellVal = (row as any)[col.id] ?? ''
-                    
+
                     return (
                       <td
                         key={col.id}
@@ -1248,7 +1265,7 @@ export const SupportExceptionLog: React.FC = () => {
                           <div className={`py-3 px-3.5 w-full h-full text-text-secondary cursor-text hover:bg-[var(--hover)]/15 select-none min-h-[38px] ${col.type === 'textarea' ? 'whitespace-pre-wrap break-words' : 'truncate'}`}>
                             {col.type === 'date' && cellVal ? (
                               col.id === 'planned_end_date' && !row.actual_end_date && cellVal <= todayStr ? (
-                                <div 
+                                <div
                                   className="flex items-center gap-1.5 px-2 py-1 rounded bg-rose-500/10 border border-rose-500/30 text-rose-500 font-bold text-xs w-fit select-none group/overdue relative cursor-help"
                                   title="Planned End Date has passed. Actual End Date is still pending."
                                 >

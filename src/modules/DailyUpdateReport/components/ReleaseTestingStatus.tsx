@@ -109,7 +109,8 @@ export const ReleaseTestingStatus: React.FC = () => {
   const deleteSelected = () => {
     if (!canDelete) return
     if (selectedIds.size === 0) return
-    setReleaseRows(releaseRows.filter(r => !selectedIds.has(r.id)))
+    // Force immediate sync to prevent rows from reappearing on refresh
+    setReleaseRows(releaseRows.filter(r => !selectedIds.has(r.id)), true)
     setSelectedIds(new Set())
   }
 
@@ -184,7 +185,7 @@ export const ReleaseTestingStatus: React.FC = () => {
     e.preventDefault()
     const raw = e.clipboardData.getData('Text')
     const lines = raw.split(/\r?\n/).filter(line => line.length > 0)
-    
+
     const newRecords: ReleaseTestingRecord[] = lines.map(line => {
       const parts = line.split('\t')
       return {
@@ -208,7 +209,7 @@ export const ReleaseTestingStatus: React.FC = () => {
   const exportToCSV = () => {
     const activeHeaders = COLUMNS.filter(c => visibleColumns[c.id])
     const headerRow = activeHeaders.map(h => `"${h.label.replace(/"/g, '""')}"`).join(',')
-    
+
     const rows = filteredRows.map(row => {
       return activeHeaders.map(h => {
         const val = (row as any)[h.id] ?? ''
@@ -244,7 +245,7 @@ export const ReleaseTestingStatus: React.FC = () => {
       html += `</tr>`
     })
     html += `</tbody></table></body></html>`
-    
+
     const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -305,7 +306,7 @@ export const ReleaseTestingStatus: React.FC = () => {
       html += `<script>window.onload = function() { window.print(); }</script>`
     }
     html += `</body></html>`
-    
+
     printWindow.document.write(html)
     printWindow.document.close()
   }
@@ -429,7 +430,8 @@ export const ReleaseTestingStatus: React.FC = () => {
             alert(`Successfully imported ${imported.length} rows!`)
           }
 
-          setReleaseRows([...releaseRows, ...imported])
+          // Force immediate sync to prevent data loss on navigation
+          setReleaseRows([...releaseRows, ...imported], true)
         } catch (error: any) {
           alert(`Failed to import Excel file: ${error?.message || error || "Unknown error parsing Excel sheet structure"}`)
         }
@@ -540,7 +542,8 @@ export const ReleaseTestingStatus: React.FC = () => {
             alert(`Successfully imported ${imported.length} rows!`)
           }
 
-          setReleaseRows([...releaseRows, ...imported])
+          // Force immediate sync to prevent data loss on navigation
+          setReleaseRows([...releaseRows, ...imported], true)
         } catch (error: any) {
           alert(`Failed to import CSV file: ${error?.message || error}`)
         }
@@ -563,7 +566,7 @@ export const ReleaseTestingStatus: React.FC = () => {
       return
     }
     const headers = COLUMNS.map(c => c.label)
-    
+
     // Create a realistic sample row
     const sampleRow = COLUMNS.map(col => {
       switch (col.id) {
@@ -585,7 +588,7 @@ export const ReleaseTestingStatus: React.FC = () => {
     if (format === 'csv') {
       const csvWS = XLSX.utils.aoa_to_sheet(aoaData)
       const csvContent = XLSX.utils.sheet_to_csv(csvWS)
-      
+
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -597,7 +600,7 @@ export const ReleaseTestingStatus: React.FC = () => {
     } else {
       const wb = XLSX.utils.book_new()
       const ws = XLSX.utils.aoa_to_sheet(aoaData)
-      
+
       // Auto-fit column widths
       const colWidths = COLUMNS.map(col => {
         const labelLen = col.label.length
@@ -716,7 +719,7 @@ export const ReleaseTestingStatus: React.FC = () => {
         (row.description || '').toLowerCase().includes(search.toLowerCase()) ||
         (row.scope_of_testing_for_smoke || '').toLowerCase().includes(search.toLowerCase()) ||
         (row.overall_scope_of_testing || '').toLowerCase().includes(search.toLowerCase())
-      
+
       const matchSmoke = smokeFilter === '' || row.smoke_testing_status === smokeFilter
       return matchSearch && matchSmoke
     })
@@ -724,7 +727,7 @@ export const ReleaseTestingStatus: React.FC = () => {
       if (!sortColumn) return 0
       const aVal = (a as any)[sortColumn] ?? ''
       const bVal = (b as any)[sortColumn] ?? ''
-      
+
       if (typeof aVal === 'number' && typeof bVal === 'number') {
         return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
       }
@@ -745,11 +748,11 @@ export const ReleaseTestingStatus: React.FC = () => {
 
   return (
     <GlassCard hoverEffect={false} className="flex flex-col gap-4 overflow-visible relative">
-      
+
       {/* Grid Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-4 border-b border-white/5 pb-4">
         <div className="flex items-center gap-3 flex-wrap flex-1 min-w-[280px]">
-          
+
           {/* Search bar */}
           <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10 text-xs flex-1 max-w-xs transition-all focus-within:border-accent-gold/40">
             <Search className="w-3.5 h-3.5 text-text-muted shrink-0" />
@@ -781,7 +784,7 @@ export const ReleaseTestingStatus: React.FC = () => {
 
         {/* Action Button grouping */}
         <div className="flex items-center gap-2 flex-wrap text-xs">
-          
+
           {/* Column menu */}
           <div className="relative">
             <button

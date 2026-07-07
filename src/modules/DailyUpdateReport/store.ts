@@ -37,6 +37,9 @@ interface DailyReportState {
   syncing: boolean
   isDbAvailable: boolean
   syncStatus: 'synced' | 'saving' | 'local' | 'error'
+  selectedProjectId: string
+  projects: Array<{ id: string; project_name: string; project_code: string }>
+  projectMembers: string[] // Array of user IDs who are members of the selected project
 
   // Actions
   fetchDropdownConfigs: () => Promise<void>
@@ -44,6 +47,9 @@ interface DailyReportState {
   deleteDropdownConfig: (id: string) => Promise<void>
   reorderDropdownConfigs: (category: ConfigCategory, configs: DropdownConfig[]) => Promise<void>
 
+  fetchProjects: () => Promise<void>
+  setSelectedProjectId: (projectId: string) => void
+  fetchProjectMembers: (projectId: string) => Promise<void>
   fetchReportRows: () => Promise<void>
   setSupportRows: (rows: SupportLogRecord[], forceSync?: boolean) => Promise<void>
   setReleaseRows: (rows: ReleaseTestingRecord[], forceSync?: boolean) => Promise<void>
@@ -55,6 +61,73 @@ interface DailyReportState {
 // Debounce helper for database syncing
 let syncTimeout: any = null
 
+// Helper function to validate rows and add errors property
+const validateSupportRow = (row: SupportLogRecord, dropdownConfigs: DropdownConfig[]): SupportLogRecord => {
+  const rowErrors: string[] = []
+
+  // Get configured values
+  const branches = dropdownConfigs.filter(c => c.category === 'branch' && c.is_active).map(c => c.value.toLowerCase())
+  const qas = dropdownConfigs.filter(c => c.category === 'qa' && c.is_active).map(c => c.value.toLowerCase())
+  const statuses = dropdownConfigs.filter(c => c.category === 'status' && c.is_active).map(c => c.value.toLowerCase())
+  const retestingStatuses = dropdownConfigs.filter(c => c.category === 'retesting_status' && c.is_active).map(c => c.value.toLowerCase())
+  const issueSources = dropdownConfigs.filter(c => c.category === 'issue_source' && c.is_active).map(c => c.value.toLowerCase())
+
+  // Validate branch
+  if (row.branch && !branches.includes(row.branch.toLowerCase())) {
+    rowErrors.push(`Branch '${row.branch}' is not configured.`)
+  }
+
+  // Validate QA
+  if (row.qa && !qas.includes(row.qa.toLowerCase())) {
+    rowErrors.push(`QA '${row.qa}' is not configured.`)
+  }
+
+  // Validate status
+  if (row.status && !statuses.includes(row.status.toLowerCase())) {
+    rowErrors.push(`Status '${row.status}' is not configured.`)
+  }
+
+  // Validate retesting status
+  if (row.retesting_status && !retestingStatuses.includes(row.retesting_status.toLowerCase())) {
+    rowErrors.push(`Retesting Status '${row.retesting_status}' is not configured.`)
+  }
+
+  // Validate issue source
+  if (row.issue_source && !issueSources.includes(row.issue_source.toLowerCase())) {
+    rowErrors.push(`Issue Source '${row.issue_source}' is not configured.`)
+  }
+
+  if (rowErrors.length > 0) {
+    return { ...row, errors: rowErrors } as any
+  }
+
+  return row
+}
+
+const validateReleaseRow = (row: ReleaseTestingRecord, dropdownConfigs: DropdownConfig[]): ReleaseTestingRecord => {
+  const rowErrors: string[] = []
+
+  // Get configured values
+  const qas = dropdownConfigs.filter(c => c.category === 'qa' && c.is_active).map(c => c.value.toLowerCase())
+  const smokeStatuses = dropdownConfigs.filter(c => c.category === 'smoke_status' && c.is_active).map(c => c.value.toLowerCase())
+
+  // Validate QA
+  if (row.qa && !qas.includes(row.qa.toLowerCase())) {
+    rowErrors.push(`QA '${row.qa}' is not configured.`)
+  }
+
+  // Validate smoke testing status
+  if (row.smoke_testing_status && !smokeStatuses.includes(row.smoke_testing_status.toLowerCase())) {
+    rowErrors.push(`Smoke Status '${row.smoke_testing_status}' is not configured.`)
+  }
+
+  if (rowErrors.length > 0) {
+    return { ...row, errors: rowErrors } as any
+  }
+
+  return row
+}
+
 export const useDailyReportStore = create<DailyReportState>((set, get) => ({
   supportRows: [],
   releaseRows: [],
@@ -64,7 +137,64 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
   isDbAvailable: true,
   syncStatus: 'synced',
   overdueOnlyFilter: false,
+  selectedProjectId: '',
+  projects: [],
+  projectMembers: [],
+
   setOverdueOnlyFilter: (val: boolean) => set({ overdueOnlyFilter: val }),
+  setSelectedProjectId: (projectId: string) => {
+    set({ selectedProjectId: projectId })
+    if (projectId) {
+      get().fetchProjectMembers(projectId)
+      get().fetchReportRows()
+    }
+  },
+
+  fetchProjects: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name, project_code')
+        .eq('status', 'active')
+        .order('name', { ascending: true })
+
+      if (error) throw error
+      if (data) {
+        const mapped = data.map(p => ({
+          id: p.id,
+          project_name: p.name,
+          project_code: p.project_code
+        }))
+        set({ projects: mapped })
+        // Auto-select first project if available and none selected
+        const currentProjectId = get().selectedProjectId
+        if (!currentProjectId && mapped.length > 0) {
+          get().setSelectedProjectId(mapped[0].id)
+        }
+      }
+    } catch (e) {
+      console.error('[DailyReportStore] Failed to fetch projects:', e)
+      set({ projects: [] })
+    }
+  },
+
+  fetchProjectMembers: async (projectId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('project_members')
+        .select('user_id')
+        .eq('project_id', projectId)
+
+      if (error) throw error
+      if (data) {
+        const memberIds = data.map(m => m.user_id)
+        set({ projectMembers: memberIds })
+      }
+    } catch (e) {
+      console.error('[DailyReportStore] Failed to fetch project members:', e)
+      set({ projectMembers: [] })
+    }
+  },
 
   fetchDropdownConfigs: async () => {
     set({ loading: true })
@@ -200,18 +330,29 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
     set({ loading: true })
     const user = useAppStore.getState().user
     const role = useAppStore.getState().role
+    const selectedProjectId = get().selectedProjectId
+    const projectMembers = get().projectMembers
 
-    // Load local storage drafts first as immediately responsive state
-    const localSupport = localStorage.getItem('flux-daily-support-rows')
-    const localRelease = localStorage.getItem('flux-daily-release-rows')
+    // Check if there are unsaved changes BEFORE loading localStorage
+    const currentSyncStatus = get().syncStatus
+    const hasUnsavedChanges = currentSyncStatus === 'saving' || currentSyncStatus === 'local' || currentSyncStatus === 'error'
 
-    if (localSupport) set({ supportRows: JSON.parse(localSupport) })
-    if (localRelease) set({ releaseRows: JSON.parse(localRelease) })
+    // Only load localStorage if there are unsaved changes
+    // This prevents "flash" of stale/unfiltered data from appearing
+    // CRITICAL: Include 'error' status to prevent data loss after failed sync (e.g., validation warnings)
+    if (hasUnsavedChanges) {
+      const localSupport = localStorage.getItem('flux-daily-support-rows')
+      const localRelease = localStorage.getItem('flux-daily-release-rows')
+
+      if (localSupport) set({ supportRows: JSON.parse(localSupport) })
+      if (localRelease) set({ releaseRows: JSON.parse(localRelease) })
+    }
 
     if (user) {
       try {
         // Bug fix: manager/qa_lead/admin see all team rows (RLS handles scoping).
         // qa_engineer and others only see their own rows.
+        // Now also filtered by project and project members
         const teamRoles = ['manager', 'qa_lead', 'admin', 'super_admin']
         const isTeamRole = teamRoles.includes(role)
 
@@ -224,25 +365,46 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
           .select('*')
           .order('sort_order', { ascending: true })
 
-        // Only filter by user_id for non-team roles
-        if (!isTeamRole) {
+        // Filter by project if selected
+        if (selectedProjectId) {
+          supportQuery.eq('project_id', selectedProjectId)
+          releaseQuery.eq('project_id', selectedProjectId)
+        }
+
+        // For team roles, filter by project members only
+        if (isTeamRole && projectMembers.length > 0) {
+          supportQuery.in('user_id', projectMembers)
+          releaseQuery.in('user_id', projectMembers)
+        } else if (!isTeamRole) {
+          // Only filter by user_id for non-team roles
           supportQuery.eq('user_id', user.id)
           releaseQuery.eq('user_id', user.id)
         }
 
         const [supportRes, releaseRes] = await Promise.all([supportQuery, releaseQuery])
 
-        if (!supportRes.error && supportRes.data && supportRes.data.length > 0) {
-          set({ supportRows: supportRes.data as SupportLogRecord[] })
-          localStorage.setItem('flux-daily-support-rows', JSON.stringify(supportRes.data))
+        // Only update from database if there are no unsaved changes
+        if (!hasUnsavedChanges) {
+          if (!supportRes.error) {
+            const dbSupportRows = (supportRes.data || []) as SupportLogRecord[]
+            // Re-validate rows to add errors property for unconfigured values
+            const validatedRows = dbSupportRows.map(row => validateSupportRow(row, get().dropdownConfigs))
+            set({ supportRows: validatedRows })
+            localStorage.setItem('flux-daily-support-rows', JSON.stringify(validatedRows))
+          }
+
+          if (!releaseRes.error) {
+            const dbReleaseRows = (releaseRes.data || []) as ReleaseTestingRecord[]
+            // Re-validate rows to add errors property for unconfigured values
+            const validatedRows = dbReleaseRows.map(row => validateReleaseRow(row, get().dropdownConfigs))
+            set({ releaseRows: validatedRows })
+            localStorage.setItem('flux-daily-release-rows', JSON.stringify(validatedRows))
+          }
+        } else {
+          console.log('[DailyReportStore] Skipping database overwrite - unsaved changes detected')
         }
 
-        if (!releaseRes.error && releaseRes.data && releaseRes.data.length > 0) {
-          set({ releaseRows: releaseRes.data as ReleaseTestingRecord[] })
-          localStorage.setItem('flux-daily-release-rows', JSON.stringify(releaseRes.data))
-        }
-
-        set({ isDbAvailable: true, syncStatus: 'synced' })
+        set({ isDbAvailable: true, syncStatus: hasUnsavedChanges ? currentSyncStatus : 'synced' })
       } catch (e) {
         console.warn('[DailyReportStore] Failed to fetch report rows from database, working in Local Draft Mode.', e)
         set({ isDbAvailable: false, syncStatus: 'local' })
@@ -293,41 +455,102 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
 
     set({ syncing: true, syncStatus: 'saving' })
     try {
+      const selectedProjectId = get().selectedProjectId // Get current project filter
+      console.log('[DailyReportStore] Starting sync with project:', selectedProjectId)
+
       const supportPayload = get().supportRows.map((r, i) => {
         const item: any = { ...r, user_id: user.id, sort_order: i + 1 }
+
+        // Set project_id to currently selected project (critical for filtering!)
+        if (selectedProjectId) {
+          item.project_id = selectedProjectId
+        }
+
         // Clean temporary local IDs
         if (r.id.startsWith('temp-') || r.id.startsWith('local-')) {
           delete item.id
         }
+
+        // Remove client-side validation errors property (not a DB column!)
+        delete item.errors
+
         // Replace empty strings with null for numeric SQL columns
         if (item.tc_count === '') item.tc_count = null
         if (item.estimation_hrs === '') item.estimation_hrs = null
         if (item.blocked_hours === '') item.blocked_hours = null
         if (item.retesting_estimation_hrs === '') item.retesting_estimation_hrs = null
+
+        // Replace empty strings with null for date columns too!
+        if (item.received_date === '') item.received_date = null
+        if (item.actual_start_date === '') item.actual_start_date = null
+        if (item.planned_end_date === '') item.planned_end_date = null
+        if (item.actual_end_date === '') item.actual_end_date = null
+
+        // Remove any undefined values
+        Object.keys(item).forEach(key => {
+          if (item[key] === undefined) {
+            delete item[key]
+          }
+        })
+
         return item
       })
 
       const releasePayload = get().releaseRows.map((r, i) => {
         const item: any = { ...r, user_id: user.id, sort_order: i + 1 }
+
+        // Set project_id to currently selected project (critical for filtering!)
+        if (selectedProjectId) {
+          item.project_id = selectedProjectId
+        }
+
         if (r.id.startsWith('temp-') || r.id.startsWith('local-')) {
           delete item.id
         }
+
+        // Remove client-side validation errors property (not a DB column!)
+        delete item.errors
+
         if (item.initial_round_estimation_hrs === '') item.initial_round_estimation_hrs = null
         if (item.smoke_testing_estimation_hrs === '') item.smoke_testing_estimation_hrs = null
         if (item.overall_estimation_hrs === '') item.overall_estimation_hrs = null
+
+        // Remove any undefined values
+        Object.keys(item).forEach(key => {
+          if (item[key] === undefined) {
+            delete item[key]
+          }
+        })
+
         return item
       })
 
       // 1. Re-sync Support Rows: Clear and Upsert
-      await supabase
-        .from('daily_support_logs')
-        .delete()
-        .eq('user_id', user.id)
+      // Only delete rows for the current project to avoid affecting other projects
+      if (selectedProjectId) {
+        await supabase
+          .from('daily_support_logs')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('project_id', selectedProjectId)
 
-      await supabase
-        .from('daily_release_testing_status')
-        .delete()
-        .eq('user_id', user.id)
+        await supabase
+          .from('daily_release_testing_status')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('project_id', selectedProjectId)
+      } else {
+        // If no project selected, clear all user rows (legacy behavior)
+        await supabase
+          .from('daily_support_logs')
+          .delete()
+          .eq('user_id', user.id)
+
+        await supabase
+          .from('daily_release_testing_status')
+          .delete()
+          .eq('user_id', user.id)
+      }
 
       const insertPromises: any[] = []
 
@@ -351,23 +574,67 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
 
       const results = await Promise.all(insertPromises)
 
-      // Update local states with actual database assigned IDs
-      const stateUpdate: Partial<DailyReportState> = { syncStatus: 'synced', syncing: false }
-
+      // Check for database errors before marking as synced
+      let hasErrors = false
       let resIdx = 0
+
+      const stateUpdate: Partial<DailyReportState> = { syncing: false }
+
       if (supportPayload.length > 0) {
         const res = results[resIdx++]
-        if (!res.error && res.data) {
-          stateUpdate.supportRows = res.data as SupportLogRecord[]
-          localStorage.setItem('flux-daily-support-rows', JSON.stringify(res.data))
+        if (res.error) {
+          console.error('[DailyReportStore] Support logs insert failed:', res.error)
+          console.error('[DailyReportStore] Failed payload sample:', JSON.stringify(supportPayload[0], null, 2))
+          hasErrors = true
+        } else if (res.data) {
+          console.log('[DailyReportStore] Successfully inserted', res.data.length, 'support rows')
+
+          // Re-validate the returned data to add errors property back
+          const validatedRows = (res.data as SupportLogRecord[]).map(row =>
+            validateSupportRow(row, get().dropdownConfigs)
+          )
+
+          stateUpdate.supportRows = validatedRows
+          localStorage.setItem('flux-daily-support-rows', JSON.stringify(validatedRows))
         }
+      } else {
+        // If supportPayload is empty (all rows deleted), clear state and localStorage
+        stateUpdate.supportRows = []
+        localStorage.setItem('flux-daily-support-rows', JSON.stringify([]))
+        console.log('[DailyReportStore] All support rows deleted')
       }
+
       if (releasePayload.length > 0) {
         const res = results[resIdx++]
-        if (!res.error && res.data) {
-          stateUpdate.releaseRows = res.data as ReleaseTestingRecord[]
-          localStorage.setItem('flux-daily-release-rows', JSON.stringify(res.data))
+        if (res.error) {
+          console.error('[DailyReportStore] Release testing status insert failed:', res.error)
+          console.error('[DailyReportStore] Failed payload sample:', JSON.stringify(releasePayload[0], null, 2))
+          hasErrors = true
+        } else if (res.data) {
+          console.log('[DailyReportStore] Successfully inserted', res.data.length, 'release rows')
+
+          // Re-validate the returned data to add errors property back
+          const validatedRows = (res.data as ReleaseTestingRecord[]).map(row =>
+            validateReleaseRow(row, get().dropdownConfigs)
+          )
+
+          stateUpdate.releaseRows = validatedRows
+          localStorage.setItem('flux-daily-release-rows', JSON.stringify(validatedRows))
         }
+      } else {
+        // If releasePayload is empty (all rows deleted), clear state and localStorage
+        stateUpdate.releaseRows = []
+        localStorage.setItem('flux-daily-release-rows', JSON.stringify([]))
+        console.log('[DailyReportStore] All release rows deleted')
+      }
+
+      // Only mark as synced if there were no errors
+      stateUpdate.syncStatus = hasErrors ? 'error' : 'synced'
+
+      if (hasErrors) {
+        console.error('[DailyReportStore] Sync completed with errors. Check logs above for details.')
+      } else {
+        console.log('[DailyReportStore] Sync completed successfully')
       }
 
       set(stateUpdate)

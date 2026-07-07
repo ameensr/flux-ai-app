@@ -16,6 +16,8 @@ export interface SupportLogRecord {
   blocked_hours: number | ''
   retesting_status: string
   retesting_estimation_hrs: number | ''
+  issue_source: string
+  project_id?: string
 }
 
 export interface ReleaseTestingRecord {
@@ -29,9 +31,10 @@ export interface ReleaseTestingRecord {
   smoke_testing_estimation_hrs: number | ''
   overall_scope_of_testing: string
   overall_estimation_hrs: number | ''
+  project_id?: string
 }
 
-export type ConfigCategory = 'branch' | 'qa' | 'status' | 'retesting_status' | 'smoke_status'
+export type ConfigCategory = 'branch' | 'qa' | 'status' | 'retesting_status' | 'smoke_status' | 'issue_source'
 
 export interface DropdownConfig {
   id: string

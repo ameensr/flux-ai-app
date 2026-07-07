@@ -15,6 +15,7 @@ import { useIdleTimeout } from '@/hooks/useIdleTimeout'
 import { SessionTimeoutWarning } from '@/components/ui/SessionTimeoutWarning'
 import { logLoginEvent } from '@/services/loginActivity'
 import { useMaintenanceStore } from '@/store/useMaintenanceStore'
+import { useToast } from '@/hooks/use-toast'
 
 // ── Idle timeout context ──────────────────────────────────────────────────────
 type RegisterOperationFn = (key: string) => () => void
@@ -25,6 +26,8 @@ export function useRegisterActiveOperation(): RegisterOperationFn {
 
 // ── Lazy-loaded page modules ──────────────────────────────────────────────────
 const Dashboard = lazy(() => import('@/pages/Dashboard').then(m => ({ default: m.Dashboard })))
+const ProjectHub = lazy(() => import('@/modules/ProjectHub').then(m => ({ default: m.ProjectHub })))
+const ProjectDetail = lazy(() => import('@/modules/ProjectHub/ProjectDetail').then(m => ({ default: m.ProjectDetail })))
 const BugRefiner = lazy(() => import('@/modules/BugRefiner').then(m => ({ default: m.BugRefiner })))
 const TestCaseGenerator = lazy(() => import('@/modules/TestCaseGenerator').then(m => ({ default: m.TestCaseGenerator })))
 const WritingAssistant = lazy(() => import('@/modules/WritingAssistant').then(m => ({ default: m.WritingAssistant })))
@@ -134,6 +137,7 @@ function ReportPreviewWrapper() {
 
 // ── Auth initializer ──────────────────────────────────────────────────────────
 function AuthInitializer({ children }: { children: React.ReactNode }) {
+  const { toast } = useToast()
   const {
     setUser, setProfile, setPermissionMap, setPermissionsLoaded, initSession,
   } = useAppStore()
@@ -151,6 +155,13 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
             supabase.from('profiles').select('*').eq('id', user.id).single(),
             useMaintenanceStore.getState().fetchConfig(),
           ])
+
+          if (data && data.status === 'inactive') {
+            await supabase.auth.signOut()
+            initPromiseRef.current = null
+            toast({ variant: 'destructive', title: 'Account Disabled', description: 'Your account has been disabled. Please contact support.' })
+            return
+          }
 
           const role = data?.role ?? 'free'
           if (data) setProfile(data as Profile)
@@ -235,6 +246,8 @@ export default function App() {
           {/* Protected dashboard routes — uses layout with sidebar */}
           <Route element={<RequireAuth><DashboardWrapper /></RequireAuth>}>
             <Route path={ROUTES.dashboard} element={<Dashboard />} />
+            <Route path={ROUTES.projectHub} element={<ProjectHub />} />
+            <Route path={`${ROUTES.projectHub}/:projectId`} element={<ProjectDetail />} />
             <Route path={ROUTES.bugRefiner} element={<BugRefiner />} />
             <Route path={ROUTES.testGenerator} element={<TestCaseGenerator />} />
             <Route path={ROUTES.writingAssistant} element={<WritingAssistant />} />
