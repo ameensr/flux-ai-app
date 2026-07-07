@@ -134,7 +134,8 @@ export const SupportExceptionLog: React.FC = () => {
       comments: '',
       blocked_hours: '',
       retesting_status: '',
-      retesting_estimation_hrs: ''
+      retesting_estimation_hrs: '',
+      issue_source: ''
     }
     setSupportRows([...supportRows, newRow])
   }
@@ -254,6 +255,7 @@ export const SupportExceptionLog: React.FC = () => {
         blocked_hours: parts[13] ? parseFloat(parts[13]) || '' : '',
         retesting_status: parts[14] || '',
         retesting_estimation_hrs: parts[15] ? parseFloat(parts[15]) || '' : '',
+        issue_source: parts[16] || '',
       }
     })
 
@@ -416,7 +418,27 @@ export const SupportExceptionLog: React.FC = () => {
           }
 
           const imported = jsonData.slice(1).map(row => {
-            const record: any = { id: `temp-${Math.random().toString(36).substr(2, 9)}` }
+            const record: any = {
+              id: `temp-${Math.random().toString(36).substr(2, 9)}`,
+              // Initialize all required fields with empty defaults
+              support_id: '',
+              bug_id: '',
+              branch: '',
+              description: '',
+              received_date: '',
+              qa: '',
+              tc_count: '',
+              estimation_hrs: '',
+              actual_start_date: '',
+              planned_end_date: '',
+              actual_end_date: '',
+              status: '',
+              comments: '',
+              blocked_hours: '',
+              retesting_status: '',
+              retesting_estimation_hrs: '',
+              issue_source: ''
+            }
             const rowErrors: string[] = []
 
             headers.forEach((h, idx) => {
@@ -546,7 +568,27 @@ export const SupportExceptionLog: React.FC = () => {
             const rowData = (line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(','))
               .map(val => val.replace(/^"|"$/g, '').trim())
 
-            const record: any = { id: `temp-${Math.random().toString(36).substr(2, 9)}` }
+            const record: any = {
+              id: `temp-${Math.random().toString(36).substr(2, 9)}`,
+              // Initialize all required fields with empty defaults
+              support_id: '',
+              bug_id: '',
+              branch: '',
+              description: '',
+              received_date: '',
+              qa: '',
+              tc_count: '',
+              estimation_hrs: '',
+              actual_start_date: '',
+              planned_end_date: '',
+              actual_end_date: '',
+              status: '',
+              comments: '',
+              blocked_hours: '',
+              retesting_status: '',
+              retesting_estimation_hrs: '',
+              issue_source: ''
+            }
             const rowErrors: string[] = []
 
             headers.forEach((h, idx) => {
