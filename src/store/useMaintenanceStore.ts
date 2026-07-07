@@ -135,10 +135,13 @@ export const useMaintenanceStore = create<MaintenanceStore>((set, get) => ({
     const { config } = get()
     if (!get().isMaintenanceActive()) return false
 
-    // If role is in allowed list, never locked
+    // Allowed roles always bypass
     if (config.allowed_roles.includes(role)) return false
 
-    // If role is in locked list, it's locked
+    // full_lock: everyone NOT in allowed_roles is locked
+    if (config.maintenance_type === 'full_lock') return true
+
+    // custom_message: only explicitly listed roles are locked
     return config.locked_roles.includes(role)
   },
 

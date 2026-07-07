@@ -182,7 +182,7 @@ export const DefectChart: React.FC = () => {
 
 // ── Report History ────────────────────────────────────────────────────────────
 
-export const ReportHistory: React.FC<{ onReportLoaded?: () => void }> = ({ onReportLoaded }) => {
+export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => void }> = ({ onReportLoaded }) => {
   const { savedReports, deleteReport, setGeneratedReport, setForm, historySearch, setHistorySearch, projects, form, fetchReports } = useQAReportStore()
   const { can } = usePermissions()
   const canDelete = can('qa-report', 'can_delete')
@@ -216,9 +216,9 @@ export const ReportHistory: React.FC<{ onReportLoaded?: () => void }> = ({ onRep
     setGeneratedReport(r.markdown)
     setForm(r.form)
     toast({ title: 'Report Loaded', description: `${r.project} — ${r.week}` })
-    // Notify parent that a report was loaded from history
     if (onReportLoaded) {
-      onReportLoaded()
+      const snapshot = JSON.stringify((() => { const s = { ...r.form }; delete (s as any).showAIInsights; delete (s as any).showAISummary; delete (s as any).showHistoricalAnalytics; delete (s as any).showTimeline; return s })())
+      onReportLoaded(snapshot)
     }
   }
 

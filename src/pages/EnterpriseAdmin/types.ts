@@ -34,6 +34,15 @@ export interface EnterpriseRole {
   user_count?: number
 }
 
+export interface Team {
+  id: string
+  name: string
+  description: string | null
+  created_by: string | null
+  created_at: string
+  member_count?: number
+}
+
 export interface Department {
   id: string
   name: string
@@ -112,6 +121,7 @@ export const TEMPLATE_PRESETS: Record<string, Record<string, string[]>> = {
     'qa-report': ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_export', 'can_share', 'can_generate_ai'],
     'daily-report': ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_export', 'can_share', 'can_configure'],
     announcements: ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_share', 'can_configure'],
+    'team-management': ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_configure'],
   },
   manager: {
     dashboard: ['can_view', 'can_export', 'can_generate_ai'],
@@ -122,6 +132,7 @@ export const TEMPLATE_PRESETS: Record<string, Record<string, string[]>> = {
     'qa-report': ['can_view', 'can_create', 'can_edit', 'can_export', 'can_share', 'can_generate_ai'],
     'daily-report': ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_export', 'can_share', 'can_configure'],
     announcements: ['can_view', 'can_create', 'can_edit', 'can_share'],
+    'team-management': ['can_view', 'can_configure'],
   },
   developer: {
     dashboard: ['can_view', 'can_generate_ai'],

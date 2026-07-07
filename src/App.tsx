@@ -75,15 +75,26 @@ function RedirectIfAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// ── Maintenance guard for standalone routes (e.g. /report-preview) ─────────
+function MaintenanceGuard({ children }: { children: React.ReactNode }) {
+  const { role } = useAppStore()
+  const { isRoleLocked, loading: maintenanceLoading } = useMaintenanceStore()
+  if (maintenanceLoading) return <FullPageLoader />
+  if (isRoleLocked(role)) return <Navigate to={ROUTES.maintenance} replace />
+  return <>{children}</>
+}
+
 // ── Dashboard Layout wrapper (renders <Outlet /> for child routes) ─────────────
 function DashboardWrapper() {
   const { phase, secondsLeft, stayLoggedIn, logoutNow, registerOperation } = useIdleTimeout()
   const { role } = useAppStore()
   const { isRoleLocked, loading: maintenanceLoading } = useMaintenanceStore()
-  const location = useLocation()
+
+  // Wait for maintenance config to load before making any routing decision
+  if (maintenanceLoading) return <FullPageLoader />
 
   // Redirect locked roles to maintenance page
-  if (!maintenanceLoading && isRoleLocked(role)) {
+  if (isRoleLocked(role)) {
     return <Navigate to={ROUTES.maintenance} replace />
   }
 
@@ -136,11 +147,10 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 
       initPromiseRef.current = (async () => {
         try {
-          const { data } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single()
+          const [{ data }, _] = await Promise.all([
+            supabase.from('profiles').select('*').eq('id', user.id).single(),
+            useMaintenanceStore.getState().fetchConfig(),
+          ])
 
           const role = data?.role ?? 'free'
           if (data) setProfile(data as Profile)
@@ -170,8 +180,13 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
     }
     checkInitialSession()
 
-    // Load maintenance config on startup
-    useMaintenanceStore.getState().fetchConfig()
+    // Realtime: re-fetch maintenance config whenever admin changes it
+    const maintenanceChannel = supabase
+      .channel('maintenance_config_changes')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'maintenance_config' }, () => {
+        useMaintenanceStore.getState().fetchConfig()
+      })
+      .subscribe()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION') return
@@ -190,7 +205,10 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+      supabase.removeChannel(maintenanceChannel)
+    }
   }, [])
 
   if (!ready) return <FullPageLoader />
@@ -209,7 +227,7 @@ export default function App() {
           <Route path={ROUTES.signup} element={<RedirectIfAuth><AuthPage /></RedirectIfAuth>} />
 
           {/* Report Preview — standalone page, no sidebar */}
-          <Route path={ROUTES.reportPreview} element={<RequireAuth><ReportPreviewWrapper /></RequireAuth>} />
+          <Route path={ROUTES.reportPreview} element={<RequireAuth><MaintenanceGuard><ReportPreviewWrapper /></MaintenanceGuard></RequireAuth>} />
 
           {/* Maintenance page — standalone, no sidebar */}
           <Route path={ROUTES.maintenance} element={<RequireAuth><MaintenancePage /></RequireAuth>} />

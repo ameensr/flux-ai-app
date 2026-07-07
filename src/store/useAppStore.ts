@@ -7,6 +7,7 @@ export interface Profile {
   full_name: string | null
   phone: string | null
   role: Role
+  team_id: string | null
   created_at: string
 }
 
@@ -21,6 +22,7 @@ interface AppState {
   profile: Profile | null
   setProfile: (profile: Profile | null) => void
   role: Role
+  teamId: string | null
   permissionMap: RolePermissionMap
   setPermissionMap: (map: RolePermissionMap) => void
   permissionsLoaded: boolean
@@ -37,8 +39,9 @@ export const useAppStore = create<AppState>((set) => ({
   user: null,
   setUser: (user) => set({ user, isAuthenticated: !!user }),
   profile: null,
-  setProfile: (profile) => set({ profile, role: profile?.role ?? 'free' }),
+  setProfile: (profile) => set({ profile, role: profile?.role ?? 'free', teamId: profile?.team_id ?? null }),
   role: 'free',
+  teamId: null,
   permissionMap: {},
   setPermissionMap: (map) => set({ permissionMap: map }),
   permissionsLoaded: false,

@@ -44,6 +44,7 @@ export const ROUTES = {
   enterpriseTemplates: '/admin/enterprise/templates',
   enterpriseAudit: '/admin/enterprise/audit',
   enterpriseMaintenance: '/admin/enterprise/maintenance',
+  enterpriseTeams: '/admin/enterprise/teams',
 
   // Daily Update Report & Config
   dailyReport: '/daily-report',
@@ -75,6 +76,7 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.enterpriseRoles]: 'admin',
   [ROUTES.enterpriseTemplates]: 'admin',
   [ROUTES.enterpriseAudit]: 'admin',
+  [ROUTES.enterpriseTeams]: 'admin',
   [ROUTES.dailyReport]: 'daily-report',
   [ROUTES.dailyReportConfig]: 'daily-report',
 }

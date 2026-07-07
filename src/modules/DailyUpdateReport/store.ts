@@ -199,6 +199,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
   fetchReportRows: async () => {
     set({ loading: true })
     const user = useAppStore.getState().user
+    const role = useAppStore.getState().role
 
     // Load local storage drafts first as immediately responsive state
     const localSupport = localStorage.getItem('flux-daily-support-rows')
@@ -209,18 +210,27 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
 
     if (user) {
       try {
-        const [supportRes, releaseRes] = await Promise.all([
-          supabase
-            .from('daily_support_logs')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('sort_order', { ascending: true }),
-          supabase
-            .from('daily_release_testing_status')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('sort_order', { ascending: true })
-        ])
+        // Bug fix: manager/qa_lead/admin see all team rows (RLS handles scoping).
+        // qa_engineer and others only see their own rows.
+        const teamRoles = ['manager', 'qa_lead', 'admin', 'super_admin']
+        const isTeamRole = teamRoles.includes(role)
+
+        const supportQuery = supabase
+          .from('daily_support_logs')
+          .select('*')
+          .order('sort_order', { ascending: true })
+        const releaseQuery = supabase
+          .from('daily_release_testing_status')
+          .select('*')
+          .order('sort_order', { ascending: true })
+
+        // Only filter by user_id for non-team roles
+        if (!isTeamRole) {
+          supportQuery.eq('user_id', user.id)
+          releaseQuery.eq('user_id', user.id)
+        }
+
+        const [supportRes, releaseRes] = await Promise.all([supportQuery, releaseQuery])
 
         if (!supportRes.error && supportRes.data && supportRes.data.length > 0) {
           set({ supportRows: supportRes.data as SupportLogRecord[] })

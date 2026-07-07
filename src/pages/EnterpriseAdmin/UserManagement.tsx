@@ -1,7 +1,7 @@
 // src/pages/EnterpriseAdmin/UserManagement.tsx
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '@/lib/supabase'
+import { supabase, SUPABASE_URL } from '@/lib/supabase'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
@@ -267,15 +267,35 @@ export function UserManagement() {
   const fetchAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [{ data: usersData }, { data: rolesData }, { data: deptsData }] = await Promise.all([
-        supabase.from('profiles').select(`
+      // Try with teams join first; fall back without it if migration 031 hasn't run yet
+      let usersData: any[] | null = null
+      let usersError: any = null
+
+      const withTeams = await supabase.from('profiles').select(`
+        id, email, full_name, employee_id, avatar_url, role, status,
+        last_login_at, created_at, department_id, plan_id, team_id,
+        departments(name), plans(plan_name), teams(name)
+      `).order('created_at', { ascending: false })
+
+      if (withTeams.error) {
+        // teams table may not exist yet — retry without it
+        const withoutTeams = await supabase.from('profiles').select(`
           id, email, full_name, employee_id, avatar_url, role, status,
           last_login_at, created_at, department_id, plan_id,
           departments(name), plans(plan_name)
-        `).order('created_at', { ascending: false }),
+        `).order('created_at', { ascending: false })
+        usersData = withoutTeams.data
+        usersError = withoutTeams.error
+      } else {
+        usersData = withTeams.data
+      }
+
+      const [{ data: rolesData }, { data: deptsData }] = await Promise.all([
         supabase.from('roles').select('*').order('priority'),
         supabase.from('departments').select('*').order('name'),
       ])
+
+      if (usersError) throw usersError
 
       // Enrich last_login_at with real data from login_events
       const userIds = (usersData ?? []).map((u: any) => u.id)
@@ -299,6 +319,7 @@ export function UserManagement() {
         last_login_at: lastLogins[u.id] || u.last_login_at || null,
         department_name: u.departments?.name ?? null,
         plan_name: u.plans?.plan_name ?? null,
+        team_name: u.teams?.name ?? null,
       })))
       setRoles(rolesData ?? [])
       setDepartments(deptsData ?? [])
@@ -329,10 +350,26 @@ export function UserManagement() {
       }
     } else if (action === 'delete') {
       if (!confirm(`Delete ${user.full_name || user.email}? This cannot be undone.`)) return
-      const { error } = await supabase.from('profiles').delete().eq('id', user.id)
-      if (error) { toast({ variant: 'destructive', title: 'Failed', description: error.message }); return }
-      setUsers(prev => prev.filter(u => u.id !== user.id))
-      toast({ title: 'User Deleted' })
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const resp = await fetch(
+          `${SUPABASE_URL}/functions/v1/admin-permissions?action=delete_user`,
+          {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session?.access_token}`,
+            },
+            body: JSON.stringify({ user_id: user.id }),
+          }
+        )
+        const result = await resp.json()
+        if (!resp.ok) throw new Error(result.error ?? 'Delete failed')
+        setUsers(prev => prev.filter(u => u.id !== user.id))
+        toast({ title: 'User Deleted', description: `${user.full_name || user.email} has been permanently removed.` })
+      } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Failed to delete user', description: e.message })
+      }
     } else if (action === 'reset_password') {
       const { error } = await supabase.auth.resetPasswordForEmail(user.email)
       if (error) { toast({ variant: 'destructive', title: 'Failed', description: error.message }); return }
@@ -462,6 +499,7 @@ export function UserManagement() {
                       </th>
                     ))}
                     <th className="text-left py-3 pr-4 text-text-muted font-semibold text-[10px] uppercase tracking-widest">Department</th>
+                    <th className="text-left py-3 pr-4 text-text-muted font-semibold text-[10px] uppercase tracking-widest">Team</th>
                     <th className="text-left py-3 pr-4 text-text-muted font-semibold text-[10px] uppercase tracking-widest">Plan</th>
                     <th className="text-left py-3 pr-4 text-text-muted font-semibold text-[10px] uppercase tracking-widest">
                       <button onClick={() => handleSort('last_login_at')} className="flex items-center gap-1 hover:text-white transition-colors">
@@ -473,7 +511,7 @@ export function UserManagement() {
                 </thead>
                 <tbody className="divide-y divide-white/[0.03]">
                   {paginated.length === 0 ? (
-                    <tr><td colSpan={7} className="text-center py-16 text-text-muted">No users found</td></tr>
+                    <tr><td colSpan={8} className="text-center py-16 text-text-muted">No users found</td></tr>
                   ) : paginated.map((user, i) => (
                     <motion.tr
                       key={user.id}
@@ -507,6 +545,13 @@ export function UserManagement() {
                       </td>
                       <td className="py-4 pr-4"><StatusBadge status={user.status} /></td>
                       <td className="py-4 pr-4 text-text-secondary text-xs">{user.department_name || '—'}</td>
+                      <td className="py-4 pr-4">
+                        {(user as any).team_name ? (
+                          <span className="px-2.5 py-1 rounded-lg bg-accent-gold/10 border border-accent-gold/20 text-accent-gold text-xs font-bold">
+                            {(user as any).team_name}
+                          </span>
+                        ) : <span className="text-text-muted text-xs">—</span>}
+                      </td>
                       <td className="py-4 pr-4">
                         {user.plan_name ? (
                           <span className={cn('px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-widest', PLAN_CONFIG[user.plan_name.toLowerCase()]?.color ?? 'text-text-muted bg-white/5 border-white/10')}>

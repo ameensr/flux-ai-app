@@ -93,6 +93,16 @@ Deno.serve(async (req) => {
       return json({ success: true })
     }
 
+    // DELETE a user from auth.users + profiles (hard delete)
+    if (req.method === 'DELETE' && action === 'delete_user') {
+      const { user_id } = await req.json()
+      if (!user_id) return json({ error: 'Missing user_id' }, 400)
+      // auth.admin.deleteUser cascades to profiles via FK on delete cascade
+      const { error } = await supabase.auth.admin.deleteUser(user_id)
+      if (error) throw error
+      return json({ success: true })
+    }
+
     // PUT bulk update
     if (req.method === 'PUT' && action === 'bulk') {
       const { updates } = await req.json() as {

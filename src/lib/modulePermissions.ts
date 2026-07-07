@@ -162,12 +162,25 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
     moduleName: 'User Management',
     supportedPermissions: [
       'can_view',
-      'can_create', // Create new users
-      'can_edit', // Edit user profiles
-      'can_delete', // Delete/deactivate users
-      'can_export', // Export user list (if implemented)
+      'can_create',
+      'can_edit',
+      'can_delete',
+      'can_export',
     ],
     description: 'Manage user accounts and profiles'
+  },
+
+  'team-management': {
+    moduleKey: 'team-management',
+    moduleName: 'Team Management',
+    supportedPermissions: [
+      'can_view',
+      'can_create',
+      'can_edit',
+      'can_delete',
+      'can_configure', // Assign users to teams
+    ],
+    description: 'Manage teams and user team assignments'
   },
 
   'roles-permissions': {

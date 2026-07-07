@@ -1,7 +1,7 @@
 // src/lib/rbac.ts
 import { supabase } from './supabase'
 
-export type Role = 'free' | 'pro' | 'admin' | 'super_admin'
+export type Role = 'free' | 'pro' | 'admin' | 'super_admin' | 'manager' | 'qa_lead' | 'qa_engineer' | 'developer' | 'standard' | 'guest'
 
 export interface RolePermissionMap {
   [moduleKey: string]: { [permissionKey: string]: boolean }

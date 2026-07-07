@@ -441,31 +441,16 @@ export const QAWeeklyReport: React.FC = () => {
 
   // Check if current form matches a saved report in history
   React.useEffect(() => {
+    if (!lastSavedSnapshot) return
     const currentSnapshot = createFormSnapshot(form)
-
-    // Find if this exact report exists in history
-    const matchingReport = savedReports.find(report => {
-      const savedSnapshot = createFormSnapshot(report.form)
-      return savedSnapshot === currentSnapshot && report.status === 'Final'
-    })
-
-    if (matchingReport) {
-      // Report already exists in history - allow direct launch
+    if (currentSnapshot === lastSavedSnapshot) {
       setIsSaved(true)
-      setLastSavedSnapshot(currentSnapshot)
-
-      // If we haven't explicitly marked it as changed, it's in sync
-      if (!hasChangedSinceLoad && loadedFromHistory) {
-        setHasChangedSinceLoad(false)
-      }
-    } else if (lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot) {
-      // Form has changed since last save - require new save
+      if (loadedFromHistory) setHasChangedSinceLoad(false)
+    } else {
       setIsSaved(false)
-      if (loadedFromHistory) {
-        setHasChangedSinceLoad(true)
-      }
+      if (loadedFromHistory) setHasChangedSinceLoad(true)
     }
-  }, [form, savedReports, lastSavedSnapshot, hasChangedSinceLoad, loadedFromHistory])
+  }, [form, lastSavedSnapshot, loadedFromHistory])
 
   const handlePreview = () => {
     const errs = validate(form)
@@ -499,12 +484,11 @@ export const QAWeeklyReport: React.FC = () => {
     }
   }
 
-  const handleReportLoadedFromHistory = () => {
-    const currentSnapshot = createFormSnapshot(form)
+  const handleReportLoadedFromHistory = (snapshot: string) => {
     setLoadedFromHistory(true)
     setHasChangedSinceLoad(false)
-    setLastSavedSnapshot(currentSnapshot)
-    // The useEffect will set isSaved to true if the form matches history
+    setLastSavedSnapshot(snapshot)
+    setIsSaved(true)
   }
 
   const handleGenerate = () => {

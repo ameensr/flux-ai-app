@@ -55,9 +55,10 @@ const mapDailySupportToQA = (rows: SupportLogRecord[]): SupportTicket[] => rows.
 
 export const SupportLog: React.FC = () => {
   const { form, setForm } = useQAReportStore()
-  const { supportRows: dailySupportRows } = useDailyReportStore()
+  const { supportRows: dailySupportRows, fetchReportRows } = useDailyReportStore()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [importing, setImporting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const tickets = form.supportTickets
@@ -88,15 +89,31 @@ export const SupportLog: React.FC = () => {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'support-log.csv'; a.click()
   }
 
-  const importFromDailyReport = () => {
-    if (!dailySupportRows.length) {
-      toast({ title: 'No daily report data', description: 'Support & Exception Log in Daily Update Report is empty.' })
-      return
+  const importFromDailyReport = async () => {
+    setImporting(true)
+    try {
+      let rows = dailySupportRows
+      // Bug fix 1: store may be empty if user never visited /daily-report — fetch from DB
+      if (!rows.length) {
+        await fetchReportRows()
+        rows = useDailyReportStore.getState().supportRows
+      }
+      if (!rows.length) {
+        toast({ title: 'No daily report data', description: 'Support & Exception Log in Daily Update Report is empty.' })
+        return
+      }
+      // Bug fix 2: deduplicate by taskId to prevent double-import
+      const existingIds = new Set(tickets.map(t => t.taskId).filter(Boolean))
+      const imported = mapDailySupportToQA(rows).filter(r => !existingIds.has(r.taskId))
+      if (!imported.length) {
+        toast({ title: 'Already imported', description: 'All rows from Daily Report are already present.' })
+        return
+      }
+      setForm({ supportTickets: [...tickets, ...imported] })
+      toast({ title: 'Imported from Daily Report', description: `${imported.length} row${imported.length === 1 ? '' : 's'} added to Support & Exception Log.` })
+    } finally {
+      setImporting(false)
     }
-
-    const imported = mapDailySupportToQA(dailySupportRows)
-    setForm({ supportTickets: [...tickets, ...imported] })
-    toast({ title: 'Imported from Daily Report', description: `${imported.length} row${imported.length === 1 ? '' : 's'} added to Support & Exception Log.` })
   }
 
   const downloadTemplate = () => {
@@ -142,8 +159,8 @@ export const SupportLog: React.FC = () => {
           <button onClick={duplicate} disabled={selected.size === 0} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all disabled:opacity-30">
             <Copy className="w-3 h-3" /> Dupe
           </button>
-          <button onClick={importFromDailyReport} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all">
-            <Upload className="w-3 h-3" /> Import
+          <button onClick={importFromDailyReport} disabled={importing} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all disabled:opacity-50">
+            <Upload className={`w-3 h-3 ${importing ? 'animate-spin' : ''}`} /> {importing ? 'Loading…' : 'Import'}
           </button>
           <button onClick={downloadTemplate} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all">
             <Download className="w-3 h-3" /> Template
