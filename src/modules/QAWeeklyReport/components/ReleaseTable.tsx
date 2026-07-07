@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
-import type { ReleaseItem } from '../types'
+import type { ReleaseItem, ReleaseStatus } from '../types'
 import { useDailyReportStore } from '@/modules/DailyUpdateReport/store'
 import type { ReleaseTestingRecord } from '@/modules/DailyUpdateReport/types'
 import { toast } from '@/hooks/use-toast'
@@ -32,7 +32,7 @@ const mapDailyReleaseToQA = (rows: ReleaseTestingRecord[]): ReleaseItem[] => row
   status: (() => {
     // Preserve exact status from Daily Report if it matches QA Report options
     const dailyStatus = row.smoke_testing_status || ''
-    const qaStatusOptions = ['Not Started', 'In Progress', 'Pass', 'Fail', 'Blocked']
+    const qaStatusOptions: ReleaseStatus[] = ['Not Started', 'In Progress', 'Pass', 'Fail', 'Blocked']
 
     // Check if the daily status matches any QA status (case-insensitive)
     const matchedStatus = qaStatusOptions.find(

@@ -1,11 +1,23 @@
+export type SupportStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed'
+
+export const isSupportStatus = (status: string): status is SupportStatus => {
+  return ['Open', 'In Progress', 'Resolved', 'Closed'].includes(status)
+}
+
 export interface SupportTicket {
   id: string
   taskId: string
   description: string
   assignedQA: string
-  status: 'Open' | 'In Progress' | 'Resolved' | 'Closed'
+  status: SupportStatus
   priority: 'Critical' | 'High' | 'Medium' | 'Low'
   remarks: string
+}
+
+export type ReleaseStatus = 'Not Started' | 'In Progress' | 'Pass' | 'Fail' | 'Blocked'
+
+export const isReleaseStatus = (status: string): status is ReleaseStatus => {
+  return ['Not Started', 'In Progress', 'Pass', 'Fail', 'Blocked'].includes(status)
 }
 
 export interface ReleaseItem {
@@ -13,7 +25,7 @@ export interface ReleaseItem {
   taskId: string
   featureName: string
   assignee: string
-  status: 'Not Started' | 'In Progress' | 'Pass' | 'Fail' | 'Blocked'
+  status: ReleaseStatus
   priority: 'Critical' | 'High' | 'Medium' | 'Low'
   remarks: string
 }

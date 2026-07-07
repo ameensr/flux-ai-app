@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
-import type { SupportTicket } from '../types'
+import type { SupportTicket, SupportStatus } from '../types'
 import { useDailyReportStore } from '@/modules/DailyUpdateReport/store'
 import type { SupportLogRecord } from '@/modules/DailyUpdateReport/types'
 import { toast } from '@/hooks/use-toast'
@@ -34,7 +34,7 @@ const mapDailySupportToQA = (rows: SupportLogRecord[]): SupportTicket[] => rows.
   status: (() => {
     // Preserve exact status from Daily Report if it matches QA Report options
     const dailyStatus = row.status || ''
-    const qaStatusOptions = ['Open', 'In Progress', 'Resolved', 'Closed']
+    const qaStatusOptions: SupportStatus[] = ['Open', 'In Progress', 'Resolved', 'Closed']
 
     // Check if the daily status matches any QA status (case-insensitive)
     const matchedStatus = qaStatusOptions.find(
