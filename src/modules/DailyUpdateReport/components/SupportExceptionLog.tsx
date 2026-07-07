@@ -465,11 +465,30 @@ export const SupportExceptionLog: React.FC = () => {
                   if (val === '') {
                     record[colId] = ''
                   } else {
-                    const dateObj = new Date(val)
+                    // Check if value is an Excel serial date number (numeric value)
+                    const numVal = parseFloat(val)
+                    let dateObj: Date
+
+                    if (!isNaN(numVal) && numVal > 100 && numVal < 100000) {
+                      // Excel serial date: convert to JS Date
+                      // Excel dates are days since 1900-01-01 (with 1900 leap year bug)
+                      const excelEpoch = new Date(1899, 11, 30) // Excel epoch adjusted for leap year bug
+                      dateObj = new Date(excelEpoch.getTime() + numVal * 86400000)
+                    } else {
+                      // Try parsing as string date
+                      dateObj = new Date(val)
+                    }
+
                     if (isNaN(dateObj.getTime())) {
                       rowErrors.push(`${h} must be a valid date YYYY-MM-DD (got: '${val}')`)
+                      record[colId] = ''
+                    } else {
+                      // Format as YYYY-MM-DD
+                      const year = dateObj.getFullYear()
+                      const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+                      const day = String(dateObj.getDate()).padStart(2, '0')
+                      record[colId] = `${year}-${month}-${day}`
                     }
-                    record[colId] = val
                   }
                 } else {
                   record[colId] = val
@@ -615,11 +634,29 @@ export const SupportExceptionLog: React.FC = () => {
                   if (val === '') {
                     record[colId] = ''
                   } else {
-                    const dateObj = new Date(val)
+                    // Check if value is an Excel serial date number (numeric value)
+                    const numVal = parseFloat(val)
+                    let dateObj: Date
+
+                    if (!isNaN(numVal) && numVal > 100 && numVal < 100000) {
+                      // Excel serial date: convert to JS Date
+                      const excelEpoch = new Date(1899, 11, 30)
+                      dateObj = new Date(excelEpoch.getTime() + numVal * 86400000)
+                    } else {
+                      // Try parsing as string date
+                      dateObj = new Date(val)
+                    }
+
                     if (isNaN(dateObj.getTime())) {
                       rowErrors.push(`${h} must be a valid date YYYY-MM-DD (got: '${val}')`)
+                      record[colId] = ''
+                    } else {
+                      // Format as YYYY-MM-DD
+                      const year = dateObj.getFullYear()
+                      const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+                      const day = String(dateObj.getDate()).padStart(2, '0')
+                      record[colId] = `${year}-${month}-${day}`
                     }
-                    record[colId] = val
                   }
                 } else {
                   record[colId] = val
@@ -816,25 +853,27 @@ export const SupportExceptionLog: React.FC = () => {
 
       // Dynamic Dropdowns Configuration reference list
       const configAOA = [
-        ['Branch Options', 'QA Options', 'Status Options', 'Retesting Status Options'],
+        ['Branch Options', 'QA Options', 'Status Options', 'Retesting Status Options', 'Issue Source Options'],
       ]
       const branches = getDropdownOptions('branch')
       const qas = getDropdownOptions('qa')
       const statuses = getDropdownOptions('status')
       const retestingStatuses = getDropdownOptions('retesting_status')
+      const issueSources = getDropdownOptions('issue_source')
 
-      const maxLen = Math.max(branches.length, qas.length, statuses.length, retestingStatuses.length)
+      const maxLen = Math.max(branches.length, qas.length, statuses.length, retestingStatuses.length, issueSources.length)
       for (let i = 0; i < maxLen; i++) {
         configAOA.push([
           branches[i] || '',
           qas[i] || '',
           statuses[i] || '',
-          retestingStatuses[i] || ''
+          retestingStatuses[i] || '',
+          issueSources[i] || ''
         ])
       }
 
       const configWS = XLSX.utils.aoa_to_sheet(configAOA)
-      configWS['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }]
+      configWS['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 20 }]
 
       if (format === 'xlsx') {
         for (const key in configWS) {

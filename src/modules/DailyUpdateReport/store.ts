@@ -466,10 +466,16 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
           item.project_id = selectedProjectId
         }
 
-        // Clean temporary local IDs
-        if (r.id.startsWith('temp-') || r.id.startsWith('local-')) {
-          delete item.id
-        }
+        // ALWAYS delete id for INSERT - let database generate new UUIDs
+        // This prevents constraint violations from reusing old UUIDs
+        delete item.id
+
+        // Remove timestamp fields - let database generate these
+        delete item.created_at
+        delete item.updated_at
+
+        // Remove obsolete team_id field
+        delete item.team_id
 
         // Remove client-side validation errors property (not a DB column!)
         delete item.errors
@@ -504,9 +510,15 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
           item.project_id = selectedProjectId
         }
 
-        if (r.id.startsWith('temp-') || r.id.startsWith('local-')) {
-          delete item.id
-        }
+        // ALWAYS delete id for INSERT - let database generate new UUIDs
+        delete item.id
+
+        // Remove timestamp fields
+        delete item.created_at
+        delete item.updated_at
+
+        // Remove obsolete team_id field
+        delete item.team_id
 
         // Remove client-side validation errors property (not a DB column!)
         delete item.errors
