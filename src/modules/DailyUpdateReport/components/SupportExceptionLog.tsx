@@ -25,12 +25,12 @@ const COLUMNS = [
   { id: 'actual_start_date', label: 'Actual Start Date', type: 'date', defaultWidth: 140 },
   { id: 'planned_end_date', label: 'Planned End Date', type: 'date', defaultWidth: 140 },
   { id: 'actual_end_date', label: 'Actual End Date', type: 'date', defaultWidth: 140 },
-  { id: 'status', label: 'Status', type: 'select', category: 'status', defaultWidth: 120 },
+  { id: 'testing_status', label: 'Testing Status', type: 'select', category: 'testing_status', defaultWidth: 120 },
+  { id: 'issue_source', label: 'Issue Source', type: 'select', category: 'issue_source', defaultWidth: 150 },
   { id: 'comments', label: 'Comments', type: 'textarea', defaultWidth: 200 },
   { id: 'blocked_hours', label: 'Blocked Hours', type: 'number', defaultWidth: 120 },
   { id: 'retesting_status', label: 'Retesting Status', type: 'select', category: 'retesting_status', defaultWidth: 140 },
   { id: 'retesting_estimation_hrs', label: 'Retesting Est (Hrs)', type: 'number', defaultWidth: 140 },
-  { id: 'issue_source', label: 'Issue Source', type: 'select', category: 'issue_source', defaultWidth: 150 },
 ]
 
 export const SupportExceptionLog: React.FC = () => {
@@ -39,15 +39,16 @@ export const SupportExceptionLog: React.FC = () => {
     setSupportRows,
     dropdownConfigs,
     syncStatus,
-    overdueOnlyFilter
+    overdueOnlyFilter,
+    isProjectViewer
   } = useDailyReportStore()
 
   const todayStr = new Date().toISOString().split('T')[0]
 
   const { can } = usePermissions()
-  const canCreate = can('daily-report', 'can_create')
-  const canEdit = can('daily-report', 'can_edit')
-  const canDelete = can('daily-report', 'can_delete')
+  const canCreate = can('daily-report', 'can_create') && !isProjectViewer
+  const canEdit = can('daily-report', 'can_edit') && !isProjectViewer
+  const canDelete = can('daily-report', 'can_delete') && !isProjectViewer
   const canExport = can('daily-report', 'can_export')
 
   const getRowHealth = (row: SupportLogRecord) => {
@@ -130,12 +131,12 @@ export const SupportExceptionLog: React.FC = () => {
       actual_start_date: '',
       planned_end_date: '',
       actual_end_date: '',
-      status: '',
+      testing_status: '',
+      issue_source: '',
       comments: '',
       blocked_hours: '',
       retesting_status: '',
-      retesting_estimation_hrs: '',
-      issue_source: ''
+      retesting_estimation_hrs: ''
     }
     setSupportRows([...supportRows, newRow])
   }
@@ -157,8 +158,19 @@ export const SupportExceptionLog: React.FC = () => {
   const deleteSelected = () => {
     if (!canDelete) return
     if (selectedIds.size === 0) return
+
+    // Confirmation dialog - Team members can delete any row in their project
+    const confirmMessage = selectedIds.size === 1
+      ? 'Are you sure you want to delete this row? This action cannot be undone.'
+      : `Are you sure you want to delete ${selectedIds.size} rows? This action cannot be undone.`
+
+    if (!confirm(confirmMessage)) return
+
+    // Filter out selected rows (permission already checked via canDelete)
+    const remainingRows = supportRows.filter(r => !selectedIds.has(r.id))
+
     // Force immediate sync to prevent rows from reappearing on refresh
-    setSupportRows(supportRows.filter(r => !selectedIds.has(r.id)), true)
+    setSupportRows(remainingRows, true)
     setSelectedIds(new Set())
   }
 
@@ -250,12 +262,12 @@ export const SupportExceptionLog: React.FC = () => {
         actual_start_date: parts[8] || '',
         planned_end_date: parts[9] || '',
         actual_end_date: parts[10] || '',
-        status: parts[11] || '',
-        comments: parts[12] || '',
-        blocked_hours: parts[13] ? parseFloat(parts[13]) || '' : '',
-        retesting_status: parts[14] || '',
-        retesting_estimation_hrs: parts[15] ? parseFloat(parts[15]) || '' : '',
-        issue_source: parts[16] || '',
+        testing_status: parts[11] || '',
+        issue_source: parts[12] || '',
+        comments: parts[13] || '',
+        blocked_hours: parts[14] ? parseFloat(parts[14]) || '' : '',
+        retesting_status: parts[15] || '',
+        retesting_estimation_hrs: parts[16] ? parseFloat(parts[16]) || '' : '',
       }
     })
 
@@ -432,12 +444,12 @@ export const SupportExceptionLog: React.FC = () => {
               actual_start_date: '',
               planned_end_date: '',
               actual_end_date: '',
-              status: '',
+              testing_status: '',
+              issue_source: '',
               comments: '',
               blocked_hours: '',
               retesting_status: '',
-              retesting_estimation_hrs: '',
-              issue_source: ''
+              retesting_estimation_hrs: ''
             }
             const rowErrors: string[] = []
 
@@ -516,10 +528,10 @@ export const SupportExceptionLog: React.FC = () => {
                 rowErrors.push(`QA '${record.qa}' is not configured.`)
               }
             }
-            if (record.status) {
-              const statuses = getDropdownOptions('status').map(s => s.toLowerCase())
-              if (!statuses.includes(record.status.toLowerCase())) {
-                rowErrors.push(`Status '${record.status}' is not configured.`)
+            if (record.testing_status) {
+              const testingStatuses = getDropdownOptions('testing_status').map(s => s.toLowerCase())
+              if (!testingStatuses.includes(record.testing_status.toLowerCase())) {
+                rowErrors.push(`Testing Status '${record.testing_status}' is not configured.`)
               }
             }
             if (record.retesting_status) {
@@ -601,12 +613,12 @@ export const SupportExceptionLog: React.FC = () => {
               actual_start_date: '',
               planned_end_date: '',
               actual_end_date: '',
-              status: '',
+              testing_status: '',
+              issue_source: '',
               comments: '',
               blocked_hours: '',
               retesting_status: '',
-              retesting_estimation_hrs: '',
-              issue_source: ''
+              retesting_estimation_hrs: ''
             }
             const rowErrors: string[] = []
 
@@ -684,10 +696,10 @@ export const SupportExceptionLog: React.FC = () => {
                 rowErrors.push(`QA '${record.qa}' is not configured.`)
               }
             }
-            if (record.status) {
-              const statuses = getDropdownOptions('status').map(s => s.toLowerCase())
-              if (!statuses.includes(record.status.toLowerCase())) {
-                rowErrors.push(`Status '${record.status}' is not configured.`)
+            if (record.testing_status) {
+              const testingStatuses = getDropdownOptions('testing_status').map(s => s.toLowerCase())
+              if (!testingStatuses.includes(record.testing_status.toLowerCase())) {
+                rowErrors.push(`Testing Status '${record.testing_status}' is not configured.`)
               }
             }
             if (record.retesting_status) {
@@ -755,7 +767,8 @@ export const SupportExceptionLog: React.FC = () => {
         case 'estimation_hrs': return 4.5
         case 'actual_start_date': return '2026-07-03'
         case 'planned_end_date': return '2026-07-04'
-        case 'status': return getDropdownOptions('status')[0] || 'In Progress'
+        case 'testing_status': return getDropdownOptions('testing_status')[0] || 'In Progress'
+        case 'issue_source': return getDropdownOptions('issue_source')[0] || 'Internal Testing'
         case 'comments': return 'Retrying on staging server.'
         case 'blocked_hours': return 0
         case 'retesting_status': return getDropdownOptions('retesting_status')[0] || 'Pending'
@@ -853,20 +866,20 @@ export const SupportExceptionLog: React.FC = () => {
 
       // Dynamic Dropdowns Configuration reference list
       const configAOA = [
-        ['Branch Options', 'QA Options', 'Status Options', 'Retesting Status Options', 'Issue Source Options'],
+        ['Branch Options', 'QA Options', 'Testing Status Options', 'Retesting Status Options', 'Issue Source Options'],
       ]
       const branches = getDropdownOptions('branch')
       const qas = getDropdownOptions('qa')
-      const statuses = getDropdownOptions('status')
+      const testingStatuses = getDropdownOptions('testing_status')
       const retestingStatuses = getDropdownOptions('retesting_status')
       const issueSources = getDropdownOptions('issue_source')
 
-      const maxLen = Math.max(branches.length, qas.length, statuses.length, retestingStatuses.length, issueSources.length)
+      const maxLen = Math.max(branches.length, qas.length, testingStatuses.length, retestingStatuses.length, issueSources.length)
       for (let i = 0; i < maxLen; i++) {
         configAOA.push([
           branches[i] || '',
           qas[i] || '',
-          statuses[i] || '',
+          testingStatuses[i] || '',
           retestingStatuses[i] || '',
           issueSources[i] || ''
         ])
@@ -913,7 +926,7 @@ export const SupportExceptionLog: React.FC = () => {
         (row.description || '').toLowerCase().includes(search.toLowerCase()) ||
         (row.comments || '').toLowerCase().includes(search.toLowerCase())
 
-      const matchStatus = statusFilter === '' || row.status === statusFilter
+      const matchStatus = statusFilter === '' || row.testing_status === statusFilter
       return matchSearch && matchStatus
     })
     .sort((a, b) => {
@@ -959,7 +972,7 @@ export const SupportExceptionLog: React.FC = () => {
             {search && <X className="w-3 h-3 cursor-pointer text-text-muted hover:text-white" onClick={() => setSearch('')} />}
           </div>
 
-          {/* Status Filter */}
+          {/* Testing Status Filter */}
           <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10 text-xs text-text-secondary select-none">
             <Filter className="w-3.5 h-3.5 text-text-muted" />
             <select
@@ -967,8 +980,8 @@ export const SupportExceptionLog: React.FC = () => {
               onChange={e => setStatusFilter(e.target.value)}
               className="bg-transparent focus:outline-none text-xs text-white cursor-pointer font-semibold"
             >
-              <option value="" className="bg-[#121214]">All Statuses</option>
-              {getDropdownOptions('status').map(opt => (
+              <option value="" className="bg-[#121214]">All Testing Statuses</option>
+              {getDropdownOptions('testing_status').map(opt => (
                 <option key={opt} value={opt} className="bg-[#121214]">{opt}</option>
               ))}
             </select>
@@ -1173,22 +1186,24 @@ export const SupportExceptionLog: React.FC = () => {
 
       {/* Spreadsheet grid container */}
       <div
-        className="w-full overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] relative focus:outline-none shadow-sm"
+        className="w-full overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] relative focus:outline-none shadow-lg"
         onPaste={handleClipboardPaste}
         tabIndex={0}
       >
-        <table className="border-collapse text-left text-xs min-w-full table-fixed" style={{ width: Object.values(columnWidths).reduce((a, b) => a + b, 0) + 120 }}>
+        <table className="border-collapse text-left text-xs min-w-full" style={{ width: 'max-content', minWidth: '100%' }}>
           <thead>
-            <tr className="border-b border-[var(--border)] bg-[var(--surface-secondary)] text-[10px] font-black uppercase tracking-wider select-none text-text-muted">
+            <tr className="border-b-2 border-[var(--border)] bg-gradient-to-r from-[#1a1a1c] to-[#252527] text-[10px] font-black uppercase tracking-wider select-none text-text-muted sticky top-0 z-20 shadow-md">
               {/* First cell: Drag and checkbox headers */}
-              <th className="py-3 px-3.5 w-20 sticky left-0 z-30 bg-[inherit] border-r border-[var(--divider)] flex items-center justify-between gap-1 shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
-                <input
-                  type="checkbox"
-                  checked={filteredRows.length > 0 && selectedIds.size === filteredRows.length}
-                  onChange={toggleSelectAll}
-                  className="rounded border-white/10 text-accent-gold focus:ring-0 focus:ring-offset-0 bg-transparent cursor-pointer"
-                />
-                <span className="text-[8px] uppercase tracking-wide text-text-muted">No.</span>
+              <th className="py-3.5 px-4 w-[100px] min-w-[100px] sticky left-0 z-30 bg-gradient-to-r from-[#1a1a1c] to-[#252527] border-r-2 border-[var(--divider)] shadow-[4px_0_8px_rgba(0,0,0,0.15)]">
+                <div className="flex items-center justify-between gap-2">
+                  <input
+                    type="checkbox"
+                    checked={filteredRows.length > 0 && selectedIds.size === filteredRows.length}
+                    onChange={toggleSelectAll}
+                    className="rounded border-white/20 text-accent-gold focus:ring-2 focus:ring-accent-gold/50 focus:ring-offset-0 bg-white/5 cursor-pointer scale-110"
+                  />
+                  <span className="text-[9px] uppercase tracking-wider text-text-muted font-extrabold">No.</span>
+                </div>
               </th>
 
               {/* Dynamic headers */}
@@ -1200,19 +1215,26 @@ export const SupportExceptionLog: React.FC = () => {
                 return (
                   <th
                     key={col.id}
-                    className="p-0 border-r border-[var(--divider)] relative group"
-                    style={{ width }}
+                    className="p-0 border-r border-[var(--divider)] relative group hover:bg-white/[0.02] transition-colors"
+                    style={{ minWidth: width, width }}
                   >
                     <div
-                      className="py-3 px-3.5 h-full w-full flex items-center justify-between cursor-pointer hover:bg-[var(--hover)] transition-colors"
+                      className="py-3.5 px-4 h-full w-full flex items-center justify-between cursor-pointer"
                       onClick={() => handleHeaderClick(col.id)}
                     >
-                      <span className="truncate">{col.label}</span>
-                      {isSorted && (sortDirection === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-accent-gold ml-1" /> : <ChevronDown className="w-3.5 h-3.5 text-accent-gold ml-1" />)}
+                      <span className="truncate font-extrabold">{col.label}</span>
+                      {isSorted && (
+                        <div className="ml-2 shrink-0">
+                          {sortDirection === 'asc' ?
+                            <ChevronUp className="w-4 h-4 text-accent-gold animate-pulse" /> :
+                            <ChevronDown className="w-4 h-4 text-accent-gold animate-pulse" />
+                          }
+                        </div>
+                      )}
                     </div>
                     {/* Resize handle */}
                     <div
-                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize opacity-0 group-hover:opacity-100 bg-accent-gold/40 hover:bg-accent-gold transition-opacity duration-300 z-10"
+                      className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize opacity-0 group-hover:opacity-100 bg-accent-gold/60 hover:bg-accent-gold transition-all duration-200 z-10"
                       onMouseDown={(e) => startResize(e, col.id)}
                     />
                   </th>
@@ -1224,6 +1246,8 @@ export const SupportExceptionLog: React.FC = () => {
             {filteredRows.map((row, idx) => {
               const isSelected = selectedIds.has(row.id)
               const hasErrors = !!(row as any).errors
+              const isEvenRow = idx % 2 === 0
+
               return (
                 <tr
                   key={row.id}
@@ -1231,36 +1255,39 @@ export const SupportExceptionLog: React.FC = () => {
                   onDragStart={(e) => handleDragStart(e, idx)}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDrop(e, idx)}
-                  className={`premium-table-row text-xs border-[var(--divider)] ${isSelected ? 'row-selected' : ''} ${hasErrors ? '!bg-red-500/[0.03] border-l-2 border-l-red-500/50' : ''}`}
+                  className={`text-xs border-b border-[var(--divider)] transition-all duration-150 hover:bg-white/[0.02] ${isSelected ? 'bg-accent-gold/[0.08] hover:bg-accent-gold/[0.12]' : isEvenRow ? 'bg-white/[0.01]' : 'bg-transparent'
+                    } ${hasErrors ? '!bg-red-500/[0.04] border-l-4 border-l-red-500/70' : ''}`}
                 >
                   {/* Select + Drag cell */}
-                  <td className="py-2.5 px-3 sticky left-0 z-10 bg-[inherit] border-r border-[var(--divider)] flex items-center justify-between gap-1 shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
-                    <div className="flex items-center gap-1">
-                      <div className="cursor-grab text-text-muted hover:text-white shrink-0 active:cursor-grabbing p-0.5">
-                        <GripVertical className="w-3 h-3" />
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleSelectRow(row.id)}
-                        className="rounded border-white/10 text-accent-gold focus:ring-0 focus:ring-offset-0 bg-transparent cursor-pointer"
-                      />
-                      <span className="cursor-default select-none text-[13px] ml-0.5" title={`Health: ${getRowHealth(row).label}`}>
-                        {getRowHealth(row).icon}
-                      </span>
-                      {hasErrors && (
-                        <div className="relative group shrink-0" title={(row as any).errors.join('\n')}>
-                          <AlertCircle className="w-3.5 h-3.5 text-red-500 animate-pulse cursor-help" />
-                          <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block z-50 w-64 bg-red-950/95 border border-red-500/40 text-red-200 text-[10px] p-2.5 rounded-lg shadow-xl backdrop-blur-md">
-                            <span className="font-bold block border-b border-red-500/20 pb-1 mb-1">Import Validation Errors</span>
-                            {(row as any).errors.map((err: string, i: number) => (
-                              <span key={i} className="block mt-0.5">• {err}</span>
-                            ))}
-                          </div>
+                  <td className="py-3 px-4 sticky left-0 z-10 bg-[inherit] border-r border-[var(--divider)] shadow-[4px_0_8px_rgba(0,0,0,0.08)]">
+                    <div className="flex items-center justify-between gap-2 min-w-[92px]">
+                      <div className="flex items-center gap-2">
+                        <div className="cursor-grab text-text-muted hover:text-white shrink-0 active:cursor-grabbing p-0.5 hover:bg-white/5 rounded transition-colors">
+                          <GripVertical className="w-3.5 h-3.5" />
                         </div>
-                      )}
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectRow(row.id)}
+                          className="rounded border-white/20 text-accent-gold focus:ring-2 focus:ring-accent-gold/50 focus:ring-offset-0 bg-white/5 cursor-pointer scale-110"
+                        />
+                        <span className="cursor-default select-none text-[14px] ml-0.5" title={`Health: ${getRowHealth(row).label}`}>
+                          {getRowHealth(row).icon}
+                        </span>
+                        {hasErrors && (
+                          <div className="relative group shrink-0" title={(row as any).errors.join('\n')}>
+                            <AlertCircle className="w-4 h-4 text-red-500 animate-pulse cursor-help" />
+                            <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block z-50 w-64 bg-red-950/95 border border-red-500/40 text-red-200 text-[10px] p-2.5 rounded-lg shadow-xl backdrop-blur-md">
+                              <span className="font-bold block border-b border-red-500/20 pb-1 mb-1">Import Validation Errors</span>
+                              {(row as any).errors.map((err: string, i: number) => (
+                                <span key={i} className="block mt-0.5">• {err}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-text-muted font-mono font-bold">{idx + 1}</span>
                     </div>
-                    <span className="text-[10px] text-text-muted font-mono">{idx + 1}</span>
                   </td>
 
                   {/* Dynamic cells */}
@@ -1273,8 +1300,8 @@ export const SupportExceptionLog: React.FC = () => {
                     return (
                       <td
                         key={col.id}
-                        className="p-0 border-r border-[var(--divider)] relative truncate align-top"
-                        style={{ width }}
+                        className="p-0 border-r border-[var(--divider)] relative align-top"
+                        style={{ minWidth: width, width }}
                         onDoubleClick={() => {
                           if (canEdit) {
                             setActiveCell({ rowId: row.id, colId: col.id })
@@ -1283,8 +1310,8 @@ export const SupportExceptionLog: React.FC = () => {
                       >
                         {isEditing ? (
                           <div className={col.type === 'textarea'
-                            ? "absolute left-0 right-0 top-0 z-20 min-h-[96px] bg-[var(--surface-elevated)] border border-accent-gold p-1 shadow-2xl rounded-lg"
-                            : "absolute inset-0 z-20 bg-[var(--surface-elevated)] border border-accent-gold flex items-center p-0.5"
+                            ? "absolute left-0 right-0 top-0 z-20 min-h-[96px] bg-[var(--surface-elevated)] border-2 border-accent-gold p-2 shadow-2xl rounded-lg"
+                            : "absolute inset-0 z-20 bg-[var(--surface-elevated)] border-2 border-accent-gold flex items-center p-1"
                           }>
                             {col.type === 'select' ? (
                               <select
@@ -1292,7 +1319,7 @@ export const SupportExceptionLog: React.FC = () => {
                                 value={cellVal}
                                 onChange={e => updateCell(row.id, col.id, e.target.value)}
                                 onBlur={() => setActiveCell(null)}
-                                className="w-full h-full bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-0 focus:ring-0"
+                                className="w-full h-full bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-1.5 focus:ring-0 font-semibold"
                               >
                                 <option value="" className="bg-[var(--surface-elevated)] text-[var(--text-primary)]">Choose Option...</option>
                                 {getDropdownOptions(col.category as ConfigCategory).map(opt => (
@@ -1312,7 +1339,7 @@ export const SupportExceptionLog: React.FC = () => {
                                     setActiveCell(null)
                                   }
                                 }}
-                                className="w-full h-24 bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-1 focus:ring-0 resize-y font-sans"
+                                className="w-full h-24 bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-2 focus:ring-0 resize-y font-sans leading-relaxed"
                               />
                             ) : col.type === 'date' ? (
                               <input
@@ -1322,7 +1349,7 @@ export const SupportExceptionLog: React.FC = () => {
                                 onChange={e => updateCell(row.id, col.id, e.target.value)}
                                 onBlur={() => setActiveCell(null)}
                                 onPaste={e => e.stopPropagation()}
-                                className="w-full h-full bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-1 focus:ring-0 dark:[color-scheme:dark]"
+                                className="w-full h-full bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-1.5 focus:ring-0 dark:[color-scheme:dark] font-semibold"
                               />
                             ) : (
                               <input
@@ -1338,37 +1365,37 @@ export const SupportExceptionLog: React.FC = () => {
                                 onKeyDown={e => {
                                   if (e.key === 'Enter') setActiveCell(null)
                                 }}
-                                className="w-full h-full bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-1 focus:ring-0 font-sans"
+                                className="w-full h-full bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-1.5 focus:ring-0 font-sans font-semibold"
                               />
                             )}
                           </div>
                         ) : (
-                          <div className={`py-3 px-3.5 w-full h-full text-text-secondary cursor-text hover:bg-[var(--hover)]/15 select-none min-h-[38px] ${col.type === 'textarea' ? 'whitespace-pre-wrap break-words' : 'truncate'}`}>
+                          <div className={`py-3 px-4 w-full h-full text-text-secondary cursor-text hover:bg-[var(--hover)]/30 select-none min-h-[42px] transition-colors ${col.type === 'textarea' ? 'whitespace-pre-wrap break-words leading-relaxed' : 'truncate'}`}>
                             {col.type === 'date' && cellVal ? (
                               col.id === 'planned_end_date' && !row.actual_end_date && cellVal <= todayStr ? (
                                 <div
-                                  className="flex items-center gap-1.5 px-2 py-1 rounded bg-rose-500/10 border border-rose-500/30 text-rose-500 font-bold text-xs w-fit select-none group/overdue relative cursor-help"
+                                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 font-bold text-xs w-fit select-none group/overdue relative cursor-help"
                                   title="Planned End Date has passed. Actual End Date is still pending."
                                 >
-                                  <Clock className="w-3.5 h-3.5 shrink-0 animate-pulse text-rose-500" />
-                                  <span>{cellVal}</span>
-                                  <span className="text-[9px] uppercase tracking-wider font-extrabold bg-rose-500/20 px-1 rounded ml-1 text-rose-300">
+                                  <Clock className="w-4 h-4 shrink-0 animate-pulse text-rose-500" />
+                                  <span className="font-mono">{cellVal}</span>
+                                  <span className="text-[9px] uppercase tracking-wider font-extrabold bg-rose-500/20 px-1.5 py-0.5 rounded ml-1 text-rose-300">
                                     {getDaysOverdueText(cellVal)}
                                   </span>
-                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/overdue:block z-50 w-56 bg-rose-950/95 border border-rose-500/30 text-rose-200 text-[10px] p-2.5 rounded-lg shadow-xl backdrop-blur-md text-center leading-normal">
+                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/overdue:block z-50 w-56 bg-rose-950/95 border border-rose-500/30 text-rose-200 text-[10px] p-2.5 rounded-lg shadow-xl backdrop-blur-md text-center leading-normal">
                                     Planned End Date has passed. Actual End Date is still pending.
                                   </div>
                                 </div>
                               ) : (
-                                <span className="flex items-center gap-1">
-                                  <Calendar className="w-3 h-3 text-text-muted shrink-0" />
-                                  {cellVal}
+                                <span className="flex items-center gap-1.5 text-xs">
+                                  <Calendar className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                                  <span className="font-mono font-medium">{cellVal}</span>
                                 </span>
                               )
                             ) : cellVal === '' ? (
-                              <span className="text-[10px] italic text-text-muted select-none opacity-40">empty</span>
+                              <span className="text-[10px] italic text-text-muted select-none opacity-30">—</span>
                             ) : (
-                              cellVal
+                              <span className={col.type === 'number' ? 'font-mono font-semibold' : ''}>{cellVal}</span>
                             )}
                           </div>
                         )}

@@ -13,20 +13,23 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
 import type { DropdownConfig, ConfigCategory } from './types'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/hooks/use-toast'
 
 const CATEGORIES: { key: ConfigCategory; label: string; desc: string }[] = [
   { key: 'branch', label: 'Branches', desc: 'Manage project codebase repository branch selection lists.' },
   { key: 'qa', label: 'QA Engineers', desc: 'Personnel assignments for support tickets and release verification.' },
-  { key: 'status', label: 'Statuses', desc: 'Track progress flow for support tasks and logs.' },
+  { key: 'testing_status', label: 'Testing Statuses', desc: 'Track progress flow for support tasks and release testing logs.' },
   { key: 'retesting_status', label: 'Retesting Statuses', desc: 'Phases of validation (e.g. Open, Retesting, Fixed).' },
   { key: 'smoke_status', label: 'Smoke Testing Statuses', desc: 'Status checks specifically assigned to smoke runs.' },
   { key: 'issue_source', label: 'Issue Sources', desc: 'Origin or source of issues (e.g. Missed by QA, Backend Update, Customer Reported).' },
+  { key: 'priority', label: 'Priorities', desc: 'Urgency levels for tasks and issues (e.g. Critical, High, Medium, Low).' },
 ]
 
 export const DailyReportConfig: React.FC = () => {
   const navigate = useNavigate()
   const { role } = useAppStore()
   const { can } = usePermissions()
+  const { toast } = useToast()
   const {
     dropdownConfigs,
     fetchDropdownConfigs,
@@ -83,7 +86,11 @@ export const DailyReportConfig: React.FC = () => {
     // Prevent duplicates
     const isDuplicate = dropdownConfigs.some(c => c.category === activeTab && c.value.toLowerCase() === newValue.trim().toLowerCase())
     if (isDuplicate) {
-      alert('This value already exists in this master category.')
+      toast({
+        variant: "destructive",
+        title: "Duplicate Value",
+        description: "This value already exists in this master category."
+      })
       return
     }
 
@@ -99,8 +106,20 @@ export const DailyReportConfig: React.FC = () => {
         sort_order: maxSort + 1
       })
       setNewValue('')
-    } catch (e) {
-      alert('Error creating dropdown config.')
+
+      // Get category label for success message
+      const categoryLabel = CATEGORIES.find(c => c.key === activeTab)?.label.slice(0, -1) || 'Configuration'
+      toast({
+        variant: "success",
+        title: "Added Successfully",
+        description: `${categoryLabel} "${newValue.trim()}" added successfully.`
+      })
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Add",
+        description: e.message || "Error creating dropdown config."
+      })
     }
   }
 
@@ -114,8 +133,20 @@ export const DailyReportConfig: React.FC = () => {
       })
       setEditingConfigId(null)
       setEditValue('')
-    } catch (e) {
-      alert('Error updating configuration.')
+
+      // Get category label for success message
+      const categoryLabel = CATEGORIES.find(c => c.key === activeTab)?.label.slice(0, -1) || 'Configuration'
+      toast({
+        variant: "success",
+        title: "Updated Successfully",
+        description: `${categoryLabel} updated successfully.`
+      })
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Update",
+        description: e.message || "Error updating configuration."
+      })
     }
   }
 
@@ -126,8 +157,21 @@ export const DailyReportConfig: React.FC = () => {
         ...config,
         is_active: !config.is_active
       })
-    } catch (e) {
-      alert('Error toggling configuration status.')
+
+      // Get category label for success message
+      const categoryLabel = CATEGORIES.find(c => c.key === activeTab)?.label.slice(0, -1) || 'Configuration'
+      const action = !config.is_active ? 'activated' : 'deactivated'
+      toast({
+        variant: "success",
+        title: "Status Updated",
+        description: `${categoryLabel} ${action} successfully.`
+      })
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Update Status",
+        description: e.message || "Error toggling configuration status."
+      })
     }
   }
 
@@ -136,8 +180,20 @@ export const DailyReportConfig: React.FC = () => {
     if (!confirm('Are you sure you want to delete this dropdown value? This may result in empty values in existing rows.')) return
     try {
       await deleteDropdownConfig(id)
-    } catch (e) {
-      alert('Error deleting configuration.')
+
+      // Get category label for success message
+      const categoryLabel = CATEGORIES.find(c => c.key === activeTab)?.label.slice(0, -1) || 'Configuration'
+      toast({
+        variant: "success",
+        title: "Deleted Successfully",
+        description: `${categoryLabel} deleted successfully.`
+      })
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Delete",
+        description: e.message || "Error deleting configuration."
+      })
     }
   }
 
@@ -168,7 +224,7 @@ export const DailyReportConfig: React.FC = () => {
 
       <CinematicHeading
         title="Dropdown Configurations"
-        subtitle="Manage master values used dynamically across support logs and release testing statuses."
+        subtitle="Manage master values used dynamically across support logs and release testing logs."
         align="left"
       />
 

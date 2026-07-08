@@ -14,7 +14,7 @@ import { ReleaseTable } from './components/ReleaseTable'
 import { ReleaseBugStatus } from './components/ReleaseBugStatus'
 import { TeamCapacityUpload } from './components/TeamCapacity'
 import { DashboardSectionToggles } from './components/DashboardSectionToggles'
-import { DefectAnalysis, HistoricalProgress, NextPriorities } from './components/Metrics'
+import { DefectAnalysis, HistoricalProgress, NextPriorities, HistoricalDefectOptimization } from './components/Metrics'
 import { DashboardWidgets, DefectChart, ReportHistory } from './components/Widgets'
 import { toast } from '@/hooks/use-toast'
 import { FileText, RefreshCw, RotateCcw, AlertCircle, Plus, Trash, History as HistoryIcon, Settings, Eye, Lock } from 'lucide-react'
@@ -157,6 +157,19 @@ function buildMarkdown(f: QAReportForm): string {
   lines.push(`| Open | ${f.defectsLastWeek.open} | ${f.defectsMTD.open} |`)
   lines.push(`| Fixed | ${f.defectsLastWeek.fixed} | ${f.defectsMTD.fixed} |`)
   lines.push(`| Closed | ${f.defectsLastWeek.closed} | ${f.defectsMTD.closed} |`)
+
+  // Historical Defect Optimization
+  if (f.historicalDefectOptimization?.executiveSummary) {
+    lines.push('\n## Historical Defect Optimization')
+    lines.push(`**Previous Fixed Bug Count:** ${f.historicalDefectOptimization.previousFixedBugCount}`)
+    lines.push(`**Latest Fixed Bug Count:** ${f.historicalDefectOptimization.latestFixedBugCount}`)
+    if (f.historicalDefectOptimization.trackingSince) {
+      lines.push(`**Tracking Since:** ${fmt(f.historicalDefectOptimization.trackingSince)}`)
+    }
+    lines.push(`\n**Reduced Bugs:** ${f.historicalDefectOptimization.reducedBugs}`)
+    lines.push(`**Improvement Percentage:** ${f.historicalDefectOptimization.improvementPercentage}%`)
+    lines.push(`\n${f.historicalDefectOptimization.executiveSummary}`)
+  }
 
   // Historical Progress
   lines.push('\n## Historical Defect Progress')
@@ -612,6 +625,7 @@ export const QAWeeklyReport: React.FC = () => {
             onChange={(data) => setForm({ teamCapacity: data })}
           />
           <DefectAnalysis />
+          <HistoricalDefectOptimization />
           <HistoricalProgress />
           <NextPriorities />
 

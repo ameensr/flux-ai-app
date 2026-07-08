@@ -44,12 +44,49 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
     }
   }
 
-  const handleChangeRole = async (memberId: string, newRole: ProjectRole) => {
+  const handleChangeRole = async (memberId: string, newRole: ProjectRole, currentRole: ProjectRole) => {
     setActiveMenu(null)
+
+    // Get current user's role in this project
+    const currentUserMember = members.find(m => m.user_id === user?.id)
+
+    // Client-side validation (server will also validate)
+    // Note: super_admins bypass these checks at the server level
+    if (currentUserMember?.project_role === 'lead') {
+      if (currentRole === 'owner') {
+        toast({
+          variant: 'destructive',
+          title: 'Permission Denied',
+          description: 'Project Leads cannot modify Project Owners'
+        })
+        return
+      }
+      if (newRole === 'owner') {
+        toast({
+          variant: 'destructive',
+          title: 'Permission Denied',
+          description: 'Project Leads cannot assign the Owner role'
+        })
+        return
+      }
+    }
+
+    // Check if removing/demoting last owner
+    if (currentRole === 'owner' && newRole !== 'owner') {
+      const ownerCount = members.filter(m => m.project_role === 'owner').length
+      if (ownerCount <= 1) {
+        toast({
+          variant: 'destructive',
+          title: 'Cannot Demote Last Owner',
+          description: 'Assign another owner before changing this role'
+        })
+        return
+      }
+    }
 
     try {
       setLoading(true)
-      await updateMemberRole(memberId, newRole)
+      await updateMemberRole(memberId, newRole, projectId)
       toast({ title: 'Success', description: 'Member role updated successfully' })
       onUpdate()
     } catch (error: any) {
@@ -63,8 +100,34 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
     }
   }
 
-  const handleRemoveMember = async (memberId: string, memberName: string) => {
+  const handleRemoveMember = async (memberId: string, memberName: string, memberRole: ProjectRole) => {
     setActiveMenu(null)
+
+    // Get current user's role in this project
+    const currentUserMember = members.find(m => m.user_id === user?.id)
+
+    // Client-side validation (server will also validate)
+    if (currentUserMember?.project_role === 'lead' && memberRole === 'owner') {
+      toast({
+        variant: 'destructive',
+        title: 'Permission Denied',
+        description: 'Project Leads cannot remove Project Owners'
+      })
+      return
+    }
+
+    // Check if removing last owner
+    if (memberRole === 'owner') {
+      const ownerCount = members.filter(m => m.project_role === 'owner').length
+      if (ownerCount <= 1) {
+        toast({
+          variant: 'destructive',
+          title: 'Cannot Remove Last Owner',
+          description: 'Assign another owner before removing this member'
+        })
+        return
+      }
+    }
 
     if (!confirm(`Remove ${memberName} from this project? This action cannot be undone.`)) {
       return
@@ -72,7 +135,7 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
 
     try {
       setLoading(true)
-      await removeMember(memberId)
+      await removeMember(memberId, projectId)
       toast({ title: 'Success', description: 'Member removed from project' })
       onUpdate()
     } catch (error: any) {
@@ -224,7 +287,7 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
                                 key={role}
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  handleChangeRole(member.id, role)
+                                  handleChangeRole(member.id, role, member.project_role)
                                 }}
                                 disabled={loading}
                                 className="w-full px-4 py-3 text-left flex items-start gap-3 transition-all disabled:opacity-50 hover:bg-[var(--hover)]"
@@ -254,7 +317,7 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleRemoveMember(member.id, member.profile.full_name || member.profile.email)
+                          handleRemoveMember(member.id, member.profile.full_name || member.profile.email, member.project_role)
                         }}
                         disabled={loading}
                         className="w-full px-4 py-3 text-left flex items-center gap-2.5 text-red-500 disabled:opacity-50 transition-all font-medium text-sm hover:bg-red-500/10"

@@ -18,6 +18,7 @@ const COLUMNS = [
   { id: 'description', label: 'Description', type: 'textarea', defaultWidth: 200 },
   { id: 'qa', label: 'QA', type: 'select', category: 'qa', defaultWidth: 140 },
   { id: 'initial_round_estimation_hrs', label: 'Initial Est (Hrs)', type: 'number', defaultWidth: 140 },
+  { id: 'testing_status', label: 'Testing Status', type: 'select', category: 'testing_status', defaultWidth: 140 },
   { id: 'smoke_testing_status', label: 'Smoke Status', type: 'select', category: 'smoke_status', defaultWidth: 140 },
   { id: 'scope_of_testing_for_smoke', label: 'Smoke Test Scope', type: 'textarea', defaultWidth: 200 },
   { id: 'smoke_testing_estimation_hrs', label: 'Smoke Est (Hrs)', type: 'number', defaultWidth: 140 },
@@ -30,13 +31,14 @@ export const ReleaseTestingStatus: React.FC = () => {
     releaseRows,
     setReleaseRows,
     dropdownConfigs,
-    syncStatus
+    syncStatus,
+    isProjectViewer
   } = useDailyReportStore()
 
   const { can } = usePermissions()
-  const canCreate = can('daily-report', 'can_create')
-  const canEdit = can('daily-report', 'can_edit')
-  const canDelete = can('daily-report', 'can_delete')
+  const canCreate = can('daily-report', 'can_create') && !isProjectViewer
+  const canEdit = can('daily-report', 'can_edit') && !isProjectViewer
+  const canDelete = can('daily-report', 'can_delete') && !isProjectViewer
   const canExport = can('daily-report', 'can_export')
 
   // Grid states
@@ -83,6 +85,7 @@ export const ReleaseTestingStatus: React.FC = () => {
       description: '',
       qa: '',
       initial_round_estimation_hrs: '',
+      testing_status: '',
       smoke_testing_status: '',
       scope_of_testing_for_smoke: '',
       smoke_testing_estimation_hrs: '',
@@ -109,8 +112,19 @@ export const ReleaseTestingStatus: React.FC = () => {
   const deleteSelected = () => {
     if (!canDelete) return
     if (selectedIds.size === 0) return
+
+    // Confirmation dialog - Team members can delete any row in their project
+    const confirmMessage = selectedIds.size === 1
+      ? 'Are you sure you want to delete this row? This action cannot be undone.'
+      : `Are you sure you want to delete ${selectedIds.size} rows? This action cannot be undone.`
+
+    if (!confirm(confirmMessage)) return
+
+    // Filter out selected rows (permission already checked via canDelete)
+    const remainingRows = releaseRows.filter(r => !selectedIds.has(r.id))
+
     // Force immediate sync to prevent rows from reappearing on refresh
-    setReleaseRows(releaseRows.filter(r => !selectedIds.has(r.id)), true)
+    setReleaseRows(remainingRows, true)
     setSelectedIds(new Set())
   }
 
@@ -194,11 +208,12 @@ export const ReleaseTestingStatus: React.FC = () => {
         description: parts[1] || '',
         qa: parts[2] || '',
         initial_round_estimation_hrs: parts[3] ? parseFloat(parts[3]) || '' : '',
-        smoke_testing_status: parts[4] || '',
-        scope_of_testing_for_smoke: parts[5] || '',
-        smoke_testing_estimation_hrs: parts[6] ? parseFloat(parts[6]) || '' : '',
-        overall_scope_of_testing: parts[7] || '',
-        overall_estimation_hrs: parts[8] ? parseFloat(parts[8]) || '' : '',
+        testing_status: parts[4] || '',
+        smoke_testing_status: parts[5] || '',
+        scope_of_testing_for_smoke: parts[6] || '',
+        smoke_testing_estimation_hrs: parts[7] ? parseFloat(parts[7]) || '' : '',
+        overall_scope_of_testing: parts[8] || '',
+        overall_estimation_hrs: parts[9] ? parseFloat(parts[9]) || '' : '',
       }
     })
 
@@ -221,7 +236,7 @@ export const ReleaseTestingStatus: React.FC = () => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `Release_Testing_Status_${new Date().toISOString().split('T')[0]}.csv`
+    a.download = `Release_Testing_Log_${new Date().toISOString().split('T')[0]}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -231,7 +246,7 @@ export const ReleaseTestingStatus: React.FC = () => {
     const activeHeaders = COLUMNS.filter(c => visibleColumns[c.id])
     let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">`
     html += `<head><meta charset="utf-8"/><style>table { border-collapse: collapse; } th { background-color: #1f2937; color: #ffffff; font-weight: bold; } th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-family: sans-serif; font-size: 11px; }</style></head>`
-    html += `<body><h2>Release Testing Status</h2><table><thead><tr>`
+    html += `<body><h2>Release Testing Log</h2><table><thead><tr>`
     activeHeaders.forEach(h => {
       html += `<th>${h.label}</th>`
     })
@@ -250,7 +265,7 @@ export const ReleaseTestingStatus: React.FC = () => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `Release_Testing_Status_${new Date().toISOString().split('T')[0]}.xls`
+    a.download = `Release_Testing_Log_${new Date().toISOString().split('T')[0]}.xls`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -262,7 +277,7 @@ export const ReleaseTestingStatus: React.FC = () => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `Release_Testing_Status_${new Date().toISOString().split('T')[0]}.json`
+    a.download = `Release_Testing_Log_${new Date().toISOString().split('T')[0]}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -270,7 +285,7 @@ export const ReleaseTestingStatus: React.FC = () => {
   // Print-Friendly / PDF Window
   const openPrintFriendly = (triggerPrint = false) => {
     const activeHeaders = COLUMNS.filter(c => visibleColumns[c.id])
-    const title = 'Release Testing Status'
+    const title = 'Release Testing Log'
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
 
@@ -409,6 +424,12 @@ export const ReleaseTestingStatus: React.FC = () => {
                 rowErrors.push(`QA '${record.qa}' is not configured.`)
               }
             }
+            if (record.testing_status) {
+              const testingStatuses = getDropdownOptions('testing_status').map(s => s.toLowerCase())
+              if (!testingStatuses.includes(record.testing_status.toLowerCase())) {
+                rowErrors.push(`Testing Status '${record.testing_status}' is not configured.`)
+              }
+            }
             if (record.smoke_testing_status) {
               const smokeStatuses = getDropdownOptions('smoke_status').map(s => s.toLowerCase())
               if (!smokeStatuses.includes(record.smoke_testing_status.toLowerCase())) {
@@ -521,6 +542,12 @@ export const ReleaseTestingStatus: React.FC = () => {
                 rowErrors.push(`QA '${record.qa}' is not configured.`)
               }
             }
+            if (record.testing_status) {
+              const testingStatuses = getDropdownOptions('testing_status').map(s => s.toLowerCase())
+              if (!testingStatuses.includes(record.testing_status.toLowerCase())) {
+                rowErrors.push(`Testing Status '${record.testing_status}' is not configured.`)
+              }
+            }
             if (record.smoke_testing_status) {
               const smokeStatuses = getDropdownOptions('smoke_status').map(s => s.toLowerCase())
               if (!smokeStatuses.includes(record.smoke_testing_status.toLowerCase())) {
@@ -574,6 +601,7 @@ export const ReleaseTestingStatus: React.FC = () => {
         case 'description': return 'Smoke test of login page.'
         case 'qa': return getDropdownOptions('qa')[0] || 'Sarah Jenkins'
         case 'initial_round_estimation_hrs': return 2
+        case 'testing_status': return getDropdownOptions('testing_status')[0] || 'In Progress'
         case 'smoke_testing_status': return getDropdownOptions('smoke_status')[0] || 'Pass'
         case 'scope_of_testing_for_smoke': return 'Verify standard login, MFA flow, and social login redirects.'
         case 'smoke_testing_estimation_hrs': return 1
@@ -593,7 +621,7 @@ export const ReleaseTestingStatus: React.FC = () => {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.setAttribute('download', 'Daily_Release_Template.csv')
+      link.setAttribute('download', 'Daily_Release_Testing_Log_Template.csv')
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -671,21 +699,23 @@ export const ReleaseTestingStatus: React.FC = () => {
 
       // Dynamic Dropdowns Configuration reference list
       const configAOA = [
-        ['QA Options', 'Smoke Status Options'],
+        ['QA Options', 'Testing Status Options', 'Smoke Status Options'],
       ]
       const qas = getDropdownOptions('qa')
+      const testingStatuses = getDropdownOptions('testing_status')
       const smokeStatuses = getDropdownOptions('smoke_status')
 
-      const maxLen = Math.max(qas.length, smokeStatuses.length)
+      const maxLen = Math.max(qas.length, testingStatuses.length, smokeStatuses.length)
       for (let i = 0; i < maxLen; i++) {
         configAOA.push([
           qas[i] || '',
+          testingStatuses[i] || '',
           smokeStatuses[i] || ''
         ])
       }
 
       const configWS = XLSX.utils.aoa_to_sheet(configAOA)
-      configWS['!cols'] = [{ wch: 18 }, { wch: 18 }]
+      configWS['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 18 }]
 
       if (format === 'xlsx') {
         for (const key in configWS) {
@@ -703,9 +733,9 @@ export const ReleaseTestingStatus: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, configWS, 'Configurations Ref')
 
       if (format === 'xlsx') {
-        XLSXStyle.writeFile(wb, 'Daily_Release_Template.xlsx')
+        XLSXStyle.writeFile(wb, 'Daily_Release_Testing_Log_Template.xlsx')
       } else {
-        XLSX.writeFile(wb, 'Daily_Release_Template.xls', { bookType: 'biff8' })
+        XLSX.writeFile(wb, 'Daily_Release_Testing_Log_Template.xls', { bookType: 'biff8' })
       }
     }
   }
@@ -980,21 +1010,23 @@ export const ReleaseTestingStatus: React.FC = () => {
 
       {/* Grid Table */}
       <div
-        className="w-full overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] relative focus:outline-none shadow-sm"
+        className="w-full overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] relative focus:outline-none shadow-lg"
         onPaste={handleClipboardPaste}
         tabIndex={0}
       >
-        <table className="border-collapse text-left text-xs min-w-full table-fixed" style={{ width: Object.values(columnWidths).reduce((a, b) => a + b, 0) + 120 }}>
+        <table className="border-collapse text-left text-xs min-w-full" style={{ width: 'max-content', minWidth: '100%' }}>
           <thead>
-            <tr className="border-b border-[var(--border)] bg-[var(--surface-secondary)] text-[10px] font-black uppercase tracking-wider select-none text-text-muted">
-              <th className="py-3 px-3.5 w-20 sticky left-0 z-30 bg-[inherit] border-r border-[var(--divider)] flex items-center justify-between gap-1 shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
-                <input
-                  type="checkbox"
-                  checked={filteredRows.length > 0 && selectedIds.size === filteredRows.length}
-                  onChange={toggleSelectAll}
-                  className="rounded border-white/10 text-accent-gold focus:ring-0 focus:ring-offset-0 bg-transparent cursor-pointer"
-                />
-                <span className="text-[8px] uppercase tracking-wide text-text-muted">No.</span>
+            <tr className="border-b-2 border-[var(--border)] bg-gradient-to-r from-[#1a1a1c] to-[#252527] text-[10px] font-black uppercase tracking-wider select-none text-text-muted sticky top-0 z-20 shadow-md">
+              <th className="py-3.5 px-4 w-[100px] min-w-[100px] sticky left-0 z-30 bg-gradient-to-r from-[#1a1a1c] to-[#252527] border-r-2 border-[var(--divider)] shadow-[4px_0_8px_rgba(0,0,0,0.15)]">
+                <div className="flex items-center justify-between gap-2">
+                  <input
+                    type="checkbox"
+                    checked={filteredRows.length > 0 && selectedIds.size === filteredRows.length}
+                    onChange={toggleSelectAll}
+                    className="rounded border-white/20 text-accent-gold focus:ring-2 focus:ring-accent-gold/50 focus:ring-offset-0 bg-white/5 cursor-pointer scale-110"
+                  />
+                  <span className="text-[9px] uppercase tracking-wider text-text-muted font-extrabold">No.</span>
+                </div>
               </th>
 
               {COLUMNS.map(col => {
@@ -1005,18 +1037,25 @@ export const ReleaseTestingStatus: React.FC = () => {
                 return (
                   <th
                     key={col.id}
-                    className="p-0 border-r border-[var(--divider)] relative group"
-                    style={{ width }}
+                    className="p-0 border-r border-[var(--divider)] relative group hover:bg-white/[0.02] transition-colors"
+                    style={{ minWidth: width, width }}
                   >
                     <div
-                      className="py-3 px-3.5 h-full w-full flex items-center justify-between cursor-pointer hover:bg-[var(--hover)] transition-colors"
+                      className="py-3.5 px-4 h-full w-full flex items-center justify-between cursor-pointer"
                       onClick={() => handleHeaderClick(col.id)}
                     >
-                      <span className="truncate">{col.label}</span>
-                      {isSorted && (sortDirection === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-accent-gold ml-1" /> : <ChevronDown className="w-3.5 h-3.5 text-accent-gold ml-1" />)}
+                      <span className="truncate font-extrabold">{col.label}</span>
+                      {isSorted && (
+                        <div className="ml-2 shrink-0">
+                          {sortDirection === 'asc' ?
+                            <ChevronUp className="w-4 h-4 text-accent-gold animate-pulse" /> :
+                            <ChevronDown className="w-4 h-4 text-accent-gold animate-pulse" />
+                          }
+                        </div>
+                      )}
                     </div>
                     <div
-                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize opacity-0 group-hover:opacity-100 bg-accent-gold/40 hover:bg-accent-gold transition-opacity duration-300 z-10"
+                      className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize opacity-0 group-hover:opacity-100 bg-accent-gold/60 hover:bg-accent-gold transition-all duration-200 z-10"
                       onMouseDown={(e) => startResize(e, col.id)}
                     />
                   </th>
@@ -1028,6 +1067,8 @@ export const ReleaseTestingStatus: React.FC = () => {
             {filteredRows.map((row, idx) => {
               const isSelected = selectedIds.has(row.id)
               const hasErrors = !!(row as any).errors
+              const isEvenRow = idx % 2 === 0
+
               return (
                 <tr
                   key={row.id}
@@ -1035,32 +1076,35 @@ export const ReleaseTestingStatus: React.FC = () => {
                   onDragStart={(e) => handleDragStart(e, idx)}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDrop(e, idx)}
-                  className={`premium-table-row text-xs border-[var(--divider)] ${isSelected ? 'row-selected' : ''} ${hasErrors ? '!bg-red-500/[0.03] border-l-2 border-l-red-500/50' : ''}`}
+                  className={`text-xs border-b border-[var(--divider)] transition-all duration-150 hover:bg-white/[0.02] ${isSelected ? 'bg-accent-gold/[0.08] hover:bg-accent-gold/[0.12]' : isEvenRow ? 'bg-white/[0.01]' : 'bg-transparent'
+                    } ${hasErrors ? '!bg-red-500/[0.04] border-l-4 border-l-red-500/70' : ''}`}
                 >
-                  <td className="py-2.5 px-3 sticky left-0 z-10 bg-[inherit] border-r border-[var(--divider)] flex items-center justify-between gap-1 shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
-                    <div className="flex items-center gap-1">
-                      <div className="cursor-grab text-text-muted hover:text-white shrink-0 active:cursor-grabbing p-0.5">
-                        <GripVertical className="w-3 h-3" />
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleSelectRow(row.id)}
-                        className="rounded border-white/10 text-accent-gold focus:ring-0 focus:ring-offset-0 bg-transparent cursor-pointer"
-                      />
-                      {hasErrors && (
-                        <div className="relative group shrink-0" title={(row as any).errors.join('\n')}>
-                          <AlertCircle className="w-3.5 h-3.5 text-red-500 animate-pulse cursor-help" />
-                          <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block z-50 w-64 bg-red-950/95 border border-red-500/40 text-red-200 text-[10px] p-2.5 rounded-lg shadow-xl backdrop-blur-md">
-                            <span className="font-bold block border-b border-red-500/20 pb-1 mb-1">Import Validation Errors</span>
-                            {(row as any).errors.map((err: string, i: number) => (
-                              <span key={i} className="block mt-0.5">• {err}</span>
-                            ))}
-                          </div>
+                  <td className="py-3 px-4 sticky left-0 z-10 bg-[inherit] border-r border-[var(--divider)] shadow-[4px_0_8px_rgba(0,0,0,0.08)]">
+                    <div className="flex items-center justify-between gap-2 min-w-[92px]">
+                      <div className="flex items-center gap-2">
+                        <div className="cursor-grab text-text-muted hover:text-white shrink-0 active:cursor-grabbing p-0.5 hover:bg-white/5 rounded transition-colors">
+                          <GripVertical className="w-3.5 h-3.5" />
                         </div>
-                      )}
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectRow(row.id)}
+                          className="rounded border-white/20 text-accent-gold focus:ring-2 focus:ring-accent-gold/50 focus:ring-offset-0 bg-white/5 cursor-pointer scale-110"
+                        />
+                        {hasErrors && (
+                          <div className="relative group shrink-0" title={(row as any).errors.join('\n')}>
+                            <AlertCircle className="w-4 h-4 text-red-500 animate-pulse cursor-help" />
+                            <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block z-50 w-64 bg-red-950/95 border border-red-500/40 text-red-200 text-[10px] p-2.5 rounded-lg shadow-xl backdrop-blur-md">
+                              <span className="font-bold block border-b border-red-500/20 pb-1 mb-1">Import Validation Errors</span>
+                              {(row as any).errors.map((err: string, i: number) => (
+                                <span key={i} className="block mt-0.5">• {err}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-text-muted font-mono font-bold">{idx + 1}</span>
                     </div>
-                    <span className="text-[10px] text-text-muted font-mono">{idx + 1}</span>
                   </td>
 
                   {COLUMNS.map(col => {
@@ -1072,8 +1116,8 @@ export const ReleaseTestingStatus: React.FC = () => {
                     return (
                       <td
                         key={col.id}
-                        className="p-0 border-r border-[var(--divider)] relative truncate align-top"
-                        style={{ width }}
+                        className="p-0 border-r border-[var(--divider)] relative align-top"
+                        style={{ minWidth: width, width }}
                         onDoubleClick={() => {
                           if (canEdit) {
                             setActiveCell({ rowId: row.id, colId: col.id })
@@ -1082,8 +1126,8 @@ export const ReleaseTestingStatus: React.FC = () => {
                       >
                         {isEditing ? (
                           <div className={col.type === 'textarea'
-                            ? "absolute left-0 right-0 top-0 z-20 min-h-[96px] bg-[var(--surface-elevated)] border border-accent-gold p-1 shadow-2xl rounded-lg"
-                            : "absolute inset-0 z-20 bg-[var(--surface-elevated)] border border-accent-gold flex items-center p-0.5"
+                            ? "absolute left-0 right-0 top-0 z-20 min-h-[96px] bg-[var(--surface-elevated)] border-2 border-accent-gold p-2 shadow-2xl rounded-lg"
+                            : "absolute inset-0 z-20 bg-[var(--surface-elevated)] border-2 border-accent-gold flex items-center p-1"
                           }>
                             {col.type === 'select' ? (
                               <select
@@ -1091,7 +1135,7 @@ export const ReleaseTestingStatus: React.FC = () => {
                                 value={cellVal}
                                 onChange={e => updateCell(row.id, col.id, e.target.value)}
                                 onBlur={() => setActiveCell(null)}
-                                className="w-full h-full bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-0 focus:ring-0"
+                                className="w-full h-full bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-1.5 focus:ring-0 font-semibold"
                               >
                                 <option value="" className="bg-[var(--surface-elevated)] text-[var(--text-primary)]">Choose Option...</option>
                                 {getDropdownOptions(col.category as ConfigCategory).map(opt => (
@@ -1111,7 +1155,7 @@ export const ReleaseTestingStatus: React.FC = () => {
                                     setActiveCell(null)
                                   }
                                 }}
-                                className="w-full h-24 bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-1 focus:ring-0 resize-y font-sans"
+                                className="w-full h-24 bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-2 focus:ring-0 resize-y font-sans leading-relaxed"
                               />
                             ) : (
                               <input
@@ -1127,16 +1171,16 @@ export const ReleaseTestingStatus: React.FC = () => {
                                 onKeyDown={e => {
                                   if (e.key === 'Enter') setActiveCell(null)
                                 }}
-                                className="w-full h-full bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-1 focus:ring-0 font-sans"
+                                className="w-full h-full bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-1.5 focus:ring-0 font-sans font-semibold"
                               />
                             )}
                           </div>
                         ) : (
-                          <div className={`py-3 px-3.5 w-full h-full text-text-secondary cursor-text hover:bg-[var(--hover)]/15 select-none min-h-[38px] ${col.type === 'textarea' ? 'whitespace-pre-wrap break-words' : 'truncate'}`}>
+                          <div className={`py-3 px-4 w-full h-full text-text-secondary cursor-text hover:bg-[var(--hover)]/30 select-none min-h-[42px] transition-colors ${col.type === 'textarea' ? 'whitespace-pre-wrap break-words leading-relaxed' : 'truncate'}`}>
                             {cellVal === '' ? (
-                              <span className="text-[10px] italic text-text-muted select-none opacity-40">empty</span>
+                              <span className="text-[10px] italic text-text-muted select-none opacity-30">—</span>
                             ) : (
-                              cellVal
+                              <span className={col.type === 'number' ? 'font-mono font-semibold' : ''}>{cellVal}</span>
                             )}
                           </div>
                         )}
@@ -1151,7 +1195,7 @@ export const ReleaseTestingStatus: React.FC = () => {
                 <td colSpan={COLUMNS.filter(c => visibleColumns[c.id]).length + 1} className="py-16 text-center text-text-muted">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Clipboard className="w-8 h-8 text-white/10" />
-                    <span className="text-sm font-semibold">No Release Status Entries</span>
+                    <span className="text-sm font-semibold">No Release Testing Log Entries</span>
                     <span className="text-xs max-w-xs leading-normal">
                       Click **Add Row** or copy/paste rows from Microsoft Excel using standard keyboard triggers.
                     </span>

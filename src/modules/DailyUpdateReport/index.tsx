@@ -31,7 +31,9 @@ export const DailyUpdateReport: React.FC = () => {
     projects,
     selectedProjectId,
     fetchProjects,
-    setSelectedProjectId
+    setSelectedProjectId,
+    isProjectViewer,
+    userProjectRole
   } = useDailyReportStore()
 
   // Active Tab state
@@ -57,15 +59,15 @@ export const DailyUpdateReport: React.FC = () => {
   const totalSupport = supportRows.length
   const totalRelease = releaseRows.length
 
-  const completedSupport = supportRows.filter(r => ['Passed', 'Closed', 'Fixed'].includes(r.status)).length
+  const completedSupport = supportRows.filter(r => ['Passed', 'Closed', 'Fixed'].includes(r.testing_status)).length
   const completedRelease = releaseRows.filter(r => ['Pass', 'Passes'].includes(r.smoke_testing_status)).length
   const totalCompleted = completedSupport + completedRelease
 
-  const blockedSupport = supportRows.filter(r => r.status === 'Blocked').length
+  const blockedSupport = supportRows.filter(r => r.testing_status === 'Blocked').length
   const blockedRelease = releaseRows.filter(r => r.smoke_testing_status === 'Blocked').length
   const totalBlocked = blockedSupport + blockedRelease
 
-  const pendingSupport = supportRows.filter(r => ['Pending', 'In Progress', 'Retesting'].includes(r.status)).length
+  const pendingSupport = supportRows.filter(r => ['Pending', 'In Progress', 'Retesting'].includes(r.testing_status)).length
   const pendingRelease = releaseRows.filter(r => ['Not Executed', 'Retesting'].includes(r.smoke_testing_status)).length
   const totalPending = pendingSupport + pendingRelease
 
@@ -93,7 +95,7 @@ export const DailyUpdateReport: React.FC = () => {
 
   // Spent Hours = completed support estimation + completed release overall estimation + blocked hours (overhead)
   const completedSupportHrs = supportRows
-    .filter(r => ['Passed', 'Closed', 'Fixed'].includes(r.status))
+    .filter(r => ['Passed', 'Closed', 'Fixed'].includes(r.testing_status))
     .reduce((acc, r) => acc + (parseFloat(r.estimation_hrs as any) || 0) + (parseFloat(r.retesting_estimation_hrs as any) || 0), 0)
 
   const completedReleaseHrs = releaseRows
@@ -119,6 +121,25 @@ export const DailyUpdateReport: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 text-xs">
+          {/* Viewer Mode Badge */}
+          {isProjectViewer && (
+            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              <span className="font-semibold uppercase tracking-wide">Read-Only Mode</span>
+            </div>
+          )}
+
+          {/* Project Role Badge */}
+          {userProjectRole && userProjectRole !== 'viewer' && (
+            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-medium">
+              <CheckCircle className="w-3.5 h-3.5" />
+              <span className="capitalize">{userProjectRole}</span>
+            </div>
+          )}
+
           {/* Sync status badge */}
           {syncStatus !== 'local' && (
             <button
@@ -257,7 +278,7 @@ export const DailyUpdateReport: React.FC = () => {
         <div className="flex items-center gap-1.5 bg-[var(--surface-secondary)]/80 backdrop-blur-xl border border-[var(--border)] p-1.5 rounded-2xl relative shadow-xl">
           {[
             { id: 'support', label: 'Support & Exception Log', count: totalSupport },
-            { id: 'release', label: 'Release Testing Status', count: totalRelease }
+            { id: 'release', label: 'Release Testing Log', count: totalRelease }
           ].map(tab => {
             const isActive = activeTab === tab.id
             return (
@@ -289,6 +310,33 @@ export const DailyUpdateReport: React.FC = () => {
           <div className="h-16 rounded-2xl bg-white/5 animate-pulse w-full" />
           <div className="h-16 rounded-2xl bg-white/5 animate-pulse w-full" />
         </div>
+      ) : !selectedProjectId ? (
+        /* No Project Selected - Empty State */
+        <GlassCard hoverEffect={false} className="p-12">
+          <div className="flex flex-col items-center justify-center text-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent-gold/20 to-accent-gold/5 border-2 border-accent-gold/30 flex items-center justify-center">
+              <Layers className="w-8 h-8 text-accent-gold" />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-[var(--text-primary)] mb-2">
+                Select a Project to View Daily Report
+              </h3>
+              <p className="text-sm text-text-muted max-w-md">
+                Choose a project from the dropdown above to view and manage daily updates,
+                support logs, and release testing status for that project.
+              </p>
+            </div>
+            {projects.length > 0 && (
+              <button
+                onClick={() => setSelectedProjectId(projects[0].id)}
+                className="mt-4 flex items-center gap-2 px-6 py-3 rounded-xl bg-accent-gold text-black hover:opacity-90 transition-all font-bold uppercase tracking-wide text-sm"
+              >
+                <ChevronDown className="w-4 h-4" />
+                Select First Project
+              </button>
+            )}
+          </div>
+        </GlassCard>
       ) : (
         <div className="relative mt-2">
           <AnimatePresence mode="wait">

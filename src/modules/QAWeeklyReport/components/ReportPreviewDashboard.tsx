@@ -172,8 +172,9 @@ const MiniSparkline: React.FC<SparklineProps> = ({ data, color }) => {
 interface CountUpProps {
   end: number
   suffix?: string
+  decimals?: number
 }
-const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '' }) => {
+const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '', decimals = 0 }) => {
   const [isPrinting, setIsPrinting] = useState(false)
   const [count, setCount] = useState(() => {
     const hasPlayed = typeof window !== 'undefined' && sessionStorage.getItem('qaly-dashboard-entrance-played') === 'true'
@@ -219,7 +220,7 @@ const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '' }) => {
     const step = (timestamp: number) => {
       if (!startTimestamp) startTimestamp = timestamp
       const progress = Math.min((timestamp - startTimestamp) / duration, 1)
-      setCount(Math.floor(progress * end))
+      setCount(progress * end)
       if (progress < 1) {
         window.requestAnimationFrame(step)
       } else {
@@ -229,7 +230,7 @@ const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '' }) => {
     window.requestAnimationFrame(step)
   }, [end, isPrinting])
 
-  return <span>{isPrinting ? end : count}{suffix}</span>
+  return <span>{isPrinting ? end.toFixed(decimals) : count.toFixed(decimals)}{suffix}</span>
 }
 
 const containerVariants: Variants = {
@@ -1786,8 +1787,8 @@ Do not return markdown wraps, only raw JSON text.
                     >
                       <div
                         className={`px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-xl max-w-[200px] relative ${theme === 'dark'
-                            ? 'bg-gradient-to-br from-[#1a1a1a] via-[#1a1a1a] to-[#0a0a0a] border border-white/10'
-                            : 'bg-gradient-to-br from-white via-white to-slate-50 border border-slate-200 shadow-slate-200/50'
+                          ? 'bg-gradient-to-br from-[#1a1a1a] via-[#1a1a1a] to-[#0a0a0a] border border-white/10'
+                          : 'bg-gradient-to-br from-white via-white to-slate-50 border border-slate-200 shadow-slate-200/50'
                           }`}
                         style={{
                           boxShadow: theme === 'dark'
@@ -1806,8 +1807,8 @@ Do not return markdown wraps, only raw JSON text.
                         <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-[1px]">
                           <div
                             className={`w-2.5 h-2.5 rotate-45 ${theme === 'dark'
-                                ? 'bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border-r border-b border-white/10'
-                                : 'bg-gradient-to-br from-white to-slate-50 border-r border-b border-slate-200'
+                              ? 'bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border-r border-b border-white/10'
+                              : 'bg-gradient-to-br from-white to-slate-50 border-r border-b border-slate-200'
                               }`}
                           />
                         </div>
@@ -2289,6 +2290,119 @@ Do not return markdown wraps, only raw JSON text.
               </div>
             </motion.section>
           )}
+
+
+        {/* ── HISTORICAL DEFECT OPTIMIZATION ── */}
+        {vis.show_historicalDefectOptimization !== false && data.historicalDefectOptimization?.executiveSummary && (
+          <motion.section
+            variants={sectionVariants}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: "-80px" }}
+            className="flex flex-col gap-5"
+          >
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-accent-gold" />
+              <h2 className="text-2xl font-extrabold font-clash">Historical Defect Optimization</h2>
+            </div>
+
+            <div className={`p-6 rounded-2xl border flex flex-col gap-6 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+              {/* Input Values */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className={`p-4 rounded-xl border ${theme === 'dark' ? 'border-white/5 bg-white/[0.02]' : 'border-slate-100 bg-slate-50'}`}>
+                  <span className="text-[9px] uppercase font-bold tracking-wider text-red-400 block mb-2">Previous Count</span>
+                  <span className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                    <CountUpNumber end={data.historicalDefectOptimization.previousFixedBugCount} />
+                  </span>
+                </div>
+                <div className={`p-4 rounded-xl border ${theme === 'dark' ? 'border-white/5 bg-white/[0.02]' : 'border-slate-100 bg-slate-50'}`}>
+                  <span className="text-[9px] uppercase font-bold tracking-wider text-green-400 block mb-2">Latest Count</span>
+                  <span className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                    <CountUpNumber end={data.historicalDefectOptimization.latestFixedBugCount} />
+                  </span>
+                </div>
+                {data.historicalDefectOptimization.trackingSince && (
+                  <div className={`p-4 rounded-xl border ${theme === 'dark' ? 'border-white/5 bg-white/[0.02]' : 'border-slate-100 bg-slate-50'}`}>
+                    <span className="text-[9px] uppercase font-bold tracking-wider text-blue-400 block mb-2">Tracking Since</span>
+                    <span className={`text-lg font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                      {new Date(data.historicalDefectOptimization.trackingSince).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Calculated Results */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`p-5 rounded-xl border ${theme === 'dark' ? 'border-white/5 bg-gradient-to-br from-green-500/5 to-emerald-500/5' : 'border-green-200 bg-gradient-to-br from-green-50 to-emerald-50'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-green-400">Reduced Bugs</span>
+                    {data.historicalDefectOptimization.reducedBugs! >= 0 ? (
+                      <TrendingDown className="w-5 h-5 text-green-400" />
+                    ) : (
+                      <TrendingUp className="w-5 h-5 text-red-400" />
+                    )}
+                  </div>
+                  <span className={`text-4xl font-black ${data.historicalDefectOptimization.reducedBugs! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {data.historicalDefectOptimization.reducedBugs! >= 0 ? '' : '+'}
+                    <CountUpNumber end={Math.abs(data.historicalDefectOptimization.reducedBugs!)} />
+                  </span>
+                </div>
+
+                <div className={`p-5 rounded-xl border ${theme === 'dark' ? 'border-white/5 bg-gradient-to-br from-green-500/5 to-emerald-500/5' : 'border-green-200 bg-gradient-to-br from-green-50 to-emerald-50'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-green-400">Improvement</span>
+                    {data.historicalDefectOptimization.improvementPercentage! >= 0 ? (
+                      <TrendingUp className="w-5 h-5 text-green-400" />
+                    ) : (
+                      <TrendingDown className="w-5 h-5 text-red-400" />
+                    )}
+                  </div>
+                  <span className={`text-4xl font-black ${data.historicalDefectOptimization.improvementPercentage! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    <CountUpNumber end={Math.abs(data.historicalDefectOptimization.improvementPercentage!)} decimals={1} />%
+                  </span>
+                </div>
+              </div>
+
+              {/* Animated Progress Bar */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-text-muted">Progress</span>
+                  <span className="font-bold text-accent-gold">
+                    <CountUpNumber end={Math.abs(data.historicalDefectOptimization.improvementPercentage!)} decimals={1} />%
+                  </span>
+                </div>
+                <div className={`h-4 rounded-full overflow-hidden border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-slate-100 border-slate-200'}`}>
+                  <motion.div
+                    initial={{ width: hasPlayed ? `${Math.min(Math.abs(data.historicalDefectOptimization.improvementPercentage!), 100)}%` : 0 }}
+                    animate={{ width: `${Math.min(Math.abs(data.historicalDefectOptimization.improvementPercentage!), 100)}%` }}
+                    transition={{ duration: hasPlayed ? 0 : 1.2, ease: 'easeOut' }}
+                    className={`h-full rounded-full ${data.historicalDefectOptimization.improvementPercentage! >= 0 ? 'bg-gradient-to-r from-green-500 to-green-400' : 'bg-gradient-to-r from-red-500 to-red-400'}`}
+                    style={{
+                      boxShadow: data.historicalDefectOptimization.improvementPercentage! >= 0
+                        ? '0 0 10px rgba(34, 197, 94, 0.5)'
+                        : '0 0 10px rgba(239, 68, 68, 0.5)'
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-text-muted">
+                  <span>0%</span>
+                  <span>100%</span>
+                </div>
+              </div>
+
+              {/* Executive Summary */}
+              <div className={`p-5 rounded-xl border ${theme === 'dark' ? 'bg-accent-gold/5 border-accent-gold/20' : 'bg-amber-50 border-amber-200'}`}>
+                <h4 className={`text-[10px] font-bold uppercase tracking-wider mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-accent-gold' : 'text-amber-600'}`}>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Executive Summary
+                </h4>
+                <p className={`text-base leading-relaxed font-medium ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                  {data.historicalDefectOptimization.executiveSummary}
+                </p>
+              </div>
+            </div>
+          </motion.section>
+        )}
 
 
         {/* ════════════════════════════════════════════════════════════

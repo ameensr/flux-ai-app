@@ -16,6 +16,7 @@ import { ROUTES } from '@/lib/routes'
 import { ProjectMembersList } from './components/ProjectMembersList'
 import { AddMemberModal } from './components/AddMemberModal'
 import { EditProjectModal } from './components/EditProjectModal'
+import { DeleteProjectModal } from './components/DeleteProjectModal'
 
 export function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -28,6 +29,7 @@ export function ProjectDetail() {
   const [loading, setLoading] = useState(true)
   const [showAddMember, setShowAddMember] = useState(false)
   const [showEditProject, setShowEditProject] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   const canEdit = can('project-hub', 'can_edit')
   const canDelete = can('project-hub', 'can_delete')
@@ -75,20 +77,23 @@ export function ProjectDetail() {
     }
   }
 
-  const handleDelete = async () => {
-    if (!project) return
-    if (!confirm('Delete this project permanently? This action cannot be undone.')) return
+  const handleDeleteClick = () => {
+    setShowDeleteModal(true)
+  }
 
+  const handleDeleteConfirm = async () => {
     try {
+      if (!project) return
       await deleteProject(project.id)
-      toast({ title: 'Success', description: 'Project deleted' })
+      setShowDeleteModal(false)
+      toast({
+        title: 'Success',
+        description: 'Project deleted successfully. All associated data has been permanently removed.'
+      })
       navigate(ROUTES.projectHub)
     } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error.message || 'Failed to delete project'
-      })
+      // Error will be shown in modal
+      throw error
     }
   }
 
@@ -207,7 +212,7 @@ export function ProjectDetail() {
 
           {canDelete && (
             <button
-              onClick={handleDelete}
+              onClick={handleDeleteClick}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-all font-bold text-sm uppercase tracking-wider"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -380,6 +385,16 @@ export function ProjectDetail() {
             loadProject()
             toast({ title: 'Success', description: 'Project updated successfully' })
           }}
+        />
+      )}
+
+      {/* Delete Modal */}
+      {showDeleteModal && project && (
+        <DeleteProjectModal
+          projectName={project.name}
+          projectId={project.id}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDeleteConfirm}
         />
       )}
     </div>

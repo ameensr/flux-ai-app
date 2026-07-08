@@ -47,6 +47,15 @@ export interface DefectMetrics {
   closed: number
 }
 
+export interface HistoricalDefectOptimization {
+  previousFixedBugCount: number
+  latestFixedBugCount: number
+  trackingSince: string
+  reducedBugs?: number
+  improvementPercentage?: number
+  executiveSummary?: string
+}
+
 export interface HistoricalDefect {
   id: string
   metric: string
@@ -109,6 +118,7 @@ export interface QAReportForm {
   teamCapacity?: any // TeamCapacityData — stored as JSON
   defectsLastWeek: DefectMetrics
   defectsMTD: DefectMetrics
+  historicalDefectOptimization?: HistoricalDefectOptimization
   historicalDefects: HistoricalDefect[]
   nextPriorities: NextPriority[]
   showAIInsights?: boolean
@@ -117,6 +127,8 @@ export interface QAReportForm {
   showTimeline?: boolean
   customTimeline?: TimelineNode[]
   dashboardSections?: Record<string, boolean>
+  visibleSupportColumns?: Record<string, boolean> // Column visibility state for Support Log
+  visibleReleaseColumns?: Record<string, boolean> // Column visibility state for Release Testing
 }
 
 export interface SavedReport {
@@ -205,6 +217,14 @@ export const ensureFormData = (form: any): QAReportForm => {
       fixed: Number(f.defectsMTD?.fixed) || 0,
       closed: Number(f.defectsMTD?.closed) || 0,
     },
+    historicalDefectOptimization: f.historicalDefectOptimization ? {
+      previousFixedBugCount: Number(f.historicalDefectOptimization.previousFixedBugCount) || 0,
+      latestFixedBugCount: Number(f.historicalDefectOptimization.latestFixedBugCount) || 0,
+      trackingSince: f.historicalDefectOptimization.trackingSince || '',
+      reducedBugs: Number(f.historicalDefectOptimization.reducedBugs) || undefined,
+      improvementPercentage: Number(f.historicalDefectOptimization.improvementPercentage) || undefined,
+      executiveSummary: f.historicalDefectOptimization.executiveSummary || undefined,
+    } : undefined,
     historicalDefects: Array.isArray(f.historicalDefects) ? f.historicalDefects.filter(Boolean).map((hd: any) => ({
       id: hd?.id || crypto.randomUUID(),
       metric: hd?.metric || '',

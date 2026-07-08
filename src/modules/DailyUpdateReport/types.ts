@@ -1,5 +1,6 @@
 export interface SupportLogRecord {
   id: string
+  user_id?: string // Owner of this record
   support_id: string
   bug_id: string
   branch: string
@@ -11,30 +12,34 @@ export interface SupportLogRecord {
   actual_start_date: string
   planned_end_date: string
   actual_end_date: string
-  status: string
+  testing_status: string // Renamed from 'status' to 'testing_status'
+  issue_source: string // Moved after testing_status, before comments
   comments: string
   blocked_hours: number | ''
   retesting_status: string
   retesting_estimation_hrs: number | ''
-  issue_source: string
+  sort_order?: number // Database column for ordering rows
   project_id?: string
 }
 
 export interface ReleaseTestingRecord {
   id: string
+  user_id?: string // Owner of this record
   task_id: string
   description: string
   qa: string
   initial_round_estimation_hrs: number | ''
+  testing_status: string // New field: centralized Testing Status
   smoke_testing_status: string
   scope_of_testing_for_smoke: string
   smoke_testing_estimation_hrs: number | ''
   overall_scope_of_testing: string
   overall_estimation_hrs: number | ''
+  sort_order?: number // Database column for ordering rows
   project_id?: string
 }
 
-export type ConfigCategory = 'branch' | 'qa' | 'status' | 'retesting_status' | 'smoke_status' | 'issue_source'
+export type ConfigCategory = 'branch' | 'qa' | 'testing_status' | 'retesting_status' | 'smoke_status' | 'issue_source' | 'priority'
 
 export interface DropdownConfig {
   id: string

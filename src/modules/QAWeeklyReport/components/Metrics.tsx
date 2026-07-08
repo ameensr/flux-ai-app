@@ -3,6 +3,8 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
 import type { DefectMetrics, HistoricalDefect, NextPriority } from '../types'
 import { Plus, Trash2, TrendingUp, TrendingDown, Minus, Calculator, Lock, Unlock } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useTheme } from '@/context/ThemeContext'
 
 const inp = 'field-input py-2'
 const lbl = 'label-xs mb-1 block'
@@ -146,6 +148,228 @@ export const DefectAnalysis: React.FC = () => {
       <DefectBlock title="Defects — Last Week" value={form.defectsLastWeek} onChange={p => setForm({ defectsLastWeek: { ...form.defectsLastWeek, ...p } })} />
       <DefectBlock title="Defects — Month To Date" value={form.defectsMTD} onChange={p => setForm({ defectsMTD: { ...form.defectsMTD, ...p } })} />
     </div>
+  )
+}
+
+// ── Historical Defect Progress ────────────────────────────────────────────────
+
+export const HistoricalDefectOptimization: React.FC = () => {
+  const { form, setForm } = useQAReportStore()
+  const { isDark } = useTheme()
+  const data = form.historicalDefectOptimization
+  const [isCalculated, setIsCalculated] = useState(false)
+
+  const previousCount = data?.previousFixedBugCount || 0
+  const latestCount = data?.latestFixedBugCount || 0
+  const trackingSince = data?.trackingSince || ''
+
+  const handleCalculate = () => {
+    if (previousCount === 0 || latestCount === 0) {
+      return
+    }
+
+    const reducedBugs = previousCount - latestCount
+    const improvementPercentage = previousCount !== 0
+      ? Math.round((reducedBugs / previousCount) * 1000) / 10  // Round to 1 decimal place
+      : 0
+
+    const formatDate = (dateStr: string) => {
+      if (!dateStr) return 'the tracking start date'
+      const date = new Date(dateStr)
+      return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    }
+
+    const executiveSummary = `Historical defect backlog has been reduced from ${previousCount} to ${latestCount}${trackingSince ? ` since ${formatDate(trackingSince)}` : ''}, resulting in a ${Math.abs(improvementPercentage)}% ${improvementPercentage >= 0 ? 'improvement' : 'increase'} and ${Math.abs(reducedBugs)} ${reducedBugs >= 0 ? 'fewer' : 'more'} historical defects requiring attention.`
+
+    setForm({
+      historicalDefectOptimization: {
+        previousFixedBugCount: previousCount,
+        latestFixedBugCount: latestCount,
+        trackingSince,
+        reducedBugs,
+        improvementPercentage,
+        executiveSummary
+      }
+    })
+
+    setIsCalculated(true)
+  }
+
+  const handleFieldChange = () => {
+    setIsCalculated(false)
+  }
+
+  return (
+    <GlassCard hoverEffect={false} className="flex flex-col gap-4">
+      <span className="label-xs">Historical Defect Optimization</span>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Previous Fixed Bug Count */}
+        <div className="flex flex-col gap-1">
+          <label className={`${lbl} text-red-400`}>Previous Fixed Bug Count *</label>
+          <input
+            type="number"
+            min={0}
+            className={inp}
+            value={previousCount}
+            onChange={e => {
+              setForm({
+                historicalDefectOptimization: {
+                  previousFixedBugCount: Number(e.target.value),
+                  latestFixedBugCount: data?.latestFixedBugCount || 0,
+                  trackingSince: data?.trackingSince || '',
+                  reducedBugs: data?.reducedBugs,
+                  improvementPercentage: data?.improvementPercentage,
+                  executiveSummary: data?.executiveSummary
+                }
+              })
+              handleFieldChange()
+            }}
+            placeholder="e.g. 800"
+          />
+        </div>
+
+        {/* Latest Fixed Bug Count */}
+        <div className="flex flex-col gap-1">
+          <label className={`${lbl} text-green-400`}>Latest Fixed Bug Count *</label>
+          <input
+            type="number"
+            min={0}
+            className={inp}
+            value={latestCount}
+            onChange={e => {
+              setForm({
+                historicalDefectOptimization: {
+                  previousFixedBugCount: data?.previousFixedBugCount || 0,
+                  latestFixedBugCount: Number(e.target.value),
+                  trackingSince: data?.trackingSince || '',
+                  reducedBugs: data?.reducedBugs,
+                  improvementPercentage: data?.improvementPercentage,
+                  executiveSummary: data?.executiveSummary
+                }
+              })
+              handleFieldChange()
+            }}
+            placeholder="e.g. 524"
+          />
+        </div>
+
+        {/* Tracking Since */}
+        <div className="flex flex-col gap-1">
+          <label className={`${lbl} text-blue-400`}>Tracking Since (Optional)</label>
+          <input
+            type="date"
+            className={inp}
+            value={trackingSince}
+            onChange={e => {
+              setForm({
+                historicalDefectOptimization: {
+                  previousFixedBugCount: data?.previousFixedBugCount || 0,
+                  latestFixedBugCount: data?.latestFixedBugCount || 0,
+                  trackingSince: e.target.value,
+                  reducedBugs: data?.reducedBugs,
+                  improvementPercentage: data?.improvementPercentage,
+                  executiveSummary: data?.executiveSummary
+                }
+              })
+              handleFieldChange()
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Calculate Button */}
+      <button
+        onClick={handleCalculate}
+        disabled={previousCount === 0 || latestCount === 0}
+        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-accent-gold/10 border border-accent-gold/20 text-sm font-bold text-accent-gold hover:bg-accent-gold/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+      >
+        <Calculator className="w-4 h-4" />
+        Calculate
+      </button>
+
+      {/* Results Section */}
+      <AnimatePresence>
+        {isCalculated && data?.reducedBugs !== undefined && data?.improvementPercentage !== undefined && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="flex flex-col gap-4 pt-4 border-t border-white/10"
+          >
+            {/* Metrics Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Reduced Bugs */}
+              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Reduced Bugs</span>
+                  {data.reducedBugs >= 0 ? (
+                    <TrendingDown className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <TrendingUp className="w-4 h-4 text-red-400" />
+                  )}
+                </div>
+                <p className={`text-2xl font-black ${data.reducedBugs >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {data.reducedBugs >= 0 ? '' : '+'}{Math.abs(data.reducedBugs)}
+                </p>
+              </div>
+
+              {/* Improvement Percentage */}
+              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Improvement</span>
+                  {data.improvementPercentage >= 0 ? (
+                    <TrendingUp className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <TrendingDown className="w-4 h-4 text-red-400" />
+                  )}
+                </div>
+                <p className={`text-2xl font-black ${data.improvementPercentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {Math.abs(data.improvementPercentage)}%
+                </p>
+              </div>
+            </div>
+
+            {/* Animated Progress Bar */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-text-muted">Progress</span>
+                <span className="font-bold text-accent-gold">{Math.abs(data.improvementPercentage)}%</span>
+              </div>
+              <div className="h-3 bg-white/5 rounded-full overflow-hidden border border-white/10">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(Math.abs(data.improvementPercentage), 100)}%` }}
+                  transition={{ duration: 1, ease: 'easeOut' }}
+                  className={`h-full rounded-full ${data.improvementPercentage >= 0 ? 'bg-gradient-to-r from-green-500 to-green-400' : 'bg-gradient-to-r from-red-500 to-red-400'}`}
+                  style={{
+                    boxShadow: data.improvementPercentage >= 0
+                      ? '0 0 10px rgba(34, 197, 94, 0.5)'
+                      : '0 0 10px rgba(239, 68, 68, 0.5)'
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-text-muted">
+                <span>0%</span>
+                <span>100%</span>
+              </div>
+            </div>
+
+            {/* Executive Summary */}
+            {data.executiveSummary && (
+              <div className={`p-4 rounded-xl border ${isDark ? 'bg-accent-gold/5 border-accent-gold/20' : 'bg-amber-50 border-amber-200'}`}>
+                <h4 className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${isDark ? 'text-accent-gold' : 'text-amber-700'}`}>
+                  Executive Summary
+                </h4>
+                <p className={`text-sm leading-relaxed font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  {data.executiveSummary}
+                </p>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </GlassCard>
   )
 }
 

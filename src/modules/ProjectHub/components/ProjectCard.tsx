@@ -12,6 +12,7 @@ import { archiveProject, deleteProject } from '../projectService'
 import type { ProjectWithMembers } from '../types'
 import { PROJECT_STATUS_LABELS, PROJECT_STATUS_COLORS } from '../types'
 import { ROUTES } from '@/lib/routes'
+import { DeleteProjectModal } from './DeleteProjectModal'
 
 interface ProjectCardProps {
   project: ProjectWithMembers
@@ -25,6 +26,7 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
   const { isDark } = useTheme()
   const [showMenu, setShowMenu] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
+  const [showDeleteModal, setShowDeleteModal] = React.useState(false)
 
   const canEdit = can('project-hub', 'can_edit')
   const canDelete = can('project-hub', 'can_delete')
@@ -53,23 +55,23 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
     }
   }
 
-  const handleDelete = async () => {
-    if (!confirm('Delete this project permanently? This action cannot be undone.')) return
+  const handleDeleteClick = () => {
+    setShowMenu(false)
+    setShowDeleteModal(true)
+  }
 
+  const handleDeleteConfirm = async () => {
     try {
-      setLoading(true)
       await deleteProject(project.id)
-      toast({ title: 'Success', description: 'Project deleted successfully' })
+      setShowDeleteModal(false)
+      toast({
+        title: 'Success',
+        description: 'Project deleted successfully. All associated data has been permanently removed.'
+      })
       onUpdate()
     } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error.message || 'Failed to delete project'
-      })
-    } finally {
-      setLoading(false)
-      setShowMenu(false)
+      // Error will be shown in modal
+      throw error
     }
   }
 
@@ -218,7 +220,7 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleDelete()
+                        handleDeleteClick()
                       }}
                       disabled={loading}
                       className="w-full px-3 py-2 text-left text-xs flex items-center gap-2.5 transition-colors disabled:opacity-50"
@@ -341,6 +343,16 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
           </div>
         </div>
       </div>
+
+      {/* Delete Modal */}
+      {showDeleteModal && (
+        <DeleteProjectModal
+          projectName={project.name}
+          projectId={project.id}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDeleteConfirm}
+        />
+      )}
     </motion.div>
   )
 }

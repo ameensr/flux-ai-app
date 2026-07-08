@@ -16,7 +16,7 @@ Include these sections in order:
 3. ## Production Issue Analysis (Last Week & Month To Date)
 4. ## Team Resource Allocation
 5. ## Support & Exception Log
-6. ## Release Testing Status
+6. ## Release Testing Log
 7. ## Internal Defect Analysis
 8. ## Historical Defect Progress
 9. ## Next Week Priorities

@@ -208,7 +208,71 @@ export async function assignMember(input: AssignMemberInput): Promise<ProjectMem
   return data as ProjectMember
 }
 
-export async function updateMemberRole(memberId: string, projectRole: string): Promise<ProjectMember> {
+export async function updateMemberRole(
+  memberId: string,
+  projectRole: string,
+  projectId: string
+): Promise<ProjectMember> {
+  // Get current user
+  const { data: userData } = await supabase.auth.getUser()
+  if (!userData.user) throw new Error('Not authenticated')
+
+  // Get current user's profile to check for super_admin
+  const { data: currentUserProfile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userData.user.id)
+    .single()
+
+  const isSuperAdmin = currentUserProfile?.role === 'super_admin'
+
+  // Super admins bypass all restrictions
+  if (!isSuperAdmin) {
+    // Get current user's role in this project
+    const { data: currentUserMembership } = await supabase
+      .from('project_members')
+      .select('project_role')
+      .eq('project_id', projectId)
+      .eq('user_id', userData.user.id)
+      .single()
+
+    // Get target member's current role
+    const { data: targetMember } = await supabase
+      .from('project_members')
+      .select('project_role, user_id')
+      .eq('id', memberId)
+      .single()
+
+    if (!targetMember) throw new Error('Member not found')
+
+    // Business rules for non-super-admins:
+    // 1. Leads cannot modify Owners
+    if (currentUserMembership?.project_role === 'lead' &&
+      targetMember.project_role === 'owner') {
+      throw new Error('Project Leads cannot modify Project Owners')
+    }
+
+    // 2. Leads cannot promote anyone to Owner
+    if (currentUserMembership?.project_role === 'lead' &&
+      projectRole === 'owner') {
+      throw new Error('Project Leads cannot assign the Owner role')
+    }
+
+    // 3. Cannot demote the last owner
+    if (targetMember.project_role === 'owner' && projectRole !== 'owner') {
+      const { count } = await supabase
+        .from('project_members')
+        .select('id', { count: 'exact', head: true })
+        .eq('project_id', projectId)
+        .eq('project_role', 'owner')
+
+      if (count === 1) {
+        throw new Error('Cannot remove or demote the last project owner. Assign another owner first.')
+      }
+    }
+  }
+
+  // Perform the update
   const { data, error } = await supabase
     .from('project_members')
     .update({ project_role: projectRole })
@@ -216,24 +280,110 @@ export async function updateMemberRole(memberId: string, projectRole: string): P
     .select()
     .single()
 
-  if (error) throw error
+  if (error) {
+    // Handle specific database errors
+    if (error.message.includes('last project owner')) {
+      throw new Error('Cannot remove or demote the last project owner. Assign another owner first.')
+    }
+    throw error
+  }
   if (!data) throw new Error('Failed to update member role')
 
   return data as ProjectMember
 }
 
-export async function removeMember(memberId: string): Promise<void> {
+export async function removeMember(memberId: string, projectId: string): Promise<void> {
+  // Get current user
+  const { data: userData } = await supabase.auth.getUser()
+  if (!userData.user) throw new Error('Not authenticated')
+
+  // Get current user's profile to check for super_admin
+  const { data: currentUserProfile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userData.user.id)
+    .single()
+
+  const isSuperAdmin = currentUserProfile?.role === 'super_admin'
+
+  // Super admins bypass all restrictions
+  if (!isSuperAdmin) {
+    // Get current user's role in this project
+    const { data: currentUserMembership } = await supabase
+      .from('project_members')
+      .select('project_role')
+      .eq('project_id', projectId)
+      .eq('user_id', userData.user.id)
+      .single()
+
+    // Get target member's details
+    const { data: targetMember } = await supabase
+      .from('project_members')
+      .select('project_role, user_id')
+      .eq('id', memberId)
+      .single()
+
+    if (!targetMember) throw new Error('Member not found')
+
+    // Business rules for non-super-admins:
+    // 1. Leads cannot remove Owners
+    if (currentUserMembership?.project_role === 'lead' &&
+      targetMember.project_role === 'owner') {
+      throw new Error('Project Leads cannot remove Project Owners')
+    }
+
+    // 2. Cannot remove the last owner
+    if (targetMember.project_role === 'owner') {
+      const { count } = await supabase
+        .from('project_members')
+        .select('id', { count: 'exact', head: true })
+        .eq('project_id', projectId)
+        .eq('project_role', 'owner')
+
+      if (count === 1) {
+        throw new Error('Cannot remove the last project owner. Assign another owner first.')
+      }
+    }
+  }
+
+  // Perform the deletion
   const { error } = await supabase
     .from('project_members')
     .delete()
     .eq('id', memberId)
 
-  if (error) throw error
+  if (error) {
+    // Handle specific database errors
+    if (error.message.includes('last project owner')) {
+      throw new Error('Cannot remove the last project owner. Assign another owner first.')
+    }
+    throw error
+  }
 }
 
 export async function leaveProject(projectId: string): Promise<void> {
   const { data: userData } = await supabase.auth.getUser()
   if (!userData.user) throw new Error('Not authenticated')
+
+  // Check if user is an owner and the last one
+  const { data: currentMember } = await supabase
+    .from('project_members')
+    .select('project_role')
+    .eq('project_id', projectId)
+    .eq('user_id', userData.user.id)
+    .single()
+
+  if (currentMember?.project_role === 'owner') {
+    const { count } = await supabase
+      .from('project_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+      .eq('project_role', 'owner')
+
+    if (count === 1) {
+      throw new Error('Cannot leave project as the last owner. Assign another owner first or delete the project.')
+    }
+  }
 
   const { error } = await supabase
     .from('project_members')
@@ -241,7 +391,12 @@ export async function leaveProject(projectId: string): Promise<void> {
     .eq('project_id', projectId)
     .eq('user_id', userData.user.id)
 
-  if (error) throw error
+  if (error) {
+    if (error.message.includes('last project owner')) {
+      throw new Error('Cannot leave project as the last owner. Assign another owner first or delete the project.')
+    }
+    throw error
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

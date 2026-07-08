@@ -43,7 +43,8 @@ const SECTIONS: DashboardSectionConfig[] = [
   { key: 'show_teamCapacity', label: 'Team Capacity Overview', description: 'Weekly team availability and testing capacity', icon: Activity, category: 'Support', defaultEnabled: true },
 
   // Defects
-  { key: 'show_defectAnalysis', label: 'Defect Analysis', description: 'Last week + MTD defect counts', icon: Bug, category: 'Defects', defaultEnabled: true },
+  { key: 'show_defectAnalysis', label: 'Defects — Last Week', description: 'Last week + MTD defect counts', icon: Bug, category: 'Defects', defaultEnabled: true },
+  { key: 'show_historicalDefectOptimization', label: 'Historical Defect Optimization', description: 'Compare previous vs latest fixed bug counts with improvement metrics', icon: TrendingUp, category: 'Defects', defaultEnabled: true },
   { key: 'show_weeklyCharts', label: 'Weekly Defect Charts', description: 'Pie and bar charts for distributions', icon: BarChart3, category: 'Defects', defaultEnabled: true },
 
   // Analytics
