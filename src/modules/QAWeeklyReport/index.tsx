@@ -13,12 +13,14 @@ import { ReportPreviewDrawer } from './components/ReportPreviewDrawer'
 import { ReleaseTable } from './components/ReleaseTable'
 import { ReleaseBugStatus } from './components/ReleaseBugStatus'
 import { TeamCapacityUpload } from './components/TeamCapacity'
-import { DashboardSectionToggles } from './components/DashboardSectionToggles'
+import { DashboardSectionToggles, getSectionVisibility } from './components/DashboardSectionToggles'
+import { DisabledSectionWrapper } from './components/DisabledSectionWrapper'
 import { DefectAnalysis, HistoricalProgress, NextPriorities, HistoricalDefectOptimization } from './components/Metrics'
 import { DashboardWidgets, DefectChart, ReportHistory } from './components/Widgets'
 import { toast } from '@/hooks/use-toast'
 import { FileText, RefreshCw, RotateCcw, AlertCircle, Plus, Trash, History as HistoryIcon, Settings, Eye, Lock } from 'lucide-react'
-import type { QAReportForm, TimelineNode } from './types'
+import type { QAReportForm, TimelineNode, SupportTicket, ReleaseItem } from './types'
+import { createFormSnapshot, isPassStatus } from './types'
 import { ROUTES } from '@/lib/routes'
 import { calculateQAScore } from './utils/qualityCalculator'
 
@@ -29,7 +31,7 @@ function buildMarkdown(f: QAReportForm): string {
   const lwTotal = f.lastWeek.support
   const mtdTotal = f.monthToDate.support
 
-  const passCount = f.releaseItems.filter(i => i.status === 'Pass').length
+  const passCount = f.releaseItems.filter(i => isPassStatus(i.status)).length
   const passRate = f.releaseItems.length ? Math.round((passCount / f.releaseItems.length) * 100) : 0
 
   const lines: string[] = []
@@ -65,7 +67,7 @@ function buildMarkdown(f: QAReportForm): string {
   lines.push('| Category | Count |')
   lines.push('|---|---|')
   lines.push(`| Escaped Issue | ${f.lastWeek.escapedIssue} |`)
-  lines.push(`| Support Fix | ${f.lastWeek.supportFix} |`)
+  lines.push(`| Support | ${f.lastWeek.supportFix} |`)
   lines.push(`| Change Request | ${f.lastWeek.changeRequest} |`)
   lines.push(`| Data Issue | ${f.lastWeek.dataIssue} |`)
   lines.push(`| Backend Updation | ${f.lastWeek.backendUpdation} |`)
@@ -75,9 +77,8 @@ function buildMarkdown(f: QAReportForm): string {
   lines.push('| Category | Count |')
   lines.push('|---|---|')
   lines.push(`| Escaped Issue | ${f.monthToDate.escapedIssue} |`)
-  lines.push(`| Support Fix | ${f.monthToDate.supportFix} |`)
+  lines.push(`| Support | ${f.monthToDate.supportFix} |`)
   lines.push(`| Change Request | ${f.monthToDate.changeRequest} |`)
-  lines.push(`| Completed CR | ${f.monthToDate.completedCR ?? 0} |`)
   lines.push(`| Data Issue | ${f.monthToDate.dataIssue} |`)
   lines.push(`| Backend Updation | ${f.monthToDate.backendUpdation} |`)
   lines.push(`| **Total (Support Mails)** | **${mtdTotal}** |`)
@@ -91,21 +92,70 @@ function buildMarkdown(f: QAReportForm): string {
     if (f.automationTeam.length) lines.push(`- **Automation Team:** ${f.automationTeam.join(', ')}`)
   }
 
-  // Support Log
+  // Support Log with column visibility
   lines.push('\n## Support & Exception Log')
   if (!f.supportTickets.length) { lines.push(na) } else {
-    lines.push('| Task ID | Description | Assigned QA | Status | Priority | Remarks |')
-    lines.push('|---|---|---|---|---|---|')
-    f.supportTickets.forEach(t => lines.push(`| ${t.taskId} | ${t.description} | ${t.assignedQA} | ${t.status} | ${t.priority} | ${t.remarks} |`))
+    // Define support columns (must match SupportLog.tsx)
+    const supportColumns = [
+      { id: 'taskId', label: 'Task ID', defaultVisible: true },
+      { id: 'description', label: 'Description', defaultVisible: true },
+      { id: 'assignedQA', label: 'Assigned QA', defaultVisible: true },
+      { id: 'status', label: 'Status', defaultVisible: true },
+      { id: 'priority', label: 'Priority', defaultVisible: true },
+      { id: 'remarks', label: 'Remarks', defaultVisible: true },
+    ]
+    // Get visible columns from form or use defaults
+    const visibleSupportColumns = f.visibleSupportColumns || supportColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
+    const visibleSupportColumnsList = supportColumns.filter(col => visibleSupportColumns[col.id])
+
+    // Build table header
+    const header = visibleSupportColumnsList.map(col => col.label).join(' | ')
+    const separator = visibleSupportColumnsList.map(() => '---').join('|')
+    lines.push(`| ${header} |`)
+    lines.push(`|${separator}|`)
+
+    // Build table rows
+    f.supportTickets.forEach(t => {
+      const values = visibleSupportColumnsList.map(col => {
+        const colId = col.id as keyof SupportTicket
+        return t[colId] || ''
+      })
+      lines.push(`| ${values.join(' | ')} |`)
+    })
   }
 
-  // Release Testing
+  // Release Testing with column visibility
   lines.push('\n## Release Testing Status')
   if (!f.releaseItems.length) { lines.push(na) } else {
     lines.push(`**Pass Rate: ${passRate}% (${passCount}/${f.releaseItems.length})**`)
-    lines.push('\n| Task ID | Feature | Assignee | Status | Priority | Remarks |')
-    lines.push('|---|---|---|---|---|---|')
-    f.releaseItems.forEach(i => lines.push(`| ${i.taskId} | ${i.featureName} | ${i.assignee} | ${i.status} | ${i.priority} | ${i.remarks} |`))
+
+    // Define release columns (must match ReleaseTable.tsx)
+    const releaseColumns = [
+      { id: 'taskId', label: 'Task ID', defaultVisible: true },
+      { id: 'featureName', label: 'Feature Name', defaultVisible: true },
+      { id: 'assignee', label: 'Assignee', defaultVisible: true },
+      { id: 'status', label: 'Status', defaultVisible: true },
+      { id: 'priority', label: 'Priority', defaultVisible: true },
+      { id: 'remarks', label: 'Remarks', defaultVisible: true },
+    ]
+    // Get visible columns from form or use defaults
+    const visibleReleaseColumns = f.visibleReleaseColumns || releaseColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
+    const visibleReleaseColumnsList = releaseColumns.filter(col => visibleReleaseColumns[col.id])
+
+    // Build table header
+    const header = visibleReleaseColumnsList.map(col => col.label).join(' | ')
+    const separator = visibleReleaseColumnsList.map(() => '---').join('|')
+    lines.push(`\n| ${header} |`)
+    lines.push(`|${separator}|`)
+
+    // Build table rows
+    f.releaseItems.forEach(i => {
+      const values = visibleReleaseColumnsList.map(col => {
+        const colId = col.id as keyof typeof i
+        return i[colId] || ''
+      })
+      lines.push(`| ${values.join(' | ')} |`)
+    })
   }
 
   // Release Bug Status
@@ -257,7 +307,7 @@ function TimelineBuilder() {
     }
 
     const populated = activeHistory.map((h, i, arr) => {
-      const currPassCount = h.form.releaseItems.filter((item: any) => item?.status === 'Pass').length
+      const currPassCount = h.form.releaseItems.filter((item: any) => isPassStatus(item?.status)).length
       const currPassRate = h.form.releaseItems.length ? Math.round((currPassCount / h.form.releaseItems.length) * 100) : 0
 
       let emailChange = '➜'
@@ -404,17 +454,6 @@ function TimelineBuilder() {
   )
 }
 
-// Helper to create a form snapshot (excluding dashboard sections which are display-only preferences)
-function createFormSnapshot(form: QAReportForm): string {
-  const snapshot = { ...form }
-  delete (snapshot as any).dashboardSections // Exclude display preferences
-  delete (snapshot as any).showAIInsights
-  delete (snapshot as any).showAISummary
-  delete (snapshot as any).showHistoricalAnalytics
-  delete (snapshot as any).showTimeline
-  return JSON.stringify(snapshot)
-}
-
 export const QAWeeklyReport: React.FC = () => {
   const { form, setForm, setGeneratedReport, generatedReport, resetForm, fetchReports, fetchProjects, savedReports } = useQAReportStore()
   const { can } = usePermissions()
@@ -433,6 +472,14 @@ export const QAWeeklyReport: React.FC = () => {
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState<string>('')
   const [loadedFromHistory, setLoadedFromHistory] = useState(false)
   const [hasChangedSinceLoad, setHasChangedSinceLoad] = useState(false)
+
+  // Reset tracking states when project ID changes to prevent false "Changes Detected" state
+  React.useEffect(() => {
+    setIsSaved(false)
+    setLastSavedSnapshot('')
+    setLoadedFromHistory(false)
+    setHasChangedSinceLoad(false)
+  }, [form.projectId])
 
   React.useEffect(() => {
     fetchProjects(true).then(() => {
@@ -503,6 +550,9 @@ export const QAWeeklyReport: React.FC = () => {
     setLastSavedSnapshot(snapshot)
     setIsSaved(true)
   }
+
+  // Get section visibility for graying out disabled sections
+  const sectionVisibility = getSectionVisibility(form)
 
   const handleGenerate = () => {
     if (!isSaved) {
@@ -611,23 +661,56 @@ export const QAWeeklyReport: React.FC = () => {
           <HeaderSection />
           <DashboardSectionToggles />
           <TimelineBuilder />
-          <KPICards />
-          <ProductionIssues />
-          <TeamAllocation />
-          <SupportLog />
-          <ReleaseTable />
-          <ReleaseBugStatus
-            analytics={form.releaseBugStatus}
-            onChange={(data) => setForm({ releaseBugStatus: data })}
-          />
-          <TeamCapacityUpload
-            capacityData={form.teamCapacity}
-            onChange={(data) => setForm({ teamCapacity: data })}
-          />
-          <DefectAnalysis />
-          <HistoricalDefectOptimization />
-          <HistoricalProgress />
-          <NextPriorities />
+
+          <DisabledSectionWrapper isEnabled={sectionVisibility.show_kpiCards !== false} sectionName="KPI Scorecards">
+            <KPICards />
+          </DisabledSectionWrapper>
+
+          <DisabledSectionWrapper isEnabled={sectionVisibility.show_productionIssues !== false} sectionName="Production Issues">
+            <ProductionIssues />
+          </DisabledSectionWrapper>
+
+          <DisabledSectionWrapper isEnabled={sectionVisibility.show_teamAllocation !== false} sectionName="Team Allocation">
+            <TeamAllocation />
+          </DisabledSectionWrapper>
+
+          <DisabledSectionWrapper isEnabled={sectionVisibility.show_supportLog !== false} sectionName="Support & Exception Log">
+            <SupportLog />
+          </DisabledSectionWrapper>
+
+          <DisabledSectionWrapper isEnabled={sectionVisibility.show_releaseTable !== false} sectionName="Release Testing Table">
+            <ReleaseTable />
+          </DisabledSectionWrapper>
+
+          <DisabledSectionWrapper isEnabled={sectionVisibility.show_releaseBugStatus !== false} sectionName="Release Bug Status">
+            <ReleaseBugStatus
+              analytics={form.releaseBugStatus}
+              onChange={(data) => setForm({ releaseBugStatus: data })}
+            />
+          </DisabledSectionWrapper>
+
+          <DisabledSectionWrapper isEnabled={sectionVisibility.show_teamCapacity !== false} sectionName="Team Capacity Overview">
+            <TeamCapacityUpload
+              capacityData={form.teamCapacity}
+              onChange={(data) => setForm({ teamCapacity: data })}
+            />
+          </DisabledSectionWrapper>
+
+          <DisabledSectionWrapper isEnabled={sectionVisibility.show_defectAnalysis !== false} sectionName="Defect Analysis">
+            <DefectAnalysis />
+          </DisabledSectionWrapper>
+
+          <DisabledSectionWrapper isEnabled={sectionVisibility.show_historicalDefectOptimization !== false} sectionName="Historical Defect Optimization">
+            <HistoricalDefectOptimization />
+          </DisabledSectionWrapper>
+
+          <DisabledSectionWrapper isEnabled={sectionVisibility.showHistoricalAnalytics !== false} sectionName="Historical Defect Progress">
+            <HistoricalProgress />
+          </DisabledSectionWrapper>
+
+          <DisabledSectionWrapper isEnabled={sectionVisibility.show_nextPriorities !== false} sectionName="Next Week Priorities">
+            <NextPriorities />
+          </DisabledSectionWrapper>
 
           {/* Validation errors */}
           <AnimatePresence>

@@ -9,18 +9,16 @@ const lbl = 'label-xs mb-1 block'
 type BlockKey = keyof ProductionIssueBlock
 
 function IssueBlock({
-  title, value, onChange, showCR = false,
+  title, value, onChange,
 }: {
   title: string
   value: ProductionIssueBlock
   onChange: (patch: Partial<ProductionIssueBlock>) => void
-  showCR?: boolean
 }) {
   const fields: { key: BlockKey; label: string }[] = [
     { key: 'escapedIssue', label: 'Escaped Issue' },
-    { key: 'supportFix', label: 'Support Fix' },
+    { key: 'supportFix', label: 'Support' },
     { key: 'changeRequest', label: 'Change Request' },
-    ...(showCR ? [{ key: 'completedCR' as BlockKey, label: 'Completed CR' }] : []),
     { key: 'dataIssue', label: 'Data Issue' },
     { key: 'backendUpdation', label: 'Backend Updation' },
   ]
@@ -33,16 +31,18 @@ function IssueBlock({
       (Number(updatedValue.escapedIssue) || 0) +
       (Number(updatedValue.supportFix) || 0) +
       (Number(updatedValue.changeRequest) || 0) +
-      (Number(updatedValue.completedCR) || 0) +
       (Number(updatedValue.dataIssue) || 0) +
       (Number(updatedValue.backendUpdation) || 0)
-    
+
     onChange({ [key]: val, support: supportSum })
   }
 
   return (
     <GlassCard hoverEffect={false} className="flex flex-col gap-3">
-      <span className="label-xs">{title}</span>
+      <div className="flex items-center justify-between">
+        <span className="label-xs font-bold">{title}</span>
+        <span className="text-[10px] text-text-muted font-medium">(Manual Input)</span>
+      </div>
       {fields.map(({ key, label }) => (
         <div key={key} className="flex items-center justify-between gap-3">
           <label className={lbl}>{label}</label>
@@ -78,7 +78,6 @@ export const ProductionIssues: React.FC = () => {
         title="Month To Date"
         value={form.monthToDate}
         onChange={patch => setForm({ monthToDate: { ...form.monthToDate, ...patch } })}
-        showCR
       />
     </div>
   )

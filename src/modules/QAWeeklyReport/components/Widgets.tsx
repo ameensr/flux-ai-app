@@ -5,6 +5,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { Trash2, ExternalLink, Search, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
+import { createFormSnapshot, isPassStatus } from '../types'
 
 // ── Pie Chart ─────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ export const DashboardWidgets: React.FC = () => {
   const { defectsLastWeek: d, releaseItems } = form
   const total = d.reported || 1
   const closedPct = Math.round((d.closed / total) * 100)
-  const passCount = releaseItems.filter(i => i.status === 'Pass').length
+  const passCount = releaseItems.filter(i => isPassStatus(i.status)).length
 
   const slices: PieSlice[] = [
     { label: 'Support Tickets', value: form.supportEmails, color: 'bg-blue-400', hex: '#60a5fa' },
@@ -212,13 +213,21 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
   const pages = Math.ceil(filtered.length / PER_PAGE)
   const visible = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
+  // Reset to last valid page if current page exceeds available pages
+  useEffect(() => {
+    if (page > pages && pages > 0) {
+      setPage(pages)
+    } else if (pages === 0) {
+      setPage(1)
+    }
+  }, [filtered.length, page, pages])
+
   const open = (r: typeof savedReports[0]) => {
     setGeneratedReport(r.markdown)
     setForm(r.form)
     toast({ title: 'Report Loaded', description: `${r.project} — ${r.week}` })
     if (onReportLoaded) {
-      const snapshot = JSON.stringify((() => { const s = { ...r.form }; delete (s as any).showAIInsights; delete (s as any).showAISummary; delete (s as any).showHistoricalAnalytics; delete (s as any).showTimeline; return s })())
-      onReportLoaded(snapshot)
+      onReportLoaded(createFormSnapshot(r.form))
     }
   }
 

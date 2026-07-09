@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
 import type { ReleaseItem, ReleaseStatus } from '../types'
+import { isPassStatus } from '../types'
 import { useDailyReportStore } from '@/modules/DailyUpdateReport/store'
 import type { ReleaseTestingRecord } from '@/modules/DailyUpdateReport/types'
 import { toast } from '@/hooks/use-toast'
@@ -97,9 +98,9 @@ export const ReleaseTable: React.FC = () => {
     }
   }, [showColumnMenu])
 
-  // Get status options from Daily Report configuration (smoke_status for release testing)
+  // Get status options from Daily Report configuration (testing_status for release testing)
   const statusOptions = dropdownConfigs
-    .filter(c => c.category === 'smoke_status' && c.is_active)
+    .filter(c => c.category === 'testing_status' && c.is_active)
     .sort((a, b) => a.sort_order - b.sort_order)
     .map(c => c.value)
 
@@ -202,7 +203,7 @@ export const ReleaseTable: React.FC = () => {
     const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
   })
 
-  const passRate = items.length ? Math.round(items.filter(i => i.status === 'Pass').length / items.length * 100) : 0
+  const passRate = items.length ? Math.round(items.filter(i => isPassStatus(i.status)).length / items.length * 100) : 0
 
   return (
     <GlassCard hoverEffect={false} className="flex flex-col gap-4">
@@ -211,7 +212,12 @@ export const ReleaseTable: React.FC = () => {
           <div className="flex items-center gap-3">
             <span className="label-xs">Release Testing Log</span>
             {items.length > 0 && (
-              <span className="text-[10px] font-bold text-green-400">{passRate}% Pass Rate</span>
+              <span
+                className="text-[10px] font-bold text-green-400 cursor-help"
+                title={`Base on completed status: ${items.filter(i => isPassStatus(i.status)).length} passed out of ${items.length} total items`}
+              >
+                {passRate}% Pass Rate
+              </span>
             )}
           </div>
         </div>

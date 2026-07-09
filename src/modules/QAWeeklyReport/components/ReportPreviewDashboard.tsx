@@ -13,6 +13,7 @@ import {
 import { Logo } from '@/components/ui/Logo'
 import { BRAND } from '@/lib/brand'
 import { calculateQAScore } from '../utils/qualityCalculator'
+import { ExecutiveKPISection } from './ExecutiveKPISection'
 
 const getCustomStyles = (theme: 'light' | 'dark') => `
   @keyframes float {
@@ -324,6 +325,10 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const [showTeamCapacityModal, setShowTeamCapacityModal] = useState(false)
   const [showQualityScoreModal, setShowQualityScoreModal] = useState(false)
   const [hoveredKPI, setHoveredKPI] = useState<string | null>(null)
+  const [expandedKPICategories, setExpandedKPICategories] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem('qaly-expanded-kpi-categories')
+    return saved ? JSON.parse(saved) : {}
+  })
   const [aiSummary, setAiSummary] = useState({
     achievements: [
       'Successfully validated the core checkout flows, bringing mobile friction down by 14% month-over-month.',
@@ -788,6 +793,15 @@ const ReportPreviewDashboardContent: React.FC = () => {
     }
   }
 
+  const toggleKPICategory = (categoryId: string) => {
+    const newState = {
+      ...expandedKPICategories,
+      [categoryId]: !expandedKPICategories[categoryId]
+    }
+    setExpandedKPICategories(newState)
+    localStorage.setItem('qaly-expanded-kpi-categories', JSON.stringify(newState))
+  }
+
   const scrollToSection = (section: string) => {
     const targetRef = (sectionsRef as any)[section]
     if (targetRef && targetRef.current) {
@@ -918,11 +932,10 @@ Do not return markdown wraps, only raw JSON text.
   // ── Table Adapters ──
   const prodIssuesData = [
     { category: 'Escaped Issue', lastWeek: data.lastWeek.escapedIssue ?? (data.lastWeek as any).codeFix, mtd: data.monthToDate.escapedIssue ?? (data.monthToDate as any).codeFix },
-    { category: 'Support Fix', lastWeek: data.lastWeek.supportFix || 0, mtd: data.monthToDate.supportFix || 0 },
+    { category: 'Support', lastWeek: data.lastWeek.supportFix || 0, mtd: data.monthToDate.supportFix || 0 },
     { category: 'Change Request', lastWeek: data.lastWeek.changeRequest, mtd: data.monthToDate.changeRequest },
     { category: 'Data Issue', lastWeek: data.lastWeek.dataIssue, mtd: data.monthToDate.dataIssue },
-    { category: 'Backend Update', lastWeek: data.lastWeek.backendUpdation, mtd: data.monthToDate.backendUpdation },
-    ...(data.monthToDate.completedCR ? [{ category: 'Completed CR', lastWeek: 0, mtd: data.monthToDate.completedCR }] : [])
+    { category: 'Backend Update', lastWeek: data.lastWeek.backendUpdation, mtd: data.monthToDate.backendUpdation }
   ]
 
   // Work Distribution - using actual data from tables
@@ -1397,8 +1410,7 @@ Do not return markdown wraps, only raw JSON text.
                   { id: 'supportLog', label: 'Support' },
                   { id: 'defects', label: 'Defects' },
                   { id: 'charts', label: 'Charts' },
-                  { id: 'aiSummary', label: 'AI Insights', show: data.showAIInsights !== false || data.showAISummary !== false },
-                  { id: 'comparison', label: 'WoW', show: data.showAIInsights !== false },
+                  { id: 'comparison', label: 'WoW' },
                   { id: 'historyDashboard', label: 'History', show: data.showHistoricalAnalytics !== false },
                   { id: 'roadmap', label: 'Priorities' }
                 ].filter(item => item.show !== false).map(item => (
@@ -1605,7 +1617,7 @@ Do not return markdown wraps, only raw JSON text.
             <div className="flex items-center gap-6 mt-2 flex-wrap">
               <div>
                 <span className="text-3xl font-black text-accent-gold block"><CountUpNumber end={releaseCount} /></span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>Items Tested</span>
+                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>Release Scope</span>
               </div>
               <div className="w-px h-10 bg-white/10" />
               <div>
@@ -1714,143 +1726,199 @@ Do not return markdown wraps, only raw JSON text.
             <Activity className="w-5 h-5 text-accent-gold" />
             <h2 className="text-2xl font-extrabold font-clash">Key Performance Indicators</h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 items-stretch">
-            {(() => {
-              // Calculate KPIs from Release Bug Status, Release Testing Status, and Support & Exception Log
-              const releaseBugMetrics = data.releaseBugStatus?.metrics
-              const releaseTestingPassed = data.releaseItems?.filter(i => i?.status === 'Pass').length || 0
-              const releaseTestingFailed = data.releaseItems?.filter(i => i?.status === 'Fail').length || 0
-              const releaseTestingBlocked = data.releaseItems?.filter(i => i?.status === 'Blocked').length || 0
-              const releaseTestingTotal = data.releaseItems?.length || 0
-              const supportTicketsTotal = data.supportTickets?.length || 0
-              const supportCritical = data.supportTickets?.filter(t => t?.priority === 'Critical').length || 0
-              const supportHigh = data.supportTickets?.filter(t => t?.priority === 'High').length || 0
-              const supportResolved = data.supportTickets?.filter(t => t?.status === 'Resolved' || t?.status === 'Closed').length || 0
 
-              return [
-                // Release Bug Status KPIs (if available)
-                ...(releaseBugMetrics ? [
-                  { label: 'Total Bugs', val: releaseBugMetrics.totalBugs, icon: AlertTriangle, color: 'text-blue-400', desc: 'Release bug count', sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.totalBugs || 0), tooltip: 'All tracked bugs for this release' },
-                  { label: 'Active Bugs', val: releaseBugMetrics.activeBugs, icon: AlertTriangle, color: 'text-red-400', desc: 'Currently active bugs', sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.activeBugs || 0), pulse: releaseBugMetrics.activeBugs > 5, tooltip: 'Bugs awaiting fix • Immediate attention' },
-                  { label: 'Completed Bugs', val: releaseBugMetrics.completedBugs, icon: CheckCheck, color: 'text-green-400', desc: 'Bugs verified and closed', sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.completedBugs || 0), tooltip: 'Fixed, tested & fully resolved' },
-                  { label: 'Bug Closure Rate', val: Math.round(releaseBugMetrics.closurePercentage * 100) / 100, suffix: '%', icon: TrendingUp, color: 'text-accent-gold', desc: 'Bug resolution efficiency', sparklineData: getHistoricalValues(f => Math.round((f.releaseBugStatus?.metrics?.closurePercentage || 0) * 100) / 100), tooltip: 'Resolution efficiency • Higher is better' },
-                ] : []),
+          {(() => {
+            // Calculate KPIs from Release Bug Status, Release Testing Status, and Support & Exception Log
+            const releaseBugMetrics = data.releaseBugStatus?.metrics
+            const releaseTestingPassed = data.releaseItems?.filter(i => i?.status === 'Pass').length || 0
+            const releaseTestingFailed = data.releaseItems?.filter(i => i?.status === 'Fail').length || 0
+            const releaseTestingBlocked = data.releaseItems?.filter(i => i?.status === 'Blocked').length || 0
+            const releaseTestingTotal = data.releaseItems?.length || 0
+            const supportTicketsTotal = data.supportTickets?.length || 0
+            const supportCritical = data.supportTickets?.filter(t => t?.priority === 'Critical').length || 0
+            const supportHigh = data.supportTickets?.filter(t => t?.priority === 'High').length || 0
+            const supportResolved = data.supportTickets?.filter(t => t?.status === 'Resolved' || t?.status === 'Closed').length || 0
 
-                // Release Testing Status KPIs
-                { label: 'Tests Passed', val: releaseTestingPassed, icon: Check, color: 'text-green-400', desc: 'Release tests passed', sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => i?.status === 'Pass').length || 0), tooltip: 'Successfully validated test cases' },
-                { label: 'Tests Failed', val: releaseTestingFailed, icon: X, color: 'text-red-400', desc: 'Release tests failed', sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => i?.status === 'Fail').length || 0), pulse: releaseTestingFailed > 3, tooltip: 'Tests requiring fixes before release' },
-                { label: 'Tests Blocked', val: releaseTestingBlocked, icon: Shield, color: 'text-orange-400', desc: 'Release tests blocked', sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => i?.status === 'Blocked').length || 0), tooltip: 'Blocked by dependencies or environment' },
+            // Prepare KPI metrics with categories for Executive KPI Section
+            const kpiMetrics = [
+              // PRIMARY METRICS (Always Visible - Top Priority)
+              {
+                label: 'Release Testing Progress',
+                val: releaseTestingTotal > 0 ? Math.round((releaseTestingPassed / releaseTestingTotal) * 100) : 0,
+                suffix: '%',
+                icon: Star,
+                color: 'text-accent-gold',
+                desc: `${releaseTestingPassed}/${releaseTestingTotal} features validated`,
+                sparklineData: getHistoricalValues(f => {
+                  const total = f.releaseItems?.length || 0
+                  const passed = f.releaseItems?.filter((i: any) => i?.status === 'Pass').length || 0
+                  return total > 0 ? Math.round((passed / total) * 100) : 0
+                }),
+                tooltip: 'Are we ready to release? • Target: 90%+',
+                category: 'primary' as const
+              },
+              {
+                label: 'Active Bugs',
+                val: releaseBugMetrics?.activeBugs || data.defectsLastWeek.open,
+                icon: AlertTriangle,
+                color: 'text-red-400',
+                desc: releaseBugMetrics ? `${releaseBugMetrics.totalBugs} total bugs` : 'Unresolved defects',
+                sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.activeBugs || f.defectsLastWeek.open || 0),
+                pulse: (releaseBugMetrics?.activeBugs || data.defectsLastWeek.open) > 5,
+                tooltip: 'What unresolved product risk exists?',
+                category: 'primary' as const
+              },
+              {
+                label: 'Support Tickets',
+                val: supportTicketsTotal,
+                icon: Mail,
+                color: 'text-blue-400',
+                desc: `${supportResolved} resolved`,
+                sparklineData: getHistoricalValues(f => f.supportTickets?.length || 0),
+                tooltip: 'Is production/customer support under control?',
+                category: 'primary' as const
+              },
+              {
+                label: 'QA Health Score',
+                val: qualityStats.score,
+                suffix: '%',
+                icon: Star,
+                color: 'text-purple-400',
+                desc: qualityStats.label,
+                sparklineData: getHistoricalValues(f => calculateQAScore(f).score),
+                tooltip: 'Overall QA confidence',
+                category: 'primary' as const
+              },
+              {
+                label: 'Critical Tickets',
+                val: supportCritical,
+                icon: AlertTriangle,
+                color: 'text-red-500',
+                desc: 'Immediate action needed',
+                sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => t?.priority === 'Critical').length || 0),
+                pulse: supportCritical > 3,
+                tooltip: 'Production outages requiring immediate action',
+                category: 'primary' as const
+              },
+
+              // RELEASE HEALTH CATEGORY
+              ...(releaseBugMetrics ? [
                 {
-                  label: 'Pass Rate', val: releaseTestingTotal > 0 ? Math.round((releaseTestingPassed / releaseTestingTotal) * 100) : 0, suffix: '%', icon: Star, color: 'text-accent-gold', desc: 'Test success percentage', sparklineData: getHistoricalValues(f => {
-                    const total = f.releaseItems?.length || 0
-                    const passed = f.releaseItems?.filter((i: any) => i?.status === 'Pass').length || 0
-                    return total > 0 ? Math.round((passed / total) * 100) : 0
-                  }), tooltip: 'Production readiness • Target: 90%+'
+                  label: 'Total Bugs',
+                  val: releaseBugMetrics.totalBugs,
+                  icon: AlertTriangle,
+                  color: 'text-blue-400',
+                  desc: 'Release bug count',
+                  sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.totalBugs || 0),
+                  tooltip: 'All tracked bugs for this release',
+                  category: 'releaseHealth' as const
                 },
+                {
+                  label: 'Completed Bugs',
+                  val: releaseBugMetrics.completedBugs,
+                  icon: CheckCheck,
+                  color: 'text-green-400',
+                  desc: 'Bugs verified and closed',
+                  sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.completedBugs || 0),
+                  tooltip: 'Fixed, tested & fully resolved',
+                  category: 'releaseHealth' as const
+                },
+                {
+                  label: 'Bug Closure Rate',
+                  val: Math.round(releaseBugMetrics.closurePercentage * 100) / 100,
+                  suffix: '%',
+                  icon: TrendingUp,
+                  color: 'text-accent-gold',
+                  desc: 'Bug resolution efficiency',
+                  sparklineData: getHistoricalValues(f => Math.round((f.releaseBugStatus?.metrics?.closurePercentage || 0) * 100) / 100),
+                  tooltip: 'Resolution efficiency • Higher is better',
+                  category: 'releaseHealth' as const
+                }
+              ] : []),
 
-                // Support & Exception Log KPIs
-                { label: 'Support Tickets', val: supportTicketsTotal, icon: Mail, color: 'text-blue-400', desc: 'Total support tickets', sparklineData: getHistoricalValues(f => f.supportTickets?.length || 0), tooltip: 'Active support queue • All priorities' },
-                { label: 'Critical Tickets', val: supportCritical, icon: AlertTriangle, color: 'text-red-500', desc: 'Critical priority tickets', sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => t?.priority === 'Critical').length || 0), pulse: supportCritical > 3, tooltip: 'Production outages • Immediate action' },
-                { label: 'High Priority', val: supportHigh, icon: Zap, color: 'text-orange-400', desc: 'High priority tickets', sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => t?.priority === 'High').length || 0), tooltip: 'Key issues impacting multiple users' },
-                { label: 'Resolved Tickets', val: supportResolved, icon: CheckCheck, color: 'text-green-400', desc: 'Resolved/closed tickets', sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => t?.status === 'Resolved' || t?.status === 'Closed').length || 0), tooltip: 'Successfully resolved & closed' },
+              // TESTING QUALITY CATEGORY
+              {
+                label: 'Tests Passed',
+                val: releaseTestingPassed,
+                icon: Check,
+                color: 'text-green-400',
+                desc: 'Release tests passed',
+                sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => i?.status === 'Pass').length || 0),
+                tooltip: 'Successfully validated test cases',
+                category: 'testingQuality' as const
+              },
+              {
+                label: 'Tests Failed',
+                val: releaseTestingFailed,
+                icon: X,
+                color: 'text-red-400',
+                desc: 'Release tests failed',
+                sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => i?.status === 'Fail').length || 0),
+                pulse: releaseTestingFailed > 3,
+                tooltip: 'Tests requiring fixes before release',
+                category: 'testingQuality' as const
+              },
+              {
+                label: 'Tests Blocked',
+                val: releaseTestingBlocked,
+                icon: Shield,
+                color: 'text-orange-400',
+                desc: 'Release tests blocked',
+                sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => i?.status === 'Blocked').length || 0),
+                tooltip: 'Blocked by dependencies or environment',
+                category: 'testingQuality' as const
+              },
 
-                // Additional useful metrics
-                { label: 'Team Size', val: data.newFeatureTeam.length + data.supportTeam.length + data.automationTeam.length, icon: Users, color: 'text-teal-400', desc: 'Active QA team members', sparklineData: getHistoricalValues(f => f.newFeatureTeam.length + f.supportTeam.length + f.automationTeam.length), isInternal: true, tooltip: 'Active QA engineers across all teams' },
-                { label: 'QA Health Score', val: qualityStats.score, suffix: '%', icon: Star, color: 'text-purple-400', desc: 'Executive quality index', sparklineData: getHistoricalValues(f => calculateQAScore(f).score), tooltip: 'Overall quality health • Multi-factor' }
-              ]
-            })().filter(kpi => !clientMode || !kpi.isInternal).map((kpi, idx) => (
-              <motion.div
-                key={kpi.label}
-                initial="initial"
-                whileInView="show"
-                whileHover="hover"
-                variants={{
-                  initial: { opacity: 0, y: 15 },
-                  show: { opacity: 1, y: 0 },
-                  hover: { y: -6, scale: 1.02, boxShadow: theme === 'dark' ? '0 10px 30px -10px rgba(255,255,255,0.08)' : '0 10px 30px -10px rgba(0,0,0,0.12)' }
-                }}
-                viewport={{ once: true }}
-                transition={{ delay: idx * 0.04 }}
-                className={`p-5 rounded-2xl border flex flex-col justify-between gap-3 group relative overflow-visible transition-all duration-300 min-h-[140px] ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme === 'dark' ? 'bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]' : 'bg-white border-slate-200 hover:border-slate-300'}`}
-                onMouseEnter={() => kpi.tooltip && setHoveredKPI(kpi.label)}
-                onMouseLeave={() => setHoveredKPI(null)}
-              >
-                {/* Premium Tooltip */}
-                <AnimatePresence>
-                  {kpi.tooltip && hoveredKPI === kpi.label && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.9 }}
-                      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                      className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 z-50 pointer-events-none"
-                    >
-                      <div
-                        className={`px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-xl max-w-[200px] relative ${theme === 'dark'
-                          ? 'bg-gradient-to-br from-[#1a1a1a] via-[#1a1a1a] to-[#0a0a0a] border border-white/10'
-                          : 'bg-gradient-to-br from-white via-white to-slate-50 border border-slate-200 shadow-slate-200/50'
-                          }`}
-                        style={{
-                          boxShadow: theme === 'dark'
-                            ? '0 20px 40px -15px rgba(0,0,0,0.8), 0 0 0 1px rgba(212,175,55,0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
-                            : '0 20px 40px -15px rgba(0,0,0,0.15), 0 0 0 1px rgba(212,175,55,0.1), inset 0 1px 0 rgba(255,255,255,0.8)'
-                        }}
-                      >
-                        {/* Glow effect */}
-                        <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-accent-gold/5 via-transparent to-blue-500/5 pointer-events-none" />
+              // SUPPORT OPERATIONS CATEGORY
+              {
+                label: 'High Priority',
+                val: supportHigh,
+                icon: Zap,
+                color: 'text-orange-400',
+                desc: 'High priority tickets',
+                sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => t?.priority === 'High').length || 0),
+                tooltip: 'Key issues impacting multiple users',
+                category: 'supportOps' as const
+              },
+              {
+                label: 'Resolved Tickets',
+                val: supportResolved,
+                icon: CheckCheck,
+                color: 'text-green-400',
+                desc: 'Resolved/closed tickets',
+                sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => t?.status === 'Resolved' || t?.status === 'Closed').length || 0),
+                tooltip: 'Successfully resolved & closed',
+                category: 'supportOps' as const
+              },
 
-                        <p className={`text-[11px] font-medium leading-relaxed relative z-10 ${theme === 'dark' ? 'text-white/90' : 'text-slate-700'}`}>
-                          {kpi.tooltip}
-                        </p>
+              // TEAM & RESOURCES CATEGORY
+              {
+                label: 'Team Size',
+                val: data.newFeatureTeam.length + data.supportTeam.length + data.automationTeam.length,
+                icon: Users,
+                color: 'text-teal-400',
+                desc: 'Active QA team members',
+                sparklineData: getHistoricalValues(f => f.newFeatureTeam.length + f.supportTeam.length + f.automationTeam.length),
+                isInternal: true,
+                tooltip: 'Active QA engineers across all teams',
+                category: 'teamResources' as const
+              }
+            ]
 
-                        {/* Premium arrow */}
-                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-[1px]">
-                          <div
-                            className={`w-2.5 h-2.5 rotate-45 ${theme === 'dark'
-                              ? 'bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border-r border-b border-white/10'
-                              : 'bg-gradient-to-br from-white to-slate-50 border-r border-b border-slate-200'
-                              }`}
-                          />
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Gradient Border Glow */}
-                <div className="absolute inset-0 border border-transparent bg-gradient-to-tr from-accent-gold/25 via-blue-500/25 to-transparent rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }} />
-
-                {/* Info Icon Indicator */}
-                {kpi.tooltip && (
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    <Info className="w-3.5 h-3.5 text-accent-gold" />
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between">
-                  <motion.div variants={{ hover: { rotate: [0, -8, 8, 0], scale: 1.15 } }} transition={{ duration: 0.4 }}>
-                    <kpi.icon className={`w-5 h-5 ${kpi.color} ${kpi.pulse ? 'animate-pulse' : ''}`} />
-                  </motion.div>
-                  {kpi.sparklineData.length > 1 && (
-                    <MiniSparkline data={kpi.sparklineData} color={kpi.color.includes('gold') ? '#d4af37' : kpi.color.includes('blue') ? '#60a5fa' : kpi.color.includes('green') ? '#4ade80' : '#a855f7'} />
-                  )}
-                  {kpi.pulse && (
-                    <span className="absolute top-3 right-3 flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <span className={`text-3xl font-black block tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
-                    <CountUpNumber end={kpi.val} suffix={kpi.suffix} />
-                  </span>
-                  <span className={`text-xs font-extrabold ${theme === 'dark' ? 'text-white/80' : 'text-slate-700'}`}>{kpi.label}</span>
-                </div>
-                <p className="text-[10px] text-text-muted leading-normal">{kpi.desc}</p>
-              </motion.div>
-            ))}
-          </div>
+            // Render using new Executive KPI Section component
+            return (
+              <ExecutiveKPISection
+                kpiMetrics={kpiMetrics.filter(kpi => !clientMode || !kpi.isInternal)}
+                expandedCategories={expandedKPICategories}
+                onToggleCategory={toggleKPICategory}
+                hoveredKPI={hoveredKPI}
+                onHoverKPI={setHoveredKPI}
+                theme={theme}
+                CountUpNumber={CountUpNumber}
+                MiniSparkline={MiniSparkline}
+              />
+            )
+          })()}
         </motion.section>
 
         {/* ══════════════════════════════════════════════════════════
@@ -2040,36 +2108,90 @@ Do not return markdown wraps, only raw JSON text.
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10">
                 <tr className={`border-b ${theme === 'dark' ? 'border-white/5 bg-[#0f0f12] text-white/55' : 'border-slate-200 bg-slate-50 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
-                  <th className="py-3.5 px-5">Task ID</th>
-                  <th className="py-3.5 px-5">Feature</th>
-                  <th className="py-3.5 px-5">Assignee</th>
-                  <th className="py-3.5 px-5 text-center">Status</th>
-                  <th className="py-3.5 px-5 text-center">Priority</th>
+                  {(() => {
+                    const releaseColumns = [
+                      { id: 'taskId', label: 'Task ID', defaultVisible: true },
+                      { id: 'featureName', label: 'Feature', defaultVisible: true },
+                      { id: 'assignee', label: 'Assignee', defaultVisible: true },
+                      { id: 'status', label: 'Status', defaultVisible: true },
+                      { id: 'priority', label: 'Priority', defaultVisible: true },
+                      { id: 'remarks', label: 'Remarks', defaultVisible: true },
+                    ]
+                    const visibleColumns = data.visibleReleaseColumns || releaseColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
+                    const visibleColumnsList = releaseColumns.filter(col => visibleColumns[col.id])
+                    return visibleColumnsList.map(col => (
+                      <th key={col.id} className={`py-3.5 px-5 ${col.id === 'status' || col.id === 'priority' ? 'text-center' : ''}`}>{col.label}</th>
+                    ))
+                  })()}
                 </tr>
               </thead>
               <tbody>
-                {data.releaseItems.map((item, idx) => (
-                  <motion.tr
-                    key={item.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: idx * 0.04, duration: 0.3 }}
-                    className={`border-b text-xs transition-colors hover:bg-white/[0.03] ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'} ${idx % 2 === 0 ? '' : theme === 'dark' ? 'bg-white/[0.015]' : 'bg-slate-50/50'}`}
-                  >
-                    <td className="py-3.5 px-5 font-mono font-bold text-accent-gold">{item.taskId}</td>
-                    <td className={`py-3.5 px-5 font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{item.featureName}</td>
-                    <td className="py-3.5 px-5 text-text-secondary">{item.assignee}</td>
-                    <td className="py-3.5 px-5 text-center">
-                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${item.status === 'Pass' ? 'bg-green-500/10 text-green-400' : item.status === 'Fail' ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-accent-gold'}`}>{item.status}</span>
-                    </td>
-                    <td className="py-3.5 px-5 text-center">
-                      <span className={`text-[10px] font-bold ${item.priority === 'Critical' ? 'text-red-400' : item.priority === 'High' ? 'text-orange-400' : 'text-text-muted'}`}>{item.priority}</span>
-                    </td>
-                  </motion.tr>
-                ))}
+                {data.releaseItems.map((item, idx) => {
+                  const releaseColumns = [
+                    { id: 'taskId', label: 'Task ID', defaultVisible: true },
+                    { id: 'featureName', label: 'Feature', defaultVisible: true },
+                    { id: 'assignee', label: 'Assignee', defaultVisible: true },
+                    { id: 'status', label: 'Status', defaultVisible: true },
+                    { id: 'priority', label: 'Priority', defaultVisible: true },
+                    { id: 'remarks', label: 'Remarks', defaultVisible: true },
+                  ]
+                  const visibleColumns = data.visibleReleaseColumns || releaseColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
+                  const visibleColumnsList = releaseColumns.filter(col => visibleColumns[col.id])
+
+                  return (
+                    <motion.tr
+                      key={item.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.04, duration: 0.3 }}
+                      className={`border-b text-xs transition-colors hover:bg-white/[0.03] ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'} ${idx % 2 === 0 ? '' : theme === 'dark' ? 'bg-white/[0.015]' : 'bg-slate-50/50'}`}
+                    >
+                      {visibleColumnsList.map(col => {
+                        if (col.id === 'taskId') {
+                          return <td key={col.id} className="py-3.5 px-5 font-mono font-bold text-accent-gold">{item.taskId}</td>
+                        }
+                        if (col.id === 'featureName') {
+                          return <td key={col.id} className={`py-3.5 px-5 font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{item.featureName}</td>
+                        }
+                        if (col.id === 'assignee') {
+                          return <td key={col.id} className="py-3.5 px-5 text-text-secondary">{item.assignee}</td>
+                        }
+                        if (col.id === 'status') {
+                          return (
+                            <td key={col.id} className="py-3.5 px-5 text-center">
+                              <span className={`inline-block px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${item.status === 'Pass' ? 'bg-green-500/10 text-green-400' : item.status === 'Fail' ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-accent-gold'}`}>{item.status}</span>
+                            </td>
+                          )
+                        }
+                        if (col.id === 'priority') {
+                          return (
+                            <td key={col.id} className="py-3.5 px-5 text-center">
+                              <span className={`text-[10px] font-bold ${item.priority === 'Critical' ? 'text-red-400' : item.priority === 'High' ? 'text-orange-400' : 'text-text-muted'}`}>{item.priority}</span>
+                            </td>
+                          )
+                        }
+                        if (col.id === 'remarks') {
+                          return <td key={col.id} className={`py-3.5 px-5 text-text-secondary ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>{item.remarks}</td>
+                        }
+                        return null
+                      })}
+                    </motion.tr>
+                  )
+                })}
                 {data.releaseItems.length === 0 && (
-                  <tr><td colSpan={5} className="py-8 text-center text-xs text-text-muted">No items configured.</td></tr>
+                  <tr><td colSpan={(() => {
+                    const releaseColumns = [
+                      { id: 'taskId', label: 'Task ID', defaultVisible: true },
+                      { id: 'featureName', label: 'Feature', defaultVisible: true },
+                      { id: 'assignee', label: 'Assignee', defaultVisible: true },
+                      { id: 'status', label: 'Status', defaultVisible: true },
+                      { id: 'priority', label: 'Priority', defaultVisible: true },
+                      { id: 'remarks', label: 'Remarks', defaultVisible: true },
+                    ]
+                    const visibleColumns = data.visibleReleaseColumns || releaseColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
+                    return releaseColumns.filter(col => visibleColumns[col.id]).length
+                  })()} className="py-8 text-center text-xs text-text-muted">No items configured.</td></tr>
                 )}
               </tbody>
             </table>
@@ -2175,36 +2297,90 @@ Do not return markdown wraps, only raw JSON text.
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10">
                 <tr className={`border-b ${theme === 'dark' ? 'border-white/5 bg-[#0f0f12] text-white/55' : 'border-slate-200 bg-slate-50 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
-                  <th className="py-3.5 px-5">Ticket</th>
-                  <th className="py-3.5 px-5">Description</th>
-                  <th className="py-3.5 px-5">QA</th>
-                  <th className="py-3.5 px-5 text-center">Status</th>
-                  <th className="py-3.5 px-5 text-center">Priority</th>
+                  {(() => {
+                    const supportColumns = [
+                      { id: 'taskId', label: 'Ticket', defaultVisible: true },
+                      { id: 'description', label: 'Description', defaultVisible: true },
+                      { id: 'assignedQA', label: 'QA', defaultVisible: true },
+                      { id: 'status', label: 'Status', defaultVisible: true },
+                      { id: 'priority', label: 'Priority', defaultVisible: true },
+                      { id: 'remarks', label: 'Remarks', defaultVisible: true },
+                    ]
+                    const visibleColumns = data.visibleSupportColumns || supportColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
+                    const visibleColumnsList = supportColumns.filter(col => visibleColumns[col.id])
+                    return visibleColumnsList.map(col => (
+                      <th key={col.id} className="py-3.5 px-5">{col.label}</th>
+                    ))
+                  })()}
                 </tr>
               </thead>
               <tbody>
-                {data.supportTickets.map((ticket, idx) => (
-                  <motion.tr
-                    key={ticket.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: idx * 0.04, duration: 0.3 }}
-                    className={`border-b text-xs transition-colors hover:bg-white/[0.03] ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'} ${idx % 2 === 0 ? '' : theme === 'dark' ? 'bg-white/[0.015]' : 'bg-slate-50/50'}`}
-                  >
-                    <td className="py-3.5 px-5 font-mono font-bold text-blue-400">{ticket.taskId}</td>
-                    <td className={`py-3.5 px-5 font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{ticket.description}</td>
-                    <td className="py-3.5 px-5 text-text-secondary">{ticket.assignedQA}</td>
-                    <td className="py-3.5 px-5 text-center">
-                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${ticket.status === 'Resolved' ? 'bg-green-500/10 text-green-400' : ticket.status === 'Closed' ? 'bg-blue-500/10 text-blue-400' : 'bg-orange-500/10 text-orange-400'}`}>{ticket.status}</span>
-                    </td>
-                    <td className="py-3.5 px-5 text-center">
-                      <span className={`text-[10px] font-bold ${ticket.priority === 'Critical' ? 'text-red-400' : ticket.priority === 'High' ? 'text-orange-400' : 'text-text-muted'}`}>{ticket.priority}</span>
-                    </td>
-                  </motion.tr>
-                ))}
+                {data.supportTickets.map((ticket, idx) => {
+                  const supportColumns = [
+                    { id: 'taskId', label: 'Ticket', defaultVisible: true },
+                    { id: 'description', label: 'Description', defaultVisible: true },
+                    { id: 'assignedQA', label: 'QA', defaultVisible: true },
+                    { id: 'status', label: 'Status', defaultVisible: true },
+                    { id: 'priority', label: 'Priority', defaultVisible: true },
+                    { id: 'remarks', label: 'Remarks', defaultVisible: true },
+                  ]
+                  const visibleColumns = data.visibleSupportColumns || supportColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
+                  const visibleColumnsList = supportColumns.filter(col => visibleColumns[col.id])
+
+                  return (
+                    <motion.tr
+                      key={ticket.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.04, duration: 0.3 }}
+                      className={`border-b text-xs transition-colors hover:bg-white/[0.03] ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'} ${idx % 2 === 0 ? '' : theme === 'dark' ? 'bg-white/[0.015]' : 'bg-slate-50/50'}`}
+                    >
+                      {visibleColumnsList.map(col => {
+                        if (col.id === 'taskId') {
+                          return <td key={col.id} className="py-3.5 px-5 font-mono font-bold text-blue-400">{ticket.taskId}</td>
+                        }
+                        if (col.id === 'description') {
+                          return <td key={col.id} className={`py-3.5 px-5 font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{ticket.description}</td>
+                        }
+                        if (col.id === 'assignedQA') {
+                          return <td key={col.id} className="py-3.5 px-5 text-text-secondary">{ticket.assignedQA}</td>
+                        }
+                        if (col.id === 'status') {
+                          return (
+                            <td key={col.id} className="py-3.5 px-5 text-center">
+                              <span className={`inline-block px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${ticket.status === 'Resolved' ? 'bg-green-500/10 text-green-400' : ticket.status === 'Closed' ? 'bg-blue-500/10 text-blue-400' : 'bg-orange-500/10 text-orange-400'}`}>{ticket.status}</span>
+                            </td>
+                          )
+                        }
+                        if (col.id === 'priority') {
+                          return (
+                            <td key={col.id} className="py-3.5 px-5 text-center">
+                              <span className={`text-[10px] font-bold ${ticket.priority === 'Critical' ? 'text-red-400' : ticket.priority === 'High' ? 'text-orange-400' : 'text-text-muted'}`}>{ticket.priority}</span>
+                            </td>
+                          )
+                        }
+                        if (col.id === 'remarks') {
+                          return <td key={col.id} className={`py-3.5 px-5 text-text-secondary ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>{ticket.remarks}</td>
+                        }
+                        return null
+                      })}
+                    </motion.tr>
+                  )
+                })}
                 {data.supportTickets.length === 0 && (
-                  <tr><td colSpan={5} className="py-8 text-center text-xs text-text-muted">No tickets logged.</td></tr>
+                  <tr><td colSpan={(() => {
+                    const supportColumns = [
+                      { id: 'taskId', label: 'Ticket', defaultVisible: true },
+                      { id: 'description', label: 'Description', defaultVisible: true },
+                      { id: 'assignedQA', label: 'QA', defaultVisible: true },
+                      { id: 'status', label: 'Status', defaultVisible: true },
+                      { id: 'priority', label: 'Priority', defaultVisible: true },
+                      { id: 'remarks', label: 'Remarks', defaultVisible: true },
+                    ]
+                    const visibleColumns = data.visibleSupportColumns || supportColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
+                    return supportColumns.filter(col => visibleColumns[col.id]).length
+                  })()} className="py-8 text-center text-xs text-text-muted">No tickets logged.</td></tr>
                 )}
               </tbody>
             </table>
@@ -2406,366 +2582,247 @@ Do not return markdown wraps, only raw JSON text.
 
 
         {/* ════════════════════════════════════════════════════════════
-            AI INSIGHTS
-        ════════════════════════════════════════════════════════════ */}
-
-        {/* ── SECTION 8: AI EXECUTIVE SUMMARY ── */}
-        {data.showAIInsights !== false && vis.showAIInsights !== false && (
-          <>
-            <motion.section
-              variants={sectionVariants}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true, margin: "-80px" }}
-              ref={sectionsRef.aiSummary}
-              className="flex flex-col gap-5"
-            >
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-accent-gold" />
-                  <h2 className="text-2xl font-extrabold font-clash">AI Insights</h2>
-                </div>
-                <button
-                  onClick={handleAIGenerate}
-                  disabled={isGeneratingAI}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-tr from-accent-gold to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-extrabold text-xs uppercase tracking-widest transition-all disabled:opacity-50"
-                >
-                  {isGeneratingAI ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Synthesizing...</> : <><Sparkles className="w-3.5 h-3.5" /> Regenerate</>}
-                </button>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                {[
-                  { title: '🏆 Major Achievements', list: aiSummary.achievements, color: 'border-green-500/20 text-green-400', bg: 'bg-green-500/[0.03]' },
-                  { title: '⚠ Risks & Impediments', list: aiSummary.risks, color: 'border-red-500/20 text-red-400', bg: 'bg-red-500/[0.03]', isInternal: true },
-                  { title: '📈 Identified Trends', list: aiSummary.trends, color: 'border-blue-500/20 text-blue-400', bg: 'bg-blue-500/[0.03]' },
-                  { title: '💡 Recommendations', list: aiSummary.recommendations, color: 'border-purple-500/20 text-purple-400', bg: 'bg-purple-500/[0.03]' }
-                ].filter(card => !clientMode || !card.isInternal).map(card => (
-                  <div key={card.title} className={`p-5 rounded-2xl border flex flex-col gap-3 ${card.bg} ${theme === 'dark' ? `border-white/5 ${card.color.split(' ')[0]}` : `border-slate-200`}`}>
-                    <span className={`text-xs font-black tracking-wide ${card.color.split(' ')[1]}`}>{card.title}</span>
-                    <ul className="flex flex-col gap-2">
-                      {card.list.map((item, idx) => (
-                        <motion.li
-                          key={idx}
-                          initial={{ opacity: 0, x: -15 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: idx * 0.08, ease: 'easeOut' }}
-                          className="flex gap-2 items-start text-xs leading-relaxed"
-                        >
-                          <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-accent-gold" />
-                          <span className={theme === 'dark' ? 'text-white/80' : 'text-slate-700'}>{item}</span>
-                        </motion.li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </motion.section>
-
-            {/* ════════════════════════════════════════════════════════════
             HISTORICAL COMPARISON
         ════════════════════════════════════════════════════════════ */}
 
-            {/* ── SECTION 9: WoW COMPARISON ── */}
-            <motion.section
-              variants={sectionVariants}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true, margin: "-80px" }}
-              ref={sectionsRef.comparison}
-              className="flex flex-col gap-5"
-              style={{ display: vis.show_wowComparison === false ? 'none' : undefined }}
-            >
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-accent-gold" />
-                  <h2 className="text-2xl font-extrabold font-clash">Week-over-Week KPI Comparison</h2>
-                </div>
-                {activeHistory.length >= 2 && (
-                  <button
-                    onClick={() => setCompareMode(v => !v)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${compareMode ? 'bg-accent-gold text-black border-accent-gold' : 'bg-white/5 border-white/10 text-text-secondary hover:text-white'}`}
-                  >
-                    <GitCompare className="w-4 h-4" />
-                    {compareMode ? 'Show WoW Cards' : 'Compare Saved Reports'}
-                  </button>
-                )}
-              </div>
-
-              {compareMode ? (
-                <div className={`p-6 rounded-3xl border flex flex-col gap-6 ${tS.card} ${tS.border} ${tS.glow}`}>
-                  <div className="flex items-center justify-between flex-wrap gap-4 border-b border-white/5 pb-4">
-                    <div>
-                      <h3 className="text-lg font-bold font-clash">Snapshot Comparison Mode</h3>
-                      <p className="text-xs text-text-muted">Select any two saved reports to see differences side-by-side.</p>
-                    </div>
-
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[9px] uppercase font-bold text-text-muted">Report A (Baseline)</span>
-                        <select
-                          value={compareReportA}
-                          onChange={e => setCompareReportA(e.target.value)}
-                          className="bg-[#1a1a1a] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none"
-                        >
-                          <option value="">Choose Report A...</option>
-                          {activeHistory.map(r => (
-                            <option key={r.id} value={r.id}>{r.week || r.form.weekStart} - {r.form.projectName}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <span className="text-text-muted mt-4">vs</span>
-
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[9px] uppercase font-bold text-text-muted">Report B (Comparison)</span>
-                        <select
-                          value={compareReportB}
-                          onChange={e => setCompareReportB(e.target.value)}
-                          className="bg-[#1a1a1a] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none"
-                        >
-                          <option value="">Choose Report B...</option>
-                          {activeHistory.map(r => (
-                            <option key={r.id} value={r.id}>{r.week || r.form.weekStart} - {r.form.projectName}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Compare Results Display */}
-                  {(() => {
-                    const repA = activeHistory.find(r => r.id === compareReportA)?.form
-                    const repB = activeHistory.find(r => r.id === compareReportB)?.form
-
-                    if (!repA || !repB) {
-                      return (
-                        <div className="p-8 text-center text-xs text-text-muted border border-dashed border-white/5 rounded-2xl">
-                          Select two reports from the dropdowns above to calculate snapshots.
-                        </div>
-                      )
-                    }
-
-                    const winner = getComparisonWinner(repA, repB)
-                    const biggestImp = getBiggestImprovement(repA, repB)
-
-                    const metricsCompare = [
-                      { name: 'Support Tickets', valA: repA.supportEmails, valB: repB.supportEmails, type: 'lower' },
-                      { name: 'Defects Reported', valA: repA.defectsLastWeek.reported, valB: repB.defectsLastWeek.reported, type: 'lower' },
-                      { name: 'Open Defects', valA: repA.defectsLastWeek.open, valB: repB.defectsLastWeek.open, type: 'lower' },
-                      { name: 'Features Completed', valA: repA.newFeatures, valB: repB.newFeatures, type: 'higher' },
-                      { name: 'Testing Completed', valA: repA.releaseItems.length, valB: repB.releaseItems.length, type: 'higher' }
-                    ]
-
-                    return (
-                      <div className="flex flex-col gap-6">
-                        {/* Insights Summary Widgets */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="p-4 rounded-2xl bg-green-500/5 border border-green-500/10 flex flex-col justify-between">
-                            <span className="text-[9px] uppercase font-bold text-green-400 tracking-wider">Overall Winner</span>
-                            <span className="text-sm font-extrabold mt-1 text-white">{winner}</span>
-                          </div>
-                          <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex flex-col justify-between">
-                            <span className="text-[9px] uppercase font-bold text-blue-400 tracking-wider">Biggest Improvement</span>
-                            <span className="text-sm font-extrabold mt-1 text-white">{biggestImp}</span>
-                          </div>
-                        </div>
-
-                        {/* Comparison table grid */}
-                        <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.01]">
-                          <table className="w-full text-left text-xs border-collapse">
-                            <thead>
-                              <tr className="border-b border-white/5 bg-white/5 text-[10px] font-black uppercase text-text-muted">
-                                <th className="p-4">Metric</th>
-                                <th className="p-4">Report A (Baseline)</th>
-                                <th className="p-4">Report B (Comparison)</th>
-                                <th className="p-4">Difference</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {metricsCompare.map((m, idx) => {
-                                const diff = m.valB - m.valA
-                                const pct = m.valA !== 0 ? Math.round((diff / m.valA) * 100) : 0
-                                const isLowerBetter = m.type === 'lower'
-
-                                let isImproved = false
-                                if (diff !== 0) {
-                                  isImproved = isLowerBetter ? diff < 0 : diff > 0
-                                }
-
-                                return (
-                                  <motion.tr
-                                    key={m.name}
-                                    initial={{ opacity: 0, y: 8 }}
-                                    whileInView={{ opacity: 1, y: 0 }}
-                                    viewport={{ once: true }}
-                                    transition={{ delay: idx * 0.04, duration: 0.3 }}
-                                    className="border-b border-white/5"
-                                  >
-                                    <td className="p-4 font-bold text-white">{m.name}</td>
-                                    <td className="p-4 text-text-secondary">{m.valA}</td>
-                                    <td className="p-4 text-white font-extrabold">{m.valB}</td>
-                                    <td className="p-4">
-                                      {diff === 0 ? (
-                                        <span className="text-text-muted">▬ No Change</span>
-                                      ) : (
-                                        <span className={`font-bold px-2 py-0.5 rounded ${isImproved ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-                                          {diff > 0 ? '▲' : '▼'} {Math.abs(pct)}% {isImproved ? 'Improved' : 'Worse'}
-                                        </span>
-                                      )}
-                                    </td>
-                                  </motion.tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </div>
-              ) : !prevReport ? (
-                <div className={`p-8 rounded-2xl border text-center text-sm ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 text-white/50' : 'bg-white border-slate-200 text-slate-500'}`}>
-                  <p className="font-semibold text-accent-gold mb-1">No previous report available for comparison</p>
-                  <p className="text-xs">Save your first report to start tracking week-over-week performance changes.</p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {comparisons.map((card, idx) => {
-                      const isImproved = card.trend === 'improved'
-                      const isRegression = card.trend === 'regression'
-                      const isNeutral = card.trend === 'neutral'
-
-                      const badgeColor = isImproved
-                        ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                        : isRegression
-                          ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                          : 'bg-amber-500/10 text-accent-gold border-accent-gold/20'
-
-                      const glowColor = isImproved
-                        ? 'shadow-[0_0_20px_rgba(74,222,128,0.05)] border-green-500/10'
-                        : isRegression
-                          ? 'shadow-[0_0_20px_rgba(248,113,113,0.05)] border-red-500/10'
-                          : 'shadow-none border-white/5'
-
-                      return (
-                        <motion.div
-                          key={card.name}
-                          initial={{ opacity: 0, y: 15 }}
-                          whileInView={{ opacity: 1, y: 0 }}
-                          viewport={{ once: true }}
-                          transition={{ delay: idx * 0.05 }}
-                          className={`p-6 rounded-2xl border flex flex-col justify-between gap-4 group transition-all duration-300 ${glowColor} ${theme === 'dark' ? 'bg-white/[0.01] hover:border-white/20 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:shadow-lg hover:border-slate-300'}`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className={`text-xs font-extrabold ${theme === 'dark' ? 'text-white/80' : 'text-slate-700'}`}>{card.name}</span>
-                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${badgeColor}`}>
-                              {card.badgeText}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between py-2">
-                            <div className="flex flex-col">
-                              <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Last Week</span>
-                              <span className={`text-xl font-bold ${theme === 'dark' ? 'text-white/60' : 'text-slate-500'}`}>
-                                {card.lastVal}
-                              </span>
-                            </div>
-
-                            <div className="flex flex-col items-center justify-center text-text-muted">
-                              <span className="text-xs">↓</span>
-                            </div>
-
-                            <div className="flex flex-col items-end">
-                              <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">This Week</span>
-                              <span className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-                                <CountUpNumber end={card.thisVal} />
-                              </span>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )
-                    })}
-                  </div>
-
-                  {/* WoW AI Insights Summary box */}
-                  <div className={`p-5 rounded-2xl border flex items-start gap-4 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}>
-                    <div className="p-2 rounded-xl bg-accent-gold/10 text-accent-gold shrink-0">
-                      <Sparkles className="w-5 h-5" />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-black uppercase tracking-widest text-accent-gold">WoW AI Summary</span>
-                      <p className={`text-xs leading-relaxed ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>
-                        {generateWowSummary(comparisons)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </motion.section>
-          </>
-        )}
-
-        {/* ── SECTION 3: AI EXECUTIVE SUMMARY ── */}
-        {data.showAISummary !== false && (
-          <motion.section
-            variants={sectionVariants}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, margin: "-80px" }}
-            ref={sectionsRef.aiSummary}
-            className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-8"
-          >
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-accent-gold" />
-                <h2 className="text-2xl font-extrabold font-clash">AI Summary</h2>
-              </div>
-              <p className={`text-sm leading-relaxed ${theme === 'dark' ? 'text-white/60' : 'text-slate-600'}`}>
-                Synthesizing current weekly data against the last 5 saved history reports to map trends, regression vectors, and resource workloads.
-              </p>
+        {/* ── SECTION 9: WoW COMPARISON ── */}
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          ref={sectionsRef.comparison}
+          className="flex flex-col gap-5"
+          style={{ display: vis.show_wowComparison === false ? 'none' : undefined }}
+        >
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-accent-gold" />
+              <h2 className="text-2xl font-extrabold font-clash">Week-over-Week KPI Comparison</h2>
+            </div>
+            {activeHistory.length >= 2 && (
               <button
-                onClick={handleAIGenerate}
-                disabled={isGeneratingAI}
-                className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-tr from-accent-gold to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-extrabold text-xs uppercase tracking-widest transition-all mt-2 disabled:opacity-50"
+                onClick={() => setCompareMode(v => !v)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${compareMode ? 'bg-accent-gold text-black border-accent-gold' : 'bg-white/5 border-white/10 text-text-secondary hover:text-white'}`}
               >
-                {isGeneratingAI ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" /> Synthesizing data...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" /> Regenerate summary
-                  </>
-                )}
+                <GitCompare className="w-4 h-4" />
+                {compareMode ? 'Show WoW Cards' : 'Compare Saved Reports'}
               </button>
-            </div>
+            )}
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { title: '🏆 Major Achievements', list: aiSummary.achievements, color: 'border-green-500/20 text-green-400' },
-                { title: '⚠ Risks & Impediments', list: aiSummary.risks, color: 'border-red-500/20 text-red-400', isInternal: true },
-                { title: '📈 Identified Trends', list: aiSummary.trends, color: 'border-blue-500/20 text-blue-400' },
-                { title: '💡 Recommendations', list: aiSummary.recommendations, color: 'border-purple-500/20 text-purple-400' }
-              ].filter(card => !clientMode || !card.isInternal).map(card => (
-                <div
-                  key={card.title}
-                  className={`p-5 rounded-2xl border flex flex-col gap-3 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}
-                >
-                  <span className={`text-sm font-black tracking-wide ${card.color}`}>{card.title}</span>
-                  <ul className="flex flex-col gap-2">
-                    {card.list.map((item, idx) => (
-                      <li key={idx} className="flex gap-2 items-start text-xs leading-normal">
-                        <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-accent-gold" />
-                        <span className={theme === 'dark' ? 'text-white/80' : 'text-slate-700'}>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
+          {compareMode ? (
+            <div className={`p-6 rounded-3xl border flex flex-col gap-6 ${tS.card} ${tS.border} ${tS.glow}`}>
+              <div className="flex items-center justify-between flex-wrap gap-4 border-b border-white/5 pb-4">
+                <div>
+                  <h3 className="text-lg font-bold font-clash">Snapshot Comparison Mode</h3>
+                  <p className="text-xs text-text-muted">Select any two saved reports to see differences side-by-side.</p>
                 </div>
-              ))}
+
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] uppercase font-bold text-text-muted">Report A (Baseline)</span>
+                    <select
+                      value={compareReportA}
+                      onChange={e => setCompareReportA(e.target.value)}
+                      className="bg-[#1a1a1a] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none"
+                    >
+                      <option value="">Choose Report A...</option>
+                      {activeHistory.map(r => (
+                        <option key={r.id} value={r.id}>{r.week || r.form.weekStart} - {r.form.projectName}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <span className="text-text-muted mt-4">vs</span>
+
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] uppercase font-bold text-text-muted">Report B (Comparison)</span>
+                    <select
+                      value={compareReportB}
+                      onChange={e => setCompareReportB(e.target.value)}
+                      className="bg-[#1a1a1a] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none"
+                    >
+                      <option value="">Choose Report B...</option>
+                      {activeHistory.map(r => (
+                        <option key={r.id} value={r.id}>{r.week || r.form.weekStart} - {r.form.projectName}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Compare Results Display */}
+              {(() => {
+                const repA = activeHistory.find(r => r.id === compareReportA)?.form
+                const repB = activeHistory.find(r => r.id === compareReportB)?.form
+
+                if (!repA || !repB) {
+                  return (
+                    <div className="p-8 text-center text-xs text-text-muted border border-dashed border-white/5 rounded-2xl">
+                      Select two reports from the dropdowns above to calculate snapshots.
+                    </div>
+                  )
+                }
+
+                const winner = getComparisonWinner(repA, repB)
+                const biggestImp = getBiggestImprovement(repA, repB)
+
+                const metricsCompare = [
+                  { name: 'Support Tickets', valA: repA.supportEmails, valB: repB.supportEmails, type: 'lower' },
+                  { name: 'Defects Reported', valA: repA.defectsLastWeek.reported, valB: repB.defectsLastWeek.reported, type: 'lower' },
+                  { name: 'Open Defects', valA: repA.defectsLastWeek.open, valB: repB.defectsLastWeek.open, type: 'lower' },
+                  { name: 'Features Completed', valA: repA.newFeatures, valB: repB.newFeatures, type: 'higher' },
+                  { name: 'Testing Completed', valA: repA.releaseItems.length, valB: repB.releaseItems.length, type: 'higher' }
+                ]
+
+                return (
+                  <div className="flex flex-col gap-6">
+                    {/* Insights Summary Widgets */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 rounded-2xl bg-green-500/5 border border-green-500/10 flex flex-col justify-between">
+                        <span className="text-[9px] uppercase font-bold text-green-400 tracking-wider">Overall Winner</span>
+                        <span className="text-sm font-extrabold mt-1 text-white">{winner}</span>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex flex-col justify-between">
+                        <span className="text-[9px] uppercase font-bold text-blue-400 tracking-wider">Biggest Improvement</span>
+                        <span className="text-sm font-extrabold mt-1 text-white">{biggestImp}</span>
+                      </div>
+                    </div>
+
+                    {/* Comparison table grid */}
+                    <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.01]">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/5 bg-white/5 text-[10px] font-black uppercase text-text-muted">
+                            <th className="p-4">Metric</th>
+                            <th className="p-4">Report A (Baseline)</th>
+                            <th className="p-4">Report B (Comparison)</th>
+                            <th className="p-4">Difference</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {metricsCompare.map((m, idx) => {
+                            const diff = m.valB - m.valA
+                            const pct = m.valA !== 0 ? Math.round((diff / m.valA) * 100) : 0
+                            const isLowerBetter = m.type === 'lower'
+
+                            let isImproved = false
+                            if (diff !== 0) {
+                              isImproved = isLowerBetter ? diff < 0 : diff > 0
+                            }
+
+                            return (
+                              <motion.tr
+                                key={m.name}
+                                initial={{ opacity: 0, y: 8 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: idx * 0.04, duration: 0.3 }}
+                                className="border-b border-white/5"
+                              >
+                                <td className="p-4 font-bold text-white">{m.name}</td>
+                                <td className="p-4 text-text-secondary">{m.valA}</td>
+                                <td className="p-4 text-white font-extrabold">{m.valB}</td>
+                                <td className="p-4">
+                                  {diff === 0 ? (
+                                    <span className="text-text-muted">▬ No Change</span>
+                                  ) : (
+                                    <span className={`font-bold px-2 py-0.5 rounded ${isImproved ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                      {diff > 0 ? '▲' : '▼'} {Math.abs(pct)}% {isImproved ? 'Improved' : 'Worse'}
+                                    </span>
+                                  )}
+                                </td>
+                              </motion.tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
-          </motion.section>
-        )}
+          ) : !prevReport ? (
+            <div className={`p-8 rounded-2xl border text-center text-sm ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 text-white/50' : 'bg-white border-slate-200 text-slate-500'}`}>
+              <p className="font-semibold text-accent-gold mb-1">No previous report available for comparison</p>
+              <p className="text-xs">Save your first report to start tracking week-over-week performance changes.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {comparisons.map((card, idx) => {
+                  const isImproved = card.trend === 'improved'
+                  const isRegression = card.trend === 'regression'
+                  const isNeutral = card.trend === 'neutral'
+
+                  const badgeColor = isImproved
+                    ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                    : isRegression
+                      ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                      : 'bg-amber-500/10 text-accent-gold border-accent-gold/20'
+
+                  const glowColor = isImproved
+                    ? 'shadow-[0_0_20px_rgba(74,222,128,0.05)] border-green-500/10'
+                    : isRegression
+                      ? 'shadow-[0_0_20px_rgba(248,113,113,0.05)] border-red-500/10'
+                      : 'shadow-none border-white/5'
+
+                  return (
+                    <motion.div
+                      key={card.name}
+                      initial={{ opacity: 0, y: 15 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.05 }}
+                      className={`p-6 rounded-2xl border flex flex-col justify-between gap-4 group transition-all duration-300 ${glowColor} ${theme === 'dark' ? 'bg-white/[0.01] hover:border-white/20 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:shadow-lg hover:border-slate-300'}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-extrabold ${theme === 'dark' ? 'text-white/80' : 'text-slate-700'}`}>{card.name}</span>
+                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${badgeColor}`}>
+                          {card.badgeText}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between py-2">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Last Week</span>
+                          <span className={`text-xl font-bold ${theme === 'dark' ? 'text-white/60' : 'text-slate-500'}`}>
+                            {card.lastVal}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col items-center justify-center text-text-muted">
+                          <span className="text-xs">↓</span>
+                        </div>
+
+                        <div className="flex flex-col items-end">
+                          <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">This Week</span>
+                          <span className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                            <CountUpNumber end={card.thisVal} />
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+
+              {/* WoW AI Insights Summary box */}
+              <div className={`p-5 rounded-2xl border flex items-start gap-4 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div className="p-2 rounded-xl bg-accent-gold/10 text-accent-gold shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold">WoW AI Summary</span>
+                  <p className={`text-xs leading-relaxed ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>
+                    {generateWowSummary(comparisons)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.section>
 
         {/* ── SECTION 4: TEAM CAPACITY OVERVIEW ── */}
         {data.teamCapacity && vis.show_teamCapacity !== false && (
@@ -3230,14 +3287,16 @@ Do not return markdown wraps, only raw JSON text.
       />
 
       {/* ── Team Capacity Modal ── */}
-      {data.teamCapacity && (
-        <TeamCapacityModal
-          isOpen={showTeamCapacityModal}
-          onClose={() => setShowTeamCapacityModal(false)}
-          data={data.teamCapacity}
-          projectName={data.projectName}
-        />
-      )}
+      {
+        data.teamCapacity && (
+          <TeamCapacityModal
+            isOpen={showTeamCapacityModal}
+            onClose={() => setShowTeamCapacityModal(false)}
+            data={data.teamCapacity}
+            projectName={data.projectName}
+          />
+        )
+      }
 
       {/* ── Executive Quality Score Modal ── */}
       <ExecutiveQualityScoreModal

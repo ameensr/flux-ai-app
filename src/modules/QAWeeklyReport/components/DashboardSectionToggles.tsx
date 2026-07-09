@@ -28,7 +28,6 @@ const SECTIONS: DashboardSectionConfig[] = [
   { key: 'show_hero', label: 'Hero Section', description: 'Project title, reporting period, and key metrics', icon: LayoutDashboard, category: 'Executive Overview', defaultEnabled: true },
   { key: 'show_qualityScore', label: 'Quality Score', description: 'Executive quality gauge with health indicator', icon: Shield, category: 'Executive Overview', defaultEnabled: true },
   { key: 'show_kpiCards', label: 'KPI Scorecards', description: 'Support emails, features, fixes, defects', icon: Activity, category: 'Executive Overview', defaultEnabled: true },
-  { key: 'showAISummary', label: 'Executive Summary', description: 'AI-generated achievements and overview', icon: Sparkles, category: 'Executive Overview', defaultEnabled: true },
 
   // Release
   { key: 'show_sprintHealth', label: 'Sprint Health', description: 'Sprint validation progress and status cards', icon: Shield, category: 'Release', defaultEnabled: true },
@@ -53,13 +52,9 @@ const SECTIONS: DashboardSectionConfig[] = [
 
   // Planning
   { key: 'show_nextPriorities', label: 'Next Priorities', description: 'Upcoming week priority cards', icon: Briefcase, category: 'Planning', defaultEnabled: true },
-
-  // AI Insights
-  { key: 'showAIInsights', label: 'AI Insights', description: 'Achievements, risks, trends, recommendations', icon: Sparkles, category: 'AI Insights', defaultEnabled: true },
-  { key: 'show_aiRisk', label: 'AI Risk Analysis', description: 'Risk identification from historical data', icon: Shield, category: 'AI Insights', defaultEnabled: true },
 ]
 
-const CATEGORIES = ['Executive Overview', 'Release', 'Support', 'Defects', 'Analytics', 'Planning', 'AI Insights']
+const CATEGORIES = ['Executive Overview', 'Release', 'Support', 'Defects', 'Analytics', 'Planning']
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
   'Executive Overview': LayoutDashboard,
@@ -68,7 +63,6 @@ const CATEGORY_ICONS: Record<string, React.ElementType> = {
   'Defects': Bug,
   'Analytics': BarChart3,
   'Planning': Calendar,
-  'AI Insights': Sparkles,
 }
 
 // ── Presets ───────────────────────────────────────────────────────────────────
@@ -85,7 +79,7 @@ const PRESETS: Preset[] = [
     id: 'executive',
     label: 'Executive View',
     description: 'High-level metrics for management',
-    enabled: ['show_hero', 'show_qualityScore', 'show_kpiCards', 'showAISummary', 'show_releaseReadiness', 'show_releaseBugStatus', 'show_weeklyCharts', 'show_wowComparison', 'showAIInsights'],
+    enabled: ['show_hero', 'show_qualityScore', 'show_kpiCards', 'show_releaseReadiness', 'show_releaseBugStatus', 'show_weeklyCharts', 'show_wowComparison'],
   },
   {
     id: 'client',

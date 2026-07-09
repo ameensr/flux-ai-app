@@ -32,10 +32,27 @@ export interface TeamCapacityData {
 }
 
 // Determine member status based on hours
+// Uses percentage-based threshold: only mark as "On Leave" if leave hours exceed 50% of expected weekly hours
 export function getMemberStatus(logged: number, leave: number): MemberStatus {
-  if (logged === 0 && leave === 0) return 'no-logs'
-  if (leave > 0) return 'on-leave'
-  return 'available'
+  const EXPECTED_WEEKLY_HOURS = 40 // Standard work week
+  const LEAVE_THRESHOLD_PERCENT = 50 // 50% or more leave = "On Leave"
+
+  const totalHours = logged + leave
+
+  // No activity at all
+  if (totalHours === 0) return 'no-logs'
+
+  // Calculate leave percentage of expected work week
+  const leavePercent = (leave / EXPECTED_WEEKLY_HOURS) * 100
+
+  // If leave is 50%+ of the week, mark as "On Leave"
+  if (leavePercent >= LEAVE_THRESHOLD_PERCENT) return 'on-leave'
+
+  // If they have logged hours, they're available (even with some leave)
+  if (logged > 0) return 'available'
+
+  // Edge case: Only leave hours, no work logged
+  return 'on-leave'
 }
 
 // Calculate team capacity statistics
@@ -48,8 +65,14 @@ export function calculateCapacityStats(members: TeamMemberCapacity[]): TeamCapac
   const totalHours = members.reduce((sum, m) => sum + m.logged_hours, 0)
   const avgHours = total > 0 ? Number((totalHours / total).toFixed(1)) : 0
 
-  // Capacity = available members / total members * 100
-  const capacity = total > 0 ? Math.round((available / total) * 100) : 0
+  // Improved capacity calculation: Based on actual hours worked vs expected hours
+  // This gives a more accurate picture than just counting available members
+  const EXPECTED_HOURS_PER_PERSON = 40
+  const maxPossibleHours = total * EXPECTED_HOURS_PER_PERSON
+  const actualWorkHours = members.reduce((sum, m) => sum + m.logged_hours, 0)
+  const capacity = maxPossibleHours > 0
+    ? Math.round((actualWorkHours / maxPossibleHours) * 100)
+    : 0
 
   return {
     total_members: total,

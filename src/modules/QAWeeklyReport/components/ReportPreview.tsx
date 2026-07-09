@@ -8,6 +8,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import { toast } from '@/hooks/use-toast'
 import type { QAReportForm } from '../types'
+import { isPassStatus } from '../types'
 import {
   Printer, Maximize2, Minimize2,
   Code, Save, CheckCircle2
@@ -144,7 +145,7 @@ function buildMetricsSection(form: QAReportForm): string {
     </div>`).join('')
 
   const closedPct = Math.round((d.closed / (d.reported || 1)) * 100)
-  const passCount = form.releaseItems.filter(i => i.status === 'Pass').length
+  const passCount = form.releaseItems.filter(i => isPassStatus(i.status)).length
   const passTotal = form.releaseItems.length
 
   return `

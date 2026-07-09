@@ -121,8 +121,6 @@ export interface QAReportForm {
   historicalDefectOptimization?: HistoricalDefectOptimization
   historicalDefects: HistoricalDefect[]
   nextPriorities: NextPriority[]
-  showAIInsights?: boolean
-  showAISummary?: boolean
   showHistoricalAnalytics?: boolean
   showTimeline?: boolean
   customTimeline?: TimelineNode[]
@@ -238,8 +236,6 @@ export const ensureFormData = (form: any): QAReportForm => {
       owner: np?.owner || '',
       dueDate: np?.dueDate || ''
     })) : [],
-    showAIInsights: f.showAIInsights !== false,
-    showAISummary: f.showAISummary !== false,
     showHistoricalAnalytics: f.showHistoricalAnalytics !== false,
     showTimeline: f.showTimeline !== false,
     customTimeline: Array.isArray(f.customTimeline) ? f.customTimeline.filter(Boolean).map((t: any) => ({
@@ -255,5 +251,51 @@ export const ensureFormData = (form: any): QAReportForm => {
       rawForm: t?.rawForm
     })) : [],
     dashboardSections: f.dashboardSections || null,
+    visibleSupportColumns: f.visibleSupportColumns || undefined,
+    visibleReleaseColumns: f.visibleReleaseColumns || undefined,
   }
+}
+
+export function canonicalStringify(obj: any): string {
+  if (obj === null || obj === undefined) {
+    return 'null';
+  }
+  if (Array.isArray(obj)) {
+    return '[' + obj.map(canonicalStringify).join(',') + ']';
+  }
+  if (typeof obj === 'object') {
+    const keys = Object.keys(obj).sort();
+    const parts = keys.map(k => `${JSON.stringify(k)}:${canonicalStringify(obj[k])}`);
+    return '{' + parts.join(',') + '}';
+  }
+  return JSON.stringify(obj);
+}
+
+export function createFormSnapshot(form: QAReportForm): string {
+  const normalized = ensureFormData(form)
+  const snapshot = { ...normalized }
+  delete (snapshot as any).dashboardSections // Exclude display preferences
+  delete (snapshot as any).showHistoricalAnalytics
+  delete (snapshot as any).showTimeline
+  delete (snapshot as any).visibleSupportColumns
+  delete (snapshot as any).visibleReleaseColumns
+  return canonicalStringify(snapshot)
+}
+
+export function isPassStatus(status: string | null | undefined): boolean {
+  if (!status) return false
+  const normalized = status.toLowerCase()
+  return ['passed', 'pass', 'completed', 'success'].some(v => normalized.includes(v))
+}
+
+export function isFailStatus(status: string | null | undefined): boolean {
+  if (!status) return false
+  const normalized = status.toLowerCase()
+  return ['fail', 'failed', 'failure'].some(v => normalized.includes(v))
+}
+
+export function isBlockedStatus(status: string | null | undefined): boolean {
+  if (!status) return false
+  const normalized = status.toLowerCase()
+  return normalized.includes('blocked')
 }

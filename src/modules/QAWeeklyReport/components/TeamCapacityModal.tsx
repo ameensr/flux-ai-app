@@ -3,7 +3,7 @@
 
 import React, { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Users, CheckCircle, AlertCircle, Ban, Clock } from 'lucide-react'
+import { X, Users, CheckCircle, AlertCircle, Ban, Clock, Activity } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import type { TeamCapacityData, CapacityDistribution } from '../types/teamCapacity'
 import { getCapacityDistribution } from '../types/teamCapacity'
@@ -370,15 +370,137 @@ export function TeamCapacityModal({
                       <div className="bg-green-500/10 rounded-lg p-4 border border-green-500/20">
                         <h4 className="text-sm font-semibold text-text-primary mb-2">Capacity Insights</h4>
                         <p className="text-xs text-text-muted leading-relaxed">
-                          Team capacity is calculated based on available members versus total team size.
                           {data.stats.estimated_capacity_percent >= 80 ? (
-                            <span className="text-green-400 font-semibold"> Your team is operating at strong capacity this week.</span>
+                            <span className="text-green-400 font-semibold">✅ Your team is operating at strong capacity this week.</span>
                           ) : data.stats.estimated_capacity_percent >= 60 ? (
-                            <span className="text-yellow-400 font-semibold"> Your team is operating at moderate capacity this week.</span>
+                            <span className="text-yellow-400 font-semibold">⚠️ Your team is operating at moderate capacity this week.</span>
                           ) : (
-                            <span className="text-red-400 font-semibold"> Your team capacity is reduced this week, consider workload adjustments.</span>
+                            <span className="text-red-400 font-semibold">🔴 Your team capacity is reduced this week, consider workload adjustments.</span>
                           )}
                         </p>
+                      </div>
+                    </motion.div>
+
+                    {/* Calculation Methodology */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.75 }}
+                      className="mt-6 pt-6 border-t border-border/30"
+                    >
+                      <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
+                        <svg className="w-5 h-5 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        How We Calculate Capacity
+                      </h3>
+
+                      <div className="space-y-4">
+                        {/* Status Determination */}
+                        <div className="bg-surface-elevated/50 backdrop-blur-sm rounded-lg p-4 border border-border/30">
+                          <h4 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
+                            <CheckCircle className="w-4 h-4 text-green-400" />
+                            Member Status Determination
+                          </h4>
+                          <div className="space-y-3 text-xs text-text-secondary leading-relaxed">
+                            <div className="flex items-start gap-2">
+                              <span className="inline-block w-24 font-semibold text-green-400 shrink-0">Available:</span>
+                              <span>Team member has logged work hours and leave is less than 50% of the expected 40-hour work week. Example: 15h logged + 8h leave = <strong className="text-green-400">Available</strong> (8h is only 20% of 40h).</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="inline-block w-24 font-semibold text-yellow-400 shrink-0">On Leave:</span>
+                              <span>Team member's leave hours exceed 50% of the expected work week (≥20 hours). Example: 5h logged + 30h leave = <strong className="text-yellow-400">On Leave</strong> (30h is 75% of 40h).</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="inline-block w-24 font-semibold text-red-400 shrink-0">No Logs:</span>
+                              <span>Team member has no logged hours and no leave hours recorded for the week.</span>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 pt-3 border-t border-border/20">
+                            <p className="text-xs text-text-muted italic">
+                              💡 <strong>Why this approach?</strong> Taking a few hours of leave shouldn't mark someone as "On Leave" for the entire week. This percentage-based method ensures fair representation of actual availability.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Capacity Calculation */}
+                        <div className="bg-surface-elevated/50 backdrop-blur-sm rounded-lg p-4 border border-border/30">
+                          <h4 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-accent-gold" />
+                            Team Capacity Calculation
+                          </h4>
+
+                          <div className="space-y-3">
+                            {/* Formula Display */}
+                            <div className="bg-black/20 rounded-lg p-3 font-mono text-xs overflow-x-auto">
+                              <div className="text-accent-gold mb-2">Formula:</div>
+                              <div className="text-text-secondary whitespace-nowrap">
+                                Capacity % = (Total Logged Hours / Expected Total Hours) × 100
+                              </div>
+                            </div>
+
+                            {/* Calculation Example */}
+                            <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
+                              <div className="text-xs font-semibold text-blue-400 mb-2">Example Calculation:</div>
+                              <div className="space-y-1 text-xs text-text-secondary">
+                                <div className="flex justify-between">
+                                  <span>Total Team Members:</span>
+                                  <span className="font-semibold text-text-primary">{data.stats.total_members}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Expected Hours per Person:</span>
+                                  <span className="font-semibold text-text-primary">40 hours/week</span>
+                                </div>
+                                <div className="flex justify-between border-t border-blue-500/20 pt-1 mt-1">
+                                  <span>Expected Total Hours:</span>
+                                  <span className="font-semibold text-text-primary">{data.stats.total_members} × 40 = {data.stats.total_members * 40}h</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Actual Logged Hours:</span>
+                                  <span className="font-semibold text-green-400">
+                                    {data.members.reduce((sum, m) => sum + m.logged_hours, 0)}h
+                                  </span>
+                                </div>
+                                <div className="flex justify-between border-t border-blue-500/20 pt-1 mt-1">
+                                  <span className="font-bold">Team Capacity:</span>
+                                  <span className="font-bold text-accent-gold">
+                                    {data.stats.estimated_capacity_percent}%
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="pt-2">
+                              <p className="text-xs text-text-muted italic">
+                                💡 <strong>Why this approach?</strong> This formula measures actual productivity based on hours worked, not just headcount. A team member working 15 hours contributes 37.5% capacity, giving a more accurate picture than a binary "available/unavailable" status.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Key Benefits */}
+                        <div className="bg-accent-gold/5 border border-accent-gold/20 rounded-lg p-4">
+                          <h4 className="text-sm font-bold text-accent-gold mb-2">Benefits of This Methodology</h4>
+                          <ul className="space-y-1.5 text-xs text-text-secondary">
+                            <li className="flex items-start gap-2">
+                              <span className="text-green-400 shrink-0">✓</span>
+                              <span><strong>Fair Representation:</strong> Accounts for partial availability instead of treating members as fully available or completely unavailable.</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-green-400 shrink-0">✓</span>
+                              <span><strong>Accurate Metrics:</strong> Reflects actual work output rather than just counting heads.</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-green-400 shrink-0">✓</span>
+                              <span><strong>Flexible Threshold:</strong> 50% leave threshold adapts to different work arrangements and partial leaves.</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-green-400 shrink-0">✓</span>
+                              <span><strong>Better Planning:</strong> Provides realistic capacity data for sprint and testing planning.</span>
+                            </li>
+                          </ul>
+                        </div>
                       </div>
                     </motion.div>
                   </div>

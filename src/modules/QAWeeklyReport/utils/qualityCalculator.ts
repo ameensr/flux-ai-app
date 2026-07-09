@@ -1,4 +1,5 @@
 import type { QAReportForm } from '../types'
+import { isPassStatus, isFailStatus } from '../types'
 
 export interface QualityScoreResult {
   score: number
@@ -25,8 +26,8 @@ export const calculateQAScore = (data: QAReportForm | null | undefined): Quality
   }
 
   const releaseCount = data.releaseItems?.length || 0
-  const releasePassed = data.releaseItems?.filter(i => i?.status === 'Pass').length || 0
-  const releaseFailed = data.releaseItems?.filter(i => i?.status === 'Fail').length || 0
+  const releasePassed = data.releaseItems?.filter(i => isPassStatus(i?.status)).length || 0
+  const releaseFailed = data.releaseItems?.filter(i => isFailStatus(i?.status)).length || 0
 
   const activeDefectsTotal = data.defectsLastWeek?.reported || 0
   const defectsClosed = data.defectsLastWeek?.closed || 0
