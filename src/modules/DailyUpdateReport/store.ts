@@ -280,38 +280,13 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
             .eq('created_by', user.id),
         ])
 
-<<<<<<< Updated upstream
-        const response = await supabase
-          .from('project_members')
-          .select(`
-            project_id,
-            projects!inner (
-              id,
-              name,
-              project_code,
-              status
-            )
-          `)
-          .eq('user_id', user.id)
-          .eq('projects.status', 'active')
-=======
-        console.log('[DailyReportStore] Membership query response:', memberResponse)
+console.log('[DailyReportStore] Membership query response:', memberResponse)
         console.log('[DailyReportStore] Created-by query response:', creatorResponse)
->>>>>>> Stashed changes
+
 
         const byId = new Map<string, any>()
 
-<<<<<<< Updated upstream
-        if (response.data) {
-          // Transform the joined data structure
-          data = response.data.map((item: any) => ({
-            id: item.projects.id,
-            name: item.projects.name,
-            project_code: item.projects.project_code
-          }))
-          console.log('[DailyReportStore] Transformed data:', data)
-=======
-        if (memberResponse.data) {
+if (memberResponse.data) {
           for (const item of memberResponse.data as any[]) {
             byId.set(item.projects.id, {
               id: item.projects.id,
@@ -320,7 +295,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
               project_role: item.project_role,
             })
           }
->>>>>>> Stashed changes
+
         }
 
         // Projects created by this user that don't already have a member-row entry

@@ -8,32 +8,6 @@ import { useDailyReportStore } from '../store'
 import { usePermissions } from '@/hooks/usePermissions'
 import type { SupportLogRecord } from '../types'
 import { GlassCard } from '@/components/ui/GlassCard'
-<<<<<<< Updated upstream
-import * as XLSX from 'xlsx'
-import XLSXStyle from 'xlsx-js-style'
-
-
-
-const COLUMNS = [
-  { id: 'support_id', label: 'Support ID', type: 'text', defaultWidth: 120 },
-  { id: 'bug_id', label: 'Bug ID', type: 'text', defaultWidth: 100 },
-  { id: 'branch', label: 'Branch', type: 'select', category: 'branch', defaultWidth: 120 },
-  { id: 'description', label: 'Description', type: 'textarea', defaultWidth: 200 },
-  { id: 'received_date', label: 'Received Date', type: 'date', defaultWidth: 140 },
-  { id: 'qa', label: 'QA', type: 'select', category: 'qa', defaultWidth: 140 },
-  { id: 'tc_count', label: 'TC Count', type: 'number', defaultWidth: 100 },
-  { id: 'estimation_hrs', label: 'Estimation (Hrs)', type: 'number', defaultWidth: 140 },
-  { id: 'actual_start_date', label: 'Actual Start Date', type: 'date', defaultWidth: 140 },
-  { id: 'planned_end_date', label: 'Planned End Date', type: 'date', defaultWidth: 140 },
-  { id: 'actual_end_date', label: 'Actual End Date', type: 'date', defaultWidth: 140 },
-  { id: 'testing_status', label: 'Testing Status', type: 'select', category: 'testing_status', defaultWidth: 120 },
-  { id: 'issue_source', label: 'Issue Source', type: 'select', category: 'issue_source', defaultWidth: 150 },
-  { id: 'comments', label: 'Comments', type: 'textarea', defaultWidth: 200 },
-  { id: 'blocked_hours', label: 'Blocked Hours', type: 'number', defaultWidth: 120 },
-  { id: 'retesting_status', label: 'Retesting Status', type: 'select', category: 'retesting_status', defaultWidth: 140 },
-  { id: 'retesting_estimation_hrs', label: 'Retesting Est (Hrs)', type: 'number', defaultWidth: 140 },
-]
-=======
 import { useDynamicColumns } from '../useDynamicColumns'
 import { findDashboardRoleColumn } from '../columnConfigStore'
 import {
@@ -52,7 +26,7 @@ import { CellDisplay, CellEditor, defaultWidthForType } from './DynamicCell'
 import { CustomizeColumnsDrawer } from './CustomizeColumnsDrawer'
 import { DashboardMetricsModal } from './DashboardMetricsModal'
 import { ValidationTooltip } from './ValidationTooltip'
->>>>>>> Stashed changes
+
 
 export const SupportExceptionLog: React.FC = () => {
   const {
@@ -460,16 +434,12 @@ export const SupportExceptionLog: React.FC = () => {
 
     if (fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
       const reader = new FileReader()
-      reader.onload = (evt) => {
+      reader.onload = async (evt) => {
         try {
           const data = evt.target?.result as ArrayBuffer
-<<<<<<< Updated upstream
-          if (!data) throw new Error("Could not read file contents.")
-
-=======
-          if (!data) throw new Error('Could not read file contents.')
+if (!data) throw new Error('Could not read file contents.')
           const XLSX = await import('xlsx')
->>>>>>> Stashed changes
+
           const workbook = XLSX.read(new Uint8Array(data), { type: 'array' })
           const firstSheetName = workbook.SheetNames[0]
           if (!firstSheetName) throw new Error('Excel file does not contain any sheets.')
@@ -518,50 +488,18 @@ export const SupportExceptionLog: React.FC = () => {
     e.target.value = ''
   }
 
-<<<<<<< Updated upstream
-  // Template Download builder
-  const downloadTemplate = (format: 'xlsx' | 'xls' | 'csv') => {
-=======
-  // Template — every VISIBLE column with current display names + option ref sheet
+// Template — every VISIBLE column with current display names + option ref sheet
   const downloadTemplate = async (format: 'xlsx' | 'xls' | 'csv') => {
->>>>>>> Stashed changes
+
     if (!canExport) {
       alert('Permission Denied: You do not have permission to download templates.')
       return
     }
-<<<<<<< Updated upstream
-    const headers = COLUMNS.map(c => c.label)
-
-    // Create a realistic sample row
-    const sampleRow = COLUMNS.map(col => {
-      switch (col.id) {
-        case 'support_id': return '100/101'
-        case 'bug_id': return 'BUG-999'
-        case 'branch': return getDropdownOptions('branch')[0] || 'Dev'
-        case 'description': return 'Initial investigation of exception trace.'
-        case 'received_date': return '2026-07-03'
-        case 'qa': return getDropdownOptions('qa')[0] || 'Sarah Jenkins'
-        case 'tc_count': return 5
-        case 'estimation_hrs': return 4.5
-        case 'actual_start_date': return '2026-07-03'
-        case 'planned_end_date': return '2026-07-04'
-        case 'testing_status': return getDropdownOptions('testing_status')[0] || 'In Progress'
-        case 'issue_source': return getDropdownOptions('issue_source')[0] || 'Internal Testing'
-        case 'comments': return 'Retrying on staging server.'
-        case 'blocked_hours': return 0
-        case 'retesting_status': return getDropdownOptions('retesting_status')[0] || 'Pending'
-        case 'retesting_estimation_hrs': return 1
-        case 'issue_source': return getDropdownOptions('issue_source')[0] || 'Internal Testing'
-        default: return ''
-      }
-    })
-
-=======
-    const templateCols = columnsForTemplate(COLUMNS)
+const templateCols = columnsForTemplate(COLUMNS)
     const XLSX = await import('xlsx')
     const headers = templateCols.map(c => c.display_name)
     const sampleRow = templateCols.map(col => sampleValueForColumn(col, getColumnOptions))
->>>>>>> Stashed changes
+
     const aoaData = [headers, sampleRow]
 
     if (format === 'csv') {
@@ -640,60 +578,12 @@ export const SupportExceptionLog: React.FC = () => {
     }
     XLSX.utils.book_append_sheet(wb, configWS, 'Configurations Ref')
 
-<<<<<<< Updated upstream
-      XLSX.utils.book_append_sheet(wb, ws, 'Template')
-
-      // Dynamic Dropdowns Configuration reference list
-      const configAOA = [
-        ['Branch Options', 'QA Options', 'Testing Status Options', 'Retesting Status Options', 'Issue Source Options'],
-      ]
-      const branches = getDropdownOptions('branch')
-      const qas = getDropdownOptions('qa')
-      const testingStatuses = getDropdownOptions('testing_status')
-      const retestingStatuses = getDropdownOptions('retesting_status')
-      const issueSources = getDropdownOptions('issue_source')
-
-      const maxLen = Math.max(branches.length, qas.length, testingStatuses.length, retestingStatuses.length, issueSources.length)
-      for (let i = 0; i < maxLen; i++) {
-        configAOA.push([
-          branches[i] || '',
-          qas[i] || '',
-          testingStatuses[i] || '',
-          retestingStatuses[i] || '',
-          issueSources[i] || ''
-        ])
-      }
-
-      const configWS = XLSX.utils.aoa_to_sheet(configAOA)
-      configWS['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 20 }]
-
-      if (format === 'xlsx') {
-        for (const key in configWS) {
-          if (key.startsWith('!')) continue
-          const cell = configWS[key]
-          const rowIdx = parseInt(key.replace(/[A-Z]/g, ''), 10)
-          if (rowIdx === 1) {
-            cell.s = headerStyle
-          } else {
-            cell.s = dataStyle
-          }
-        }
-      }
-
-      XLSX.utils.book_append_sheet(wb, configWS, 'Configurations Ref')
-
-      if (format === 'xlsx') {
-        XLSXStyle.writeFile(wb, 'Daily_Support_Template.xlsx')
-      } else {
-        XLSX.writeFile(wb, 'Daily_Support_Template.xls', { bookType: 'biff8' })
-      }
-=======
-    if (format === 'xlsx') {
+if (format === 'xlsx') {
       const XLSXStyle = (await import('xlsx-js-style')).default
       XLSXStyle.writeFile(wb, 'Daily_Support_Template.xlsx')
     } else {
       XLSX.writeFile(wb, 'Daily_Support_Template.xls', { bookType: 'biff8' })
->>>>>>> Stashed changes
+
     }
   }
 

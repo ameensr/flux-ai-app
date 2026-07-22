@@ -8,25 +8,6 @@ import { useDailyReportStore } from '../store'
 import { usePermissions } from '@/hooks/usePermissions'
 import type { ReleaseTestingRecord } from '../types'
 import { GlassCard } from '@/components/ui/GlassCard'
-<<<<<<< Updated upstream
-import * as XLSX from 'xlsx'
-import XLSXStyle from 'xlsx-js-style'
-
-
-
-const COLUMNS = [
-  { id: 'task_id', label: 'Task ID', type: 'text', defaultWidth: 120 },
-  { id: 'description', label: 'Description', type: 'textarea', defaultWidth: 200 },
-  { id: 'qa', label: 'QA', type: 'select', category: 'qa', defaultWidth: 140 },
-  { id: 'initial_round_estimation_hrs', label: 'Initial Est (Hrs)', type: 'number', defaultWidth: 140 },
-  { id: 'testing_status', label: 'Testing Status', type: 'select', category: 'testing_status', defaultWidth: 140 },
-  { id: 'smoke_testing_status', label: 'Smoke Status', type: 'select', category: 'smoke_status', defaultWidth: 140 },
-  { id: 'scope_of_testing_for_smoke', label: 'Smoke Test Scope', type: 'textarea', defaultWidth: 200 },
-  { id: 'smoke_testing_estimation_hrs', label: 'Smoke Est (Hrs)', type: 'number', defaultWidth: 140 },
-  { id: 'overall_scope_of_testing', label: 'Overall Scope', type: 'textarea', defaultWidth: 200 },
-  { id: 'overall_estimation_hrs', label: 'Overall Est (Hrs)', type: 'number', defaultWidth: 140 },
-]
-=======
 import { useDynamicColumns } from '../useDynamicColumns'
 import { findDashboardRoleColumn } from '../columnConfigStore'
 import {
@@ -45,7 +26,7 @@ import { CellDisplay, CellEditor, defaultWidthForType } from './DynamicCell'
 import { CustomizeColumnsDrawer } from './CustomizeColumnsDrawer'
 import { DashboardMetricsModal } from './DashboardMetricsModal'
 import { ValidationTooltip } from './ValidationTooltip'
->>>>>>> Stashed changes
+
 
 export const ReleaseTestingStatus: React.FC = () => {
   const {
@@ -403,16 +384,12 @@ export const ReleaseTestingStatus: React.FC = () => {
 
     if (fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
       const reader = new FileReader()
-      reader.onload = (evt) => {
+      reader.onload = async (evt) => {
         try {
           const data = evt.target?.result as ArrayBuffer
-<<<<<<< Updated upstream
-          if (!data) throw new Error("Could not read file contents.")
-
-=======
-          if (!data) throw new Error('Could not read file contents.')
+if (!data) throw new Error('Could not read file contents.')
           const XLSX = await import('xlsx')
->>>>>>> Stashed changes
+
           const workbook = XLSX.read(new Uint8Array(data), { type: 'array' })
           const firstSheetName = workbook.SheetNames[0]
           if (!firstSheetName) throw new Error('Excel file does not contain any sheets.')
@@ -461,42 +438,17 @@ export const ReleaseTestingStatus: React.FC = () => {
     e.target.value = ''
   }
 
-<<<<<<< Updated upstream
-  // Template Download builder
-  const downloadTemplate = (format: 'xlsx' | 'xls' | 'csv') => {
-=======
-  const downloadTemplate = async (format: 'xlsx' | 'xls' | 'csv') => {
->>>>>>> Stashed changes
+const downloadTemplate = async (format: 'xlsx' | 'xls' | 'csv') => {
+
     if (!canExport) {
       alert('Permission Denied: You do not have permission to download templates.')
       return
     }
-<<<<<<< Updated upstream
-    const headers = COLUMNS.map(c => c.label)
-
-    // Create a realistic sample row
-    const sampleRow = COLUMNS.map(col => {
-      switch (col.id) {
-        case 'task_id': return 'TASK-001'
-        case 'description': return 'Smoke test of login page.'
-        case 'qa': return getDropdownOptions('qa')[0] || 'Sarah Jenkins'
-        case 'initial_round_estimation_hrs': return 2
-        case 'testing_status': return getDropdownOptions('testing_status')[0] || 'In Progress'
-        case 'smoke_testing_status': return getDropdownOptions('smoke_status')[0] || 'Pass'
-        case 'scope_of_testing_for_smoke': return 'Verify standard login, MFA flow, and social login redirects.'
-        case 'smoke_testing_estimation_hrs': return 1
-        case 'overall_scope_of_testing': return 'Check standard and admin users.'
-        case 'overall_estimation_hrs': return 3
-        default: return ''
-      }
-    })
-
-=======
-    const templateCols = columnsForTemplate(COLUMNS)
+const templateCols = columnsForTemplate(COLUMNS)
     const XLSX = await import('xlsx')
     const headers = templateCols.map(c => c.display_name)
     const sampleRow = templateCols.map(col => sampleValueForColumn(col, getColumnOptions))
->>>>>>> Stashed changes
+
     const aoaData = [headers, sampleRow]
 
     if (format === 'csv') {
@@ -575,56 +527,12 @@ export const ReleaseTestingStatus: React.FC = () => {
     }
     XLSX.utils.book_append_sheet(wb, configWS, 'Configurations Ref')
 
-<<<<<<< Updated upstream
-      XLSX.utils.book_append_sheet(wb, ws, 'Template')
-
-      // Dynamic Dropdowns Configuration reference list
-      const configAOA = [
-        ['QA Options', 'Testing Status Options', 'Smoke Status Options'],
-      ]
-      const qas = getDropdownOptions('qa')
-      const testingStatuses = getDropdownOptions('testing_status')
-      const smokeStatuses = getDropdownOptions('smoke_status')
-
-      const maxLen = Math.max(qas.length, testingStatuses.length, smokeStatuses.length)
-      for (let i = 0; i < maxLen; i++) {
-        configAOA.push([
-          qas[i] || '',
-          testingStatuses[i] || '',
-          smokeStatuses[i] || ''
-        ])
-      }
-
-      const configWS = XLSX.utils.aoa_to_sheet(configAOA)
-      configWS['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 18 }]
-
-      if (format === 'xlsx') {
-        for (const key in configWS) {
-          if (key.startsWith('!')) continue
-          const cell = configWS[key]
-          const rowIdx = parseInt(key.replace(/[A-Z]/g, ''), 10)
-          if (rowIdx === 1) {
-            cell.s = headerStyle
-          } else {
-            cell.s = dataStyle
-          }
-        }
-      }
-
-      XLSX.utils.book_append_sheet(wb, configWS, 'Configurations Ref')
-
-      if (format === 'xlsx') {
-        XLSXStyle.writeFile(wb, 'Daily_Release_Testing_Log_Template.xlsx')
-      } else {
-        XLSX.writeFile(wb, 'Daily_Release_Testing_Log_Template.xls', { bookType: 'biff8' })
-      }
-=======
-    if (format === 'xlsx') {
+if (format === 'xlsx') {
       const XLSXStyle = (await import('xlsx-js-style')).default
       XLSXStyle.writeFile(wb, 'Daily_Release_Testing_Log_Template.xlsx')
     } else {
       XLSX.writeFile(wb, 'Daily_Release_Testing_Log_Template.xls', { bookType: 'biff8' })
->>>>>>> Stashed changes
+
     }
   }
 

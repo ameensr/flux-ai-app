@@ -11,9 +11,6 @@ const cache = new Map<string, { data: RolePermissionMap; ts: number }>()
 const CACHE_TTL_MS = 5 * 60 * 1000
 
 export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
-<<<<<<< Updated upstream
-  admin: {},
-=======
   admin: {
     dashboard: { can_view: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
     'bug-refiner': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
@@ -66,7 +63,6 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     history: { can_view: true },
     'ai-settings': { can_view: true, can_edit: true },
   },
->>>>>>> Stashed changes
   pro: {
     dashboard: { can_view: true, can_generate_ai: true },
     'project-hub': { can_view: true, can_create: true, can_edit: true },
