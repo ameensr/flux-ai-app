@@ -165,31 +165,10 @@ export const useQAReportStore = create<QAReportStore>()(
           }
         }
 
-        // Maintain local store caching
+        // Maintain local store cache — keep last 50, never auto-delete from Supabase
         set((s) => {
-          const now = new Date()
-          const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate())
-          const filtered = s.savedReports.filter(r => {
-            const generatedDate = new Date(r.generatedDate)
-            return generatedDate >= twoMonthsAgo
-          })
-          const merged = [report, ...filtered.filter(r => r.id !== report.id)]
-          const sliced = merged.slice(0, 10)
-
-          if (user && sliced.length > 0 && report.projectId) {
-            const oldestDate = sliced[sliced.length - 1].generatedDate
-            supabase
-              .from('weekly_reports')
-              .delete()
-              .eq('user_id', user.id)
-              .eq('project_id', report.projectId)
-              .lt('generated_date', oldestDate)
-              .then(({ error }) => {
-                if (error) console.error('Error cleaning up Supabase reports:', String(error).replace(/[\r\n]/g, ' '))
-              })
-          }
-
-          return { savedReports: sliced }
+          const merged = [report, ...s.savedReports.filter(r => r.id !== report.id)]
+          return { savedReports: merged.slice(0, 50) }
         })
       },
 
@@ -224,7 +203,7 @@ export const useQAReportStore = create<QAReportStore>()(
 
           const { data, error } = await query
             .order('generated_date', { ascending: false })
-            .limit(10)
+            .limit(50)
 
           if (error) throw error
           if (data) {

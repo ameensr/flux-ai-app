@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Variants } from 'framer-motion'
 import DOMPurify from 'dompurify'
@@ -260,6 +261,8 @@ const sectionVariants: Variants = {
 
 const ReportPreviewDashboardContent: React.FC = () => {
   const { savedReports, saveReport, fetchReports } = useQAReportStore()
+  const [searchParams] = useSearchParams()
+  const reportIdFromUrl = searchParams.get('reportId')
 
   // Track if entrance animations have already been played (e.g. page refresh)
   const hasPlayed = typeof window !== 'undefined' && sessionStorage.getItem('qaly-dashboard-entrance-played') === 'true'
@@ -302,7 +305,8 @@ const ReportPreviewDashboardContent: React.FC = () => {
     if (raw) { try { return ensureFormData(JSON.parse(raw)) } catch { } }
     return ensureFormData(null)
   })
-  const [isLoaded, setIsLoaded] = useState(() => !!localStorage.getItem('current-qa-report-data'))
+  // isLoaded starts true only if we have localStorage data (no reportId) or will be set after fetch
+  const [isLoaded, setIsLoaded] = useState(() => !reportIdFromUrl && !!localStorage.getItem('current-qa-report-data'))
   const vis = getSectionVisibility(data)
   // Helper: returns null if section is disabled
   const gated = (key: string, content: React.ReactNode) => vis[key] !== false ? content : null
@@ -372,15 +376,42 @@ const ReportPreviewDashboardContent: React.FC = () => {
     roadmap: useRef<HTMLDivElement>(null)
   }
 
-  // Once reports are fetched from Supabase, hydrate data if not already loaded from localStorage
+  // Load report data: prefer URL reportId → Supabase fetch, fallback to localStorage
   useEffect(() => {
-    if (!isLoaded) {
+    if (reportIdFromUrl) {
+      // Try to find in already-loaded savedReports first
+      const found = savedReports.find(r => r.id === reportIdFromUrl)
+      if (found) {
+        setData(ensureFormData(found.form))
+        setIsLoaded(true)
+        return
+      }
+      // Not in cache yet — fetch from Supabase directly
+      import('@/lib/supabase').then(({ supabase }) => {
+        supabase
+          .from('weekly_reports')
+          .select('*')
+          .eq('id', reportIdFromUrl)
+          .single()
+          .then(({ data: row, error }) => {
+            if (!error && row) {
+              setData(ensureFormData({ ...row.form_data, projectId: row.project_id, projectName: row.project }))
+            } else {
+              // Fallback to localStorage if Supabase fetch fails
+              const raw = localStorage.getItem('current-qa-report-data')
+              if (raw) { try { setData(ensureFormData(JSON.parse(raw))) } catch { } }
+            }
+            setIsLoaded(true)
+          })
+      })
+    } else if (!isLoaded) {
+      // No reportId in URL — use savedReports or localStorage
       if (activeHistory.length > 0) {
         setData(ensureFormData(activeHistory[0].form))
       }
       setIsLoaded(true)
     }
-  }, [activeHistory, isLoaded])
+  }, [reportIdFromUrl, savedReports, isLoaded])
 
 
 

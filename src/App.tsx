@@ -238,7 +238,7 @@ export default function App() {
           <Route path={ROUTES.signup} element={<RedirectIfAuth><AuthPage /></RedirectIfAuth>} />
 
           {/* Report Preview — standalone page, no sidebar */}
-          <Route path={ROUTES.reportPreview} element={<RequireAuth><MaintenanceGuard><ReportPreviewWrapper /></MaintenanceGuard></RequireAuth>} />
+          <Route path={ROUTES.reportPreview} element={<RequireAuth><ProtectedRoute moduleKey="qa-report"><MaintenanceGuard><ReportPreviewWrapper /></MaintenanceGuard></ProtectedRoute></RequireAuth>} />
 
           {/* Maintenance page — standalone, no sidebar */}
           <Route path={ROUTES.maintenance} element={<RequireAuth><MaintenancePage /></RequireAuth>} />

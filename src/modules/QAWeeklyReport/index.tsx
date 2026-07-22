@@ -588,8 +588,14 @@ export const QAWeeklyReport: React.FC = () => {
     setErrors(errs)
     if (errs.length) return
 
-    // Save to local storage for the dashboard preview tab to pick up
+    // Save to local storage as fallback for the dashboard tab
     localStorage.setItem('current-qa-report-data', JSON.stringify(form))
+
+    // Find the saved report id that matches the current form
+    const { savedReports: reports } = useQAReportStore.getState()
+    const currentSnapshot = createFormSnapshot(form)
+    const matchedReport = reports.find(r => createFormSnapshot(r.form) === currentSnapshot)
+    const reportId = matchedReport?.id ?? ''
 
     // Start premium animation experience
     setIsLaunching(true)
@@ -602,7 +608,7 @@ export const QAWeeklyReport: React.FC = () => {
 
     // Complete transition and open new tab
     setTimeout(() => {
-      const url = `${window.location.origin}${ROUTES.reportPreview}`
+      const url = `${window.location.origin}${ROUTES.reportPreview}${reportId ? `?reportId=${reportId}` : ''}`
       window.open(url, '_blank', 'noopener')
       setIsLaunching(false)
       toast({ title: 'Dashboard Launched!', description: 'Opening the Executive Dashboard in a new tab.' })
