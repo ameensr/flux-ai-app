@@ -161,6 +161,7 @@ export const useQAReportStore = create<QAReportStore>()(
             if (error) throw error
           } catch (e) {
             console.error('Error saving report to Supabase:', String(e).replace(/[\r\n]/g, ' '))
+            throw e
           }
         }
 

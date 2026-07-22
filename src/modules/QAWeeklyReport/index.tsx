@@ -474,11 +474,22 @@ export const QAWeeklyReport: React.FC = () => {
   const [hasChangedSinceLoad, setHasChangedSinceLoad] = useState(false)
 
   // Reset tracking states when project ID changes to prevent false "Changes Detected" state
+  // Use a ref to skip the reset on initial mount (when projectId is set during init)
+  const prevProjectIdRef = React.useRef<string | undefined>(undefined)
   React.useEffect(() => {
-    setIsSaved(false)
-    setLastSavedSnapshot('')
-    setLoadedFromHistory(false)
-    setHasChangedSinceLoad(false)
+    // Skip reset on first render (initial project selection during mount)
+    if (prevProjectIdRef.current === undefined) {
+      prevProjectIdRef.current = form.projectId
+      return
+    }
+    // Only reset if the user actively switched projects
+    if (prevProjectIdRef.current !== form.projectId) {
+      prevProjectIdRef.current = form.projectId
+      setIsSaved(false)
+      setLastSavedSnapshot('')
+      setLoadedFromHistory(false)
+      setHasChangedSinceLoad(false)
+    }
   }, [form.projectId])
 
   React.useEffect(() => {
@@ -487,12 +498,21 @@ export const QAWeeklyReport: React.FC = () => {
       const savedId = localStorage.getItem('last-selected-project-id')
       const matched = activeProjects.find(p => p.id === savedId)
 
-      if (matched) {
-        setForm({ projectId: matched.id, projectName: matched.projectName })
-        fetchReports(matched.id)
-      } else if (activeProjects.length > 0) {
-        setForm({ projectId: activeProjects[0].id, projectName: activeProjects[0].projectName })
-        fetchReports(activeProjects[0].id)
+      const projectId = matched?.id ?? activeProjects[0]?.id
+      const projectName = matched?.projectName ?? activeProjects[0]?.projectName
+
+      if (projectId) {
+        setForm({ projectId, projectName })
+        fetchReports(projectId).then(() => {
+          // After reports load, check if current form snapshot matches any saved report
+          // This restores isSaved=true after a page refresh
+          const { savedReports, form: currentForm } = useQAReportStore.getState()
+          const currentSnapshot = createFormSnapshot(currentForm)
+          const match = savedReports.find(r => createFormSnapshot(r.form) === currentSnapshot)
+          if (match) {
+            handleReportLoadedFromHistory(currentSnapshot)
+          }
+        })
       } else {
         fetchReports()
       }
