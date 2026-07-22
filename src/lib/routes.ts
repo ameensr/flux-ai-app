@@ -47,12 +47,14 @@ export const ROUTES = {
   enterpriseMaintenance: '/admin/enterprise/maintenance',
   enterpriseTeams: '/admin/enterprise/teams',
 
-  // Daily Update Report & Config
+  // Daily Update Report (the centralized Configuration page/route was
+  // removed — Support & Exception Log / Release Testing Log now manage
+  // their own dropdown options per-column via the Customize Columns drawer)
   dailyReport: '/daily-report',
-  dailyReportConfig: '/daily-report/configuration',
 
   // QA Weekly Report Config
-  qaReportConfig: '/qa-report/configuration',
+  qaReportConfig: '/qa-report/configuration', // Project Configurations (name/code/description/status)
+  qaReportDropdownConfig: '/qa-report/dropdown-configuration', // Testing Status / Priority master dropdown lists
 } as const
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES]
@@ -66,6 +68,7 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.writingAssistant]: 'writing-assistant',
   [ROUTES.qaReport]: 'qa-report',
   [ROUTES.qaReportConfig]: 'qa-report',
+  [ROUTES.qaReportDropdownConfig]: 'qa-report',
   [ROUTES.reportPreview]: 'qa-report',
   [ROUTES.settings]: 'settings',
   [ROUTES.adminAnnouncements]: 'admin',
@@ -80,6 +83,5 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.enterpriseAudit]: 'admin',
   [ROUTES.enterpriseTeams]: 'admin',
   [ROUTES.dailyReport]: 'daily-report',
-  [ROUTES.dailyReportConfig]: 'daily-report',
 }
 

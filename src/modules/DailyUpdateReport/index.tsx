@@ -1,20 +1,92 @@
-import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useEffect, useRef, useState, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Settings, ClipboardCheck, LayoutGrid, Clock, AlertCircle,
-  CheckCircle, ChevronDown, RefreshCw, Layers, AlertTriangle
+  ClipboardCheck, Clock, AlertCircle,
+  CheckCircle, ChevronDown, RefreshCw, Layers, AlertTriangle, Info
 } from 'lucide-react'
 import { useDailyReportStore } from './store'
 import { useAppStore } from '@/store/useAppStore'
 import { usePermissions } from '@/hooks/usePermissions'
-import { ROUTES } from '@/lib/routes'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { SupportExceptionLog } from './components/SupportExceptionLog'
 import { ReleaseTestingStatus } from './components/ReleaseTestingStatus'
+import { buildOutcomeBucketMap, resolveOutcomeBucket, findDashboardRoleColumn } from './columnConfigStore'
+import { useDynamicColumns } from './useDynamicColumns'
+
+// ── Hover "info" icon + tooltip for a summary dashboard card ───────────────
+// Explains exactly what each card counts — including, for the bucket-driven
+// cards (Passed/Fixed, Pending Run, Blocked Issues, Smoke Passed/Pending/
+// Blocked), which column is currently feeding it. If no column has been
+// assigned that dashboard role yet (see findDashboardRoleColumn / the
+// "Dashboard Metrics" button on each table's toolbar), the tooltip switches
+// to an amber warning so cards never silently show zero after a column is
+// renamed or rebuilt as a custom field.
+const CardInfoTooltip: React.FC<{ text: string; warning?: boolean }> = ({ text, warning }) => {
+  const [hovered, setHovered] = useState(false)
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
+  const iconRef = useRef<HTMLButtonElement>(null)
+  const panelWidth = 240
+
+  const updatePosition = () => {
+    const rect = iconRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const left = Math.min(Math.max(8, rect.left - panelWidth / 2 + rect.width / 2), window.innerWidth - panelWidth - 8)
+    setCoords({ top: rect.bottom + 8, left })
+  }
+
+  useLayoutEffect(() => {
+    if (!hovered) return
+    updatePosition()
+    const handle = () => updatePosition()
+    window.addEventListener('scroll', handle, true)
+    window.addEventListener('resize', handle)
+    return () => {
+      window.removeEventListener('scroll', handle, true)
+      window.removeEventListener('resize', handle)
+    }
+  }, [hovered])
+
+  return (
+    <>
+      <button
+        ref={iconRef}
+        type="button"
+        onClick={e => e.stopPropagation()} // don't trigger the card's own onClick (e.g. Overdue Tasks filter toggle)
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onFocus={() => setHovered(true)}
+        onBlur={() => setHovered(false)}
+        className="shrink-0 leading-none opacity-60 hover:opacity-100 transition-opacity"
+        aria-label="What does this card count?"
+      >
+        <Info className="w-3 h-3 text-text-muted cursor-help" />
+      </button>
+
+      {createPortal(
+        <AnimatePresence>
+          {hovered && coords && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.12 }}
+              style={{ position: 'fixed', top: coords.top, left: coords.left, width: panelWidth, zIndex: 9999 }}
+              className={`pointer-events-none text-[10px] leading-relaxed p-2.5 rounded-lg shadow-2xl backdrop-blur-md border ${warning
+                ? 'bg-amber-950/95 border-amber-500/40 text-amber-200'
+                : 'bg-[var(--surface-elevated)] border-[var(--border)] text-[var(--text-secondary)]'}`}
+            >
+              {text}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+    </>
+  )
+}
 
 export const DailyUpdateReport: React.FC = () => {
-  const navigate = useNavigate()
   const { role } = useAppStore()
   const { can } = usePermissions()
   const {
@@ -22,7 +94,6 @@ export const DailyUpdateReport: React.FC = () => {
     releaseRows,
     loading,
     syncing,
-    fetchDropdownConfigs,
     fetchReportRows,
     syncRowsToDatabase,
     syncStatus,
@@ -36,12 +107,20 @@ export const DailyUpdateReport: React.FC = () => {
     userProjectRole
   } = useDailyReportStore()
 
+  // Resolves each table's active column configuration (Project →
+  // Organization Default) AND loads custom-field values for the currently
+  // loaded rows — needed because the dashboard-role column (see
+  // findDashboardRoleColumn) can be a CUSTOM column, whose values live in
+  // daily_report_custom_field_values, not on the row object directly.
+  // getCellValue() below already knows how to read either kind correctly.
+  const supportDyn = useDynamicColumns('support', selectedProjectId)
+  const releaseDyn = useDynamicColumns('release', selectedProjectId)
+
   // Active Tab state
   const [activeTab, setActiveTab] = useState<'support' | 'release'>('support')
 
-  // Load initial configurations and user records on mount
+  // Load initial user/project records on mount
   useEffect(() => {
-    fetchDropdownConfigs()
     fetchProjects()
   }, [])
 
@@ -52,59 +131,77 @@ export const DailyUpdateReport: React.FC = () => {
     }
   }, [selectedProjectId])
 
-  // Check if role is authorized to view dropdown configuration manager
-  const isAuthorizedToConfig = can('daily-report', 'can_configure')
+  // Load custom-field values for the dashboard-role lookups below (cheap
+  // no-op if the dashboard-role column for a table happens to be a system
+  // column, since getCellValue only consults this map for custom columns).
+  useEffect(() => {
+    supportDyn.loadCustomValuesForRows(supportRows.map(r => r.id))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supportRows.map(r => r.id).join(','), supportDyn.columns.length])
+  useEffect(() => {
+    releaseDyn.loadCustomValuesForRows(releaseRows.map(r => r.id))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [releaseRows.map(r => r.id).join(','), releaseDyn.columns.length])
+
+  // Which column currently feeds each table's dashboard metric — an
+  // explicit dashboard_role assignment made via the "Dashboard Metrics"
+  // button on each table's toolbar, which works for system AND custom
+  // columns alike (see findDashboardRoleColumn). Falls back to the original
+  // system column's internal_key if nothing has been explicitly assigned yet.
+  const supportRoleCol = findDashboardRoleColumn(supportDyn.columns, 'testing_status')
+  const releaseRoleCol = findDashboardRoleColumn(releaseDyn.columns, 'smoke_status')
+  const supportBucketMap = buildOutcomeBucketMap(supportRoleCol)
+  const releaseBucketMap = buildOutcomeBucketMap(releaseRoleCol)
+
+  // Resolves the outcome bucket for a row using whichever column holds the
+  // role — reading via getCellValue so custom-column values (stored
+  // separately) are handled exactly the same as system-column values.
+  const supportOutcome = (row: any) => supportRoleCol
+    ? resolveOutcomeBucket(supportBucketMap, supportDyn.getCellValue(row, supportRoleCol))
+    : 'other'
+  const releaseOutcome = (row: any) => releaseRoleCol
+    ? resolveOutcomeBucket(releaseBucketMap, releaseDyn.getCellValue(row, releaseRoleCol))
+    : 'other'
 
   // Metrics summary calculations
   const totalSupport = supportRows.length
   const totalRelease = releaseRows.length
 
-  const completedSupport = supportRows.filter(r => ['Passed', 'Closed', 'Fixed'].includes(r.testing_status)).length
-  const completedRelease = releaseRows.filter(r => ['Pass', 'Passes'].includes(r.smoke_testing_status)).length
-  const totalCompleted = completedSupport + completedRelease
+  const completedSupport = supportRows.filter(r => supportOutcome(r) === 'completed').length
+  const completedRelease = releaseRows.filter(r => releaseOutcome(r) === 'completed').length
 
-  const blockedSupport = supportRows.filter(r => r.testing_status === 'Blocked').length
-  const blockedRelease = releaseRows.filter(r => r.smoke_testing_status === 'Blocked').length
-  const totalBlocked = blockedSupport + blockedRelease
+  const blockedSupport = supportRows.filter(r => supportOutcome(r) === 'blocked').length
+  const blockedRelease = releaseRows.filter(r => releaseOutcome(r) === 'blocked').length
 
-  const pendingSupport = supportRows.filter(r => ['Pending', 'In Progress', 'Retesting'].includes(r.testing_status)).length
-  const pendingRelease = releaseRows.filter(r => ['Not Executed', 'Retesting'].includes(r.smoke_testing_status)).length
-  const totalPending = pendingSupport + pendingRelease
+  const pendingSupport = supportRows.filter(r => supportOutcome(r) === 'pending').length
+  const pendingRelease = releaseRows.filter(r => releaseOutcome(r) === 'pending').length
 
   const todayStr = new Date().toISOString().split('T')[0]
+  // Overdue uses Planned / Actual End Date system fields when present.
   const overdueTasksCount = supportRows.filter(r => {
     if (r.actual_end_date) return false
     if (!r.planned_end_date) return false
-    return r.planned_end_date < todayStr  // Changed: < instead of <= (excludes today)
+    return r.planned_end_date < todayStr
   }).length
 
-  // Estimate hrs = support estimation + support retesting + release initial + release smoke + release overall
-  const sumVal = (arr: any[], key: string) => {
-    return arr.reduce((acc, row) => {
-      const v = parseFloat(row[key])
-      return acc + (isNaN(v) ? 0 : v)
-    }, 0)
+  // Builds the tooltip text for a bucket-driven card, naming the column
+  // currently feeding it (so it's clear e.g. "Passed/Fixed" is reading a
+  // renamed or custom "STATUS" column, not the original system one) — or a
+  // clear warning if no column has that dashboard role assigned yet, which
+  // is exactly the situation that made these cards silently show 0 or
+  // uncounted rows after a column was renamed/rebuilt.
+  const bucketCardTooltip = (roleCol: typeof supportRoleCol, bucketLabel: string) => {
+    if (!roleCol) {
+      return {
+        tooltip: `No column is currently assigned to feed this metric. Click "Dashboard Metrics" on the table toolbar below, pick the source column, and assign a bucket to each of its options.`,
+        warning: true,
+      }
+    }
+    return {
+      tooltip: `Counts rows where "${roleCol.display_name}" is set to an option tagged with the "${bucketLabel}" bucket. Reassign buckets via "Dashboard Metrics" on the table toolbar.`,
+      warning: false,
+    }
   }
-
-  const totalEstimatedHrs =
-    sumVal(supportRows, 'estimation_hrs') +
-    sumVal(supportRows, 'retesting_estimation_hrs') +
-    sumVal(releaseRows, 'initial_round_estimation_hrs') +
-    sumVal(releaseRows, 'smoke_testing_estimation_hrs') +
-    sumVal(releaseRows, 'overall_estimation_hrs')
-
-  // Spent Hours = completed support estimation + completed release overall estimation + blocked hours (overhead)
-  const completedSupportHrs = supportRows
-    .filter(r => ['Passed', 'Closed', 'Fixed'].includes(r.testing_status))
-    .reduce((acc, r) => acc + (parseFloat(r.estimation_hrs as any) || 0) + (parseFloat(r.retesting_estimation_hrs as any) || 0), 0)
-
-  const completedReleaseHrs = releaseRows
-    .filter(r => ['Pass', 'Passes'].includes(r.smoke_testing_status))
-    .reduce((acc, r) => acc + (parseFloat(r.overall_estimation_hrs as any) || 0), 0)
-
-  const totalBlockedHrs = sumVal(supportRows, 'blocked_hours')
-
-  const totalActualHrs = completedSupportHrs + completedReleaseHrs + totalBlockedHrs
 
   return (
     <div className="py-6 sm:py-12">
@@ -153,16 +250,6 @@ export const DailyUpdateReport: React.FC = () => {
             </button>
           )}
 
-          {/* Config button (RBAC protected) */}
-          {isAuthorizedToConfig && (
-            <button
-              onClick={() => navigate(ROUTES.dailyReportConfig)}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-accent-gold text-black hover:opacity-90 transition-all font-black uppercase tracking-wider"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              Configuration
-            </button>
-          )}
         </div>
       </div>
 
@@ -217,27 +304,22 @@ export const DailyUpdateReport: React.FC = () => {
         </GlassCard>
       </div>
 
-      {/* Summary Dashboard widgets */}
-      <div className={`grid grid-cols-2 md:grid-cols-4 ${activeTab === 'support' ? 'lg:grid-cols-8' : 'lg:grid-cols-7'} gap-4 mb-10`}>
+      {/* Summary Dashboard widgets — status metrics only (hours/TCs removed).
+          Bucket cards are driven by Dashboard Metrics configuration. */}
+      <div className={`grid grid-cols-2 md:grid-cols-3 ${activeTab === 'support' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 mb-10`}>
         {(activeTab === 'support' ? [
-          { label: 'Support Tasks', val: totalSupport, icon: Layers, color: 'text-blue-400 bg-blue-500/5' },
-          { label: 'Passed/Fixed', val: completedSupport, icon: CheckCircle, color: 'text-green-400 bg-green-500/5' },
-          { label: 'Pending Run', val: pendingSupport, icon: Clock, color: 'text-yellow-400 bg-yellow-500/5' },
-          { label: 'Blocked Support', val: blockedSupport, icon: AlertCircle, color: 'text-red-400 bg-red-500/5' },
-          { label: 'Overdue Tasks', val: overdueTasksCount, icon: AlertTriangle, color: 'text-rose-400 bg-rose-500/5', isClickable: true },
-          { label: 'Est. Hours', val: `${Math.round((sumVal(supportRows, 'estimation_hrs') + sumVal(supportRows, 'retesting_estimation_hrs')) * 10) / 10}h`, icon: Clock, color: 'text-indigo-400 bg-indigo-500/5' },
-          { label: 'Blocked Hours', val: `${Math.round(totalBlockedHrs * 10) / 10}h`, icon: AlertCircle, color: 'text-orange-400 bg-orange-500/5' },
-          { label: 'Total TCs', val: sumVal(supportRows, 'tc_count'), icon: LayoutGrid, color: 'text-pink-400 bg-pink-500/5' },
+          { label: 'Support Tasks', val: totalSupport, icon: Layers, color: 'text-blue-400 bg-blue-500/5', tooltip: 'Total number of rows currently in the Support & Exception Log for this project.' },
+          { label: 'Passed/Fixed', val: completedSupport, icon: CheckCircle, color: 'text-green-400 bg-green-500/5', ...bucketCardTooltip(supportRoleCol, 'Completed') },
+          { label: 'Pending Run', val: pendingSupport, icon: Clock, color: 'text-yellow-400 bg-yellow-500/5', ...bucketCardTooltip(supportRoleCol, 'Pending') },
+          { label: 'Blocked Issues', val: blockedSupport, icon: AlertCircle, color: 'text-red-400 bg-red-500/5', ...bucketCardTooltip(supportRoleCol, 'Blocked') },
+          { label: 'Overdue', val: overdueTasksCount, icon: AlertTriangle, color: 'text-rose-400 bg-rose-500/5', isClickable: true, tooltip: 'Rows whose Planned End Date has already passed and which have no Actual End Date yet. Click this card to filter the table to only these rows.' },
         ] : [
-          { label: 'Release Tasks', val: totalRelease, icon: Layers, color: 'text-pink-400 bg-pink-500/5' },
-          { label: 'Smoke Passed', val: completedRelease, icon: CheckCircle, color: 'text-green-400 bg-green-500/5' },
-          { label: 'Pending Smoke', val: pendingRelease, icon: Clock, color: 'text-yellow-400 bg-yellow-500/5' },
-          { label: 'Blocked Smoke', val: blockedRelease, icon: AlertCircle, color: 'text-red-400 bg-red-500/5' },
-          { label: 'Initial Est', val: `${Math.round(sumVal(releaseRows, 'initial_round_estimation_hrs') * 10) / 10}h`, icon: Clock, color: 'text-purple-400 bg-purple-500/5' },
-          { label: 'Smoke Est', val: `${Math.round(sumVal(releaseRows, 'smoke_testing_estimation_hrs') * 10) / 10}h`, icon: Clock, color: 'text-indigo-400 bg-indigo-500/5' },
-          { label: 'Overall Est', val: `${Math.round(sumVal(releaseRows, 'overall_estimation_hrs') * 10) / 10}h`, icon: CheckCircle, color: 'text-emerald-400 bg-emerald-500/5' },
+          { label: 'Release Tasks', val: totalRelease, icon: Layers, color: 'text-pink-400 bg-pink-500/5', tooltip: 'Total number of rows currently in the Release Testing Log for this project.' },
+          { label: 'Smoke Passed', val: completedRelease, icon: CheckCircle, color: 'text-green-400 bg-green-500/5', ...bucketCardTooltip(releaseRoleCol, 'Completed') },
+          { label: 'Pending Smoke', val: pendingRelease, icon: Clock, color: 'text-yellow-400 bg-yellow-500/5', ...bucketCardTooltip(releaseRoleCol, 'Pending') },
+          { label: 'Blocked Issues', val: blockedRelease, icon: AlertCircle, color: 'text-red-400 bg-red-500/5', ...bucketCardTooltip(releaseRoleCol, 'Blocked') },
         ]).map((card, i) => {
-          const isOverdueCard = card.label === 'Overdue Tasks'
+          const isOverdueCard = card.label === 'Overdue'
           const isSelected = isOverdueCard && overdueOnlyFilter
           return (
             <motion.div
@@ -257,9 +339,12 @@ export const DailyUpdateReport: React.FC = () => {
                   : 'border-[var(--border)] bg-[var(--surface-secondary)]/50 hover:bg-[var(--surface-secondary)]/90 hover:border-accent-gold/25 hover:shadow-lg'
                 } flex flex-col justify-between transition-all duration-300 relative overflow-hidden`}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] uppercase font-bold tracking-widest text-text-muted">{card.label}</span>
-                <card.icon className={`w-4 h-4 ${card.color.split(' ')[0]}`} />
+              <div className="flex items-center justify-between gap-1">
+                <span className="flex items-center gap-1 min-w-0">
+                  <span className="text-[9px] uppercase font-bold tracking-widest text-text-muted truncate">{card.label}</span>
+                  {'tooltip' in card && card.tooltip && <CardInfoTooltip text={card.tooltip} warning={(card as any).warning} />}
+                </span>
+                <card.icon className={`w-4 h-4 shrink-0 ${card.color.split(' ')[0]}`} />
               </div>
               <div className="flex items-baseline mt-2 gap-1.5 select-none">
                 <span className="text-xl font-black text-[var(--text-primary)]">{card.val}</span>

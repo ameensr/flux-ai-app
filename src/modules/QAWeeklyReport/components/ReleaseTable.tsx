@@ -2,14 +2,16 @@ import React, { useState, useEffect, useRef } from 'react'
 import ReactDOM from 'react-dom'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
-import type { ReleaseItem, ReleaseStatus } from '../types'
+import type { ReleaseItem } from '../types'
 import { isPassStatus } from '../types'
 import { useDailyReportStore } from '@/modules/DailyUpdateReport/store'
-import type { ReleaseTestingRecord } from '@/modules/DailyUpdateReport/types'
+import { useColumnConfigStore } from '@/modules/DailyUpdateReport/columnConfigStore'
 import { toast } from '@/hooks/use-toast'
 import { Plus, Trash2, Copy, Download, Upload, Search, Columns, Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
+import { ColumnMappingModal } from './ColumnMappingModal'
+import { applyReleaseMapping, type MappingEntry } from '../dupImportMapping'
 
 const STATUS_COLORS: Record<string, string> = {
   'Not Started': 'text-text-muted', 'In Progress': 'text-yellow-400',
@@ -37,44 +39,17 @@ const RELEASE_COLUMNS = [
   { id: 'remarks', label: 'Remarks', defaultVisible: true },
 ]
 
-const mapDailyReleaseToQA = (rows: ReleaseTestingRecord[]): ReleaseItem[] => rows.map(row => ({
-  id: crypto.randomUUID(),
-  taskId: row.task_id || '',
-  featureName: [row.description, row.scope_of_testing_for_smoke ? `Smoke Scope: ${row.scope_of_testing_for_smoke}` : '', row.overall_scope_of_testing ? `Overall Scope: ${row.overall_scope_of_testing}` : ''].filter(Boolean).join(' | '),
-  assignee: row.qa || '',
-  status: (() => {
-    // Preserve exact status from Daily Report if it matches QA Report options
-    const dailyStatus = row.smoke_testing_status || ''
-    const qaStatusOptions: ReleaseStatus[] = ['Not Started', 'In Progress', 'Pass', 'Fail', 'Blocked']
-
-    // Check if the daily status matches any QA status (case-insensitive)
-    const matchedStatus = qaStatusOptions.find(
-      qaStatus => qaStatus.toLowerCase() === dailyStatus.toLowerCase()
-    )
-
-    if (matchedStatus) return matchedStatus
-
-    // Fallback: Use keyword matching only if no exact match
-    const normalized = dailyStatus.toLowerCase()
-    if (['passed', 'pass', 'completed', 'success'].some(v => normalized.includes(v))) return 'Pass'
-    if (['blocked', 'blocker'].some(v => normalized.includes(v))) return 'Blocked'
-    if (['fail', 'failed', 'failure'].some(v => normalized.includes(v))) return 'Fail'
-    if (['in progress', 'progress', 'ongoing', 'working'].some(v => normalized.includes(v))) return 'In Progress'
-    return 'Not Started'
-  })(),
-  priority: 'Medium',
-  remarks: [row.scope_of_testing_for_smoke ? `Smoke Scope: ${row.scope_of_testing_for_smoke}` : '', row.overall_scope_of_testing ? `Overall Scope: ${row.overall_scope_of_testing}` : '', row.initial_round_estimation_hrs ? `Initial Est: ${row.initial_round_estimation_hrs}` : '', row.smoke_testing_estimation_hrs ? `Smoke Est: ${row.smoke_testing_estimation_hrs}` : '', row.overall_estimation_hrs ? `Overall Est: ${row.overall_estimation_hrs}` : ''].filter(Boolean).join(' | '),
-}))
-
 export const ReleaseTable: React.FC = () => {
   const { form, setForm } = useQAReportStore()
-  const { releaseRows: dailyReleaseRows, fetchReportRows, dropdownConfigs, fetchDropdownConfigs } = useDailyReportStore()
+  const { releaseRows: dailyReleaseRows, fetchReportRows, dropdownConfigs, fetchDropdownConfigs, selectedProjectId } = useDailyReportStore()
+  const { getColumns, fetchColumnConfigs } = useColumnConfigStore()
   const { isDark } = useTheme()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [importing, setImporting] = useState(false)
   const [showColumnMenu, setShowColumnMenu] = useState(false)
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 })
+  const [showMappingModal, setShowMappingModal] = useState(false)
   const columnButtonRef = useRef<HTMLButtonElement>(null)
 
   // Initialize column visibility from store or use defaults
@@ -152,17 +127,18 @@ export const ReleaseTable: React.FC = () => {
 
   const exportCSV = () => {
     const visibleColumnsList = RELEASE_COLUMNS.filter(col => visibleColumns[col.id])
-    const header = visibleColumnsList.map(col => col.label).join(',')
+    const dynamicHeaderLabels = Object.values(customFieldLabelMap)
+    const header = [...visibleColumnsList.map(col => col.label), ...dynamicHeaderLabels].join(',')
     const rows = items.map(i => {
-      const values = visibleColumnsList.map(col => {
-        const value = i[col.id as keyof ReleaseItem] || ''
-        return `"${value}"`
-      })
+      const values = [
+        ...visibleColumnsList.map(col => `"${i[col.id as keyof ReleaseItem] || ''}"`),
+        ...customFieldKeys.map(key => `"${i.customFields?.[key] ?? ''}"`),
+      ]
       return values.join(',')
     })
     const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'release-testing-status.csv'; a.click()
-    toast({ title: 'Export successful', description: `Exported ${items.length} rows with ${visibleColumnsList.length} columns to CSV` })
+    toast({ title: 'Export successful', description: `Exported ${items.length} rows with ${visibleColumnsList.length + dynamicHeaderLabels.length} columns to CSV` })
   }
 
   const toggleColumn = (colId: string) => {
@@ -171,6 +147,19 @@ export const ReleaseTable: React.FC = () => {
   }
 
   const visibleColumnsList = RELEASE_COLUMNS.filter(col => visibleColumns[col.id])
+
+  // Any custom fields created via "Create New" during Import from DUP
+  const customFieldLabelMap: Record<string, string> = {}
+  items.forEach(i => {
+    if (!i.customFields) return
+    Object.keys(i.customFields).forEach(key => {
+      if (!customFieldLabelMap[key]) {
+        const col = getColumns('release').find(c => c.internal_key === key)
+        customFieldLabelMap[key] = col?.display_name || key
+      }
+    })
+  })
+  const customFieldKeys = Object.keys(customFieldLabelMap)
 
   const importFromDailyReport = async () => {
     setImporting(true)
@@ -185,9 +174,27 @@ export const ReleaseTable: React.FC = () => {
         toast({ title: 'No daily report data', description: 'Release Testing Log in Daily Update Report is empty.' })
         return
       }
-      // Bug fix 2: deduplicate by taskId to prevent double-import
+      await fetchColumnConfigs('release', selectedProjectId || null)
+      setShowMappingModal(true)
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const handleMappingConfirm = async (mapping: Record<string, MappingEntry>) => {
+    setShowMappingModal(false)
+    setImporting(true)
+    try {
+      let rows = dailyReleaseRows
+      if (!rows.length) {
+        await fetchReportRows()
+        rows = useDailyReportStore.getState().releaseRows
+      }
+      const columns = getColumns('release')
+      const { items: mappedItems } = await applyReleaseMapping(rows, columns, mapping)
+
       const existingIds = new Set(items.map(i => i.taskId).filter(Boolean))
-      const imported = mapDailyReleaseToQA(rows).filter(r => !existingIds.has(r.taskId))
+      const imported = mappedItems.filter(r => r.taskId && !existingIds.has(r.taskId))
       if (!imported.length) {
         toast({ title: 'Already imported', description: 'All rows from Daily Report are already present.' })
         return
@@ -338,11 +345,14 @@ export const ReleaseTable: React.FC = () => {
               {visibleColumnsList.map(col => (
                 <th key={col.id} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-text-muted font-bold">{col.label}</th>
               ))}
+              {customFieldKeys.map(key => (
+                <th key={key} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-text-muted font-bold">{customFieldLabelMap[key]}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={visibleColumnsList.length + 1} className="text-center py-8 text-text-muted text-xs">No items. Click Add to create one.</td></tr>
+              <tr><td colSpan={visibleColumnsList.length + customFieldKeys.length + 1} className="text-center py-8 text-text-muted text-xs">No items. Click Add to create one.</td></tr>
             )}
             {filtered.map(item => (
               <tr key={item.id} className={cn('hover:bg-white/[0.02] transition-colors', selected.has(item.id) && 'bg-accent-gold/5')}>
@@ -381,12 +391,26 @@ export const ReleaseTable: React.FC = () => {
                 {visibleColumns.remarks && (
                   <td className={cell}><input className={sel} value={item.remarks} onChange={e => update(item.id, { remarks: e.target.value })} placeholder="Remarks" /></td>
                 )}
+                {customFieldKeys.map(key => (
+                  <td key={key} className={cell}>
+                    <span className="text-xs text-text-secondary">{item.customFields?.[key] ?? ''}</span>
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <p className="text-[11px] text-text-muted">{items.length} item{items.length !== 1 ? 's' : ''} • {visibleColumnsList.length} of {RELEASE_COLUMNS.length} columns visible</p>
+
+      <ColumnMappingModal
+        open={showMappingModal}
+        onClose={() => setShowMappingModal(false)}
+        tableKey="release"
+        columns={getColumns('release')}
+        projectId={selectedProjectId || null}
+        onConfirm={handleMappingConfirm}
+      />
     </GlassCard>
   )
 }

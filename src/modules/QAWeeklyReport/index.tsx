@@ -23,6 +23,7 @@ import type { QAReportForm, TimelineNode, SupportTicket, ReleaseItem } from './t
 import { createFormSnapshot, isPassStatus } from './types'
 import { ROUTES } from '@/lib/routes'
 import { calculateQAScore } from './utils/qualityCalculator'
+import { useColumnConfigStore } from '@/modules/DailyUpdateReport/columnConfigStore'
 
 function buildMarkdown(f: QAReportForm): string {
   const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
@@ -108,18 +109,37 @@ function buildMarkdown(f: QAReportForm): string {
     const visibleSupportColumns = f.visibleSupportColumns || supportColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
     const visibleSupportColumnsList = supportColumns.filter(col => visibleSupportColumns[col.id])
 
+    // Any dynamic columns created via "Create New" during Import from DUP,
+    // labeled using the DUP column's current display_name (resolved by its
+    // stable internal_key so renames in the Daily Update module don't break this).
+    const dupSupportColumns = useColumnConfigStore.getState().getColumns('support')
+    const customKeys: string[] = []
+    const customLabels: Record<string, string> = {}
+    f.supportTickets.forEach(t => {
+      if (!t.customFields) return
+      Object.keys(t.customFields).forEach(k => {
+        if (!customKeys.includes(k)) {
+          customKeys.push(k)
+          customLabels[k] = dupSupportColumns.find(c => c.internal_key === k)?.display_name || k
+        }
+      })
+    })
+
     // Build table header
-    const header = visibleSupportColumnsList.map(col => col.label).join(' | ')
-    const separator = visibleSupportColumnsList.map(() => '---').join('|')
+    const header = [...visibleSupportColumnsList.map(col => col.label), ...customKeys.map(k => customLabels[k])].join(' | ')
+    const separator = [...visibleSupportColumnsList, ...customKeys].map(() => '---').join('|')
     lines.push(`| ${header} |`)
     lines.push(`|${separator}|`)
 
     // Build table rows
     f.supportTickets.forEach(t => {
-      const values = visibleSupportColumnsList.map(col => {
-        const colId = col.id as keyof SupportTicket
-        return t[colId] || ''
-      })
+      const values = [
+        ...visibleSupportColumnsList.map(col => {
+          const colId = col.id as keyof SupportTicket
+          return t[colId] || ''
+        }),
+        ...customKeys.map(k => t.customFields?.[k] ?? ''),
+      ]
       lines.push(`| ${values.join(' | ')} |`)
     })
   }
@@ -142,18 +162,35 @@ function buildMarkdown(f: QAReportForm): string {
     const visibleReleaseColumns = f.visibleReleaseColumns || releaseColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
     const visibleReleaseColumnsList = releaseColumns.filter(col => visibleReleaseColumns[col.id])
 
+    // Any dynamic columns created via "Create New" during Import from DUP
+    const dupReleaseColumns = useColumnConfigStore.getState().getColumns('release')
+    const customReleaseKeys: string[] = []
+    const customReleaseLabels: Record<string, string> = {}
+    f.releaseItems.forEach(i => {
+      if (!i.customFields) return
+      Object.keys(i.customFields).forEach(k => {
+        if (!customReleaseKeys.includes(k)) {
+          customReleaseKeys.push(k)
+          customReleaseLabels[k] = dupReleaseColumns.find(c => c.internal_key === k)?.display_name || k
+        }
+      })
+    })
+
     // Build table header
-    const header = visibleReleaseColumnsList.map(col => col.label).join(' | ')
-    const separator = visibleReleaseColumnsList.map(() => '---').join('|')
+    const header = [...visibleReleaseColumnsList.map(col => col.label), ...customReleaseKeys.map(k => customReleaseLabels[k])].join(' | ')
+    const separator = [...visibleReleaseColumnsList, ...customReleaseKeys].map(() => '---').join('|')
     lines.push(`\n| ${header} |`)
     lines.push(`|${separator}|`)
 
     // Build table rows
     f.releaseItems.forEach(i => {
-      const values = visibleReleaseColumnsList.map(col => {
-        const colId = col.id as keyof typeof i
-        return i[colId] || ''
-      })
+      const values = [
+        ...visibleReleaseColumnsList.map(col => {
+          const colId = col.id as keyof typeof i
+          return i[colId] || ''
+        }),
+        ...customReleaseKeys.map(k => i.customFields?.[k] ?? ''),
+      ]
       lines.push(`| ${values.join(' | ')} |`)
     })
   }
@@ -677,6 +714,19 @@ export const QAWeeklyReport: React.FC = () => {
             New Report
           </button>
 
+          {/* Dropdown Configuration button (RBAC protected) — manages the
+              Testing Status / Priority master dropdown lists used by the
+              Support Log and Release Testing tables below. */}
+          {isAuthorizedToConfig && (
+            <button
+              onClick={() => navigate(ROUTES.qaReportDropdownConfig)}
+              title="Manage Testing Status / Priority dropdown values"
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-hover border border-border text-text-secondary hover:text-text-primary transition-all font-black uppercase tracking-wider"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              Dropdown Config
+            </button>
+          )}
 
         </div>
       </div>

@@ -22,6 +22,15 @@ export type PermissionKey =
   | 'can_manage_templates'
   | 'can_manage_maintenance'
   | 'can_manage_system'
+  // ── QA Daily Update: column customization ──────────────────────────────
+  | 'can_manage_columns'
+  | 'can_add_columns'
+  | 'can_rename_columns'
+  | 'can_reorder_columns'
+  | 'can_hide_show_columns'
+  | 'can_delete_custom_columns'
+  | 'can_manage_org_config'
+  | 'can_manage_project_config'
 
 export interface ModulePermissionDefinition {
   moduleKey: string
@@ -123,7 +132,15 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
       'can_edit',
       'can_delete',
       'can_export', // Export reports
-      'can_configure', // Configure report settings
+      'can_configure', // Configure dropdown master lists
+      'can_manage_columns', // Open the Customize QA Daily Update Columns interface
+      'can_add_columns', // Add new custom columns
+      'can_rename_columns', // Rename column display labels
+      'can_reorder_columns', // Drag-and-drop reorder columns
+      'can_hide_show_columns', // Toggle column visibility
+      'can_delete_custom_columns', // Delete custom (non-system) columns
+      'can_manage_org_config', // Manage the organization-wide default column configuration
+      'can_manage_project_config', // Manage a project-specific column configuration
     ],
     description: 'Daily status update reports'
   },
@@ -319,6 +336,14 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   can_manage_templates: 'Manage Templates',
   can_manage_maintenance: 'Manage Maintenance',
   can_manage_system: 'Manage System',
+  can_manage_columns: 'Manage Columns',
+  can_add_columns: 'Add Custom Columns',
+  can_rename_columns: 'Rename Columns',
+  can_reorder_columns: 'Reorder Columns',
+  can_hide_show_columns: 'Hide/Show Columns',
+  can_delete_custom_columns: 'Delete Custom Columns',
+  can_manage_org_config: 'Manage Org-Level Config',
+  can_manage_project_config: 'Manage Project-Level Config',
 }
 
 /**
@@ -344,4 +369,12 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   can_manage_templates: 'Can create and edit permission templates',
   can_manage_maintenance: 'Can configure maintenance mode settings',
   can_manage_system: 'Can perform system-level configuration (super admin only)',
+  can_manage_columns: 'Can open the Customize QA Daily Update Columns interface',
+  can_add_columns: 'Can add new custom columns to the QA Daily Update table',
+  can_rename_columns: 'Can rename the display label of existing columns',
+  can_reorder_columns: 'Can reorder columns via drag-and-drop',
+  can_hide_show_columns: 'Can toggle column visibility in the QA Daily Update table',
+  can_delete_custom_columns: 'Can permanently delete custom (non-system) columns',
+  can_manage_org_config: 'Can manage the organization-wide default column configuration',
+  can_manage_project_config: 'Can manage the column configuration for a specific project',
 }

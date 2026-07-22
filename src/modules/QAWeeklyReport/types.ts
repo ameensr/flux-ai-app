@@ -12,6 +12,10 @@ export interface SupportTicket {
   status: SupportStatus
   priority: 'Critical' | 'High' | 'Medium' | 'Low'
   remarks: string
+  // Values for QA Daily Update columns mapped to "Create New" during
+  // Import from DUP, keyed by the DUP column's stable internal_key (never by
+  // its editable display name, so a later rename doesn't break the mapping).
+  customFields?: Record<string, any>
 }
 
 export type ReleaseStatus = 'Not Started' | 'In Progress' | 'Pass' | 'Fail' | 'Blocked'
@@ -28,6 +32,9 @@ export interface ReleaseItem {
   status: ReleaseStatus
   priority: 'Critical' | 'High' | 'Medium' | 'Low'
   remarks: string
+  // Values for QA Daily Update columns mapped to "Create New" during
+  // Import from DUP, keyed by the DUP column's stable internal_key.
+  customFields?: Record<string, any>
 }
 
 export interface ProductionIssueBlock {
@@ -190,7 +197,8 @@ export const ensureFormData = (form: any): QAReportForm => {
       assignedQA: t?.assignedQA || '',
       status: t?.status || 'Open',
       priority: t?.priority || 'Medium',
-      remarks: t?.remarks || ''
+      remarks: t?.remarks || '',
+      customFields: t?.customFields || undefined
     })) : [],
     releaseItems: Array.isArray(f.releaseItems) ? f.releaseItems.filter(Boolean).map((item: any) => ({
       id: item?.id || crypto.randomUUID(),
@@ -199,7 +207,8 @@ export const ensureFormData = (form: any): QAReportForm => {
       assignee: item?.assignee || '',
       status: item?.status || 'Not Started',
       priority: item?.priority || 'Medium',
-      remarks: item?.remarks || ''
+      remarks: item?.remarks || '',
+      customFields: item?.customFields || undefined
     })) : [],
     releaseBugStatus: f.releaseBugStatus || null,
     teamCapacity: f.teamCapacity || null,

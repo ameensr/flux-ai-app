@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/store/useAppStore'
-import type { SupportLogRecord, ReleaseTestingRecord, DropdownConfig, ConfigCategory } from './types'
+import { useColumnConfigStore } from './columnConfigStore'
+import type { SupportLogRecord, ReleaseTestingRecord, DropdownConfig, ConfigCategory, ColumnConfig } from './types'
 
 // Default seed values for dropdown configs in case database fetching fails or is not setup yet
 const DEFAULT_CONFIGS: Omit<DropdownConfig, 'id'>[] = [
@@ -74,39 +75,45 @@ interface DailyReportState {
 // Debounce helper for database syncing
 let syncTimeout: any = null
 
-// Helper function to validate rows and add errors property
-const validateSupportRow = (row: SupportLogRecord, dropdownConfigs: DropdownConfig[]): SupportLogRecord => {
+// Looks up a system column's currently-resolved option list (Project →
+// Organization Default, same resolution the table itself uses) by its
+// internal_key. Returns null if the column isn't option-based / not found,
+// in which case the caller skips validation for that field entirely rather
+// than false-flagging it — this mirrors the old "dropdownConfigs has no
+// rows for this category yet" graceful-degradation behavior.
+const getColumnOptionValues = (tableKey: 'support' | 'release', internalKey: string): string[] | null => {
+  const columns = useColumnConfigStore.getState().getColumns(tableKey)
+  const col = columns.find(c => c.internal_key === internalKey)
+  if (!col || !col.dropdown_options || col.dropdown_options.length === 0) return null
+  return col.dropdown_options.map(o => o.label.toLowerCase())
+}
+
+// Helper function to validate rows and add errors property. Dropdown/status
+// values are now validated against each system column's own dropdown_options
+// (Customize Columns drawer) instead of the centralized
+// daily_report_dropdown_configs table — see migration 057.
+const validateSupportRow = (row: SupportLogRecord): SupportLogRecord => {
   const rowErrors: string[] = []
 
-  // Get configured values
-  const branches = dropdownConfigs.filter(c => c.category === 'branch' && c.is_active).map(c => c.value.toLowerCase())
-  const qas = dropdownConfigs.filter(c => c.category === 'qa' && c.is_active).map(c => c.value.toLowerCase())
-  const testingStatuses = dropdownConfigs.filter(c => c.category === 'testing_status' && c.is_active).map(c => c.value.toLowerCase())
-  const retestingStatuses = dropdownConfigs.filter(c => c.category === 'retesting_status' && c.is_active).map(c => c.value.toLowerCase())
-  const issueSources = dropdownConfigs.filter(c => c.category === 'issue_source' && c.is_active).map(c => c.value.toLowerCase())
+  const branches = getColumnOptionValues('support', 'branch')
+  const qas = getColumnOptionValues('support', 'qa')
+  const testingStatuses = getColumnOptionValues('support', 'testing_status')
+  const retestingStatuses = getColumnOptionValues('support', 'retesting_status')
+  const issueSources = getColumnOptionValues('support', 'issue_source')
 
-  // Validate branch
-  if (row.branch && !branches.includes(row.branch.toLowerCase())) {
+  if (row.branch && branches && !branches.includes(row.branch.toLowerCase())) {
     rowErrors.push(`Branch '${row.branch}' is not configured.`)
   }
-
-  // Validate QA
-  if (row.qa && !qas.includes(row.qa.toLowerCase())) {
+  if (row.qa && qas && !qas.includes(row.qa.toLowerCase())) {
     rowErrors.push(`QA '${row.qa}' is not configured.`)
   }
-
-  // Validate testing status
-  if (row.testing_status && !testingStatuses.includes(row.testing_status.toLowerCase())) {
+  if (row.testing_status && testingStatuses && !testingStatuses.includes(row.testing_status.toLowerCase())) {
     rowErrors.push(`Testing Status '${row.testing_status}' is not configured.`)
   }
-
-  // Validate retesting status
-  if (row.retesting_status && !retestingStatuses.includes(row.retesting_status.toLowerCase())) {
+  if (row.retesting_status && retestingStatuses && !retestingStatuses.includes(row.retesting_status.toLowerCase())) {
     rowErrors.push(`Retesting Status '${row.retesting_status}' is not configured.`)
   }
-
-  // Validate issue source
-  if (row.issue_source && !issueSources.includes(row.issue_source.toLowerCase())) {
+  if (row.issue_source && issueSources && !issueSources.includes(row.issue_source.toLowerCase())) {
     rowErrors.push(`Issue Source '${row.issue_source}' is not configured.`)
   }
 
@@ -117,26 +124,20 @@ const validateSupportRow = (row: SupportLogRecord, dropdownConfigs: DropdownConf
   return row
 }
 
-const validateReleaseRow = (row: ReleaseTestingRecord, dropdownConfigs: DropdownConfig[]): ReleaseTestingRecord => {
+const validateReleaseRow = (row: ReleaseTestingRecord): ReleaseTestingRecord => {
   const rowErrors: string[] = []
 
-  // Get configured values
-  const qas = dropdownConfigs.filter(c => c.category === 'qa' && c.is_active).map(c => c.value.toLowerCase())
-  const testingStatuses = dropdownConfigs.filter(c => c.category === 'testing_status' && c.is_active).map(c => c.value.toLowerCase())
-  const smokeStatuses = dropdownConfigs.filter(c => c.category === 'smoke_status' && c.is_active).map(c => c.value.toLowerCase())
+  const qas = getColumnOptionValues('release', 'qa')
+  const testingStatuses = getColumnOptionValues('release', 'testing_status')
+  const smokeStatuses = getColumnOptionValues('release', 'smoke_testing_status')
 
-  // Validate QA
-  if (row.qa && !qas.includes(row.qa.toLowerCase())) {
+  if (row.qa && qas && !qas.includes(row.qa.toLowerCase())) {
     rowErrors.push(`QA '${row.qa}' is not configured.`)
   }
-
-  // Validate testing status
-  if (row.testing_status && !testingStatuses.includes(row.testing_status.toLowerCase())) {
+  if (row.testing_status && testingStatuses && !testingStatuses.includes(row.testing_status.toLowerCase())) {
     rowErrors.push(`Testing Status '${row.testing_status}' is not configured.`)
   }
-
-  // Validate smoke testing status
-  if (row.smoke_testing_status && !smokeStatuses.includes(row.smoke_testing_status.toLowerCase())) {
+  if (row.smoke_testing_status && smokeStatuses && !smokeStatuses.includes(row.smoke_testing_status.toLowerCase())) {
     rowErrors.push(`Smoke Status '${row.smoke_testing_status}' is not configured.`)
   }
 
@@ -216,19 +217,29 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         return
       }
 
-      // Layer 1: Database-level filtering - only fetch projects where user is a member
-      // Exception: Only admins and managers see all projects
-      // QA Leads now follow membership rules (strict access control)
-      const adminRoles = ['admin', 'super_admin', 'manager']
-      const isAdmin = adminRoles.includes(role)
+      // Layer 1: Database-level filtering - only fetch projects where user is a member.
+      // Exception: only true admins (admin/super_admin) see every active project —
+      // this matches is_admin() being the sole unrestricted-visibility bypass left in
+      // the projects/project_members RLS policies as of migration 051.
+      //
+      // ⚠️ 'manager' was previously grouped into this "see everything" bucket, and any
+      // project the manager wasn't an actual member of had its role fabricated as a
+      // fallback 'member' below. That contradicts migration 051, which scoped manager
+      // visibility to ONLY projects they created (is_project_creator) or are a real
+      // project_members row for (is_project_member) — everything else is invisible to
+      // them at the database level too, so the fabricated 'member' badge was pure
+      // frontend fiction: it made a manager's Settings page list projects they have
+      // zero actual access to, with a role they don't actually hold. Managers now use
+      // the same membership + creator query as regular users below.
+      const isSuperAdmin = role === 'admin' || role === 'super_admin'
 
-      console.log('[DailyReportStore] Is Admin?', isAdmin)
+      console.log('[DailyReportStore] Is Super Admin?', isSuperAdmin)
 
       let data: any[] = []
       let error: any = null
 
-      if (isAdmin) {
-        // Admins and managers see all active projects
+      if (isSuperAdmin) {
+        // Admins and super_admins see all active projects
         console.log('[DailyReportStore] Fetching as admin - all active projects')
         const response = await supabase
           .from('projects')
@@ -240,16 +251,36 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         error = response.error
         console.log('[DailyReportStore] Admin query result:', { data, error })
       } else {
-        // Regular users (including QA leads) only see projects they're members of
-        console.log('[DailyReportStore] Fetching as regular user - membership-based query')
+        // Everyone else (manager, qa_lead, and other roles) only sees projects they're
+        // an actual project_members row for, PLUS any project they created but aren't
+        // (or are no longer) a member row for — mirroring is_project_member(id) OR
+        // is_project_creator(id) from the projects_select / project_members_select RLS
+        // policies (migration 051) exactly, instead of a hardcoded role allowlist.
+        console.log('[DailyReportStore] Fetching as regular user - membership + creator query')
 
-        // TEMPORARY TEST: Try direct project_members query without inner join
-        const testResponse = await supabase
-          .from('project_members')
-          .select('*')
-          .eq('user_id', user.id)
-        console.log('[DailyReportStore] TEST - Raw project_members rows:', testResponse)
+        const [memberResponse, creatorResponse] = await Promise.all([
+          supabase
+            .from('project_members')
+            .select(`
+              project_id,
+              project_role,
+              projects!inner (
+                id,
+                name,
+                project_code,
+                status
+              )
+            `)
+            .eq('user_id', user.id)
+            .eq('projects.status', 'active'),
+          supabase
+            .from('projects')
+            .select('id, name, project_code')
+            .eq('status', 'active')
+            .eq('created_by', user.id),
+        ])
 
+<<<<<<< Updated upstream
         const response = await supabase
           .from('project_members')
           .select(`
@@ -263,9 +294,14 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
           `)
           .eq('user_id', user.id)
           .eq('projects.status', 'active')
+=======
+        console.log('[DailyReportStore] Membership query response:', memberResponse)
+        console.log('[DailyReportStore] Created-by query response:', creatorResponse)
+>>>>>>> Stashed changes
 
-        console.log('[DailyReportStore] Raw membership query response:', response)
+        const byId = new Map<string, any>()
 
+<<<<<<< Updated upstream
         if (response.data) {
           // Transform the joined data structure
           data = response.data.map((item: any) => ({
@@ -274,8 +310,35 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
             project_code: item.projects.project_code
           }))
           console.log('[DailyReportStore] Transformed data:', data)
+=======
+        if (memberResponse.data) {
+          for (const item of memberResponse.data as any[]) {
+            byId.set(item.projects.id, {
+              id: item.projects.id,
+              name: item.projects.name,
+              project_code: item.projects.project_code,
+              project_role: item.project_role,
+            })
+          }
+>>>>>>> Stashed changes
         }
-        error = response.error
+
+        // Projects created by this user that don't already have a member-row entry
+        // (e.g. their own membership row was removed later) still show up, without a
+        // fabricated role — default to 'owner' since project creation auto-assigns
+        // ownership (see createProject() in projectService.ts) and this only fires
+        // for the edge case where that original ownership row is gone.
+        if (creatorResponse.data) {
+          for (const p of creatorResponse.data as any[]) {
+            if (!byId.has(p.id)) {
+              byId.set(p.id, { id: p.id, name: p.name, project_code: p.project_code, project_role: 'owner' })
+            }
+          }
+        }
+
+        data = Array.from(byId.values())
+        error = memberResponse.error || creatorResponse.error
+        console.log('[DailyReportStore] Merged membership+creator data:', data)
       }
 
       if (error) {
@@ -607,7 +670,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
           if (!supportRes.error) {
             const dbSupportRows = (supportRes.data || []) as SupportLogRecord[]
             // Re-validate rows to add errors property for unconfigured values
-            const validatedRows = dbSupportRows.map(row => validateSupportRow(row, get().dropdownConfigs))
+            const validatedRows = dbSupportRows.map(row => validateSupportRow(row))
             set({ supportRows: validatedRows })
 
             // ⚠️ Don't write to localStorage for viewers (read-only, no sync needed)
@@ -619,7 +682,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
           if (!releaseRes.error) {
             const dbReleaseRows = (releaseRes.data || []) as ReleaseTestingRecord[]
             // Re-validate rows to add errors property for unconfigured values
-            const validatedRows = dbReleaseRows.map(row => validateReleaseRow(row, get().dropdownConfigs))
+            const validatedRows = dbReleaseRows.map(row => validateReleaseRow(row))
             set({ releaseRows: validatedRows })
 
             // ⚠️ Don't write to localStorage for viewers (read-only, no sync needed)
@@ -1028,7 +1091,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
       if (syncedSupportRows.length > 0) {
         // Validate and sort by sort_order
         const validatedRows = syncedSupportRows
-          .map(row => validateSupportRow(row, get().dropdownConfigs))
+          .map(row => validateSupportRow(row))
           .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
 
         stateUpdate.supportRows = validatedRows
@@ -1087,7 +1150,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
       if (syncedReleaseRows.length > 0) {
         // Validate and sort by sort_order
         const validatedRows = syncedReleaseRows
-          .map(row => validateReleaseRow(row, get().dropdownConfigs))
+          .map(row => validateReleaseRow(row))
           .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
 
         stateUpdate.releaseRows = validatedRows

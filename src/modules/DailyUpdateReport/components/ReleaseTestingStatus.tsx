@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Plus, Trash2, Copy, Search, Filter, Columns, Download, Upload,
-  GripVertical, ChevronUp, ChevronDown, Check, X, Clipboard, AlertCircle
+  Plus, Trash2, Copy, Search, Filter, Download, Upload,
+  GripVertical, ChevronUp, ChevronDown, X, Clipboard, Settings2, Gauge
 } from 'lucide-react'
 import { useDailyReportStore } from '../store'
 import { usePermissions } from '@/hooks/usePermissions'
-import type { ReleaseTestingRecord, ConfigCategory } from '../types'
+import type { ReleaseTestingRecord } from '../types'
 import { GlassCard } from '@/components/ui/GlassCard'
+<<<<<<< Updated upstream
 import * as XLSX from 'xlsx'
 import XLSXStyle from 'xlsx-js-style'
 
@@ -25,14 +26,35 @@ const COLUMNS = [
   { id: 'overall_scope_of_testing', label: 'Overall Scope', type: 'textarea', defaultWidth: 200 },
   { id: 'overall_estimation_hrs', label: 'Overall Est (Hrs)', type: 'number', defaultWidth: 140 },
 ]
+=======
+import { useDynamicColumns } from '../useDynamicColumns'
+import { findDashboardRoleColumn } from '../columnConfigStore'
+import {
+  buildHeaderColumnMap,
+  buildConfigRefAOA,
+  columnsForExport,
+  columnsForPaste,
+  columnsForTemplate,
+  emptyReleaseSystemFields,
+  formatExportCell,
+  normalizeHeader,
+  parseImportRow,
+  sampleValueForColumn,
+} from '../importExportUtils'
+import { CellDisplay, CellEditor, defaultWidthForType } from './DynamicCell'
+import { CustomizeColumnsDrawer } from './CustomizeColumnsDrawer'
+import { DashboardMetricsModal } from './DashboardMetricsModal'
+import { ValidationTooltip } from './ValidationTooltip'
+>>>>>>> Stashed changes
 
 export const ReleaseTestingStatus: React.FC = () => {
   const {
     releaseRows,
     setReleaseRows,
-    dropdownConfigs,
     syncStatus,
-    isProjectViewer
+    isProjectViewer,
+    selectedProjectId,
+    projects,
   } = useDailyReportStore()
 
   const { can } = usePermissions()
@@ -40,20 +62,22 @@ export const ReleaseTestingStatus: React.FC = () => {
   const canEdit = can('daily-report', 'can_edit') && !isProjectViewer
   const canDelete = can('daily-report', 'can_delete') && !isProjectViewer
   const canExport = can('daily-report', 'can_export')
+  const canManageColumns = can('daily-report', 'can_manage_columns')
+
+  const dyn = useDynamicColumns('release', selectedProjectId)
+  const COLUMNS = dyn.columns
+
+  const currentProject = projects.find(p => p.id === selectedProjectId)
 
   // Grid states
   const [search, setSearch] = useState('')
   const [smokeFilter, setSmokeFilter] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(
-    COLUMNS.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultWidth }), {})
-  )
-  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(
-    COLUMNS.reduce((acc, col) => ({ ...acc, [col.id]: true }), {})
-  )
-  const [showColumnMenu, setShowColumnMenu] = useState(false)
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [showTemplateMenu, setShowTemplateMenu] = useState(false)
+  const [showCustomizeDrawer, setShowCustomizeDrawer] = useState(false)
+  const [showDashboardMetrics, setShowDashboardMetrics] = useState(false)
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
@@ -69,12 +93,22 @@ export const ReleaseTestingStatus: React.FC = () => {
     }
   }, [activeCell])
 
-  // Dropdown options
-  const getDropdownOptions = (category: ConfigCategory) => {
-    return dropdownConfigs
-      .filter(c => c.category === category && c.is_active)
-      .map(c => c.value)
+  // Load custom field values for currently loaded rows
+  useEffect(() => {
+    dyn.loadCustomValuesForRows(releaseRows.map(r => r.id))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [releaseRows.map(r => r.id).join(','), dyn.columns.length])
+
+  // Get option labels for a system dropdown column by internal_key, reading
+  // from the column's own dropdown_options (Customize Columns drawer) —
+  // replaces the old category-based lookup against the now-removed
+  // centralized Configuration page.
+  const getColumnOptions = (internalKey: string) => {
+    const col = COLUMNS.find(c => c.internal_key === internalKey)
+    return (col?.dropdown_options || []).map(o => o.label)
   }
+
+  const getColWidth = (colId: string, type: string) => columnWidths[colId] || defaultWidthForType(type as any)
 
   // Add row
   const addRow = () => {
@@ -113,17 +147,15 @@ export const ReleaseTestingStatus: React.FC = () => {
     if (!canDelete) return
     if (selectedIds.size === 0) return
 
-    // Confirmation dialog - Team members can delete any row in their project
     const confirmMessage = selectedIds.size === 1
       ? 'Are you sure you want to delete this row? This action cannot be undone.'
       : `Are you sure you want to delete ${selectedIds.size} rows? This action cannot be undone.`
 
     if (!confirm(confirmMessage)) return
 
-    // Filter out selected rows (permission already checked via canDelete)
     const remainingRows = releaseRows.filter(r => !selectedIds.has(r.id))
+    dyn.clearCustomValuesForRows(Array.from(selectedIds))
 
-    // Force immediate sync to prevent rows from reappearing on refresh
     setReleaseRows(remainingRows, true)
     setSelectedIds(new Set())
   }
@@ -145,15 +177,14 @@ export const ReleaseTestingStatus: React.FC = () => {
   }
 
   // Update cell value
-  const updateCell = (rowId: string, colId: string, value: any) => {
+  const updateCell = (rowId: string, col: (typeof COLUMNS)[number], value: any) => {
     if (!canEdit) return
-    const nextRows = releaseRows.map(row => {
-      if (row.id === rowId) {
-        return { ...row, [colId]: value }
-      }
-      return row
-    })
-    setReleaseRows(nextRows)
+    if (col.is_system) {
+      const nextRows = releaseRows.map(row => row.id === rowId ? { ...row, [col.internal_key]: value } : row)
+      setReleaseRows(nextRows)
+    } else {
+      dyn.setCustomValue(rowId, col, value)
+    }
   }
 
   // Drag and Drop reordering
@@ -171,10 +202,10 @@ export const ReleaseTestingStatus: React.FC = () => {
   }
 
   // Column Resizer
-  const startResize = (e: React.MouseEvent, colId: string) => {
+  const startResize = (e: React.MouseEvent, colId: string, type: string) => {
     e.preventDefault()
     const startX = e.clientX
-    const startWidth = columnWidths[colId] || 120
+    const startWidth = getColWidth(colId, type)
 
     const doResize = (moveEvent: MouseEvent) => {
       const deltaX = moveEvent.clientX - startX
@@ -193,45 +224,72 @@ export const ReleaseTestingStatus: React.FC = () => {
     document.addEventListener('mouseup', endResize)
   }
 
-  // Excel paste (TSV)
-  const handleClipboardPaste = (e: React.ClipboardEvent) => {
-    if (!canEdit) return
+  // Column that feeds dashboard smoke cards + the status filter dropdown
+  const smokeRoleCol = findDashboardRoleColumn(COLUMNS, 'smoke_status')
+  const smokeFilterOptions = smokeRoleCol
+    ? (smokeRoleCol.dropdown_options || []).map(o => o.label)
+    : getColumnOptions('smoke_testing_status')
+
+  const commitImportedRows = async (
+    parsed: ReturnType<typeof parseImportRow>[],
+  ) => {
+    if (!parsed.length) return
+
+    const newRecords: ReleaseTestingRecord[] = parsed.map(p => ({
+      id: `temp-${Math.random().toString(36).substr(2, 9)}`,
+      ...emptyReleaseSystemFields(),
+      ...p.systemFields,
+      ...(p.errors.length ? { errors: p.errors } : {}),
+    } as ReleaseTestingRecord))
+
+    const customPayloads = parsed.map(p => p.customFields)
+    const priorCount = releaseRows.length
+
+    await setReleaseRows([...releaseRows, ...newRecords], true)
+
+    const afterRows = useDailyReportStore.getState().releaseRows
+    const importedSynced = afterRows.slice(Math.max(0, afterRows.length - newRecords.length))
+    const targetRows = importedSynced.length === newRecords.length
+      ? importedSynced
+      : useDailyReportStore.getState().releaseRows.slice(priorCount)
+
+    for (let i = 0; i < targetRows.length; i++) {
+      const customs = customPayloads[i] || {}
+      for (const [key, val] of Object.entries(customs)) {
+        if (val === undefined || val === null || val === '') continue
+        const col = COLUMNS.find(c => c.internal_key === key && !c.is_system)
+        if (col) await dyn.setCustomValue(targetRows[i].id, col, val)
+      }
+    }
+
+    const errorCount = parsed.filter(p => p.errors.length > 0).length
+    if (errorCount > 0) {
+      alert(`Import completed with warnings: ${parsed.length - errorCount} rows clean, ${errorCount} row(s) have validation issues (highlighted). Custom and renamed columns were mapped from the file headers.`)
+    } else {
+      alert(`Successfully imported ${parsed.length} row(s) using the current column configuration.`)
+    }
+  }
+
+  // Paste — positional onto currently visible columns (system + custom)
+  const handleClipboardPaste = async (e: React.ClipboardEvent) => {
+    if (!canEdit && !canCreate) return
     e.preventDefault()
     const raw = e.clipboardData.getData('Text')
     const lines = raw.split(/\r?\n/).filter(line => line.length > 0)
+    if (!lines.length) return
 
-    const newRecords: ReleaseTestingRecord[] = lines.map(line => {
-      const parts = line.split('\t')
-      return {
-        id: `temp-${Math.random().toString(36).substr(2, 9)}`,
-        task_id: parts[0] || '',
-        description: parts[1] || '',
-        qa: parts[2] || '',
-        initial_round_estimation_hrs: parts[3] ? parseFloat(parts[3]) || '' : '',
-        testing_status: parts[4] || '',
-        smoke_testing_status: parts[5] || '',
-        scope_of_testing_for_smoke: parts[6] || '',
-        smoke_testing_estimation_hrs: parts[7] ? parseFloat(parts[7]) || '' : '',
-        overall_scope_of_testing: parts[8] || '',
-        overall_estimation_hrs: parts[9] ? parseFloat(parts[9]) || '' : '',
-      }
-    })
-
-    setReleaseRows([...releaseRows, ...newRecords])
+    const pasteCols = columnsForPaste(COLUMNS)
+    const headers = pasteCols.map(c => c.display_name)
+    const parsed = lines.map(line => parseImportRow('release', headers, line.split('\t'), COLUMNS))
+    await commitImportedRows(parsed)
   }
 
-  // CSV Export
   const exportToCSV = () => {
-    const activeHeaders = COLUMNS.filter(c => visibleColumns[c.id])
-    const headerRow = activeHeaders.map(h => `"${h.label.replace(/"/g, '""')}"`).join(',')
-
-    const rows = filteredRows.map(row => {
-      return activeHeaders.map(h => {
-        const val = (row as any)[h.id] ?? ''
-        return `"${val.toString().replace(/"/g, '""')}"`
-      }).join(',')
-    })
-
+    const activeHeaders = columnsForExport(COLUMNS)
+    const headerRow = activeHeaders.map(h => `"${h.display_name.replace(/"/g, '""')}"`).join(',')
+    const rows = filteredRows.map(row =>
+      activeHeaders.map(h => formatExportCell(h, dyn.getCellValue(row, h) ?? '')).join(',')
+    )
     const blob = new Blob([[headerRow, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -241,20 +299,17 @@ export const ReleaseTestingStatus: React.FC = () => {
     URL.revokeObjectURL(url)
   }
 
-  // Excel (.xlsx/.xls layout format) Export
   const exportToExcel = () => {
-    const activeHeaders = COLUMNS.filter(c => visibleColumns[c.id])
+    const activeHeaders = columnsForExport(COLUMNS)
     let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">`
     html += `<head><meta charset="utf-8"/><style>table { border-collapse: collapse; } th { background-color: #1f2937; color: #ffffff; font-weight: bold; } th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-family: sans-serif; font-size: 11px; }</style></head>`
     html += `<body><h2>Release Testing Log</h2><table><thead><tr>`
-    activeHeaders.forEach(h => {
-      html += `<th>${h.label}</th>`
-    })
+    activeHeaders.forEach(h => { html += `<th>${h.display_name}</th>` })
     html += `</tr></thead><tbody>`
     filteredRows.forEach(row => {
       html += `<tr>`
       activeHeaders.forEach(h => {
-        const val = (row as any)[h.id] ?? ''
+        const val = dyn.getCellValue(row, h) ?? ''
         html += `<td>${val.toString()}</td>`
       })
       html += `</tr>`
@@ -270,9 +325,13 @@ export const ReleaseTestingStatus: React.FC = () => {
     URL.revokeObjectURL(url)
   }
 
-  // JSON Export
   const exportToJSON = () => {
-    const formatted = JSON.stringify(filteredRows.map(({ id, ...rest }) => rest), null, 2)
+    const activeHeaders = columnsForExport(COLUMNS)
+    const formatted = JSON.stringify(filteredRows.map(row => {
+      const obj: Record<string, any> = {}
+      activeHeaders.forEach(h => { obj[h.display_name] = dyn.getCellValue(row, h) ?? '' })
+      return obj
+    }), null, 2)
     const blob = new Blob([formatted], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -282,9 +341,8 @@ export const ReleaseTestingStatus: React.FC = () => {
     URL.revokeObjectURL(url)
   }
 
-  // Print-Friendly / PDF Window
   const openPrintFriendly = (triggerPrint = false) => {
-    const activeHeaders = COLUMNS.filter(c => visibleColumns[c.id])
+    const activeHeaders = columnsForExport(COLUMNS)
     const title = 'Release Testing Log'
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
@@ -304,294 +362,116 @@ export const ReleaseTestingStatus: React.FC = () => {
     html += `<div class="meta">Generated: ${new Date().toLocaleString()} | Row count: ${filteredRows.length}</div>`
     html += `<button class="no-print" onclick="window.print()">Print Document</button>`
     html += `<table><thead><tr>`
-    activeHeaders.forEach(h => {
-      html += `<th>${h.label}</th>`
-    })
+    activeHeaders.forEach(h => { html += `<th>${h.display_name}</th>` })
     html += `</tr></thead><tbody>`
     filteredRows.forEach(row => {
       html += `<tr>`
       activeHeaders.forEach(h => {
-        const val = (row as any)[h.id] ?? ''
+        const val = dyn.getCellValue(row, h) ?? ''
         html += `<td>${val.toString()}</td>`
       })
       html += `</tr>`
     })
     html += `</tbody></table>`
-    if (triggerPrint) {
-      html += `<script>window.onload = function() { window.print(); }</script>`
-    }
+    if (triggerPrint) html += `<script>window.onload = function() { window.print(); }</script>`
     html += `</body></html>`
 
     printWindow.document.write(html)
     printWindow.document.close()
   }
 
-  // CSV / Excel Import
   const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canCreate) {
-      alert("Permission Denied: You do not have permission to import records.")
+      alert('Permission Denied: You do not have permission to import records.')
       return
     }
     const file = e.target.files?.[0]
     if (!file) return
 
     const fileName = file.name.toLowerCase()
+    const headerMap = buildHeaderColumnMap(COLUMNS)
+
+    const finishWithRows = async (headers: string[], dataRows: string[][]) => {
+      const matched = headers.filter(h => headerMap.has(normalizeHeader(h)))
+      if (matched.length === 0) {
+        alert('Error: No file headers match the current table columns. Use Template download so headers match your Customize Columns labels (including custom columns).')
+        return
+      }
+      const parsed = dataRows.map(row => parseImportRow('release', headers, row, COLUMNS))
+      await commitImportedRows(parsed)
+    }
 
     if (fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
       const reader = new FileReader()
       reader.onload = (evt) => {
         try {
           const data = evt.target?.result as ArrayBuffer
+<<<<<<< Updated upstream
           if (!data) throw new Error("Could not read file contents.")
 
+=======
+          if (!data) throw new Error('Could not read file contents.')
+          const XLSX = await import('xlsx')
+>>>>>>> Stashed changes
           const workbook = XLSX.read(new Uint8Array(data), { type: 'array' })
           const firstSheetName = workbook.SheetNames[0]
-          if (!firstSheetName) throw new Error("Excel file does not contain any sheets.")
-
+          if (!firstSheetName) throw new Error('Excel file does not contain any sheets.')
           const worksheet = workbook.Sheets[firstSheetName]
           const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
-
-          // Filter out empty rows from the spreadsheet
           const jsonData = rawData.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== ''))
-
           if (jsonData.length < 2) {
-            alert("The Excel file must contain a header row and at least one data row.")
+            alert('The Excel file must contain a header row and at least one data row.')
             return
           }
-
-          // First row is headers
           const headers = jsonData[0].map((h: any) => (h ? h.toString().trim() : ''))
-          const categoryMap = COLUMNS.reduce((acc, col) => ({ ...acc, [col.label]: col.id }), {} as Record<string, string>)
-
-          // Validate headers match
-          const matchedColumns = headers.filter(h => categoryMap[h])
-          if (matchedColumns.length === 0) {
-            alert("Error: The uploaded Excel file headers do not match any columns in the table. Please make sure the column headers match the spreadsheet header names (e.g. Task ID, Description, etc.).")
-            return
-          }
-
-          const imported = jsonData.slice(1).map(row => {
-            const record: any = { id: `temp-${Math.random().toString(36).substr(2, 9)}` }
-            const rowErrors: string[] = []
-
-            headers.forEach((h, idx) => {
-              const colId = categoryMap[h]
-              if (colId) {
-                let val = row[idx] !== undefined && row[idx] !== null ? row[idx].toString().trim() : ''
-                if (val.startsWith("'")) {
-                  val = val.substring(1)
-                }
-                const colDef = COLUMNS.find(c => c.id === colId)
-                if (colDef?.type === 'number') {
-                  if (val === '') {
-                    record[colId] = ''
-                  } else {
-                    const parsed = parseFloat(val)
-                    if (isNaN(parsed)) {
-                      rowErrors.push(`${h} must be a number (got: '${val}')`)
-                      record[colId] = ''
-                    } else {
-                      record[colId] = parsed
-                    }
-                  }
-                } else if (colDef?.type === 'date') {
-                  if (val === '') {
-                    record[colId] = ''
-                  } else {
-                    const dateObj = new Date(val)
-                    if (isNaN(dateObj.getTime())) {
-                      rowErrors.push(`${h} must be a valid date YYYY-MM-DD (got: '${val}')`)
-                    }
-                    record[colId] = val
-                  }
-                } else {
-                  record[colId] = val
-                }
-              }
-            })
-
-            // Post-parsing validations
-            if (!record.task_id) {
-              rowErrors.push("Task ID is required.")
-            }
-            if (!record.description) {
-              rowErrors.push("Description is required.")
-            }
-
-            if (record.qa) {
-              const qas = getDropdownOptions('qa').map(q => q.toLowerCase())
-              if (!qas.includes(record.qa.toLowerCase())) {
-                rowErrors.push(`QA '${record.qa}' is not configured.`)
-              }
-            }
-            if (record.testing_status) {
-              const testingStatuses = getDropdownOptions('testing_status').map(s => s.toLowerCase())
-              if (!testingStatuses.includes(record.testing_status.toLowerCase())) {
-                rowErrors.push(`Testing Status '${record.testing_status}' is not configured.`)
-              }
-            }
-            if (record.smoke_testing_status) {
-              const smokeStatuses = getDropdownOptions('smoke_status').map(s => s.toLowerCase())
-              if (!smokeStatuses.includes(record.smoke_testing_status.toLowerCase())) {
-                rowErrors.push(`Smoke Status '${record.smoke_testing_status}' is not configured.`)
-              }
-            }
-
-            if (rowErrors.length > 0) {
-              record.errors = rowErrors
-            }
-
-            return record as ReleaseTestingRecord
-          })
-
-          const errorCount = imported.filter(r => (r as any).errors).length
-          if (errorCount > 0) {
-            alert(`Import completed with warnings: ${imported.length - errorCount} rows successfully imported, and ${errorCount} rows have validation issues. Rows with errors are highlighted with alert icons. Please correct the cells inline inside the table.`)
-          } else {
-            alert(`Successfully imported ${imported.length} rows!`)
-          }
-
-          // Force immediate sync to prevent data loss on navigation
-          setReleaseRows([...releaseRows, ...imported], true)
+          const dataRows = jsonData.slice(1).map(row => row.map((c: any) => (c !== undefined && c !== null ? c.toString() : '')))
+          await finishWithRows(headers, dataRows)
         } catch (error: any) {
-          alert(`Failed to import Excel file: ${error?.message || error || "Unknown error parsing Excel sheet structure"}`)
+          alert(`Failed to import Excel file: ${error?.message || error || 'Unknown error'}`)
         }
       }
-      reader.onerror = () => {
-        alert("Failed to read the file from disk.")
-      }
+      reader.onerror = () => alert('Failed to read the file from disk.')
       reader.readAsArrayBuffer(file)
     } else if (fileName.endsWith('.csv')) {
-      if (!canCreate) {
-        alert("Permission Denied: You do not have permission to import records.")
-        return
-      }
       const reader = new FileReader()
-      reader.onload = (evt) => {
+      reader.onload = async (evt) => {
         try {
           const text = evt.target?.result as string
           const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
           if (lines.length < 2) {
-            alert("The CSV file must contain a header row and at least one data row.")
+            alert('The CSV file must contain a header row and at least one data row.')
             return
           }
-
           const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim())
-          const categoryMap = COLUMNS.reduce((acc, col) => ({ ...acc, [col.label]: col.id }), {} as Record<string, string>)
-
-          const matchedColumns = headers.filter(h => categoryMap[h])
-          if (matchedColumns.length === 0) {
-            alert("Error: The uploaded CSV file headers do not match any columns in the table.")
-            return
-          }
-
-          const imported = lines.slice(1).map(line => {
-            const rowData = (line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(','))
+          const dataRows = lines.slice(1).map(line =>
+            (line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(','))
               .map(val => val.replace(/^"|"$/g, '').trim())
-
-            const record: any = { id: `temp-${Math.random().toString(36).substr(2, 9)}` }
-            const rowErrors: string[] = []
-
-            headers.forEach((h, idx) => {
-              const colId = categoryMap[h]
-              if (colId) {
-                let val = rowData[idx] ?? ''
-                if (val.startsWith("'")) {
-                  val = val.substring(1)
-                }
-                const colDef = COLUMNS.find(c => c.id === colId)
-                if (colDef?.type === 'number') {
-                  if (val === '') {
-                    record[colId] = ''
-                  } else {
-                    const parsed = parseFloat(val)
-                    if (isNaN(parsed)) {
-                      rowErrors.push(`${h} must be a number (got: '${val}')`)
-                      record[colId] = ''
-                    } else {
-                      record[colId] = parsed
-                    }
-                  }
-                } else if (colDef?.type === 'date') {
-                  if (val === '') {
-                    record[colId] = ''
-                  } else {
-                    const dateObj = new Date(val)
-                    if (isNaN(dateObj.getTime())) {
-                      rowErrors.push(`${h} must be a valid date YYYY-MM-DD (got: '${val}')`)
-                    }
-                    record[colId] = val
-                  }
-                } else {
-                  record[colId] = val
-                }
-              }
-            })
-
-            // Post-parsing validations
-            if (!record.task_id) {
-              rowErrors.push("Task ID is required.")
-            }
-            if (!record.description) {
-              rowErrors.push("Description is required.")
-            }
-
-            if (record.qa) {
-              const qas = getDropdownOptions('qa').map(q => q.toLowerCase())
-              if (!qas.includes(record.qa.toLowerCase())) {
-                rowErrors.push(`QA '${record.qa}' is not configured.`)
-              }
-            }
-            if (record.testing_status) {
-              const testingStatuses = getDropdownOptions('testing_status').map(s => s.toLowerCase())
-              if (!testingStatuses.includes(record.testing_status.toLowerCase())) {
-                rowErrors.push(`Testing Status '${record.testing_status}' is not configured.`)
-              }
-            }
-            if (record.smoke_testing_status) {
-              const smokeStatuses = getDropdownOptions('smoke_status').map(s => s.toLowerCase())
-              if (!smokeStatuses.includes(record.smoke_testing_status.toLowerCase())) {
-                rowErrors.push(`Smoke Status '${record.smoke_testing_status}' is not configured.`)
-              }
-            }
-
-            if (rowErrors.length > 0) {
-              record.errors = rowErrors
-            }
-
-            return record as ReleaseTestingRecord
-          })
-
-          const errorCount = imported.filter(r => (r as any).errors).length
-          if (errorCount > 0) {
-            alert(`Import completed with warnings: ${imported.length - errorCount} rows successfully imported, and ${errorCount} rows have validation issues. Rows with errors are highlighted with alert icons. Please correct the cells inline inside the table.`)
-          } else {
-            alert(`Successfully imported ${imported.length} rows!`)
-          }
-
-          // Force immediate sync to prevent data loss on navigation
-          setReleaseRows([...releaseRows, ...imported], true)
+          )
+          await finishWithRows(headers, dataRows)
         } catch (error: any) {
           alert(`Failed to import CSV file: ${error?.message || error}`)
         }
       }
-      reader.onerror = () => {
-        alert("Failed to read the file from disk.")
-      }
+      reader.onerror = () => alert('Failed to read the file from disk.')
       reader.readAsText(file)
     } else {
-      alert("Unsupported file format. Please upload a .csv, .xls, or .xlsx file.")
+      alert('Unsupported file format. Please upload a .csv, .xls, or .xlsx file.')
     }
 
     e.target.value = ''
   }
 
+<<<<<<< Updated upstream
   // Template Download builder
   const downloadTemplate = (format: 'xlsx' | 'xls' | 'csv') => {
+=======
+  const downloadTemplate = async (format: 'xlsx' | 'xls' | 'csv') => {
+>>>>>>> Stashed changes
     if (!canExport) {
-      alert("Permission Denied: You do not have permission to download templates.")
+      alert('Permission Denied: You do not have permission to download templates.')
       return
     }
+<<<<<<< Updated upstream
     const headers = COLUMNS.map(c => c.label)
 
     // Create a realistic sample row
@@ -611,12 +491,17 @@ export const ReleaseTestingStatus: React.FC = () => {
       }
     })
 
+=======
+    const templateCols = columnsForTemplate(COLUMNS)
+    const XLSX = await import('xlsx')
+    const headers = templateCols.map(c => c.display_name)
+    const sampleRow = templateCols.map(col => sampleValueForColumn(col, getColumnOptions))
+>>>>>>> Stashed changes
     const aoaData = [headers, sampleRow]
 
     if (format === 'csv') {
       const csvWS = XLSX.utils.aoa_to_sheet(aoaData)
       const csvContent = XLSX.utils.sheet_to_csv(csvWS)
-
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -625,76 +510,72 @@ export const ReleaseTestingStatus: React.FC = () => {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-    } else {
-      const wb = XLSX.utils.book_new()
-      const ws = XLSX.utils.aoa_to_sheet(aoaData)
+      return
+    }
 
-      // Auto-fit column widths
-      const colWidths = COLUMNS.map(col => {
-        const labelLen = col.label.length
-        return { wch: Math.max(labelLen + 5, 14) }
-      })
-      ws['!cols'] = colWidths
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(aoaData)
+    ws['!cols'] = templateCols.map(col => ({ wch: Math.max(col.display_name.length + 5, 14) }))
+    ws['!views'] = [{ state: 'frozen', ySplit: 1 }]
 
-      // Freeze header row
-      ws['!views'] = [{ state: 'frozen', ySplit: 1 }]
+    const headerStyle = {
+      font: { name: 'Segoe UI', sz: 10, bold: true, color: { rgb: '333333' } },
+      fill: { fgColor: { rgb: 'F1F5F9' } },
+      alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
+      border: {
+        top: { style: 'thin', color: { rgb: 'E2E8F0' } },
+        bottom: { style: 'medium', color: { rgb: 'CBD5E1' } },
+        left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+        right: { style: 'thin', color: { rgb: 'E2E8F0' } },
+      },
+    }
+    const dataStyle = {
+      font: { name: 'Segoe UI', sz: 10, color: { rgb: '444444' } },
+      alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
+      border: {
+        top: { style: 'thin', color: { rgb: 'F1F5F9' } },
+        bottom: { style: 'thin', color: { rgb: 'F1F5F9' } },
+        left: { style: 'thin', color: { rgb: 'F1F5F9' } },
+        right: { style: 'thin', color: { rgb: 'F1F5F9' } },
+      },
+    }
 
-      // Cell styles
-      const headerStyle = {
-        font: { name: 'Segoe UI', sz: 10, bold: true, color: { rgb: '333333' } },
-        fill: { fgColor: { rgb: 'F1F5F9' } },
-        alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
-        border: {
-          top: { style: 'thin', color: { rgb: 'E2E8F0' } },
-          bottom: { style: 'medium', color: { rgb: 'CBD5E1' } },
-          left: { style: 'thin', color: { rgb: 'E2E8F0' } },
-          right: { style: 'thin', color: { rgb: 'E2E8F0' } }
+    for (const key in ws) {
+      if (key.startsWith('!')) continue
+      const cell = ws[key]
+      const colLetter = key.replace(/[0-9]/g, '')
+      const rowIdx = parseInt(key.replace(/[A-Z]/g, ''), 10)
+      let colIdx = 0
+      for (let i = 0; i < colLetter.length; i++) colIdx = colIdx * 26 + (colLetter.charCodeAt(i) - 64)
+      colIdx = colIdx - 1
+      const col = templateCols[colIdx]
+      if (col) {
+        if (col.column_type === 'number' || col.column_type === 'percentage') {
+          cell.t = 'n'
+          cell.z = col.internal_key.includes('count') ? '0' : '0.0'
+        } else if (col.column_type === 'date') {
+          cell.z = 'yyyy-mm-dd'
         }
       }
+      if (format === 'xlsx') cell.s = rowIdx === 1 ? headerStyle : dataStyle
+    }
 
-      const dataStyle = {
-        font: { name: 'Segoe UI', sz: 10, color: { rgb: '444444' } },
-        alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
-        border: {
-          top: { style: 'thin', color: { rgb: 'F1F5F9' } },
-          bottom: { style: 'thin', color: { rgb: 'F1F5F9' } },
-          left: { style: 'thin', color: { rgb: 'F1F5F9' } },
-          right: { style: 'thin', color: { rgb: 'F1F5F9' } }
-        }
-      }
+    XLSX.utils.book_append_sheet(wb, ws, 'Template')
 
-      // Add types, formatting and borders to cells
-      for (const key in ws) {
+    const configAOA = buildConfigRefAOA(COLUMNS)
+    const configWS = XLSX.utils.aoa_to_sheet(configAOA)
+    configWS['!cols'] = (configAOA[0] || []).map(() => ({ wch: 22 }))
+    if (format === 'xlsx') {
+      for (const key in configWS) {
         if (key.startsWith('!')) continue
-        const cell = ws[key]
-        const colLetter = key.replace(/[0-9]/g, '')
+        const cell = configWS[key]
         const rowIdx = parseInt(key.replace(/[A-Z]/g, ''), 10)
-
-        let colIdx = 0
-        for (let i = 0; i < colLetter.length; i++) {
-          colIdx = colIdx * 26 + (colLetter.charCodeAt(i) - 64)
-        }
-        colIdx = colIdx - 1
-
-        const col = COLUMNS[colIdx]
-        if (col) {
-          if (col.type === 'number') {
-            cell.t = 'n'
-            cell.z = col.id.includes('count') ? '0' : '0.0'
-          } else if (col.type === 'date') {
-            cell.z = 'yyyy-mm-dd'
-          }
-        }
-
-        if (format === 'xlsx') {
-          if (rowIdx === 1) {
-            cell.s = headerStyle
-          } else {
-            cell.s = dataStyle
-          }
-        }
+        cell.s = rowIdx === 1 ? headerStyle : dataStyle
       }
+    }
+    XLSX.utils.book_append_sheet(wb, configWS, 'Configurations Ref')
 
+<<<<<<< Updated upstream
       XLSX.utils.book_append_sheet(wb, ws, 'Template')
 
       // Dynamic Dropdowns Configuration reference list
@@ -737,26 +618,36 @@ export const ReleaseTestingStatus: React.FC = () => {
       } else {
         XLSX.writeFile(wb, 'Daily_Release_Testing_Log_Template.xls', { bookType: 'biff8' })
       }
+=======
+    if (format === 'xlsx') {
+      const XLSXStyle = (await import('xlsx-js-style')).default
+      XLSXStyle.writeFile(wb, 'Daily_Release_Testing_Log_Template.xlsx')
+    } else {
+      XLSX.writeFile(wb, 'Daily_Release_Testing_Log_Template.xls', { bookType: 'biff8' })
+>>>>>>> Stashed changes
     }
   }
 
-  // Filter & Search & Sort
+  // Filter / search / sort — all visible columns; smoke filter uses dashboard-role column
   const filteredRows = releaseRows
     .filter(row => {
-      const matchSearch =
-        (row.task_id || '').toLowerCase().includes(search.toLowerCase()) ||
-        (row.qa || '').toLowerCase().includes(search.toLowerCase()) ||
-        (row.description || '').toLowerCase().includes(search.toLowerCase()) ||
-        (row.scope_of_testing_for_smoke || '').toLowerCase().includes(search.toLowerCase()) ||
-        (row.overall_scope_of_testing || '').toLowerCase().includes(search.toLowerCase())
+      const q = search.toLowerCase()
+      const matchSearch = !q || COLUMNS.filter(c => c.is_visible).some(col => {
+        const v = dyn.getCellValue(row, col)
+        return (v ?? '').toString().toLowerCase().includes(q)
+      })
 
-      const matchSmoke = smokeFilter === '' || row.smoke_testing_status === smokeFilter
+      const smokeVal = smokeRoleCol
+        ? (dyn.getCellValue(row, smokeRoleCol) ?? '').toString()
+        : (row.smoke_testing_status || '')
+      const matchSmoke = smokeFilter === '' || smokeVal === smokeFilter
       return matchSearch && matchSmoke
     })
     .sort((a, b) => {
       if (!sortColumn) return 0
-      const aVal = (a as any)[sortColumn] ?? ''
-      const bVal = (b as any)[sortColumn] ?? ''
+      const col = COLUMNS.find(c => c.internal_key === sortColumn)
+      const aVal = col ? (dyn.getCellValue(a, col) ?? '') : ((a as any)[sortColumn] ?? '')
+      const bVal = col ? (dyn.getCellValue(b, col) ?? '') : ((b as any)[sortColumn] ?? '')
 
       if (typeof aVal === 'number' && typeof bVal === 'number') {
         return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
@@ -776,8 +667,28 @@ export const ReleaseTestingStatus: React.FC = () => {
     }
   }
 
+  const visibleColumnsList = COLUMNS.filter(c => c.is_visible)
+
   return (
     <GlassCard hoverEffect={false} className="flex flex-col gap-4 overflow-visible relative">
+
+      {/* Active column preset indicator */}
+      <div
+        className="flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg w-fit"
+        style={{
+          background: dyn.scope === 'organization' ? 'rgba(96,165,250,0.08)' : 'rgba(212,175,55,0.08)',
+          border: `1px solid ${dyn.scope === 'organization' ? 'rgba(96,165,250,0.2)' : 'rgba(212,175,55,0.2)'}`,
+          color: dyn.scope === 'organization' ? '#60a5fa' : 'var(--accent)',
+        }}
+        title={dyn.scope === 'organization'
+          ? 'This project has no column configuration of its own, so the shared Organization Default preset is currently loaded.'
+          : "This project's own saved column configuration is currently loaded."}
+      >
+        <Settings2 className="w-3 h-3 shrink-0" />
+        {dyn.scope === 'organization'
+          ? 'Organization Default Column Customization Preset was loaded'
+          : `Project-Specific Column Configuration Loaded${currentProject?.project_name ? ` — ${currentProject.project_name}` : ''}`}
+      </div>
 
       {/* Grid Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-4 border-b border-white/5 pb-4">
@@ -796,7 +707,7 @@ export const ReleaseTestingStatus: React.FC = () => {
             {search && <X className="w-3 h-3 cursor-pointer text-text-muted hover:text-white" onClick={() => setSearch('')} />}
           </div>
 
-          {/* Smoke Status Filter */}
+          {/* Status filter — options from the Dashboard Metrics source column */}
           <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10 text-xs text-text-secondary select-none">
             <Filter className="w-3.5 h-3.5 text-text-muted" />
             <select
@@ -804,207 +715,204 @@ export const ReleaseTestingStatus: React.FC = () => {
               onChange={e => setSmokeFilter(e.target.value)}
               className="bg-transparent focus:outline-none text-xs text-white cursor-pointer font-semibold"
             >
-              <option value="" className="bg-[#121214]">All Smoke Statuses</option>
-              {getDropdownOptions('smoke_status').map(opt => (
+              <option value="" className="bg-[#121214]">
+                All {smokeRoleCol?.display_name || 'Smoke Statuses'}
+              </option>
+              {smokeFilterOptions.map(opt => (
                 <option key={opt} value={opt} className="bg-[#121214]">{opt}</option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Action Button grouping */}
+        {/* Action Button grouping — each logical cluster (plus its trailing
+            divider) is wrapped in its own flex group with shrink-0, so a
+            divider always wraps together with the buttons it separates
+            instead of landing on its own line at narrower widths. */}
         <div className="flex items-center gap-2 flex-wrap text-xs">
 
-          {/* Column menu */}
-          <div className="relative">
-            <button
-              onClick={() => setShowColumnMenu(p => !p)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all font-semibold ${showColumnMenu ? 'bg-accent-gold text-black' : 'bg-white/5 border border-white/10 text-text-secondary hover:text-white'}`}
-            >
-              <Columns className="w-3.5 h-3.5" />
-              Columns
-            </button>
-            <AnimatePresence>
-              {showColumnMenu && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setShowColumnMenu(false)} />
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    className="absolute right-0 mt-2 z-40 w-56 rounded-2xl bg-[var(--surface-elevated)] border border-[var(--border)] p-3 shadow-2xl flex flex-col gap-2"
-                  >
-                    <span className="text-[10px] uppercase font-bold text-[var(--text-secondary)] tracking-wider block border-b border-[var(--divider)] pb-1">Show/Hide Columns</span>
-                    <div className="max-h-60 overflow-y-auto flex flex-col gap-1.5">
-                      {COLUMNS.map(col => (
-                        <label key={col.id} className="flex items-center gap-2.5 cursor-pointer text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-                          <input
-                            type="checkbox"
-                            checked={visibleColumns[col.id]}
-                            onChange={e => setVisibleColumns(prev => ({ ...prev, [col.id]: e.target.checked }))}
-                            className="rounded border-white/10 text-accent-gold focus:ring-0 focus:ring-offset-0 bg-transparent"
-                          />
-                          {col.label}
-                        </label>
-                      ))}
-                    </div>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Customize Columns button */}
+            {canManageColumns && (
+              <button
+                onClick={() => setShowCustomizeDrawer(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all font-semibold whitespace-nowrap bg-white/5 border border-white/10 text-text-secondary hover:text-white"
+                title="Customize QA Daily Update Columns"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                Customize Columns
+              </button>
+            )}
+
+            {/* Dashboard Metrics — which column feeds Smoke Passed, Pending
+                Smoke, Blocked Issues cards + option buckets. */}
+            {canManageColumns && (
+              <button
+                onClick={() => setShowDashboardMetrics(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all font-semibold whitespace-nowrap bg-white/5 border border-white/10 text-text-secondary hover:text-white"
+                title="Configure which column feeds the summary dashboard cards"
+              >
+                <Gauge className="w-3.5 h-3.5" />
+                Dashboard Metrics
+              </button>
+            )}
+
+            {canManageColumns && <div className="w-px h-6 bg-white/10 mx-1 shrink-0" />}
           </div>
 
-          <div className="w-px h-6 bg-white/10 mx-1" />
-
           {/* Import/Export */}
-          {/* Template Download button */}
-          {canExport && (
-            <div className="relative">
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Template Download button */}
+            {canExport && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowTemplateMenu(p => !p)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all font-semibold whitespace-nowrap ${showTemplateMenu ? 'bg-accent-gold text-black' : 'bg-white/5 border border-white/10 text-text-secondary hover:text-white'}`}
+                >
+                  <Clipboard className="w-3.5 h-3.5" /> Template
+                </button>
+                <AnimatePresence>
+                  {showTemplateMenu && (
+                    <>
+                      <div className="fixed inset-0 z-30" onClick={() => setShowTemplateMenu(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="absolute right-0 mt-2 z-40 w-48 rounded-2xl bg-[var(--surface-elevated)] border border-[var(--border)] p-2.5 shadow-2xl flex flex-col gap-1"
+                      >
+                        <span className="text-[9px] uppercase font-bold text-[var(--text-secondary)] tracking-wider block border-b border-[var(--divider)] pb-1 px-1.5">Download Template</span>
+                        <button
+                          onClick={() => { downloadTemplate('xlsx'); setShowTemplateMenu(false); }}
+                          className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
+                        >
+                          Excel (.xlsx)
+                        </button>
+                        <button
+                          onClick={() => { downloadTemplate('xls'); setShowTemplateMenu(false); }}
+                          className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
+                        >
+                          Excel 97-2003 (.xls)
+                        </button>
+                        <button
+                          onClick={() => { downloadTemplate('csv'); setShowTemplateMenu(false); }}
+                          className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
+                        >
+                          CSV (.csv)
+                        </button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {canCreate && (
+              <>
+                <button
+                  onClick={() => importFileRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-secondary hover:text-white transition-all font-semibold whitespace-nowrap"
+                >
+                  <Upload className="w-3.5 h-3.5" /> Import
+                </button>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".csv, .xls, .xlsx, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  className="hidden"
+                  onChange={handleFileImport}
+                />
+              </>
+            )}
+
+            {canExport && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportMenu(p => !p)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all font-semibold whitespace-nowrap ${showExportMenu ? 'bg-accent-gold text-black' : 'bg-white/5 border border-white/10 text-text-secondary hover:text-white'}`}
+                >
+                  <Download className="w-3.5 h-3.5" /> Export
+                </button>
+                <AnimatePresence>
+                  {showExportMenu && (
+                    <>
+                      <div className="fixed inset-0 z-30" onClick={() => setShowExportMenu(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="absolute right-0 mt-2 z-40 w-44 rounded-2xl bg-[var(--surface-elevated)] border border-[var(--border)] p-2.5 shadow-2xl flex flex-col gap-1"
+                      >
+                        <span className="text-[9px] uppercase font-bold text-[var(--text-secondary)] tracking-wider block border-b border-[var(--divider)] pb-1 px-1.5">Format</span>
+                        <button
+                          onClick={() => { exportToExcel(); setShowExportMenu(false); }}
+                          className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
+                        >
+                          Excel (.xls)
+                        </button>
+                        <button
+                          onClick={() => { exportToCSV(); setShowExportMenu(false); }}
+                          className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
+                        >
+                          CSV (.csv)
+                        </button>
+                        <button
+                          onClick={() => { openPrintFriendly(true); setShowExportMenu(false); }}
+                          className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
+                        >
+                          PDF (.pdf)
+                        </button>
+                        <button
+                          onClick={() => { exportToJSON(); setShowExportMenu(false); }}
+                          className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
+                        >
+                          JSON (.json)
+                        </button>
+                        <button
+                          onClick={() => { openPrintFriendly(false); setShowExportMenu(false); }}
+                          className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
+                        >
+                          Print-Friendly View
+                        </button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            <div className="w-px h-6 bg-white/10 mx-1 shrink-0" />
+
+            {/* Row actions — matches the text-xs/font-semibold sizing of
+                every other toolbar button (see SupportExceptionLog.tsx for
+                the same fix and reasoning). */}
+            {canCreate && (
               <button
-                onClick={() => setShowTemplateMenu(p => !p)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all font-semibold ${showTemplateMenu ? 'bg-accent-gold text-black' : 'bg-white/5 border border-white/10 text-text-secondary hover:text-white'}`}
+                onClick={addRow}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent-gold/15 border border-accent-gold/30 text-accent-gold hover:bg-accent-gold/25 transition-all font-semibold whitespace-nowrap"
               >
-                <Clipboard className="w-3.5 h-3.5" /> Template
+                <Plus className="w-3.5 h-3.5" /> Add Row
               </button>
-              <AnimatePresence>
-                {showTemplateMenu && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setShowTemplateMenu(false)} />
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      className="absolute right-0 mt-2 z-40 w-48 rounded-2xl bg-[var(--surface-elevated)] border border-[var(--border)] p-2.5 shadow-2xl flex flex-col gap-1"
-                    >
-                      <span className="text-[9px] uppercase font-bold text-[var(--text-secondary)] tracking-wider block border-b border-[var(--divider)] pb-1 px-1.5">Download Template</span>
-                      <button
-                        onClick={() => { downloadTemplate('xlsx'); setShowTemplateMenu(false); }}
-                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
-                      >
-                        Excel (.xlsx)
-                      </button>
-                      <button
-                        onClick={() => { downloadTemplate('xls'); setShowTemplateMenu(false); }}
-                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
-                      >
-                        Excel 97-2003 (.xls)
-                      </button>
-                      <button
-                        onClick={() => { downloadTemplate('csv'); setShowTemplateMenu(false); }}
-                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
-                      >
-                        CSV (.csv)
-                      </button>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
-
-          {canCreate && (
-            <>
+            )}
+            {canCreate && (
               <button
-                onClick={() => importFileRef.current?.click()}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-secondary hover:text-white transition-all font-semibold"
+                onClick={duplicateSelected}
+                disabled={selectedIds.size === 0}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-secondary hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all font-semibold whitespace-nowrap"
               >
-                <Upload className="w-3.5 h-3.5" /> Import
+                <Copy className="w-3.5 h-3.5" /> Dupe
               </button>
-              <input
-                ref={importFileRef}
-                type="file"
-                accept=".csv, .xls, .xlsx, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                className="hidden"
-                onChange={handleFileImport}
-              />
-            </>
-          )}
-
-          {canExport && (
-            <div className="relative">
+            )}
+            {canDelete && (
               <button
-                onClick={() => setShowExportMenu(p => !p)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all font-semibold ${showExportMenu ? 'bg-accent-gold text-black' : 'bg-white/5 border border-white/10 text-text-secondary hover:text-white'}`}
+                onClick={deleteSelected}
+                disabled={selectedIds.size === 0}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/25 disabled:opacity-30 disabled:pointer-events-none transition-all font-semibold whitespace-nowrap"
               >
-                <Download className="w-3.5 h-3.5" /> Export
+                <Trash2 className="w-3.5 h-3.5" /> Delete
               </button>
-              <AnimatePresence>
-                {showExportMenu && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setShowExportMenu(false)} />
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      className="absolute right-0 mt-2 z-40 w-44 rounded-2xl bg-[var(--surface-elevated)] border border-[var(--border)] p-2.5 shadow-2xl flex flex-col gap-1"
-                    >
-                      <span className="text-[9px] uppercase font-bold text-[var(--text-secondary)] tracking-wider block border-b border-[var(--divider)] pb-1 px-1.5">Format</span>
-                      <button
-                        onClick={() => { exportToExcel(); setShowExportMenu(false); }}
-                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
-                      >
-                        Excel (.xls)
-                      </button>
-                      <button
-                        onClick={() => { exportToCSV(); setShowExportMenu(false); }}
-                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
-                      >
-                        CSV (.csv)
-                      </button>
-                      <button
-                        onClick={() => { openPrintFriendly(true); setShowExportMenu(false); }}
-                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
-                      >
-                        PDF (.pdf)
-                      </button>
-                      <button
-                        onClick={() => { exportToJSON(); setShowExportMenu(false); }}
-                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
-                      >
-                        JSON (.json)
-                      </button>
-                      <button
-                        onClick={() => { openPrintFriendly(false); setShowExportMenu(false); }}
-                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-semibold"
-                      >
-                        Print-Friendly View
-                      </button>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
-
-          <div className="w-px h-6 bg-white/10 mx-1" />
-
-          {/* Row actions */}
-          {canCreate && (
-            <button
-              onClick={addRow}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent-gold/15 border border-accent-gold/30 text-accent-gold hover:bg-accent-gold/25 transition-all font-extrabold uppercase tracking-wider text-[10px]"
-            >
-              <Plus className="w-3.5 h-3.5" /> Add Row
-            </button>
-          )}
-          {canCreate && (
-            <button
-              onClick={duplicateSelected}
-              disabled={selectedIds.size === 0}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-secondary hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all font-semibold"
-            >
-              <Copy className="w-3.5 h-3.5" /> Dupe
-            </button>
-          )}
-          {canDelete && (
-            <button
-              onClick={deleteSelected}
-              disabled={selectedIds.size === 0}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/25 disabled:opacity-30 disabled:pointer-events-none transition-all font-semibold"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Delete
-            </button>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -1029,10 +937,9 @@ export const ReleaseTestingStatus: React.FC = () => {
                 </div>
               </th>
 
-              {COLUMNS.map(col => {
-                if (!visibleColumns[col.id]) return null
-                const width = columnWidths[col.id] || col.defaultWidth
-                const isSorted = sortColumn === col.id
+              {visibleColumnsList.map(col => {
+                const width = getColWidth(col.id, col.column_type)
+                const isSorted = sortColumn === col.internal_key
 
                 return (
                   <th
@@ -1042,9 +949,12 @@ export const ReleaseTestingStatus: React.FC = () => {
                   >
                     <div
                       className="py-3.5 px-4 h-full w-full flex items-center justify-between cursor-pointer"
-                      onClick={() => handleHeaderClick(col.id)}
+                      onClick={() => handleHeaderClick(col.internal_key)}
                     >
-                      <span className="truncate font-extrabold">{col.label}</span>
+                      <span className="truncate font-extrabold flex items-center gap-1">
+                        {col.display_name}
+                        {col.is_required && <span className="text-red-400">*</span>}
+                      </span>
                       {isSorted && (
                         <div className="ml-2 shrink-0">
                           {sortDirection === 'asc' ?
@@ -1056,7 +966,7 @@ export const ReleaseTestingStatus: React.FC = () => {
                     </div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize opacity-0 group-hover:opacity-100 bg-accent-gold/60 hover:bg-accent-gold transition-all duration-200 z-10"
-                      onMouseDown={(e) => startResize(e, col.id)}
+                      onMouseDown={(e) => startResize(e, col.id, col.column_type)}
                     />
                   </th>
                 )
@@ -1066,7 +976,10 @@ export const ReleaseTestingStatus: React.FC = () => {
           <tbody>
             {filteredRows.map((row, idx) => {
               const isSelected = selectedIds.has(row.id)
-              const hasErrors = !!(row as any).errors
+              const importErrors: string[] = (row as any).errors || []
+              const requiredErrors = dyn.validateRow(row)
+              const allErrors = [...importErrors, ...requiredErrors]
+              const hasErrors = allErrors.length > 0
               const isEvenRow = idx % 2 === 0
 
               return (
@@ -1091,27 +1004,16 @@ export const ReleaseTestingStatus: React.FC = () => {
                           onChange={() => toggleSelectRow(row.id)}
                           className="rounded border-white/20 text-accent-gold focus:ring-2 focus:ring-accent-gold/50 focus:ring-offset-0 bg-white/5 cursor-pointer scale-110"
                         />
-                        {hasErrors && (
-                          <div className="relative group shrink-0" title={(row as any).errors.join('\n')}>
-                            <AlertCircle className="w-4 h-4 text-red-500 animate-pulse cursor-help" />
-                            <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block z-50 w-64 bg-red-950/95 border border-red-500/40 text-red-200 text-[10px] p-2.5 rounded-lg shadow-xl backdrop-blur-md">
-                              <span className="font-bold block border-b border-red-500/20 pb-1 mb-1">Import Validation Errors</span>
-                              {(row as any).errors.map((err: string, i: number) => (
-                                <span key={i} className="block mt-0.5">• {err}</span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                        <ValidationTooltip errors={allErrors} />
                       </div>
                       <span className="text-[10px] text-text-muted font-mono font-bold">{idx + 1}</span>
                     </div>
                   </td>
 
-                  {COLUMNS.map(col => {
-                    if (!visibleColumns[col.id]) return null
+                  {visibleColumnsList.map(col => {
                     const isEditing = activeCell?.rowId === row.id && activeCell?.colId === col.id
-                    const width = columnWidths[col.id] || col.defaultWidth
-                    const cellVal = (row as any)[col.id] ?? ''
+                    const width = getColWidth(col.id, col.column_type)
+                    const cellVal = dyn.getCellValue(row, col)
 
                     return (
                       <td
@@ -1119,69 +1021,25 @@ export const ReleaseTestingStatus: React.FC = () => {
                         className="p-0 border-r border-[var(--divider)] relative align-top"
                         style={{ minWidth: width, width }}
                         onDoubleClick={() => {
-                          if (canEdit) {
-                            setActiveCell({ rowId: row.id, colId: col.id })
-                          }
+                          if (canEdit) setActiveCell({ rowId: row.id, colId: col.id })
                         }}
                       >
                         {isEditing ? (
-                          <div className={col.type === 'textarea'
+                          <div className={col.column_type === 'long_text' || col.column_type === 'multiselect'
                             ? "absolute left-0 right-0 top-0 z-20 min-h-[96px] bg-[var(--surface-elevated)] border-2 border-accent-gold p-2 shadow-2xl rounded-lg"
                             : "absolute inset-0 z-20 bg-[var(--surface-elevated)] border-2 border-accent-gold flex items-center p-1"
                           }>
-                            {col.type === 'select' ? (
-                              <select
-                                ref={editorInputRef}
-                                value={cellVal}
-                                onChange={e => updateCell(row.id, col.id, e.target.value)}
-                                onBlur={() => setActiveCell(null)}
-                                className="w-full h-full bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-1.5 focus:ring-0 font-semibold"
-                              >
-                                <option value="" className="bg-[var(--surface-elevated)] text-[var(--text-primary)]">Choose Option...</option>
-                                {getDropdownOptions(col.category as ConfigCategory).map(opt => (
-                                  <option key={opt} value={opt} className="bg-[var(--surface-elevated)] text-[var(--text-primary)]">{opt}</option>
-                                ))}
-                              </select>
-                            ) : col.type === 'textarea' ? (
-                              <textarea
-                                ref={editorInputRef}
-                                value={cellVal}
-                                onChange={e => updateCell(row.id, col.id, e.target.value)}
-                                onBlur={() => setActiveCell(null)}
-                                onPaste={e => e.stopPropagation()}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault()
-                                    setActiveCell(null)
-                                  }
-                                }}
-                                className="w-full h-24 bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-2 focus:ring-0 resize-y font-sans leading-relaxed"
-                              />
-                            ) : (
-                              <input
-                                ref={editorInputRef}
-                                type={col.type === 'number' ? 'number' : 'text'}
-                                value={cellVal}
-                                onChange={e => {
-                                  const val = e.target.value
-                                  updateCell(row.id, col.id, col.type === 'number' ? (val === '' ? '' : parseFloat(val)) : val)
-                                }}
-                                onBlur={() => setActiveCell(null)}
-                                onPaste={e => e.stopPropagation()}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') setActiveCell(null)
-                                }}
-                                className="w-full h-full bg-transparent focus:outline-none text-xs text-[var(--text-primary)] border-none p-1.5 focus:ring-0 font-sans font-semibold"
-                              />
-                            )}
+                            <CellEditor
+                              column={col}
+                              value={cellVal}
+                              onChange={(v) => updateCell(row.id, col, v)}
+                              onBlur={() => setActiveCell(null)}
+                              inputRef={editorInputRef}
+                            />
                           </div>
                         ) : (
-                          <div className={`py-3 px-4 w-full h-full text-text-secondary cursor-text hover:bg-[var(--hover)]/30 select-none min-h-[42px] transition-colors ${col.type === 'textarea' ? 'whitespace-pre-wrap break-words leading-relaxed' : 'truncate'}`}>
-                            {cellVal === '' ? (
-                              <span className="text-[10px] italic text-text-muted select-none opacity-30">—</span>
-                            ) : (
-                              <span className={col.type === 'number' ? 'font-mono font-semibold' : ''}>{cellVal}</span>
-                            )}
+                          <div className={`py-3 px-4 w-full h-full text-text-secondary cursor-text hover:bg-[var(--hover)]/30 select-none min-h-[42px] transition-colors ${col.column_type === 'long_text' ? 'whitespace-pre-wrap break-words leading-relaxed' : 'truncate'}`}>
+                            <CellDisplay column={col} value={cellVal} />
                           </div>
                         )}
                       </td>
@@ -1192,7 +1050,7 @@ export const ReleaseTestingStatus: React.FC = () => {
             })}
             {filteredRows.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.filter(c => visibleColumns[c.id]).length + 1} className="py-16 text-center text-text-muted">
+                <td colSpan={visibleColumnsList.length + 1} className="py-16 text-center text-text-muted">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Clipboard className="w-8 h-8 text-white/10" />
                     <span className="text-sm font-semibold">No Release Testing Log Entries</span>
@@ -1216,6 +1074,22 @@ export const ReleaseTestingStatus: React.FC = () => {
           {syncStatus === 'error' && <><span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" /> Connection Error (Local Draft Saved)</>}
         </span>
       </div>
+
+      {/* Customize Columns Drawer */}
+      <CustomizeColumnsDrawer
+        open={showCustomizeDrawer}
+        onClose={() => setShowCustomizeDrawer(false)}
+        tableKey="release"
+        projectId={selectedProjectId}
+        projectName={currentProject?.project_name}
+      />
+
+      {/* Dashboard Metrics Modal */}
+      <DashboardMetricsModal
+        open={showDashboardMetrics}
+        onClose={() => setShowDashboardMetrics(false)}
+        tableKey="release"
+      />
     </GlassCard>
   )
 }

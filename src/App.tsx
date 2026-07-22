@@ -33,13 +33,13 @@ const TestCaseGenerator = lazy(() => import('@/modules/TestCaseGenerator').then(
 const WritingAssistant = lazy(() => import('@/modules/WritingAssistant').then(m => ({ default: m.WritingAssistant })))
 const QAWeeklyReport = lazy(() => import('@/modules/QAWeeklyReport').then(m => ({ default: m.QAWeeklyReport })))
 const QAReportConfig = lazy(() => import('@/modules/QAWeeklyReport/QAReportConfig').then(m => ({ default: m.QAReportConfig })))
+const QAReportDropdownConfig = lazy(() => import('@/modules/QAWeeklyReport/QAReportDropdownConfig').then(m => ({ default: m.QAReportDropdownConfig })))
 const ReportPreviewDashboard = lazy(() => import('@/modules/QAWeeklyReport/components/ReportPreviewDashboard').then(m => ({ default: m.ReportPreviewDashboard })))
 const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })))
 const AdminPanel = lazy(() => import('@/pages/AdminPanel').then(m => ({ default: m.AdminPanel })))
 const EnterpriseAdmin = lazy(() => import('@/pages/EnterpriseAdmin').then(m => ({ default: m.EnterpriseAdmin })))
 const AICopilot = lazy(() => import('@/components/ai/AICopilot').then(m => ({ default: m.AICopilot })))
 const DailyUpdateReport = lazy(() => import('@/modules/DailyUpdateReport').then(m => ({ default: m.DailyUpdateReport })))
-const DailyReportConfig = lazy(() => import('@/modules/DailyUpdateReport/DailyReportConfig').then(m => ({ default: m.DailyReportConfig })))
 const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINews })))
 const MaintenancePage = lazy(() => import('@/pages/MaintenancePage').then(m => ({ default: m.MaintenancePage })))
 
@@ -253,8 +253,8 @@ export default function App() {
             <Route path={ROUTES.writingAssistant} element={<WritingAssistant />} />
             <Route path={ROUTES.qaReport} element={<QAWeeklyReport />} />
             <Route path={ROUTES.dailyReport} element={<DailyUpdateReport />} />
-            <Route path={ROUTES.dailyReportConfig} element={<DailyReportConfig />} />
             <Route path={ROUTES.qaReportConfig} element={<QAReportConfig />} />
+            <Route path={ROUTES.qaReportDropdownConfig} element={<QAReportDropdownConfig />} />
             <Route path={ROUTES.aiNews} element={<AINews />} />
             <Route path={ROUTES.settings} element={<Settings />} />
             <Route path={ROUTES.admin} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
