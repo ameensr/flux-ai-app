@@ -188,11 +188,25 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
         createdBy: profile?.full_name || profile?.email || 'Unknown',
         status: 'Final',
       })
+
+      // Refresh reports list to ensure database and UI are in sync
+      await useQAReportStore.getState().fetchReports(form.projectId)
+
       setSaved(true)
       onSaved()
+      toast({
+        title: 'Report Saved Successfully',
+        description: 'Your report has been saved to the database and is ready to launch.'
+      })
       // Don't auto-close, let user see the success state and close manually
-    } catch {
-      toast({ variant: 'destructive', title: 'Save Failed', description: 'Could not save report. Please try again.' })
+    } catch (error) {
+      console.error('Save error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Could not save report. Please try again.'
+      toast({
+        variant: 'destructive',
+        title: 'Save Failed',
+        description: errorMessage
+      })
     } finally {
       setSaving(false)
     }

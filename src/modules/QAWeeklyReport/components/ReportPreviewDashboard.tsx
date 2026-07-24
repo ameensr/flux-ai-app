@@ -1,20 +1,69 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import type { Variants } from 'framer-motion'
 import DOMPurify from 'dompurify'
 import {
   TrendingUp, TrendingDown, Mail, Zap, Wrench, Shield, Check,
-  AlertTriangle, Play, HelpCircle, Activity, Sun, Moon, Maximize2,
-  Minimize2, Download, Printer, Copy, RefreshCw, X, ChevronRight,
+  AlertTriangle, HelpCircle, Activity, Sun, Moon, Maximize2,
+  Minimize2, RefreshCw, X, ChevronRight,
   BookOpen, Star, Sparkles, FileText, LayoutGrid, Users, History, CheckCheck,
-  ArrowRightLeft, GitCompare, Eye, EyeOff, Palette, Lock, Unlock,
-  Cpu, GitBranch, Terminal, Code2, ChevronDown, Info
+  ArrowRightLeft, GitCompare, Palette, Lock, Unlock,
+  Code2, ChevronDown, Info
 } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
 import { BRAND } from '@/lib/brand'
+import { ROUTES } from '@/lib/routes'
 import { calculateQAScore } from '../utils/qualityCalculator'
 import { ExecutiveKPISection } from './ExecutiveKPISection'
+import { ReportHero } from './report-preview/ReportHero'
+import { ReportNavigator, type ReportNavItem } from './report-preview/ReportNavigator'
+import { ReportActionBar } from './report-preview/ReportActionBar'
+import { StatusBadge } from './report-preview/StatusBadge'
+import { ReportTableShell, reportTableHeadClass, reportTableRowClass } from './report-preview/ReportTableShell'
+import { ReportSkeleton } from './report-preview/ReportSkeleton'
+import { ReportRail } from './report-preview/ReportRail'
+import { RankedProgressList } from './report-preview/RankedProgressList'
+import { ContinuousQATriage } from './ContinuousQATriage'
+import { ChartCallout } from './report-preview/ChartCallout'
+import { useColumnConfigStore } from '@/modules/DailyUpdateReport/columnConfigStore'
+
+// Display preferences (Dashboard Display Sections toggles, historical/timeline visibility,
+// column visibility) are intentionally excluded from `createFormSnapshot()`'s content
+// comparison — toggling them shouldn't force a re-save. But that also means a report
+// launched via an existing saved `reportId` (matched purely on content) would otherwise load
+// that report's *stale* saved preferences and silently discard whatever the user just toggled
+// in the editor. Re-apply the live, browser-local preferences on top of any loaded report so
+// toggles always take effect immediately in the preview, regardless of save state.
+function withLiveDisplayPrefs<T extends Record<string, any>>(form: T): T {
+  try {
+    const raw = localStorage.getItem('current-qa-report-data')
+    if (!raw) return form
+    const live = JSON.parse(raw)
+    return {
+      ...form,
+      dashboardSections: live.dashboardSections ?? form.dashboardSections,
+      showHistoricalAnalytics: live.showHistoricalAnalytics ?? form.showHistoricalAnalytics,
+      showTimeline: live.showTimeline ?? form.showTimeline,
+      visibleSupportColumns: live.visibleSupportColumns ?? form.visibleSupportColumns,
+      visibleReleaseColumns: live.visibleReleaseColumns ?? form.visibleReleaseColumns,
+    }
+  } catch {
+    return form
+  }
+}
+// Free-form bug status strings (sourced from the uploaded Release Bug Status sheet) mapped to a
+// small, consistent color palette for the ranked progress list — keyword heuristics first, then
+// a deterministic fallback so unseen labels still get a stable (not gray) color.
+const BUG_STATUS_PALETTE = ['bg-blue-400', 'bg-purple-400', 'bg-cyan-400', 'bg-pink-400', 'bg-indigo-400']
+function bugStatusColorClass(status: string, index = 0): string {
+  const s = (status || '').toLowerCase()
+  if (['resolved', 'closed', 'completed', 'done', 'fixed'].some(v => s.includes(v))) return 'bg-green-400'
+  if (['blocked', 'reopen', 'fail'].some(v => s.includes(v))) return 'bg-red-400'
+  if (['pending', 'hold', 'deferred'].some(v => s.includes(v))) return 'bg-amber-400'
+  if (['active', 'open', 'progress', 'new'].some(v => s.includes(v))) return 'bg-blue-400'
+  return BUG_STATUS_PALETTE[index % BUG_STATUS_PALETTE.length]
+}
 
 const getCustomStyles = (theme: 'light' | 'dark') => `
   @keyframes float {
@@ -68,6 +117,21 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
     animation: pulse-glow 8s ease-in-out infinite;
   }
 
+  /* Card language pass — matching the reference dashboard's "cards float on soft shadow rather than hard borders" pattern. */
+  .qaly-report-root .rounded-2xl, 
+  .qaly-report-root .rounded-3xl, 
+  .qaly-report-root .rounded-\\[24px\\], 
+  .qaly-report-root .rounded-\\[28px\\] {
+    box-shadow: ${theme === 'light'
+      ? '0 4px 20px rgba(15,23,42,0.04), 0 16px 40px rgba(15,23,42,0.04)'
+      : '0 4px 20px rgba(0,0,0,0.2), 0 16px 40px rgba(0,0,0,0.15)'} !important;
+    border-color: transparent !important;
+  }
+
+  .glassmorphic-card {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
   @media print {
     @page {
       size: landscape;
@@ -129,7 +193,7 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
 import {
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
   XAxis, YAxis, Tooltip, Legend, LineChart, Line, AreaChart, Area,
-  ComposedChart
+  ComposedChart, ReferenceDot
 } from 'recharts'
 import { toast } from '@/hooks/use-toast'
 import { AIService } from '@/services/ai/ai-service'
@@ -145,6 +209,8 @@ import { ProductionIssuesModal } from './ProductionIssuesModal'
 import { ReleaseReadinessModal } from './ReleaseReadinessModal'
 import { TeamCapacityModal } from './TeamCapacityModal'
 import { ExecutiveQualityScoreModal } from './ExecutiveQualityScoreModal'
+import { ReleaseScopeModal } from './ReleaseScopeModal'
+import { resolveChartAnimation, glowStyle, GlowAreaGradient, StackedAreaGradient, BarFillGradient, axisPreset, legendPreset, PremiumTooltip, BAR_RADIUS } from './report-preview/chartTheme'
 
 // Report preview has its own isolated theme system — independent of the global dark/light toggle.
 type ReportThemeId = 'light' | 'dark'
@@ -156,14 +222,15 @@ import pptxgen from 'pptxgenjs'
 interface SparklineProps {
   data: number[]
   color: string
+  className?: string
 }
-const MiniSparkline: React.FC<SparklineProps> = ({ data, color }) => {
+const MiniSparkline: React.FC<SparklineProps> = ({ data, color, className }) => {
   const chartData = data.map((v, i) => ({ val: v, name: i.toString() }))
   return (
-    <div className="w-16 h-8 opacity-80 group-hover:opacity-100 transition-opacity">
+    <div className={className || "w-16 h-8 opacity-80 group-hover:opacity-100 transition-opacity"}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
-          <Line type="monotone" dataKey="val" stroke={color} strokeWidth={1.5} dot={false} />
+          <Line type="monotone" dataKey="val" stroke={color} strokeWidth={1.5} dot={false} style={{ filter: `drop-shadow(0 0 3px ${color}99)` }} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -264,8 +331,37 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const [searchParams] = useSearchParams()
   const reportIdFromUrl = searchParams.get('reportId')
 
+  // Subscribed (not `.getState()`) so this component re-renders once the
+  // Daily Update column config finishes loading — needed to resolve
+  // display names for "Create New" custom columns below.
+  const dupSupportColumnsForLabels = useColumnConfigStore(s => s.supportColumns)
+  const dupReleaseColumnsForLabels = useColumnConfigStore(s => s.releaseColumns)
+
+  // Any dynamic columns created via "Create New" during Import from DUP —
+  // without this, those columns' values (correctly saved in each ticket's/
+  // item's `customFields`, and rendered in both the /qa-report table editor
+  // and the markdown Preview) were silently absent from this dashboard,
+  // which only ever rendered the fixed base columns below. Keyed by the
+  // DUP column's stable internal_key so a later rename never breaks this.
+  const buildCustomFieldEntries = (rows: Array<{ customFields?: Record<string, any> }>, dupColumns: typeof dupSupportColumnsForLabels) => {
+    const keys: string[] = []
+    const labels: Record<string, string> = {}
+    rows.forEach(r => {
+      if (!r.customFields) return
+      Object.keys(r.customFields).forEach(k => {
+        if (!keys.includes(k)) {
+          keys.push(k)
+          labels[k] = dupColumns.find(c => c.internal_key === k)?.display_name || k
+        }
+      })
+    })
+    return { keys, labels }
+  }
+
   // Track if entrance animations have already been played (e.g. page refresh)
   const hasPlayed = typeof window !== 'undefined' && sessionStorage.getItem('qaly-dashboard-entrance-played') === 'true'
+  // Charts skip their draw-in animation once played this session, and always for reduced-motion users
+  const chartAnimationEnabled = resolveChartAnimation(hasPlayed)
 
   useEffect(() => {
     sessionStorage.setItem('qaly-dashboard-entrance-played', 'true')
@@ -302,17 +398,45 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
   const [data, setData] = useState<QAReportForm>(() => {
     const raw = localStorage.getItem('current-qa-report-data')
-    if (raw) { try { return ensureFormData(JSON.parse(raw)) } catch { } }
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw)
+        // Validate that we have the minimum required data
+        if (!parsed.projectId || !parsed.projectName) {
+          console.warn('Dashboard loaded with incomplete data - missing project information')
+        }
+        return ensureFormData(parsed)
+      } catch (error) {
+        console.error('Failed to parse report data from localStorage:', error)
+      }
+    }
     return ensureFormData(null)
   })
   // isLoaded starts true only if we have localStorage data (no reportId) or will be set after fetch
   const [isLoaded, setIsLoaded] = useState(() => !reportIdFromUrl && !!localStorage.getItem('current-qa-report-data'))
+  // Report metadata (generated timestamp / draft-final status) — sourced from the saved report record,
+  // never fabricated. Absent for reports launched directly from the form before saving.
+  const [reportMeta, setReportMeta] = useState<{ generatedDate?: string; status?: 'Draft' | 'Final'; createdBy?: string }>({})
   const vis = getSectionVisibility(data)
   // Helper: returns null if section is disabled
   const gated = (key: string, content: React.ReactNode) => vis[key] !== false ? content : null
+
+  // Nav items mirror the actual rendered section order — a section only appears here if
+  // its corresponding vis flag (or underlying data) means it will actually be rendered.
+  const reportNavItems: ReportNavItem[] = [
+    { id: 'overview', label: 'Overview', show: vis.show_hero !== false },
+    { id: 'kpis', label: 'KPIs', show: vis.show_kpiCards !== false },
+    { id: 'releaseTesting', label: 'Release', show: vis.show_releaseTable !== false },
+    { id: 'releaseBugStatus', label: 'Bug Status', show: !!data.releaseBugStatus && vis.show_releaseBugStatus !== false },
+    { id: 'supportLog', label: 'Support', show: vis.show_supportLog !== false },
+    { id: 'defects', label: 'Defects', show: vis.show_defectAnalysis !== false },
+    { id: 'comparison', label: 'WoW', show: vis.show_wowComparison !== false }
+  ]
   const { theme: globalTheme } = useTheme()
   const theme = globalTheme === 'light' ? 'light' : 'dark'
-  const [enableParticles, setEnableParticles] = useState<boolean>(localStorage.getItem('qaly-enable-particles') !== 'false')
+  // No longer user-toggleable (the "Motion" control was removed from the top bar) — ambient
+  // background motion just follows whatever preference was last saved, defaulting to on.
+  const enableParticles = localStorage.getItem('qaly-enable-particles') !== 'false'
   const [isHealthBarFilled, setIsHealthBarFilled] = useState(false)
   const [clientMode, setClientMode] = useState<boolean>(localStorage.getItem('qaly-client-mode') === 'true')
   const [expandedTimelineWeeks, setExpandedTimelineWeeks] = useState<Record<string, boolean>>({})
@@ -328,6 +452,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const [showReleaseReadinessModal, setShowReleaseReadinessModal] = useState(false)
   const [showTeamCapacityModal, setShowTeamCapacityModal] = useState(false)
   const [showQualityScoreModal, setShowQualityScoreModal] = useState(false)
+  const [showReleaseScopeModal, setShowReleaseScopeModal] = useState(false)
   const [hoveredKPI, setHoveredKPI] = useState<string | null>(null)
   const [expandedKPICategories, setExpandedKPICategories] = useState<Record<string, boolean>>(() => {
     const saved = localStorage.getItem('qaly-expanded-kpi-categories')
@@ -365,6 +490,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
     kpis: useRef<HTMLDivElement>(null),
     sprintHealth: useRef<HTMLDivElement>(null),
     releaseTesting: useRef<HTMLDivElement>(null),
+    releaseBugStatus: useRef<HTMLDivElement>(null),
     supportLog: useRef<HTMLDivElement>(null),
     defects: useRef<HTMLDivElement>(null),
     charts: useRef<HTMLDivElement>(null),
@@ -382,7 +508,8 @@ const ReportPreviewDashboardContent: React.FC = () => {
       // Try to find in already-loaded savedReports first
       const found = savedReports.find(r => r.id === reportIdFromUrl)
       if (found) {
-        setData(ensureFormData(found.form))
+        setData(ensureFormData(withLiveDisplayPrefs(found.form)))
+        setReportMeta({ generatedDate: found.generatedDate, status: found.status, createdBy: found.createdBy })
         setIsLoaded(true)
         return
       }
@@ -395,7 +522,8 @@ const ReportPreviewDashboardContent: React.FC = () => {
           .single()
           .then(({ data: row, error }) => {
             if (!error && row) {
-              setData(ensureFormData({ ...row.form_data, projectId: row.project_id, projectName: row.project }))
+              setData(ensureFormData(withLiveDisplayPrefs({ ...row.form_data, projectId: row.project_id, projectName: row.project })))
+              setReportMeta({ generatedDate: row.generated_date, status: row.status, createdBy: row.created_by })
             } else {
               // Fallback to localStorage if Supabase fetch fails
               const raw = localStorage.getItem('current-qa-report-data')
@@ -408,6 +536,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
       // No reportId in URL — use savedReports or localStorage
       if (activeHistory.length > 0) {
         setData(ensureFormData(activeHistory[0].form))
+        setReportMeta({ generatedDate: activeHistory[0].generatedDate, status: activeHistory[0].status, createdBy: activeHistory[0].createdBy })
       }
       setIsLoaded(true)
     }
@@ -434,24 +563,30 @@ const ReportPreviewDashboardContent: React.FC = () => {
     if (theme === 'light') {
       return {
         bg: 'bg-[#f8fafc] text-slate-900',
-        card: 'bg-white border-slate-200/80 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.06)] hover:border-slate-300/80 transition-all duration-300',
+        card: 'bg-gradient-to-br from-white/95 to-slate-50/95 backdrop-blur-xl border-slate-200/80 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.06)] hover:border-slate-300/80 transition-all duration-300',
         accent: 'text-[#b5942b]',
         accentBg: 'bg-accent-gold text-black hover:bg-[#b5942b] font-bold rounded-xl transition-all',
         border: 'border-slate-200/80',
         glow: 'shadow-[0_4px_20px_rgba(0,0,0,0.02)]',
         font: 'font-inter',
-        chartColors: ['#d4af37', '#3b82f6', '#10b981', '#a855f7', '#fb923c']
+        chartColors: ['#d4af37', '#3b82f6', '#10b981', '#a855f7', '#fb923c'],
+        softCard: 'bg-gradient-to-br from-white via-white to-slate-50 border border-slate-200/60 rounded-[32px] shadow-[0_4px_20px_rgba(15,23,42,0.03),0_12px_40px_rgba(15,23,42,0.05)] hover:shadow-[0_8px_30px_rgba(15,23,42,0.05),0_20px_60px_rgba(15,23,42,0.08)] transition-shadow duration-300',
+        gradientWarm: 'bg-gradient-to-br from-[#FB7185] to-[#FB923C]',
+        gradientCool: 'bg-gradient-to-br from-[#22D3EE] to-[#3B82F6]'
       }
     } else {
       return {
         bg: 'bg-[#070a13] text-[#f8fafc]',
-        card: 'bg-[#0e1322]/60 border-white/[0.04] backdrop-blur-md rounded-2xl shadow-[0_4px_30px_rgba(0,0,0,0.2)] hover:border-white/[0.08] hover:shadow-[0_8px_40px_rgba(212,175,55,0.02)] transition-all duration-300',
+        card: 'bg-gradient-to-br from-[#151b2b]/80 to-[#0e1322]/80 border-white/[0.05] backdrop-blur-xl rounded-2xl shadow-[0_4px_30px_rgba(0,0,0,0.2)] hover:border-white/[0.1] hover:shadow-[0_8px_40px_rgba(212,175,55,0.03)] transition-all duration-300',
         accent: 'text-accent-gold',
         accentBg: 'bg-accent-gold text-black hover:bg-[#b5942b] font-bold rounded-xl transition-all',
-        border: 'border-white/[0.04]',
+        border: 'border-white/[0.05]',
         glow: 'shadow-[0_0_50px_rgba(212,175,55,0.02)]',
         font: 'font-inter',
-        chartColors: ['#d4af37', '#3b82f6', '#10b981', '#a855f7', '#fb923c']
+        chartColors: ['#d4af37', '#3b82f6', '#10b981', '#a855f7', '#fb923c'],
+        softCard: 'bg-gradient-to-br from-[#1a2133]/80 to-[#0b0f1a]/80 border border-white/[0.06] backdrop-blur-xl rounded-[32px] shadow-[0_4px_24px_rgba(0,0,0,0.25),0_20px_48px_rgba(0,0,0,0.4)] hover:border-white/[0.12] hover:shadow-[0_8px_32px_rgba(0,0,0,0.3),0_24px_60px_rgba(0,0,0,0.5)] transition-all duration-300',
+        gradientWarm: 'bg-gradient-to-br from-[#BE123C] to-[#C2410C]',
+        gradientCool: 'bg-gradient-to-br from-[#0E7490] to-[#1D4ED8]'
       }
     }
   }
@@ -673,6 +808,17 @@ const ReportPreviewDashboardContent: React.FC = () => {
     }
   }, [data?.projectId])
 
+  // Resolves display names for any "Create New" custom columns (added during
+  // Import from DUP) so this dashboard can label them correctly instead of
+  // falling back to their raw internal_key — scoped to this report's own
+  // project so a differently-scoped column config left over in the shared
+  // store from another project/page doesn't produce a wrong label.
+  useEffect(() => {
+    const columnConfigStore = useColumnConfigStore.getState()
+    columnConfigStore.fetchColumnConfigs('support', data?.projectId || null)
+    columnConfigStore.fetchColumnConfigs('release', data?.projectId || null)
+  }, [data?.projectId])
+
   // ── Canvas Particle System ──
   useEffect(() => {
     const canvas = canvasRef.current
@@ -690,10 +836,10 @@ const ReportPreviewDashboardContent: React.FC = () => {
     let height = (canvas.height = window.innerHeight)
 
     const particleColors = theme === 'dark'
-      ? ['rgba(212,175,55,0.22)', 'rgba(59,130,246,0.22)', 'rgba(168,85,247,0.22)', 'rgba(16,185,129,0.22)']
-      : ['rgba(184,150,12,0.12)', 'rgba(37,99,235,0.12)', 'rgba(124,58,237,0.12)', 'rgba(5,150,105,0.12)']
+      ? ['rgba(212,175,55,0.14)', 'rgba(59,130,246,0.14)', 'rgba(168,85,247,0.14)', 'rgba(16,185,129,0.14)']
+      : ['rgba(184,150,12,0.09)', 'rgba(37,99,235,0.09)', 'rgba(124,58,237,0.09)', 'rgba(5,150,105,0.09)']
 
-    const particles: any[] = Array.from({ length: 60 }, () => ({
+    const particles: any[] = Array.from({ length: 40 }, () => ({
       x: Math.random() * width,
       y: Math.random() * height,
       vx: Math.random() * 0.3 - 0.15,
@@ -960,6 +1106,14 @@ Do not return markdown wraps, only raw JSON text.
     }
   })
 
+  // Most notable point on the Defect Closure Trend chart — the week with the highest
+  // closed/reported ratio — annotated with a floating callout (real data, no invention).
+  const bestClosureWeek = (() => {
+    const candidates = historicalChartsData.filter(d => d.reportedDefects > 0)
+    if (candidates.length === 0) return null
+    return candidates.reduce((best, cur) => (cur.closedDefects / cur.reportedDefects) > (best.closedDefects / best.reportedDefects) ? cur : best, candidates[0])
+  })()
+
   // ── Table Adapters ──
   const prodIssuesData = [
     { category: 'Escaped Issue', lastWeek: data.lastWeek.escapedIssue ?? (data.lastWeek as any).codeFix, mtd: data.monthToDate.escapedIssue ?? (data.monthToDate as any).codeFix },
@@ -991,9 +1145,6 @@ Do not return markdown wraps, only raw JSON text.
     { name: 'Fixed Defects', value: data.defectsLastWeek.fixed, hex: '#fb923c' },
     { name: 'Closed Defects', value: data.defectsLastWeek.closed, hex: '#10b981' }
   ]
-
-  const gridColor = 'var(--chart-grid)'
-  const chartText = 'var(--chart-text)'
 
   // ── Exports ──
   const downloadMarkdown = () => {
@@ -1305,22 +1456,17 @@ Do not return markdown wraps, only raw JSON text.
   }
 
   if (!isLoaded) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white p-6 text-center">
-        <div className="w-10 h-10 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin mb-4" />
-        <p className="text-white/40 text-xs font-mono">Loading Executive Dashboard...</p>
-      </div>
-    )
+    return <ReportSkeleton theme={theme} />
   }
 
   if (!data.weekStart) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white p-6 text-center font-montreal">
-        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-6">
+      <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center font-montreal transition-colors duration-300 ${theme === 'dark' ? 'bg-[#070a13] text-white' : 'bg-[#f8fafc] text-slate-900'}`}>
+        <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 ${theme === 'dark' ? 'bg-white/5' : 'bg-black/5'}`}>
           <FileText className="w-8 h-8 text-accent-gold" />
         </div>
         <h1 className="text-2xl font-bold font-clash mb-2">No Saved Report Found</h1>
-        <p className="text-white/45 text-sm max-w-sm mb-6 leading-relaxed">
+        <p className={`text-sm max-w-sm mb-6 leading-relaxed ${theme === 'dark' ? 'text-white/45' : 'text-slate-500'}`}>
           Create or save a report to launch the Executive Dashboard.
         </p>
         <button onClick={() => window.close()} className="px-6 py-2.5 bg-accent-gold text-black font-extrabold text-xs uppercase tracking-widest rounded-xl hover:bg-yellow-500 transition-colors">
@@ -1331,7 +1477,7 @@ Do not return markdown wraps, only raw JSON text.
   }
 
   return (
-    <div className={`min-h-screen ${tS.font} ${tS.bg} transition-colors duration-300 relative overflow-hidden pb-20 print:overflow-visible print:bg-white print:text-black`}>
+    <div className={`qaly-report-root min-h-screen ${tS.font} ${tS.bg} transition-colors duration-300 relative overflow-hidden pb-20 print:overflow-visible print:bg-white print:text-black`}>
       {/* ── React Confetti Layer ── */}
       {confetti.map((c, i) => (
         <div
@@ -1354,56 +1500,52 @@ Do not return markdown wraps, only raw JSON text.
       {/* ── Canvas Animated Particles ── */}
       <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none print:hidden" />
 
-      {/* ── Background Glow Blobs ── */}
-      {/* ── Background Glow Blobs ── */}
+      {/* ── Background Glow — subtle ambient depth, softened for a more professional tone ── */}
       {enableParticles && (
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden print:hidden">
-          {/* Blob 1: Golden Aura Leakage (Top Center-Right) */}
+          {/* Blob 1: Golden Aura (Top Center-Right) */}
           <motion.div
             animate={{
-              x: [0, 50, -30, 20, 0],
-              y: [0, -60, 40, -20, 0],
-              scale: [1, 1.15, 0.9, 1.08, 1],
-              rotate: [0, 45, 90, 45, 0]
+              x: [0, 25, -15, 10, 0],
+              y: [0, -30, 20, -10, 0],
+              scale: [1, 1.06, 0.96, 1.03, 1]
             }}
             transition={{
-              duration: 22,
+              duration: 30,
               repeat: Infinity,
               ease: "easeInOut"
             }}
-            className={`absolute top-[-20%] left-[25%] w-[650px] h-[650px] rounded-full blur-[140px] opacity-[0.24] ${theme === 'dark' ? 'bg-gradient-to-br from-[#d4af37]/35 to-[#facc15]/5' : 'bg-gradient-to-br from-yellow-400/30 to-amber-300/5'}`}
+            className={`absolute top-[-20%] left-[25%] w-[600px] h-[600px] rounded-full blur-[150px] opacity-[0.12] ${theme === 'dark' ? 'bg-gradient-to-br from-[#d4af37]/30 to-[#facc15]/5' : 'bg-gradient-to-br from-yellow-400/25 to-amber-300/5'}`}
           />
 
-          {/* Blob 2: Cobalt/Blue Aura Leakage (Bottom Right) */}
+          {/* Blob 2: Cobalt Aura (Bottom Right) */}
           <motion.div
             animate={{
-              x: [0, -45, 30, -25, 0],
-              y: [0, 50, -35, 30, 0],
-              scale: [1, 1.08, 0.92, 1.12, 1],
-              rotate: [0, -30, -60, -30, 0]
+              x: [0, -22, 15, -12, 0],
+              y: [0, 25, -18, 15, 0],
+              scale: [1, 1.04, 0.97, 1.05, 1]
             }}
             transition={{
-              duration: 26,
+              duration: 34,
               repeat: Infinity,
               ease: "easeInOut"
             }}
-            className={`absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full blur-[150px] opacity-[0.2] ${theme === 'dark' ? 'bg-gradient-to-tr from-blue-600/28 to-indigo-500/5' : 'bg-gradient-to-tr from-blue-400/25 to-sky-300/5'}`}
+            className={`absolute bottom-[-10%] right-[-5%] w-[560px] h-[560px] rounded-full blur-[160px] opacity-[0.10] ${theme === 'dark' ? 'bg-gradient-to-tr from-blue-600/25 to-indigo-500/5' : 'bg-gradient-to-tr from-blue-400/20 to-sky-300/5'}`}
           />
 
-          {/* Blob 3: Indigo/Purple Aura Leakage (Middle Left) */}
+          {/* Blob 3: Indigo Aura (Middle Left) */}
           <motion.div
             animate={{
-              x: [0, 35, -25, 15, 0],
-              y: [0, 35, -40, 20, 0],
-              scale: [1, 1.12, 0.95, 1.06, 1],
-              rotate: [0, 60, -30, 0]
+              x: [0, 18, -12, 8, 0],
+              y: [0, 18, -20, 10, 0],
+              scale: [1, 1.05, 0.98, 1.03, 1]
             }}
             transition={{
-              duration: 32,
+              duration: 38,
               repeat: Infinity,
               ease: "easeInOut"
             }}
-            className={`absolute top-[35%] left-[-15%] w-[500px] h-[500px] rounded-full blur-[130px] opacity-[0.18] ${theme === 'dark' ? 'bg-gradient-to-tr from-purple-600/25 to-pink-500/5' : 'bg-gradient-to-tr from-purple-400/20 to-fuchsia-300/5'}`}
+            className={`absolute top-[35%] left-[-15%] w-[460px] h-[460px] rounded-full blur-[140px] opacity-[0.09] ${theme === 'dark' ? 'bg-gradient-to-tr from-purple-600/20 to-pink-500/5' : 'bg-gradient-to-tr from-purple-400/15 to-fuchsia-300/5'}`}
           />
         </div>
       )}
@@ -1421,9 +1563,9 @@ Do not return markdown wraps, only raw JSON text.
                 : '0 4px 30px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.8)',
             }}
           >
-            <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <div className="max-w-7xl mx-auto flex items-center gap-4">
               {/* Logo & Brand */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 shrink-0">
                 <Logo size="sm" animate={false} />
                 <div className="hidden sm:block h-6 w-px" style={{ backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }} />
                 <span className={`hidden sm:block text-[10px] uppercase font-bold tracking-[0.15em] ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>
@@ -1431,116 +1573,32 @@ Do not return markdown wraps, only raw JSON text.
                 </span>
               </div>
 
-              {/* Jump Anchors */}
-              <nav className={`hidden xl:flex items-center gap-0.5 p-1 rounded-2xl border transition-all ${theme === 'dark' ? 'bg-white/[0.04] border-white/[0.06]' : 'bg-black/[0.03] border-black/[0.06]'}`}>
-                {[
-                  { id: 'overview', label: 'Overview' },
-                  { id: 'kpis', label: 'KPIs' },
-                  { id: 'sprintHealth', label: 'Sprint' },
-                  { id: 'releaseTesting', label: 'Release' },
-                  { id: 'supportLog', label: 'Support' },
-                  { id: 'defects', label: 'Defects' },
-                  { id: 'charts', label: 'Charts' },
-                  { id: 'comparison', label: 'WoW' },
-                  { id: 'historyDashboard', label: 'History', show: data.showHistoricalAnalytics !== false },
-                  { id: 'roadmap', label: 'Priorities' }
-                ].filter(item => item.show !== false).map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => scrollToSection(item.id)}
-                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200 ${activeSection === item.id ? 'bg-accent-gold text-black shadow-md shadow-accent-gold/20' : `${theme === 'dark' ? 'text-white/50 hover:text-white hover:bg-white/[0.06]' : 'text-slate-500 hover:text-slate-900 hover:bg-black/[0.04]'}`}`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </nav>
-
-              {/* Toolbar Buttons */}
-              <div className="flex items-center gap-2">
-                {/* Client Mode Toggle */}
-                <button
-                  onClick={() => {
-                    const next = !clientMode
-                    setClientMode(next)
-                    localStorage.setItem('qaly-client-mode', String(next))
-                    toast({
-                      title: next ? 'Client Mode Active' : 'Client Mode Disabled',
-                      description: next ? 'Confidential developer notes and internal bug metrics hidden.' : 'Restored full view.'
-                    })
-                  }}
-                  className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all text-[11px] font-bold ${clientMode ? 'bg-green-500/10 border-green-500/25 text-green-400' : theme === 'dark' ? 'bg-white/[0.04] border-white/[0.06] text-white/50 hover:text-white hover:bg-white/[0.08]' : 'bg-black/[0.03] border-black/[0.06] text-slate-500 hover:text-slate-800 hover:bg-black/[0.05]'}`}
-                >
-                  {clientMode ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                  <span className="hidden 2xl:inline">Client</span>
-                </button>
-
-                {/* Particle Background Toggle */}
-                <button
-                  onClick={() => {
-                    const next = !enableParticles
-                    setEnableParticles(next)
-                    localStorage.setItem('qaly-enable-particles', String(next))
-                    toast({
-                      title: next ? 'Ambient Motion Enabled' : 'Ambient Motion Disabled',
-                      description: next ? 'Subtle particle background activated.' : 'Particle background disabled for reduced motion.'
-                    })
-                  }}
-                  className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all text-[11px] font-bold ${enableParticles ? 'bg-accent-gold/10 border-accent-gold/25 text-accent-gold' : theme === 'dark' ? 'bg-white/[0.04] border-white/[0.06] text-white/50 hover:text-white hover:bg-white/[0.08]' : 'bg-black/[0.03] border-black/[0.06] text-slate-500 hover:text-slate-800 hover:bg-black/[0.05]'}`}
-                >
-                  <Activity className="w-3 h-3" />
-                  <span className="hidden 2xl:inline">{enableParticles ? 'Motion' : 'Static'}</span>
-                </button>
-
-
-                <button
-                  onClick={togglePresentation}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent-gold hover:bg-[#c3a030] text-black font-extrabold text-[11px] uppercase tracking-widest transition-all shadow-[0_2px_12px_rgba(212,175,55,0.25)]"
-                >
-                  <Play className="w-3 h-3 fill-black" /> Present
-                </button>
-
-                <div className="relative">
-                  <button
-                    onClick={() => setShowExportMenu(v => !v)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-[11px] uppercase tracking-widest transition-all ${theme === 'dark' ? 'bg-white/[0.04] border-white/[0.06] text-white hover:bg-white/[0.08]' : 'bg-white border-black/[0.06] text-slate-800 hover:bg-slate-50 shadow-sm'}`}
-                  >
-                    <Download className="w-3 h-3" /> Export
-                  </button>
-
-                  <AnimatePresence>
-                    {showExportMenu && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className={`absolute right-0 mt-3 w-48 border rounded-2xl overflow-hidden shadow-2xl z-50 ${theme === 'dark' ? 'bg-[#111114] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                      >
-                        <div className="p-1.5 flex flex-col gap-1">
-                          <button onClick={() => { handlePrint(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
-                            <Printer className="w-4 h-4 text-accent-gold" /> Print to PDF
-                          </button>
-                          <button onClick={() => { downloadPPTX(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
-                            <FileText className="w-4 h-4 text-blue-400" /> PowerPoint Outline
-                          </button>
-                          <button onClick={() => { downloadHTML(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
-                            <LayoutGrid className="w-4 h-4 text-purple-400" /> Standalone HTML
-                          </button>
-                          <button onClick={() => { downloadMarkdown(); setShowExportMenu(false) }} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
-                            <Copy className="w-4 h-4 text-green-400" /> Markdown File
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                <button
-                  onClick={() => window.close()}
-                  className={`p-2.5 rounded-xl border transition-all ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white hover:bg-red-500/20 hover:text-red-400' : 'bg-white border-slate-200 text-slate-600 hover:bg-red-100 hover:text-red-600 shadow-sm'}`}
-                >
-                  <X className="w-4 h-4" />
-                </button>
+              {/* Section Navigator — flexible, scrolls horizontally so the whole bar stays on one line */}
+              <div className="flex-1 min-w-0">
+                <ReportNavigator theme={theme} items={reportNavItems} activeSection={activeSection} onNavigate={scrollToSection} />
               </div>
+
+              <ReportActionBar
+                theme={theme}
+                clientMode={clientMode}
+                onToggleClientMode={() => {
+                  const next = !clientMode
+                  setClientMode(next)
+                  localStorage.setItem('qaly-client-mode', String(next))
+                  toast({
+                    title: next ? 'Client Mode Active' : 'Client Mode Disabled',
+                    description: next ? 'Confidential developer notes and internal bug metrics hidden.' : 'Restored full view.'
+                  })
+                }}
+                onPresent={togglePresentation}
+                showExportMenu={showExportMenu}
+                onToggleExportMenu={() => setShowExportMenu(v => !v)}
+                onPrint={() => { handlePrint(); setShowExportMenu(false) }}
+                onDownloadPPTX={() => { downloadPPTX(); setShowExportMenu(false) }}
+                onDownloadHTML={() => { downloadHTML(); setShowExportMenu(false) }}
+                onDownloadMarkdown={() => { downloadMarkdown(); setShowExportMenu(false) }}
+                onClose={() => window.close()}
+              />
             </div>
           </div>
         </header>
@@ -1585,162 +1643,90 @@ Do not return markdown wraps, only raw JSON text.
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10 pt-8 sm:pt-12 flex flex-col gap-16"
+        className="max-w-[1600px] w-full mx-auto px-4 sm:px-6 relative z-10 pt-8 sm:pt-12 flex flex-col gap-16"
       >
 
         {/* ══════════════════════════════════════════════════════════
             EXECUTIVE SUMMARY
         ══════════════════════════════════════════════════════════ */}
 
-        {/* ── SECTION 1: HERO & QUALITY SCORE PANEL ── */}
-        <motion.section
-          variants={sectionVariants}
-          ref={sectionsRef.overview}
-          className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 items-center pt-2 relative"
-          style={{ display: vis.show_hero === false ? 'none' : undefined }}
-        >
-          {/* Floating tech background elements */}
-          <motion.div
-            animate={{ y: [0, -15, 0], rotate: [0, 6, -6, 0] }}
-            transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute top-10 right-[40%] text-accent-gold/15 pointer-events-none hidden sm:block"
-          >
-            <Cpu className="w-12 h-12" />
-          </motion.div>
-          <motion.div
-            animate={{ y: [0, 12, 0], rotate: [0, -8, 8, 0] }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute bottom-5 left-[20%] text-blue-500/10 pointer-events-none hidden sm:block"
-          >
-            <GitBranch className="w-10 h-10" />
-          </motion.div>
-          <motion.div
-            animate={{ y: [0, -10, 0] }}
-            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute top-20 left-[45%] text-purple-500/10 pointer-events-none hidden sm:block"
-          >
-            <Terminal className="w-8 h-8" />
-          </motion.div>
-
-          <div className="flex flex-col gap-6 relative z-10">
-            <div className="flex items-center gap-2 flex-wrap">
-              <motion.span
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: [0.8, 1.05, 1] }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-                className={`px-3.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest shadow-md ${passRate >= 75 ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-amber-500/10 text-accent-gold border-accent-gold/20'}`}
-              >
-                🟢 QA Status: {passRate >= 75 ? 'Stable' : 'Warning'}
-              </motion.span>
-              <span className={`px-3.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white/60' : 'bg-slate-200/50 border-slate-300 text-slate-600'}`}>
-                WEEK: {data.weekStart} – {data.weekEnd}
-              </span>
-            </div>
-            <div className="flex flex-col gap-2">
-              <span className="text-accent-gold font-clash font-extrabold uppercase text-sm tracking-widest">{data.projectName}</span>
-              <h1 className={`font-clash font-black text-4xl sm:text-5xl tracking-tight leading-none ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-                {data.reportTitle || 'Weekly Status Report'}
-              </h1>
-            </div>
-            <p className={`text-base sm:text-lg font-normal leading-relaxed max-w-2xl ${theme === 'dark' ? 'text-white/60' : 'text-slate-600'}`}>
-              {data.subtitle || 'Executive-level verification metrics, team load, release health and issue analytics.'}
-            </p>
-            <div className="flex items-center gap-6 mt-2 flex-wrap">
-              <div>
-                <span className="text-3xl font-black text-accent-gold block"><CountUpNumber end={releaseCount} /></span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>Release Scope</span>
+        {/* ── SECTION 1: HERO, QUALITY SCORE & RIGHT RAIL ── */}
+        <div className="w-full" style={{ display: vis.show_hero === false ? 'none' : undefined }}>
+          <ReportHero
+            sectionRef={sectionsRef.overview}
+            visible={true}
+            sectionVariants={sectionVariants}
+            theme={theme}
+            projectName={data.projectName}
+            reportTitle={data.reportTitle}
+            subtitle={data.subtitle}
+            weekStart={data.weekStart}
+            weekEnd={data.weekEnd}
+            reportMeta={reportMeta}
+            releaseCount={releaseCount}
+            passRate={passRate}
+            defectClosureRate={defectClosureRate}
+            qualityStats={qualityStats}
+            gradientWarm={tS.gradientWarm}
+            gradientCool={tS.gradientCool}
+            CountUpNumber={CountUpNumber}
+            onOpenQualityModal={() => setShowQualityScoreModal(true)}
+            onOpenReleaseScopeModal={() => setShowReleaseScopeModal(true)}
+            onScrollNext={() => scrollToSection('kpis')}
+            rightRailContent={
+              <div className="flex flex-col gap-6 h-full">
+                {/* Bug Status Distribution */}
+                <div className={`p-5 rounded-3xl ${tS.softCard} flex-1 overflow-hidden flex flex-col relative`}>
+                  <ContinuousQATriage opacity="opacity-[0.3]" />
+                  <div className="relative z-10 flex flex-col h-full">
+                    <h3 className={`text-base font-bold mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Bug Status</h3>
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted mb-4 block">Current Release</span>
+                    {data.releaseBugStatus && data.releaseBugStatus.statusDistribution ? (
+                      <RankedProgressList
+                        theme={theme}
+                        hasPlayed={hasPlayed}
+                        items={data.releaseBugStatus.statusDistribution.map((row: any, idx: number) => ({
+                          label: row.status,
+                          count: row.count,
+                          percent: data.releaseBugStatus.metrics.totalBugs > 0 ? (row.count / data.releaseBugStatus.metrics.totalBugs) * 100 : 0,
+                          colorClass: bugStatusColorClass(row.status, idx)
+                        }))}
+                      />
+                    ) : (
+                      <span className="text-xs text-text-muted">No bug data available.</span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="w-px h-10 bg-white/10" />
-              <div>
-                <span className="text-3xl font-black text-[#10b981] block"><CountUpNumber end={passRate} suffix="%" /></span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>Test Pass Rate</span>
-              </div>
-              <div className="w-px h-10 bg-white/10" />
-              <div>
-                <span className="text-3xl font-black text-blue-400 block"><CountUpNumber end={defectClosureRate} suffix="%" /></span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>Defect Closure</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Executive Quality Score Gauge - Interactive Modal */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ type: "spring", stiffness: 100, damping: 15 }}
-            onClick={() => setShowQualityScoreModal(true)}
-            className={`p-6 rounded-3xl border flex flex-col items-center justify-between text-center relative overflow-hidden shadow-2xl cursor-pointer group ${theme === 'dark' ? 'bg-white/[0.02] border-white/10 hover:border-accent-gold/30 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:border-accent-gold/40 hover:shadow-3xl'} transition-all duration-300`}
-          >
-            <div className="absolute inset-0 bg-gradient-to-tr from-accent-gold/5 to-blue-500/5 pointer-events-none" />
-
-            {/* Hover Glow Effect */}
-            <div className="absolute inset-0 bg-gradient-to-br from-accent-gold/10 via-transparent to-green-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-
-            {/* Click Indicator */}
-            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-gold/10 border border-accent-gold/20">
-                <span className="text-[9px] font-bold text-accent-gold uppercase tracking-wider">Click to Expand</span>
-                <svg className="w-3 h-3 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-              </div>
-            </div>
-
-            <span className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-2 relative z-10">Executive Quality Score</span>
-            <div className="relative w-36 h-36 flex items-center justify-center my-3">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="40" fill="none" stroke={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} strokeWidth="8" strokeDasharray="188.4 251.2" strokeLinecap="round" />
-                <motion.circle
-                  cx="50"
-                  cy="50"
-                  r="40"
-                  fill="none"
-                  stroke="#d4af37"
-                  strokeWidth="8"
-                  initial={{ strokeDasharray: "0 251.2" }}
-                  animate={{ strokeDasharray: `${(qualityStats.score / 100) * 188.4} 251.2` }}
-                  transition={{ duration: 1.2, ease: "easeOut" }}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute flex flex-col items-center justify-center">
-                <motion.span
-                  animate={{ scale: [1, 1.1, 1] }}
-                  transition={{ delay: 1.2, duration: 0.4 }}
-                  className={`text-4xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}
-                >
-                  <CountUpNumber end={qualityStats.score} />
-                </motion.span>
-                <span className={`text-[9px] font-bold uppercase tracking-widest ${qualityStats.color.split(' ')[0]}`}>{qualityStats.label}</span>
-              </div>
-            </div>
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.8 }}
-              className={`p-3 rounded-xl border text-xs leading-normal w-full ${qualityStats.color} relative z-10`}
-            >
-              <p className="font-semibold">{qualityStats.desc}</p>
-            </motion.div>
-          </motion.div>
-
-          {/* Scroll Indicator */}
-          <div className="col-span-full flex justify-center pt-8">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: [0, 1, 0], y: [0, 8, 0] }}
-              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-              className="flex flex-col items-center gap-1.5 cursor-pointer text-text-muted hover:text-accent-gold"
-              onClick={() => scrollToSection('kpis')}
-            >
-              <span className="text-[9px] uppercase font-black tracking-widest">Scroll to Explore</span>
-              <div className="w-5 h-8 rounded-full border-2 border-current flex justify-center p-1 relative">
-                <div className="w-1.5 h-1.5 rounded-full bg-accent-gold" style={{ animation: 'scroll-dot 1.8s ease-in-out infinite' }} />
-              </div>
-            </motion.div>
-          </div>
-        </motion.section>
+            }
+            bottomContent={
+              vis.show_defectClosureTrend !== false && historicalChartsData.length >= 2 ? (
+                <div className={`p-6 rounded-[32px] ${tS.softCard} h-[340px] w-full flex flex-col gap-4 relative overflow-hidden group border ${theme === 'dark' ? 'border-white/[0.05]' : 'border-transparent'}`}>
+                  <div className="flex items-center justify-between">
+                    <h3 className={`text-lg font-bold font-clash ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Defect Closure Trend</h3>
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Historical Analytics</span>
+                  </div>
+                  <div className="flex-1 w-full relative z-10 -ml-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                        <defs>
+                          <GlowAreaGradient id="heroReportedGrad" color="#f87171" theme={theme} />
+                          <GlowAreaGradient id="heroClosedGrad" color="#10b981" theme={theme} />
+                        </defs>
+                        <XAxis dataKey="name" {...axisPreset({ dy: 6 })} />
+                        <YAxis {...axisPreset({ dx: -6 })} />
+                        <Tooltip content={<PremiumTooltip theme={theme} />} />
+                        <Legend {...legendPreset} />
+                        <Area type="monotone" dataKey="reportedDefects" name="Reported Defects" stroke="#f87171" fill="url(#heroReportedGrad)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#f87171', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="closedDefects" name="Closed Defects" stroke="#10b981" fill="url(#heroClosedGrad)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#10b981', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              ) : null
+            }
+          />
+        </div>
 
         {/* ══════════════════════════════════════════════════════════
             KPI OVERVIEW
@@ -1966,8 +1952,9 @@ Do not return markdown wraps, only raw JSON text.
           style={{ display: vis.show_sprintHealth === false ? 'none' : undefined }}
         >
           {/* ── Sprint Health Dashboard ── */}
-          <div ref={sectionsRef.sprintHealth} className={`p-6 rounded-3xl border flex flex-col gap-4 ${tS.card} ${tS.border} ${tS.glow}`}>
-            <div className="flex items-center justify-between">
+          <div ref={sectionsRef.sprintHealth} className={`p-6 rounded-[28px] border flex flex-col gap-4 relative overflow-hidden transition-all duration-300 ${theme === 'dark' ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/60 shadow-md'}`}>
+            <div className="absolute inset-0 border border-transparent bg-gradient-to-tr from-accent-gold/25 via-blue-500/25 to-transparent rounded-[inherit] opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }} />
+            <div className="flex items-center justify-between relative z-10">
               <div>
                 <span className="text-[10px] text-text-muted uppercase font-black tracking-widest block">Sprint Validation Status</span>
                 <h3 className="text-xl font-extrabold font-clash mt-1">Sprint Status Overview</h3>
@@ -1988,7 +1975,7 @@ Do not return markdown wraps, only raw JSON text.
                   {sprintHealthScore}% Passed
                 </span>
               </div>
-              <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden border border-white/5 relative">
+              <div className={`w-full h-3 rounded-full overflow-hidden border relative ${theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-slate-100 border-slate-200'}`}>
                 <motion.div
                   initial={{ width: hasPlayed ? `${sprintHealthScore}%` : 0 }}
                   animate={{ width: `${sprintHealthScore}%` }}
@@ -1998,6 +1985,9 @@ Do not return markdown wraps, only raw JSON text.
                     sprintHealthScore >= 70 ? 'bg-gradient-to-r from-amber-500 to-yellow-400' :
                       'bg-gradient-to-r from-red-500 to-rose-400'
                     }`}
+                  style={{
+                    boxShadow: `0 0 ${theme === 'dark' ? 10 : 5}px ${sprintHealthScore >= 90 ? 'rgba(16,185,129,' : sprintHealthScore >= 70 ? 'rgba(245,158,11,' : 'rgba(239,68,68,'}${theme === 'dark' ? 0.45 : 0.2})`
+                  }}
                 >
                   {!isHealthBarFilled && (
                     <motion.div
@@ -2081,6 +2071,9 @@ Do not return markdown wraps, only raw JSON text.
                     animate={{ strokeDashoffset: 2 * Math.PI * 60 * (1 - releaseReadinessScore / 100) }}
                     transition={{ duration: 1.2, ease: 'easeOut' }}
                     strokeLinecap="round"
+                    style={{
+                      filter: `drop-shadow(0 0 ${theme === 'dark' ? 5 : 3}px ${releaseReadinessScore >= 90 ? 'rgba(16,185,129,' : releaseReadinessScore >= 70 ? 'rgba(245,158,11,' : 'rgba(239,68,68,'}${theme === 'dark' ? 0.5 : 0.25})`
+                    }}
                   />
                 </svg>
                 <div className="absolute flex flex-col items-center justify-center">
@@ -2093,11 +2086,11 @@ Do not return markdown wraps, only raw JSON text.
 
               {/* Score breakdown metrics list */}
               <div className="flex-1 flex flex-col gap-2.5 min-w-[150px]">
-                <div className="flex items-center justify-between text-xs border-b border-white/5 pb-1">
+                <div className="flex items-center justify-between text-xs border-b border-divider pb-1">
                   <span className="text-text-muted">Regression Pass %</span>
                   <span className="font-bold">{totalCases > 0 ? Math.round((passedCases / totalCases) * 100) : 100}%</span>
                 </div>
-                <div className="flex items-center justify-between text-xs border-b border-white/5 pb-1">
+                <div className="flex items-center justify-between text-xs border-b border-divider pb-1">
                   <span className="text-text-muted">Open Critical Bugs</span>
                   <span className={`font-bold ${openBugsCount > 0 ? 'text-red-400' : ''}`}>{openBugsCount}</span>
                 </div>
@@ -2135,10 +2128,10 @@ Do not return markdown wraps, only raw JSON text.
             <CheckCheck className="w-5 h-5 text-accent-gold" />
             <h2 className="text-2xl font-extrabold font-clash">Release Testing Status</h2>
           </div>
-          <div className={`overflow-x-auto rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+          <ReportTableShell theme={theme}>
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10">
-                <tr className={`border-b ${theme === 'dark' ? 'border-white/5 bg-[#0f0f12] text-white/55' : 'border-slate-200 bg-slate-50 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
+                <tr className={reportTableHeadClass(theme)}>
                   {(() => {
                     const releaseColumns = [
                       { id: 'taskId', label: 'Task ID', defaultVisible: true },
@@ -2150,9 +2143,15 @@ Do not return markdown wraps, only raw JSON text.
                     ]
                     const visibleColumns = data.visibleReleaseColumns || releaseColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
                     const visibleColumnsList = releaseColumns.filter(col => visibleColumns[col.id])
-                    return visibleColumnsList.map(col => (
-                      <th key={col.id} className={`py-3.5 px-5 ${col.id === 'status' || col.id === 'priority' ? 'text-center' : ''}`}>{col.label}</th>
-                    ))
+                    const { keys: customKeys, labels: customLabels } = buildCustomFieldEntries(data.releaseItems, dupReleaseColumnsForLabels)
+                    return [
+                      ...visibleColumnsList.map(col => (
+                        <th key={col.id} className={`py-3.5 px-5 ${col.id === 'status' || col.id === 'priority' ? 'text-center' : ''}`}>{col.label}</th>
+                      )),
+                      ...customKeys.map(key => (
+                        <th key={key} className="py-3.5 px-5">{customLabels[key]}</th>
+                      )),
+                    ]
                   })()}
                 </tr>
               </thead>
@@ -2168,6 +2167,7 @@ Do not return markdown wraps, only raw JSON text.
                   ]
                   const visibleColumns = data.visibleReleaseColumns || releaseColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
                   const visibleColumnsList = releaseColumns.filter(col => visibleColumns[col.id])
+                  const { keys: customKeys } = buildCustomFieldEntries(data.releaseItems, dupReleaseColumnsForLabels)
 
                   return (
                     <motion.tr
@@ -2176,7 +2176,7 @@ Do not return markdown wraps, only raw JSON text.
                       whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true }}
                       transition={{ delay: idx * 0.04, duration: 0.3 }}
-                      className={`border-b text-xs transition-colors hover:bg-white/[0.03] ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'} ${idx % 2 === 0 ? '' : theme === 'dark' ? 'bg-white/[0.015]' : 'bg-slate-50/50'}`}
+                      className={reportTableRowClass(theme, idx)}
                     >
                       {visibleColumnsList.map(col => {
                         if (col.id === 'taskId') {
@@ -2191,7 +2191,7 @@ Do not return markdown wraps, only raw JSON text.
                         if (col.id === 'status') {
                           return (
                             <td key={col.id} className="py-3.5 px-5 text-center">
-                              <span className={`inline-block px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${item.status === 'Pass' ? 'bg-green-500/10 text-green-400' : item.status === 'Fail' ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-accent-gold'}`}>{item.status}</span>
+                              <StatusBadge status={item.status} theme={theme} />
                             </td>
                           )
                         }
@@ -2207,6 +2207,9 @@ Do not return markdown wraps, only raw JSON text.
                         }
                         return null
                       })}
+                      {customKeys.map(key => (
+                        <td key={key} className={`py-3.5 px-5 text-text-secondary ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>{item.customFields?.[key] ?? ''}</td>
+                      ))}
                     </motion.tr>
                   )
                 })}
@@ -2221,12 +2224,13 @@ Do not return markdown wraps, only raw JSON text.
                       { id: 'remarks', label: 'Remarks', defaultVisible: true },
                     ]
                     const visibleColumns = data.visibleReleaseColumns || releaseColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
-                    return releaseColumns.filter(col => visibleColumns[col.id]).length
-                  })()} className="py-8 text-center text-xs text-text-muted">No items configured.</td></tr>
+                    const { keys: customKeys } = buildCustomFieldEntries(data.releaseItems, dupReleaseColumnsForLabels)
+                    return releaseColumns.filter(col => visibleColumns[col.id]).length + customKeys.length
+                  })()} className="py-10 text-center text-xs text-text-muted">No release testing items configured yet.</td></tr>
                 )}
               </tbody>
             </table>
-          </div>
+          </ReportTableShell>
         </motion.section>
 
         {/* ════════════════════════════════════════════════════════════
@@ -2239,6 +2243,7 @@ Do not return markdown wraps, only raw JSON text.
             initial="hidden"
             whileInView="show"
             viewport={{ once: true, margin: "-80px" }}
+            ref={sectionsRef.releaseBugStatus}
             className="flex flex-col gap-5"
           >
             <div className="flex items-center gap-2">
@@ -2271,26 +2276,18 @@ Do not return markdown wraps, only raw JSON text.
               ))}
             </div>
 
-            {/* Status Table */}
-            <div className={`overflow-x-auto rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className={`border-b ${theme === 'dark' ? 'border-white/5 bg-[#0f0f12] text-white/55' : 'border-slate-200 bg-slate-50 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
-                    <th className="py-3.5 px-5">Status</th>
-                    <th className="py-3.5 px-5 text-right">Count</th>
-                    <th className="py-3.5 px-5 text-right">%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.releaseBugStatus.statusDistribution.map((row: any) => (
-                    <tr key={row.status} className={`border-b text-xs ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'}`}>
-                      <td className={`py-3 px-5 font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{row.status}</td>
-                      <td className="py-3 px-5 text-right font-bold text-text-secondary">{row.count}</td>
-                      <td className="py-3 px-5 text-right text-text-muted">{((row.count / data.releaseBugStatus.metrics.totalBugs) * 100).toFixed(1)}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Status Distribution — ranked progress bars */}
+            <div className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+              <RankedProgressList
+                theme={theme}
+                hasPlayed={hasPlayed}
+                items={data.releaseBugStatus.statusDistribution.map((row: any, idx: number) => ({
+                  label: row.status,
+                  count: row.count,
+                  percent: data.releaseBugStatus.metrics.totalBugs > 0 ? (row.count / data.releaseBugStatus.metrics.totalBugs) * 100 : 0,
+                  colorClass: bugStatusColorClass(row.status, idx)
+                }))}
+              />
             </div>
 
             {/* AI Summary */}
@@ -2324,10 +2321,10 @@ Do not return markdown wraps, only raw JSON text.
             <Mail className="w-5 h-5 text-accent-gold" />
             <h2 className="text-2xl font-extrabold font-clash">Support & Exception Log</h2>
           </div>
-          <div className={`overflow-x-auto rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+          <ReportTableShell theme={theme}>
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10">
-                <tr className={`border-b ${theme === 'dark' ? 'border-white/5 bg-[#0f0f12] text-white/55' : 'border-slate-200 bg-slate-50 text-slate-500'} text-[10px] font-black uppercase tracking-wider`}>
+                <tr className={reportTableHeadClass(theme)}>
                   {(() => {
                     const supportColumns = [
                       { id: 'taskId', label: 'Ticket', defaultVisible: true },
@@ -2339,9 +2336,15 @@ Do not return markdown wraps, only raw JSON text.
                     ]
                     const visibleColumns = data.visibleSupportColumns || supportColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
                     const visibleColumnsList = supportColumns.filter(col => visibleColumns[col.id])
-                    return visibleColumnsList.map(col => (
-                      <th key={col.id} className="py-3.5 px-5">{col.label}</th>
-                    ))
+                    const { keys: customKeys, labels: customLabels } = buildCustomFieldEntries(data.supportTickets, dupSupportColumnsForLabels)
+                    return [
+                      ...visibleColumnsList.map(col => (
+                        <th key={col.id} className="py-3.5 px-5">{col.label}</th>
+                      )),
+                      ...customKeys.map(key => (
+                        <th key={key} className="py-3.5 px-5">{customLabels[key]}</th>
+                      )),
+                    ]
                   })()}
                 </tr>
               </thead>
@@ -2357,6 +2360,7 @@ Do not return markdown wraps, only raw JSON text.
                   ]
                   const visibleColumns = data.visibleSupportColumns || supportColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
                   const visibleColumnsList = supportColumns.filter(col => visibleColumns[col.id])
+                  const { keys: customKeys } = buildCustomFieldEntries(data.supportTickets, dupSupportColumnsForLabels)
 
                   return (
                     <motion.tr
@@ -2365,7 +2369,7 @@ Do not return markdown wraps, only raw JSON text.
                       whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true }}
                       transition={{ delay: idx * 0.04, duration: 0.3 }}
-                      className={`border-b text-xs transition-colors hover:bg-white/[0.03] ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'} ${idx % 2 === 0 ? '' : theme === 'dark' ? 'bg-white/[0.015]' : 'bg-slate-50/50'}`}
+                      className={reportTableRowClass(theme, idx)}
                     >
                       {visibleColumnsList.map(col => {
                         if (col.id === 'taskId') {
@@ -2380,7 +2384,7 @@ Do not return markdown wraps, only raw JSON text.
                         if (col.id === 'status') {
                           return (
                             <td key={col.id} className="py-3.5 px-5 text-center">
-                              <span className={`inline-block px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${ticket.status === 'Resolved' ? 'bg-green-500/10 text-green-400' : ticket.status === 'Closed' ? 'bg-blue-500/10 text-blue-400' : 'bg-orange-500/10 text-orange-400'}`}>{ticket.status}</span>
+                              <StatusBadge status={ticket.status} theme={theme} />
                             </td>
                           )
                         }
@@ -2396,6 +2400,9 @@ Do not return markdown wraps, only raw JSON text.
                         }
                         return null
                       })}
+                      {customKeys.map(key => (
+                        <td key={key} className={`py-3.5 px-5 text-text-secondary ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>{ticket.customFields?.[key] ?? ''}</td>
+                      ))}
                     </motion.tr>
                   )
                 })}
@@ -2410,12 +2417,13 @@ Do not return markdown wraps, only raw JSON text.
                       { id: 'remarks', label: 'Remarks', defaultVisible: true },
                     ]
                     const visibleColumns = data.visibleSupportColumns || supportColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
-                    return supportColumns.filter(col => visibleColumns[col.id]).length
-                  })()} className="py-8 text-center text-xs text-text-muted">No tickets logged.</td></tr>
+                    const { keys: customKeys } = buildCustomFieldEntries(data.supportTickets, dupSupportColumnsForLabels)
+                    return supportColumns.filter(col => visibleColumns[col.id]).length + customKeys.length
+                  })()} className="py-10 text-center text-xs text-text-muted">No support tickets logged yet.</td></tr>
                 )}
               </tbody>
             </table>
-          </div>
+          </ReportTableShell>
         </motion.section>
 
         {/* ════════════════════════════════════════════════════════════
@@ -2465,12 +2473,12 @@ Do not return markdown wraps, only raw JSON text.
                         </div>
                       ))}
                     </div>
-                    <div className="pt-2 border-t border-white/5">
+                    <div className="pt-2 border-t border-divider">
                       <div className="flex justify-between text-xs mb-1.5">
                         <span className="text-text-muted">Closure Rate</span>
                         <span className="font-bold text-green-400">{d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%</span>
                       </div>
-                      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div className={`h-1.5 rounded-full overflow-hidden ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-100'}`}>
                         <motion.div
                           initial={{ width: hasPlayed ? `${d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%` : 0 }}
                           animate={{ width: `${d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%` }}
@@ -2634,7 +2642,7 @@ Do not return markdown wraps, only raw JSON text.
             {activeHistory.length >= 2 && (
               <button
                 onClick={() => setCompareMode(v => !v)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${compareMode ? 'bg-accent-gold text-black border-accent-gold' : 'bg-white/5 border-white/10 text-text-secondary hover:text-white'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${compareMode ? 'bg-accent-gold text-black border-accent-gold' : theme === 'dark' ? 'bg-white/5 border-white/10 text-text-secondary hover:text-white' : 'bg-black/[0.03] border-slate-200 text-text-secondary hover:text-slate-900'}`}
               >
                 <GitCompare className="w-4 h-4" />
                 {compareMode ? 'Show WoW Cards' : 'Compare Saved Reports'}
@@ -2644,7 +2652,7 @@ Do not return markdown wraps, only raw JSON text.
 
           {compareMode ? (
             <div className={`p-6 rounded-3xl border flex flex-col gap-6 ${tS.card} ${tS.border} ${tS.glow}`}>
-              <div className="flex items-center justify-between flex-wrap gap-4 border-b border-white/5 pb-4">
+              <div className={`flex items-center justify-between flex-wrap gap-4 border-b pb-4 ${theme === 'dark' ? 'border-white/5' : 'border-slate-200'}`}>
                 <div>
                   <h3 className="text-lg font-bold font-clash">Snapshot Comparison Mode</h3>
                   <p className="text-xs text-text-muted">Select any two saved reports to see differences side-by-side.</p>
@@ -2656,7 +2664,7 @@ Do not return markdown wraps, only raw JSON text.
                     <select
                       value={compareReportA}
                       onChange={e => setCompareReportA(e.target.value)}
-                      className="bg-[#1a1a1a] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none"
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none border ${theme === 'dark' ? 'bg-[#1a1a1a] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                     >
                       <option value="">Choose Report A...</option>
                       {activeHistory.map(r => (
@@ -2672,7 +2680,7 @@ Do not return markdown wraps, only raw JSON text.
                     <select
                       value={compareReportB}
                       onChange={e => setCompareReportB(e.target.value)}
-                      className="bg-[#1a1a1a] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none"
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none border ${theme === 'dark' ? 'bg-[#1a1a1a] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                     >
                       <option value="">Choose Report B...</option>
                       {activeHistory.map(r => (
@@ -2690,7 +2698,7 @@ Do not return markdown wraps, only raw JSON text.
 
                 if (!repA || !repB) {
                   return (
-                    <div className="p-8 text-center text-xs text-text-muted border border-dashed border-white/5 rounded-2xl">
+                    <div className={`p-8 text-center text-xs text-text-muted border border-dashed rounded-2xl ${theme === 'dark' ? 'border-white/10' : 'border-slate-300'}`}>
                       Select two reports from the dropdowns above to calculate snapshots.
                     </div>
                   )
@@ -2713,19 +2721,19 @@ Do not return markdown wraps, only raw JSON text.
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="p-4 rounded-2xl bg-green-500/5 border border-green-500/10 flex flex-col justify-between">
                         <span className="text-[9px] uppercase font-bold text-green-400 tracking-wider">Overall Winner</span>
-                        <span className="text-sm font-extrabold mt-1 text-white">{winner}</span>
+                        <span className="text-sm font-extrabold mt-1 text-text-primary">{winner}</span>
                       </div>
                       <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex flex-col justify-between">
                         <span className="text-[9px] uppercase font-bold text-blue-400 tracking-wider">Biggest Improvement</span>
-                        <span className="text-sm font-extrabold mt-1 text-white">{biggestImp}</span>
+                        <span className="text-sm font-extrabold mt-1 text-text-primary">{biggestImp}</span>
                       </div>
                     </div>
 
                     {/* Comparison table grid */}
-                    <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.01]">
+                    <ReportTableShell theme={theme}>
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>
-                          <tr className="border-b border-white/5 bg-white/5 text-[10px] font-black uppercase text-text-muted">
+                          <tr className={reportTableHeadClass(theme)}>
                             <th className="p-4">Metric</th>
                             <th className="p-4">Report A (Baseline)</th>
                             <th className="p-4">Report B (Comparison)</th>
@@ -2750,11 +2758,11 @@ Do not return markdown wraps, only raw JSON text.
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: idx * 0.04, duration: 0.3 }}
-                                className="border-b border-white/5"
+                                className={reportTableRowClass(theme, idx)}
                               >
-                                <td className="p-4 font-bold text-white">{m.name}</td>
+                                <td className="p-4 font-bold text-text-primary">{m.name}</td>
                                 <td className="p-4 text-text-secondary">{m.valA}</td>
-                                <td className="p-4 text-white font-extrabold">{m.valB}</td>
+                                <td className="p-4 text-text-primary font-extrabold">{m.valB}</td>
                                 <td className="p-4">
                                   {diff === 0 ? (
                                     <span className="text-text-muted">▬ No Change</span>
@@ -2769,7 +2777,7 @@ Do not return markdown wraps, only raw JSON text.
                           })}
                         </tbody>
                       </table>
-                    </div>
+                    </ReportTableShell>
                   </div>
                 )
               })()}
@@ -2894,7 +2902,7 @@ Do not return markdown wraps, only raw JSON text.
                 <p className="text-xs">At least 2 saved reports are required to calculate trend performance charts.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className={`grid grid-cols-1 ${vis.show_defectClosureTrend !== false ? 'lg:grid-cols-2' : ''} gap-6`}>
 
                 {/* 1. Monthly KPI Trend (Line) */}
                 <motion.div
@@ -2908,50 +2916,57 @@ Do not return markdown wraps, only raw JSON text.
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                        <XAxis dataKey="name" stroke={chartText} fontSize={9} />
-                        <YAxis stroke={chartText} fontSize={9} />
-                        <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Line type="monotone" dataKey="emails" name="Support Emails" stroke="#3b82f6" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                        <Line type="monotone" dataKey="features" name="Features Tested" stroke="#facc15" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                        <Line type="monotone" dataKey="fixes" name="Code Fixes" stroke="#a855f7" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <XAxis dataKey="name" {...axisPreset()} />
+                        <YAxis {...axisPreset()} />
+                        <Tooltip content={<PremiumTooltip theme={theme} />} />
+                        <Legend {...legendPreset} />
+                        <Line type="monotone" dataKey="emails" name="Support Emails" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#3b82f6', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Line type="monotone" dataKey="features" name="Features Tested" stroke="#facc15" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#facc15', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Line type="monotone" dataKey="fixes" name="Code Fixes" stroke="#a855f7" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#a855f7', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
                 </motion.div>
 
                 {/* 2. Defect Closure Trend (Area) */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                  viewport={{ once: true, margin: "-45px" }}
-                  transition={{ duration: 0.5, delay: 0.05 }}
-                  className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
-                >
-                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Defect Closure Trend</span>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="reportedGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#f87171" stopOpacity={0.2} />
-                            <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
-                          </linearGradient>
-                          <linearGradient id="closedGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="name" stroke={chartText} fontSize={9} />
-                        <YAxis stroke={chartText} fontSize={9} />
-                        <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Area type="monotone" dataKey="reportedDefects" name="Reported Defects" stroke="#f87171" fill="url(#reportedGrad)" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                        <Area type="monotone" dataKey="closedDefects" name="Closed Defects" stroke="#10b981" fill="url(#closedGrad)" strokeWidth={2} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </motion.div>
+                {vis.show_defectClosureTrend !== false && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                    viewport={{ once: true, margin: "-45px" }}
+                    transition={{ duration: 0.5, delay: 0.05 }}
+                    className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                  >
+                    <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Defect Closure Trend</span>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                          <defs>
+                            <GlowAreaGradient id="reportedGrad" color="#f87171" theme={theme} />
+                            <GlowAreaGradient id="closedGrad" color="#10b981" theme={theme} />
+                          </defs>
+                          <XAxis dataKey="name" {...axisPreset()} />
+                          <YAxis {...axisPreset()} />
+                          <Tooltip content={<PremiumTooltip theme={theme} />} />
+                          <Legend {...legendPreset} />
+                          <Area type="monotone" dataKey="reportedDefects" name="Reported Defects" stroke="#f87171" fill="url(#reportedGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#f87171', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                          <Area type="monotone" dataKey="closedDefects" name="Closed Defects" stroke="#10b981" fill="url(#closedGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#10b981', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                          {bestClosureWeek && (
+                            <ReferenceDot
+                              x={bestClosureWeek.name}
+                              y={bestClosureWeek.closedDefects}
+                              r={5}
+                              fill="#10b981"
+                              stroke={theme === 'dark' ? '#0e1322' : '#ffffff'}
+                              strokeWidth={2}
+                              label={<ChartCallout theme={theme} title={`${bestClosureWeek.name} · Best`} value={`${Math.round((bestClosureWeek.closedDefects / bestClosureWeek.reportedDefects) * 100)}% Closed`} />}
+                            />
+                          )}
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </motion.div>
+                )}
 
                 {/* 3. Production Issue Trend (Stacked Area) */}
                 <motion.div
@@ -2965,15 +2980,22 @@ Do not return markdown wraps, only raw JSON text.
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                        <XAxis dataKey="name" stroke={chartText} fontSize={9} />
-                        <YAxis stroke={chartText} fontSize={9} />
-                        <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Area type="monotone" dataKey="escapedIssueProd" stackId="1" name="Escaped Issue" stroke="#d4af37" fill="#d4af37" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                        <Area type="monotone" dataKey="supportFixProd" stackId="1" name="Support Fix" stroke="#eab308" fill="#eab308" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                        <Area type="monotone" dataKey="changeRequestProd" stackId="1" name="Change Req" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                        <Area type="monotone" dataKey="dataIssueProd" stackId="1" name="Data Issue" stroke="#f87171" fill="#f87171" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                        <Area type="monotone" dataKey="backendUpdationProd" stackId="1" name="Backend Update" stroke="#10b981" fill="#10b981" fillOpacity={0.4} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <defs>
+                          <StackedAreaGradient id="prodTrendEscapedGrad" color="#d4af37" theme={theme} />
+                          <StackedAreaGradient id="prodTrendSupportGrad" color="#eab308" theme={theme} />
+                          <StackedAreaGradient id="prodTrendChangeGrad" color="#a855f7" theme={theme} />
+                          <StackedAreaGradient id="prodTrendDataGrad" color="#f87171" theme={theme} />
+                          <StackedAreaGradient id="prodTrendBackendGrad" color="#10b981" theme={theme} />
+                        </defs>
+                        <XAxis dataKey="name" {...axisPreset()} />
+                        <YAxis {...axisPreset()} />
+                        <Tooltip content={<PremiumTooltip theme={theme} />} />
+                        <Legend {...legendPreset} />
+                        <Area type="monotone" dataKey="escapedIssueProd" stackId="1" name="Escaped Issue" stroke="#d4af37" fill="url(#prodTrendEscapedGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="supportFixProd" stackId="1" name="Support Fix" stroke="#eab308" fill="url(#prodTrendSupportGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="changeRequestProd" stackId="1" name="Change Req" stroke="#a855f7" fill="url(#prodTrendChangeGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="dataIssueProd" stackId="1" name="Data Issue" stroke="#f87171" fill="url(#prodTrendDataGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="backendUpdationProd" stackId="1" name="Backend Update" stroke="#10b981" fill="url(#prodTrendBackendGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -2990,13 +3012,16 @@ Do not return markdown wraps, only raw JSON text.
                   <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Weekly Support Ticket Trend</span>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                        <XAxis dataKey="name" stroke={chartText} fontSize={9} />
-                        <YAxis stroke={chartText} fontSize={9} />
-                        <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Line type="monotone" dataKey="emails" name="Support tickets" stroke="#06b6d4" strokeWidth={2.5} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                      </LineChart>
+                      <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <defs>
+                          <GlowAreaGradient id="supportTicketGrad" color="#06b6d4" theme={theme} />
+                        </defs>
+                        <XAxis dataKey="name" {...axisPreset()} />
+                        <YAxis {...axisPreset()} />
+                        <Tooltip content={<PremiumTooltip theme={theme} />} />
+                        <Legend {...legendPreset} />
+                        <Area type="monotone" dataKey="emails" name="Support tickets" stroke="#06b6d4" fill="url(#supportTicketGrad)" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#06b6d4', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                      </AreaChart>
                     </ResponsiveContainer>
                   </div>
                 </motion.div>
@@ -3013,12 +3038,15 @@ Do not return markdown wraps, only raw JSON text.
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                        <XAxis dataKey="name" stroke={chartText} fontSize={9} />
-                        <YAxis stroke={chartText} fontSize={9} />
-                        <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="teamSize" name="Allocated Engineers" fill="rgba(212,175,55,0.2)" radius={[4, 4, 0, 0]} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                        <Line type="monotone" dataKey="healthScore" name="QA Health Score %" stroke="#10b981" strokeWidth={2.5} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <defs>
+                          <BarFillGradient id="teamSizeBarGrad" color="#d4af37" theme={theme} />
+                        </defs>
+                        <XAxis dataKey="name" {...axisPreset()} />
+                        <YAxis {...axisPreset()} />
+                        <Tooltip content={<PremiumTooltip theme={theme} />} />
+                        <Legend {...legendPreset} />
+                        <Bar dataKey="teamSize" name="Allocated Engineers" fill="url(#teamSizeBarGrad)" fillOpacity={0.25} radius={BAR_RADIUS} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Line type="monotone" dataKey="healthScore" name="QA Health Score %" stroke="#10b981" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#10b981', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -3036,13 +3064,18 @@ Do not return markdown wraps, only raw JSON text.
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                        <XAxis dataKey="name" stroke={chartText} fontSize={9} />
-                        <YAxis stroke={chartText} fontSize={9} />
-                        <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="passFeatures" name="Passed" stackId="a" fill="#10b981" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                        <Bar dataKey="failFeatures" name="Failed" stackId="a" fill="#f87171" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                        <Bar dataKey="blockedFeatures" name="Blocked" stackId="a" fill="#fb923c" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                        <defs>
+                          <BarFillGradient id="featurePassGrad" color="#10b981" theme={theme} />
+                          <BarFillGradient id="featureFailGrad" color="#f87171" theme={theme} />
+                          <BarFillGradient id="featureBlockedGrad" color="#fb923c" theme={theme} />
+                        </defs>
+                        <XAxis dataKey="name" {...axisPreset()} />
+                        <YAxis {...axisPreset()} />
+                        <Tooltip content={<PremiumTooltip theme={theme} />} />
+                        <Legend {...legendPreset} />
+                        <Bar dataKey="passFeatures" name="Passed" stackId="a" fill="url(#featurePassGrad)" isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Bar dataKey="failFeatures" name="Failed" stackId="a" fill="url(#featureFailGrad)" isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Bar dataKey="blockedFeatures" name="Blocked" stackId="a" fill="url(#featureBlockedGrad)" radius={BAR_RADIUS} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -3054,7 +3087,15 @@ Do not return markdown wraps, only raw JSON text.
         )}
 
         {/* ── SECTION 6: WEEKLY ANCHORED CHARTS ── */}
-        <section ref={sectionsRef.charts} className="flex flex-col gap-6" style={{ display: vis.show_weeklyCharts === false ? 'none' : undefined }}>
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          ref={sectionsRef.charts}
+          className="flex flex-col gap-6"
+          style={{ display: vis.show_weeklyCharts === false ? 'none' : undefined }}
+        >
           <div className="flex items-center gap-2">
             <LayoutGrid className="w-5 h-5 text-accent-gold" />
             <h2 className="text-2xl font-extrabold font-clash">Weekly Charts & Distribution</h2>
@@ -3089,13 +3130,13 @@ Do not return markdown wraps, only raw JSON text.
               <div className="h-64 flex justify-center items-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={workDistributionData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={4} dataKey="value" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out">
+                    <Pie data={workDistributionData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={3} cornerRadius={6} stroke="none" dataKey="value" isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out">
                       {workDistributionData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.hex} />
+                        <Cell key={`cell-${index}`} fill={entry.hex} style={glowStyle(entry.hex, theme)} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Tooltip content={<PremiumTooltip theme={theme} />} />
+                    <Legend {...legendPreset} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -3128,12 +3169,16 @@ Do not return markdown wraps, only raw JSON text.
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={prodIssuesData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                    <XAxis dataKey="category" stroke={chartText} fontSize={9} />
-                    <YAxis stroke={chartText} fontSize={9} />
-                    <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="lastWeek" name="Last Week" fill="#d4af37" radius={[4, 4, 0, 0]} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
-                    <Bar dataKey="mtd" name="MTD" fill="#3b82f6" radius={[4, 4, 0, 0]} isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out" />
+                    <defs>
+                      <BarFillGradient id="prodIssuesLastWeekGrad" color="#d4af37" theme={theme} />
+                      <BarFillGradient id="prodIssuesMtdGrad" color="#3b82f6" theme={theme} />
+                    </defs>
+                    <XAxis dataKey="category" {...axisPreset()} />
+                    <YAxis {...axisPreset()} />
+                    <Tooltip content={<PremiumTooltip theme={theme} />} />
+                    <Legend {...legendPreset} />
+                    <Bar dataKey="lastWeek" name="Last Week" fill="url(#prodIssuesLastWeekGrad)" radius={BAR_RADIUS} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                    <Bar dataKey="mtd" name="MTD" fill="url(#prodIssuesMtdGrad)" radius={BAR_RADIUS} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -3166,23 +3211,31 @@ Do not return markdown wraps, only raw JSON text.
               <div className="h-64 relative z-10">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={defectStatusData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} dataKey="value" isAnimationActive={!hasPlayed} animationDuration={1500} animationEasing="ease-out">
+                    <Pie data={defectStatusData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} cornerRadius={6} stroke="none" dataKey="value" isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out">
                       {defectStatusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.hex} />
+                        <Cell key={`cell-${index}`} fill={entry.hex} style={glowStyle(entry.hex, theme)} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Tooltip content={<PremiumTooltip theme={theme} />} />
+                    <Legend {...legendPreset} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             </motion.div>
 
           </div>
-        </section>
+        </motion.section>
 
         {/* ── SECTION 8: TEAM RESOURCE ALLOCATION ── */}
-        <section ref={sectionsRef.team} className="flex flex-col gap-6" style={{ display: vis.show_teamAllocation === false ? 'none' : undefined }}>
+        <motion.section
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-80px" }}
+          ref={sectionsRef.team}
+          className="flex flex-col gap-6"
+          style={{ display: vis.show_teamAllocation === false ? 'none' : undefined }}
+        >
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-accent-gold" />
             <h2 className="text-2xl font-extrabold font-clash">Team Resource Allocation</h2>
@@ -3196,30 +3249,39 @@ Do not return markdown wraps, only raw JSON text.
             ].map(group => (
               <div
                 key={group.role}
-                className={`p-6 rounded-2xl border relative overflow-hidden ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}
+                className={`p-6 rounded-[28px] border relative overflow-hidden transition-all duration-300 group ${theme === 'dark' ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)] hover:border-white/[0.12] hover:shadow-[0_8px_32px_rgba(0,0,0,0.3)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/60 shadow-md hover:shadow-lg'}`}
               >
-                <div className={`h-1.5 w-16 rounded-full mb-4 ${group.barColor}`} />
-                <h3 className={`text-base font-extrabold mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{group.role}</h3>
-                <span className="text-[10px] uppercase font-bold text-accent-gold tracking-widest">{group.metrics}</span>
+                {/* Premium Gradient Border Glow */}
+                <div className="absolute inset-0 border border-transparent bg-gradient-to-tr from-accent-gold/25 via-blue-500/25 to-transparent rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0" style={{ mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }} />
+                
+                {/* Soft animated inner gradient */}
+                <div className={`absolute -top-20 -right-20 w-40 h-40 rounded-full blur-3xl opacity-20 pointer-events-none animate-pulse ${group.barColor}`} />
+                <div className={`absolute -bottom-20 -left-20 w-40 h-40 rounded-full blur-3xl opacity-20 pointer-events-none animate-pulse ${group.barColor}`} style={{ animationDelay: '1.5s' }} />
 
-                <div className="flex flex-col gap-3 mt-6">
-                  {group.members.map(member => (
-                    <div key={member} className="flex items-center justify-between border-t border-white/5 pt-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-xs font-black text-text-muted">
-                          {member.charAt(0)}
+                <div className="relative z-10">
+                  <div className={`h-1.5 w-16 rounded-full mb-4 ${group.barColor}`} />
+                  <h3 className={`text-base font-extrabold mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{group.role}</h3>
+                  <span className="text-[10px] uppercase font-bold text-accent-gold tracking-widest">{group.metrics}</span>
+
+                  <div className="flex flex-col gap-3 mt-6">
+                    {group.members.map(member => (
+                      <div key={member} className="flex items-center justify-between border-t border-divider pt-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-text-muted ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-100'}`}>
+                            {member.charAt(0)}
+                          </div>
+                          <span className="text-xs font-semibold">{member}</span>
                         </div>
-                        <span className="text-xs font-semibold">{member}</span>
-                      </div>
                       <span className="text-[10px] font-bold text-text-muted">QA Specialist</span>
                     </div>
                   ))}
                   {group.members.length === 0 && <span className="text-xs text-text-muted">No resources assigned.</span>}
                 </div>
+                </div>
               </div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
         {/* ── SECTION 9: NEXT PRIORITIES ── */}
         {vis.show_nextPriorities !== false && (
@@ -3248,7 +3310,7 @@ Do not return markdown wraps, only raw JSON text.
                   </div>
                   <h3 className={`text-sm font-extrabold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{priority.title}</h3>
                   <p className="text-xs text-text-secondary leading-normal">{priority.description}</p>
-                  <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
+                  <div className="flex items-center justify-between border-t border-divider pt-3 mt-1">
                     <span className="text-[10px] font-black uppercase text-blue-400 tracking-wider">Owner: {priority.owner}</span>
                   </div>
                 </div>
@@ -3338,6 +3400,16 @@ Do not return markdown wraps, only raw JSON text.
         label={qualityStats.label}
         color={qualityStats.color}
       />
+
+      {/* ── Release Scope Modal ── */}
+      <ReleaseScopeModal
+        isOpen={showReleaseScopeModal}
+        onClose={() => setShowReleaseScopeModal(false)}
+        releaseData={data.releaseItems || []}
+        visibleColumns={data.visibleReleaseColumns || {}}
+        projectId={data.projectId}
+        projectName={data.projectName}
+      />
     </div >
   )
 }
@@ -3354,14 +3426,17 @@ class DashboardErrorBoundary extends React.Component<{ children: React.ReactNode
   }
   render() {
     if (this.state.hasError) {
+      // Uses the app's global CSS theme variables (not this page's isolated gold theme) so the
+      // fallback still respects light/dark correctly even if the crash happened before the
+      // dashboard's own theme resolution ran.
       return (
-        <div className="min-h-screen bg-[#09090b] flex items-center justify-center p-6 text-white font-montreal">
-          <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-10 max-w-md w-full text-center backdrop-blur-xl shadow-2xl">
+        <div className="min-h-screen flex items-center justify-center p-6 font-montreal" style={{ background: 'var(--bg)', color: 'var(--text-primary)' }}>
+          <div className="rounded-3xl p-10 max-w-md w-full text-center backdrop-blur-xl shadow-2xl border" style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}>
             <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-6">
               <span className="text-2xl text-red-500">⚠️</span>
             </div>
             <h2 className="text-xl font-bold font-clash mb-2">Dashboard Error</h2>
-            <p className="text-white/45 text-xs mb-6 text-left p-3 bg-black/40 rounded-xl overflow-y-auto max-h-32 font-mono break-all leading-normal">
+            <p className="text-xs mb-6 text-left p-3 rounded-xl overflow-y-auto max-h-32 font-mono break-all leading-normal" style={{ color: 'var(--text-muted)', background: 'var(--surface-secondary)' }}>
               {this.state.error?.stack || this.state.error?.message || 'An unexpected rendering error occurred.'}
             </p>
             <div className="flex flex-col gap-3">
@@ -3375,7 +3450,8 @@ class DashboardErrorBoundary extends React.Component<{ children: React.ReactNode
                 onClick={() => {
                   window.close()
                 }}
-                className="px-6 py-2.5 bg-white/5 border border-white/10 text-white font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-white/10 transition-colors w-full"
+                className="px-6 py-2.5 border font-bold text-xs uppercase tracking-widest rounded-xl transition-colors w-full hover:opacity-80"
+                style={{ background: 'var(--hover)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               >
                 Return to Reports
               </button>

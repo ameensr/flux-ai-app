@@ -41,7 +41,7 @@ const RELEASE_COLUMNS = [
 
 export const ReleaseTable: React.FC = () => {
   const { form, setForm } = useQAReportStore()
-  const { releaseRows: dailyReleaseRows, fetchReportRows, dropdownConfigs, fetchDropdownConfigs, selectedProjectId } = useDailyReportStore()
+  const { fetchReportRows, dropdownConfigs, fetchDropdownConfigs } = useDailyReportStore()
   const { getColumns, fetchColumnConfigs } = useColumnConfigStore()
   const { isDark } = useTheme()
   const [search, setSearch] = useState('')
@@ -113,6 +113,12 @@ export const ReleaseTable: React.FC = () => {
   const update = (id: string, patch: Partial<ReleaseItem>) =>
     setForm({ releaseItems: items.map(i => i.id === id ? { ...i, ...patch } : i) })
 
+  // Dedicated setter for dynamic "Create New" columns — merges into the
+  // existing customFields object instead of replacing it, so editing one
+  // custom column never clobbers another custom column's value on the row.
+  const updateCustomField = (id: string, key: string, value: string) =>
+    setForm({ releaseItems: items.map(i => i.id === id ? { ...i, customFields: { ...i.customFields, [key]: value } } : i) })
+
   const addRow = () => setForm({ releaseItems: [...items, newItem()] })
 
   const deleteSelected = () => {
@@ -162,19 +168,35 @@ export const ReleaseTable: React.FC = () => {
   const customFieldKeys = Object.keys(customFieldLabelMap)
 
   const importFromDailyReport = async () => {
+    // ⚠️ CRITICAL: The Daily Update Report module tracks its OWN selected
+    // project (`useDailyReportStore.selectedProjectId`), completely
+    // independent of this QA Weekly Report's `form.projectId`. If the user
+    // previously viewed /daily-report for a different project (or never
+    // synced the two), importing without reconciling them would silently
+    // pull another project's rows/columns into THIS report. Always scope
+    // the import to the QA report's own project — never the Daily Report
+    // module's currently-selected one — by re-selecting it there first
+    // (which also correctly (re)loads project membership/role before rows).
+    if (!form.projectId) {
+      toast({ variant: 'destructive', title: 'No project selected', description: 'Select a project for this QA report before importing from Daily Update Report.' })
+      return
+    }
     setImporting(true)
     try {
-      let rows = dailyReleaseRows
+      if (useDailyReportStore.getState().selectedProjectId !== form.projectId) {
+        await useDailyReportStore.getState().setSelectedProjectId(form.projectId)
+      }
+      let rows = useDailyReportStore.getState().releaseRows
       // Bug fix 1: store may be empty if user never visited /daily-report — fetch from DB
       if (!rows.length) {
         await fetchReportRows()
         rows = useDailyReportStore.getState().releaseRows
       }
       if (!rows.length) {
-        toast({ title: 'No daily report data', description: 'Release Testing Log in Daily Update Report is empty.' })
+        toast({ title: 'No daily report data', description: 'Release Testing Log in Daily Update Report is empty for this project.' })
         return
       }
-      await fetchColumnConfigs('release', selectedProjectId || null)
+      await fetchColumnConfigs('release', form.projectId)
       setShowMappingModal(true)
     } finally {
       setImporting(false)
@@ -185,7 +207,7 @@ export const ReleaseTable: React.FC = () => {
     setShowMappingModal(false)
     setImporting(true)
     try {
-      let rows = dailyReleaseRows
+      let rows = useDailyReportStore.getState().releaseRows
       if (!rows.length) {
         await fetchReportRows()
         rows = useDailyReportStore.getState().releaseRows
@@ -393,7 +415,12 @@ export const ReleaseTable: React.FC = () => {
                 )}
                 {customFieldKeys.map(key => (
                   <td key={key} className={cell}>
-                    <span className="text-xs text-text-secondary">{item.customFields?.[key] ?? ''}</span>
+                    <input
+                      className={sel}
+                      value={item.customFields?.[key] ?? ''}
+                      onChange={e => updateCustomField(item.id, key, e.target.value)}
+                      placeholder={customFieldLabelMap[key]}
+                    />
                   </td>
                 ))}
               </tr>
@@ -408,7 +435,7 @@ export const ReleaseTable: React.FC = () => {
         onClose={() => setShowMappingModal(false)}
         tableKey="release"
         columns={getColumns('release')}
-        projectId={selectedProjectId || null}
+        projectId={form.projectId || null}
         onConfirm={handleMappingConfirm}
       />
     </GlassCard>

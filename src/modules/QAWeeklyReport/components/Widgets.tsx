@@ -237,6 +237,19 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
     toast({ title: 'Duplicated', description: 'Report duplicated in history.' })
   }
 
+  const handleDelete = async (r: typeof savedReports[0]) => {
+    try {
+      await deleteReport(r.id)
+      toast({ title: 'Report Deleted', description: `${r.project} — ${r.week} removed from history.` })
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'Delete Failed',
+        description: e instanceof Error ? e.message : 'Could not delete the report. Please try again.',
+      })
+    }
+  }
+
   return (
     <GlassCard hoverEffect={false} className="flex flex-col gap-4">
       <div className="flex flex-col gap-3">
@@ -304,7 +317,7 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
             <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={() => open(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-accent-gold transition-all" title="Open"><ExternalLink className="w-3.5 h-3.5" /></button>
               <button onClick={() => duplicate(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-text-primary transition-all" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
-              {canDelete && <button onClick={() => deleteReport(r.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>}
+              {canDelete && <button onClick={() => handleDelete(r)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>}
             </div>
           </div>
         ))}

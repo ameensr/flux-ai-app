@@ -1126,31 +1126,34 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
             {confirmDelete && (
               <>
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[90] bg-black/60" onClick={() => setConfirmDelete(null)} />
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                  className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[91] w-full max-w-sm rounded-2xl p-6 shadow-2xl"
-                  style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)' }}
-                >
-                  <div className="flex items-start gap-3 mb-4">
-                    <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
-                      <AlertTriangle className="w-4 h-4 text-red-400" />
+                <div className="fixed inset-0 z-[91] flex items-center justify-center p-4 pointer-events-none">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                    onClick={e => e.stopPropagation()}
+                    className="pointer-events-auto w-full max-w-sm rounded-2xl p-6 shadow-2xl"
+                    style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)' }}
+                  >
+                    <div className="flex items-start gap-3 mb-4">
+                      <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                        <AlertTriangle className="w-4 h-4 text-red-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Delete "{confirmDelete.display_name}"?</h3>
+                        <p className="text-xs mt-1.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                          This column will be removed from the QA Daily Update configuration. Existing data associated with this column may also be affected.
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Delete "{confirmDelete.display_name}"?</h3>
-                      <p className="text-xs mt-1.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                        This column will be removed from the QA Daily Update configuration. Existing data associated with this column may also be affected.
-                      </p>
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 rounded-xl text-xs font-bold" style={{ background: 'var(--hover)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                        Cancel
+                      </button>
+                      <button onClick={confirmDeleteColumn} className="px-4 py-2 rounded-xl text-xs font-bold bg-red-500 text-white hover:bg-red-600 transition-all">
+                        Delete Column
+                      </button>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-end gap-2">
-                    <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 rounded-xl text-xs font-bold" style={{ background: 'var(--hover)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-                      Cancel
-                    </button>
-                    <button onClick={confirmDeleteColumn} className="px-4 py-2 rounded-xl text-xs font-bold bg-red-500 text-white hover:bg-red-600 transition-all">
-                      Delete Column
-                    </button>
-                  </div>
-                </motion.div>
+                  </motion.div>
+                </div>
               </>
             )}
           </AnimatePresence>

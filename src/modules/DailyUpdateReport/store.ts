@@ -60,6 +60,8 @@ interface DailyReportState {
   reorderDropdownConfigs: (category: ConfigCategory, configs: DropdownConfig[]) => Promise<void>
 
   fetchProjects: () => Promise<void>
+  /** @internal actual fetchProjects body — do not call directly, use fetchProjects() which single-flights it */
+  _fetchProjectsImpl: () => Promise<void>
   setSelectedProjectId: (projectId: string) => Promise<void>
   fetchProjectMembers: (projectId: string) => Promise<void>
   fetchUserProjectRole: (projectId: string) => Promise<void>
@@ -74,6 +76,26 @@ interface DailyReportState {
 
 // Debounce helper for database syncing
 let syncTimeout: any = null
+
+// Monotonic counter guarding fetchReportRows against out-of-order network
+// responses. If two calls overlap (e.g. a stray extra caller races the
+// members/role-sequenced call in setSelectedProjectId), whichever request's
+// response arrives LAST would otherwise win regardless of which one was
+// actually started last — including an earlier call that ran with
+// stale/incomplete project-member filters and resolves with an empty or
+// wrong result AFTER the correct one already populated the rows. Each call
+// captures the counter value at its start and only commits its result if
+// that value is still current by the time it resolves.
+let reportRowsFetchSeq = 0
+
+// Single-flight guard for fetchProjects. React 18 StrictMode intentionally
+// double-invokes effects in development (mount → cleanup → mount again),
+// which fires two back-to-back fetchProjects() calls with no await between
+// them — harmless in production (StrictMode's double-invoke is dev-only),
+// but in dev it doubles every query, doubles the auto-select side effect,
+// and clutters the console. If a call is already in flight, later callers
+// just await the same promise instead of starting a redundant one.
+let fetchProjectsInFlight: Promise<void> | null = null
 
 // Looks up a system column's currently-resolved option list (Project →
 // Organization Default, same resolution the table itself uses) by its
@@ -203,6 +225,14 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
   },
 
   fetchProjects: async () => {
+    if (fetchProjectsInFlight) return fetchProjectsInFlight
+    fetchProjectsInFlight = get()._fetchProjectsImpl().finally(() => {
+      fetchProjectsInFlight = null
+    })
+    return fetchProjectsInFlight
+  },
+
+  _fetchProjectsImpl: async () => {
     try {
       const user = useAppStore.getState().user
       const role = useAppStore.getState().role
@@ -553,6 +583,8 @@ if (memberResponse.data) {
   },
 
   fetchReportRows: async () => {
+    // Captured once at the start of this call — see reportRowsFetchSeq above.
+    const seq = ++reportRowsFetchSeq
     set({ loading: true })
     const user = useAppStore.getState().user
     const role = useAppStore.getState().role
@@ -640,6 +672,12 @@ if (memberResponse.data) {
 
         const [supportRes, releaseRes] = await Promise.all([supportQuery, releaseQuery])
 
+        // A newer fetchReportRows() call has started since this one began —
+        // discard this response entirely rather than let an out-of-order
+        // network reply stomp the latest (correct) data with stale or
+        // wrongly-filtered rows.
+        if (seq !== reportRowsFetchSeq) return
+
         // Only update from database if there are no unsaved changes
         if (!hasUnsavedChanges) {
           if (!supportRes.error) {
@@ -671,13 +709,18 @@ if (memberResponse.data) {
 
         set({ isDbAvailable: true, syncStatus: hasUnsavedChanges ? currentSyncStatus : 'synced' })
       } catch (e) {
+        if (seq !== reportRowsFetchSeq) return
         console.warn('[DailyReportStore] Failed to fetch report rows from database, working in Local Draft Mode.', e)
         set({ isDbAvailable: false, syncStatus: 'local' })
       } finally {
-        set({ loading: false })
+        // Only the most recent call is allowed to clear the loading flag —
+        // if a stale call's response happens to resolve while a newer call
+        // is still in flight, leave `loading: true` so the UI keeps showing
+        // the loading state until the ACTIVE fetch actually finishes.
+        if (seq === reportRowsFetchSeq) set({ loading: false })
       }
     } else {
-      set({ loading: false, syncStatus: 'local' })
+      if (seq === reportRowsFetchSeq) set({ loading: false, syncStatus: 'local' })
     }
   },
 

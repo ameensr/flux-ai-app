@@ -4,7 +4,9 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertTriangle, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { useTheme } from '@/context/ThemeContext'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts'
+import { PremiumTooltip, BarFillGradient, BAR_RADIUS, legendPreset } from './report-preview/chartTheme'
 
 interface ProductionIssuesModalProps {
   isOpen: boolean
@@ -19,9 +21,11 @@ export function ProductionIssuesModal({
   prodIssuesData,
   projectName
 }: ProductionIssuesModalProps) {
+  const { isDark } = useTheme()
 
   const totalLastWeek = prodIssuesData.reduce((sum, item) => sum + item.lastWeek, 0)
   const totalMTD = prodIssuesData.reduce((sum, item) => sum + item.mtd, 0)
+  const chartTheme = isDark ? 'dark' as const : 'light' as const
 
   return (
     <AnimatePresence>
@@ -53,13 +57,13 @@ export function ProductionIssuesModal({
               style={{ perspective: '1000px', transformStyle: 'preserve-3d' }}
             >
               <div
-                className="relative bg-gradient-to-br from-surface via-surface-secondary to-surface-elevated border border-border/50 rounded-2xl shadow-2xl overflow-hidden"
-                style={{
-                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 100px -20px rgba(212, 175, 55, 0.3)'
-                }}
+                className={`relative rounded-[28px] border overflow-hidden transition-all duration-300 ${isDark ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/60 shadow-md'}`}
               >
+                {/* Premium Gradient Border Glow */}
+                <div className="absolute inset-0 border border-transparent bg-gradient-to-tr from-accent-gold/25 via-blue-500/25 to-transparent rounded-[inherit] opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0" style={{ mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }} />
+
                 {/* Animated gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-red-500/5 opacity-50" />
+                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-red-500/5 opacity-50 pointer-events-none z-0" />
 
                 {/* Glow effect */}
                 <div className="absolute -top-24 -right-24 w-64 h-64 bg-orange-500/20 rounded-full blur-3xl animate-pulse" />
@@ -140,37 +144,36 @@ export function ProductionIssuesModal({
                       <div className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={prodIssuesData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+                            <defs>
+                              <BarFillGradient id="modalProdIssuesLastWeekGrad" color="#d4af37" theme={chartTheme} />
+                              <BarFillGradient id="modalProdIssuesMtdGrad" color="#3b82f6" theme={chartTheme} />
+                            </defs>
                             <XAxis
                               dataKey="category"
                               stroke="var(--chart-text)"
                               fontSize={11}
+                              axisLine={false}
+                              tickLine={false}
                               angle={-15}
                               textAnchor="end"
                               height={60}
                             />
-                            <YAxis stroke="var(--chart-text)" fontSize={11} />
-                            <Tooltip
-                              contentStyle={{
-                                backgroundColor: 'var(--surface-elevated)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '8px',
-                                color: 'var(--text-primary)'
-                              }}
-                            />
-                            <Legend />
+                            <YAxis stroke="var(--chart-text)" fontSize={11} axisLine={false} tickLine={false} />
+                            <Tooltip content={<PremiumTooltip theme={chartTheme} />} />
+                            <Legend {...legendPreset} />
                             <Bar
                               dataKey="lastWeek"
                               name="Last Week"
-                              fill="#d4af37"
-                              radius={[4, 4, 0, 0]}
+                              fill="url(#modalProdIssuesLastWeekGrad)"
+                              radius={BAR_RADIUS}
                               animationBegin={100}
                               animationDuration={800}
                             />
                             <Bar
                               dataKey="mtd"
                               name="MTD"
-                              fill="#3b82f6"
-                              radius={[4, 4, 0, 0]}
+                              fill="url(#modalProdIssuesMtdGrad)"
+                              radius={BAR_RADIUS}
                               animationBegin={100}
                               animationDuration={800}
                             />

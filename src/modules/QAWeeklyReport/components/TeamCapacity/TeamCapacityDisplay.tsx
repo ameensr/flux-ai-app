@@ -125,8 +125,8 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
                     cy="50"
                     r="40"
                     fill="none"
-                    stroke="rgba(255,255,255,0.05)"
-                    strokeWidth="20"
+                    stroke="var(--chart-grid)"
+                    strokeWidth="16"
                   />
 
                   {/* Segments */}
@@ -135,6 +135,7 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
                     return distribution.map((d, idx) => {
                       const circumference = 2 * Math.PI * 40
                       const dashArray = (d.percentage / 100) * circumference
+                      const gap = distribution.length > 1 ? 1.5 : 0
                       const segment = (
                         <motion.circle
                           key={d.status}
@@ -143,12 +144,13 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
                           r="40"
                           fill="none"
                           stroke={d.color}
-                          strokeWidth="20"
-                          strokeDasharray={`${dashArray} ${circumference}`}
+                          strokeWidth="16"
+                          strokeDasharray={`${Math.max(dashArray - gap, 0)} ${circumference}`}
                           strokeDashoffset={-offset}
                           strokeLinecap="round"
+                          style={{ filter: `drop-shadow(0 0 3px ${d.color}88)` }}
                           initial={{ strokeDasharray: `0 ${circumference}` }}
-                          animate={{ strokeDasharray: `${dashArray} ${circumference}` }}
+                          animate={{ strokeDasharray: `${Math.max(dashArray - gap, 0)} ${circumference}` }}
                           transition={{ duration: 1, delay: idx * 0.1, ease: 'easeOut' }}
                         />
                       )

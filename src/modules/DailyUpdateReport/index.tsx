@@ -94,7 +94,6 @@ export const DailyUpdateReport: React.FC = () => {
     releaseRows,
     loading,
     syncing,
-    fetchReportRows,
     syncRowsToDatabase,
     syncStatus,
     overdueOnlyFilter,
@@ -124,12 +123,17 @@ export const DailyUpdateReport: React.FC = () => {
     fetchProjects()
   }, [])
 
-  // Fetch report rows when project changes
-  useEffect(() => {
-    if (selectedProjectId) {
-      fetchReportRows()
-    }
-  }, [selectedProjectId])
+  // ⚠️ Report rows are intentionally NOT (re-)fetched here on `selectedProjectId`
+  // change. `setSelectedProjectId` (called by the project dropdown below, and
+  // by fetchProjects' auto-select) already awaits `fetchProjectMembers` +
+  // `fetchUserProjectRole` before calling `fetchReportRows()` itself — those
+  // determine which rows the current user is even allowed to see. A second,
+  // independent `fetchReportRows()` fired straight off the `selectedProjectId`
+  // change (as this effect used to do) races ahead of that member/role fetch
+  // and queries with stale/empty filters; whichever of the two out-of-order
+  // network responses happened to resolve LAST silently won, which is what
+  // intermittently left the table showing an empty result until a manual
+  // refresh re-ran the (by-then-correct) sequenced fetch.
 
   // Load custom-field values for the dashboard-role lookups below (cheap
   // no-op if the dashboard-role column for a table happens to be a system
@@ -253,60 +257,12 @@ export const DailyUpdateReport: React.FC = () => {
         </div>
       </div>
 
-      {/* Project Filter - Layer 3: UI Feedback */}
-      <div className="mb-8">
-        <GlassCard hoverEffect={false} className="p-5">
-          <div className="flex items-center gap-4">
-            <label className="text-sm font-bold text-[var(--text-primary)] shrink-0">
-              Filter by Project:
-            </label>
-
-            {/* Empty State Feedback */}
-            {projects.length === 0 ? (
-              <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/5">
-                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm text-amber-200 font-medium">
-                    No projects assigned to you
-                  </p>
-                  <p className="text-xs text-amber-300/70 mt-0.5">
-                    Contact your manager or QA lead to get assigned to a project
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="flex-1 max-w-md px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-accent-gold/50 transition-all"
-                >
-                  <option value="">-- Select a Project --</option>
-                  {projects.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.project_name} ({p.project_code})
-                    </option>
-                  ))}
-                </select>
-                {selectedProjectId && (
-                  <span className="text-xs text-text-muted shrink-0">
-                    Showing updates from project members only
-                  </span>
-                )}
-                {projects.length > 1 && (
-                  <span className="text-xs text-emerald-400 shrink-0 font-medium">
-                    {projects.length} projects available
-                  </span>
-                )}
-              </>
-            )}
-          </div>
-        </GlassCard>
-      </div>
-
       {/* Summary Dashboard widgets — status metrics only (hours/TCs removed).
-          Bucket cards are driven by Dashboard Metrics configuration. */}
-      <div className={`grid grid-cols-2 md:grid-cols-3 ${activeTab === 'support' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 mb-10`}>
+          Bucket cards are driven by Dashboard Metrics configuration.
+          Placed above the Filter by Project card so it's the first thing
+          visible at the top of the page. */}
+      <div className="glass-panel relative overflow-hidden group p-5 mb-8">
+      <div className={`grid grid-cols-2 md:grid-cols-3 ${activeTab === 'support' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
         {(activeTab === 'support' ? [
           { label: 'Support Tasks', val: totalSupport, icon: Layers, color: 'text-blue-400 bg-blue-500/5', tooltip: 'Total number of rows currently in the Support & Exception Log for this project.' },
           { label: 'Passed/Fixed', val: completedSupport, icon: CheckCircle, color: 'text-green-400 bg-green-500/5', ...bucketCardTooltip(supportRoleCol, 'Completed') },
@@ -356,6 +312,58 @@ export const DailyUpdateReport: React.FC = () => {
             </motion.div>
           )
         })}
+      </div>
+      </div>
+
+      {/* Project Filter - Layer 3: UI Feedback */}
+      <div className="mb-8">
+        <GlassCard hoverEffect={false} className="p-5">
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-bold text-[var(--text-primary)] shrink-0">
+              Filter by Project:
+            </label>
+
+            {/* Empty State Feedback */}
+            {projects.length === 0 ? (
+              <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/5">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-amber-200 font-medium">
+                    No projects assigned to you
+                  </p>
+                  <p className="text-xs text-amber-300/70 mt-0.5">
+                    Contact your manager or QA lead to get assigned to a project
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  className="flex-1 max-w-md px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-accent-gold/50 transition-all"
+                >
+                  <option value="">-- Select a Project --</option>
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.project_name} ({p.project_code})
+                    </option>
+                  ))}
+                </select>
+                {selectedProjectId && (
+                  <span className="text-xs text-text-muted shrink-0">
+                    Showing updates from project members only
+                  </span>
+                )}
+                {projects.length > 1 && (
+                  <span className="text-xs text-emerald-400 shrink-0 font-medium">
+                    {projects.length} projects available
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        </GlassCard>
       </div>
 
       {/* Premium Centered Navigation Switcher */}

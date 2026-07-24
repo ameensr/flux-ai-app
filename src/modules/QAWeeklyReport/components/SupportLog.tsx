@@ -42,7 +42,7 @@ const SUPPORT_COLUMNS = [
 
 export const SupportLog: React.FC = () => {
   const { form, setForm } = useQAReportStore()
-  const { supportRows: dailySupportRows, fetchReportRows, dropdownConfigs, fetchDropdownConfigs, selectedProjectId } = useDailyReportStore()
+  const { fetchReportRows, dropdownConfigs, fetchDropdownConfigs } = useDailyReportStore()
   const { getColumns, fetchColumnConfigs } = useColumnConfigStore()
   const { isDark } = useTheme()
   const [search, setSearch] = useState('')
@@ -105,6 +105,12 @@ export const SupportLog: React.FC = () => {
   const update = (id: string, patch: Partial<SupportTicket>) =>
     setForm({ supportTickets: tickets.map(t => t.id === id ? { ...t, ...patch } : t) })
 
+  // Dedicated setter for dynamic "Create New" columns — merges into the
+  // existing customFields object instead of replacing it, so editing one
+  // custom column never clobbers another custom column's value on the row.
+  const updateCustomField = (id: string, key: string, value: string) =>
+    setForm({ supportTickets: tickets.map(t => t.id === id ? { ...t, customFields: { ...t.customFields, [key]: value } } : t) })
+
   const addRow = () => setForm({ supportTickets: [...tickets, newTicket()] })
 
   const deleteSelected = () => {
@@ -157,21 +163,37 @@ export const SupportLog: React.FC = () => {
   const customFieldKeys = Object.keys(customFieldLabelMap)
 
   const importFromDailyReport = async () => {
+    // ⚠️ CRITICAL: The Daily Update Report module tracks its OWN selected
+    // project (`useDailyReportStore.selectedProjectId`), completely
+    // independent of this QA Weekly Report's `form.projectId`. If the user
+    // previously viewed /daily-report for a different project (or never
+    // synced the two), importing without reconciling them would silently
+    // pull another project's rows/columns into THIS report. Always scope
+    // the import to the QA report's own project — never the Daily Report
+    // module's currently-selected one — by re-selecting it there first
+    // (which also correctly (re)loads project membership/role before rows).
+    if (!form.projectId) {
+      toast({ variant: 'destructive', title: 'No project selected', description: 'Select a project for this QA report before importing from Daily Update Report.' })
+      return
+    }
     setImporting(true)
     try {
-      let rows = dailySupportRows
+      if (useDailyReportStore.getState().selectedProjectId !== form.projectId) {
+        await useDailyReportStore.getState().setSelectedProjectId(form.projectId)
+      }
+      let rows = useDailyReportStore.getState().supportRows
       // Bug fix 1: store may be empty if user never visited /daily-report — fetch from DB
       if (!rows.length) {
         await fetchReportRows()
         rows = useDailyReportStore.getState().supportRows
       }
       if (!rows.length) {
-        toast({ title: 'No daily report data', description: 'Support & Exception Log in Daily Update Report is empty.' })
+        toast({ title: 'No daily report data', description: 'Support & Exception Log in Daily Update Report is empty for this project.' })
         return
       }
       // Ensure the dynamic column configuration (system + any custom columns)
-      // for the source project is loaded before opening the mapping dialog.
-      await fetchColumnConfigs('support', selectedProjectId || null)
+      // for the QA report's project is loaded before opening the mapping dialog.
+      await fetchColumnConfigs('support', form.projectId)
       setShowMappingModal(true)
     } finally {
       setImporting(false)
@@ -182,7 +204,7 @@ export const SupportLog: React.FC = () => {
     setShowMappingModal(false)
     setImporting(true)
     try {
-      let rows = dailySupportRows
+      let rows = useDailyReportStore.getState().supportRows
       if (!rows.length) {
         await fetchReportRows()
         rows = useDailyReportStore.getState().supportRows
@@ -378,7 +400,12 @@ export const SupportLog: React.FC = () => {
                 {/* Dynamic columns created via "Create New" during Import from DUP */}
                 {customFieldKeys.map(key => (
                   <td key={key} className={cell}>
-                    <span className="text-xs text-text-secondary">{t.customFields?.[key] ?? ''}</span>
+                    <input
+                      className={sel}
+                      value={t.customFields?.[key] ?? ''}
+                      onChange={e => updateCustomField(t.id, key, e.target.value)}
+                      placeholder={customFieldLabelMap[key]}
+                    />
                   </td>
                 ))}
               </tr>
@@ -393,7 +420,7 @@ export const SupportLog: React.FC = () => {
         onClose={() => setShowMappingModal(false)}
         tableKey="support"
         columns={getColumns('support')}
-        projectId={selectedProjectId || null}
+        projectId={form.projectId || null}
         onConfirm={handleMappingConfirm}
       />
     </GlassCard >

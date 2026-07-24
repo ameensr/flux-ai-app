@@ -45,14 +45,22 @@ export const useQAReportStore = create<QAReportStore>()(
   persist(
     (set, get) => ({
       form: defaultForm(),
-      setForm: (patch) => set((s) => ({ form: { ...s.form, ...patch } })),
-      resetForm: (projectId, projectName) => set({
-        form: {
+      setForm: (patch) => set((s) => {
+        const next = { ...s.form, ...patch }
+        try { localStorage.setItem('current-qa-report-data', JSON.stringify(next)) } catch(e) {}
+        return { form: next }
+      }),
+      resetForm: (projectId, projectName) => set(() => {
+        const resetData = {
           ...defaultForm(),
           projectId: projectId || '',
           projectName: projectName || ''
-        },
-        generatedReport: ''
+        }
+        try { localStorage.setItem('current-qa-report-data', JSON.stringify(resetData)) } catch(e) {}
+        return {
+          form: resetData,
+          generatedReport: ''
+        }
       }),
       generatedReport: '',
       setGeneratedReport: (md) => set({ generatedReport: md }),
@@ -142,27 +150,37 @@ export const useQAReportStore = create<QAReportStore>()(
 
       saveReport: async (report) => {
         const user = useAppStore.getState().user
-        if (user) {
-          try {
-            const { error } = await supabase
-              .from('weekly_reports')
-              .upsert({
-                id: report.id,
-                user_id: user.id,
-                week: report.week,
-                project: report.project,
-                project_id: report.projectId,
-                generated_date: report.generatedDate,
-                created_by: report.createdBy,
-                markdown: report.markdown,
-                form_data: { ...report.form, projectId: report.projectId, projectName: report.project },
-                status: report.status
-              })
-            if (error) throw error
-          } catch (e) {
-            console.error('Error saving report to Supabase:', String(e).replace(/[\r\n]/g, ' '))
-            throw e
+        if (!user) {
+          throw new Error('User not authenticated')
+        }
+
+        // Validate required fields
+        if (!report.projectId) {
+          throw new Error('Project ID is required to save the report')
+        }
+
+        try {
+          const { error } = await supabase
+            .from('weekly_reports')
+            .upsert({
+              id: report.id,
+              user_id: user.id,
+              week: report.week,
+              project: report.project,
+              project_id: report.projectId,
+              generated_date: report.generatedDate,
+              created_by: report.createdBy,
+              markdown: report.markdown,
+              form_data: { ...report.form, projectId: report.projectId, projectName: report.project },
+              status: report.status
+            })
+          if (error) {
+            console.error('Supabase error saving report:', error)
+            throw new Error(`Failed to save report: ${error.message}`)
           }
+        } catch (e) {
+          console.error('Error saving report to Supabase:', String(e).replace(/[\r\n]/g, ' '))
+          throw e // Re-throw to propagate to UI
         }
 
         // Maintain local store cache — keep last 50, never auto-delete from Supabase
@@ -174,17 +192,20 @@ export const useQAReportStore = create<QAReportStore>()(
 
       deleteReport: async (id) => {
         const user = useAppStore.getState().user
-        if (user) {
-          try {
-            const { error } = await supabase
-              .from('weekly_reports')
-              .delete()
-              .eq('id', id)
-            if (error) throw error
-          } catch (e) {
-            console.error('Error deleting report from Supabase:', String(e).replace(/[\r\n]/g, ' '))
-          }
+        if (!user) {
+          throw new Error('User not authenticated')
         }
+        try {
+          const { error } = await supabase
+            .from('weekly_reports')
+            .delete()
+            .eq('id', id)
+          if (error) throw error
+        } catch (e) {
+          console.error('Error deleting report from Supabase:', String(e).replace(/[\r\n]/g, ' '))
+          throw e // Re-throw so the UI doesn't show a false "deleted" state
+        }
+        // Only drop from local cache after the DB delete actually succeeded
         set((s) => ({ savedReports: s.savedReports.filter(r => r.id !== id) }))
       },
 
@@ -192,10 +213,11 @@ export const useQAReportStore = create<QAReportStore>()(
         const user = useAppStore.getState().user
         if (!user) return
         try {
+          // No longer filtering by user_id here - let RLS policies handle visibility
+          // This allows managers and QA leads to see team reports from shared projects
           let query = supabase
             .from('weekly_reports')
             .select('*')
-            .eq('user_id', user.id)
 
           if (projectId) {
             query = query.eq('project_id', projectId)
@@ -203,7 +225,7 @@ export const useQAReportStore = create<QAReportStore>()(
 
           const { data, error } = await query
             .order('generated_date', { ascending: false })
-            .limit(50)
+            .limit(50) // Increased limit to show more team reports
 
           if (error) throw error
           if (data) {

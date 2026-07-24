@@ -572,7 +572,25 @@ export const QAWeeklyReport: React.FC = () => {
   const handlePreview = () => {
     const errs = validate(form)
     setErrors(errs)
-    if (errs.length) return
+    if (errs.length) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Errors',
+        description: 'Please fix the errors before previewing the report.',
+      })
+      return
+    }
+
+    // Validate project selection
+    if (!form.projectId) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing Project',
+        description: 'Please select a project before previewing the report.',
+      })
+      setErrors([...errs, 'Project selection is required'])
+      return
+    }
 
     // Generate markdown for the preview drawer
     const md = buildMarkdown(form)
@@ -623,33 +641,79 @@ export const QAWeeklyReport: React.FC = () => {
 
     const errs = validate(form)
     setErrors(errs)
-    if (errs.length) return
+    if (errs.length) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Errors',
+        description: 'Please fix the validation errors before launching the dashboard.',
+      })
+      return
+    }
 
-    // Save to local storage as fallback for the dashboard tab
-    localStorage.setItem('current-qa-report-data', JSON.stringify(form))
+    // Validate critical fields before launch
+    if (!form.projectId) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing Project',
+        description: 'Please select a project before launching the dashboard.',
+      })
+      return
+    }
 
-    // Find the saved report id that matches the current form
-    const { savedReports: reports } = useQAReportStore.getState()
-    const currentSnapshot = createFormSnapshot(form)
-    const matchedReport = reports.find(r => createFormSnapshot(r.form) === currentSnapshot)
-    const reportId = matchedReport?.id ?? ''
+    try {
+      // Save to local storage for the dashboard preview tab to pick up
+      localStorage.setItem('current-qa-report-data', JSON.stringify(form))
 
-    // Start premium animation experience
-    setIsLaunching(true)
-    setLaunchMessage('Preparing Executive Dashboard...')
+      // Verify localStorage write succeeded
+      const verification = localStorage.getItem('current-qa-report-data')
+      if (!verification) {
+        throw new Error('Failed to save report data to browser storage')
+      }
 
-    // Switch message halfway
-    setTimeout(() => {
-      setLaunchMessage('Loading KPIs, Analytics & Historical Insights...')
-    }, 450)
+      // Find the saved report id that matches the current form
+      const { savedReports: reports } = useQAReportStore.getState()
+      const currentSnapshot = createFormSnapshot(form)
+      const matchedReport = reports.find(r => createFormSnapshot(r.form) === currentSnapshot)
+      const reportId = matchedReport?.id ?? ''
 
-    // Complete transition and open new tab
-    setTimeout(() => {
-      const url = `${window.location.origin}${ROUTES.reportPreview}${reportId ? `?reportId=${reportId}` : ''}`
-      window.open(url, '_blank', 'noopener')
+      // Start premium animation experience
+      setIsLaunching(true)
+      setLaunchMessage('Preparing Executive Dashboard...')
+
+      // Switch message halfway
+      setTimeout(() => {
+        setLaunchMessage('Loading KPIs, Analytics & Historical Insights...')
+      }, 450)
+
+      // Complete transition and open new tab
+      setTimeout(() => {
+        const url = `${window.location.origin}${ROUTES.reportPreview}${reportId ? `?reportId=${reportId}` : ''}`
+        const newWindow = window.open(url, '_blank', 'noopener')
+
+        if (!newWindow) {
+          toast({
+            variant: 'destructive',
+            title: 'Popup Blocked',
+            description: 'Please allow popups for this site to launch the dashboard.',
+          })
+        } else {
+          toast({
+            title: 'Dashboard Launched!',
+            description: 'Opening the Executive Dashboard in a new tab.'
+          })
+        }
+
+        setIsLaunching(false)
+      }, 900)
+    } catch (error) {
+      console.error('Launch error:', error)
       setIsLaunching(false)
-      toast({ title: 'Dashboard Launched!', description: 'Opening the Executive Dashboard in a new tab.' })
-    }, 900)
+      toast({
+        variant: 'destructive',
+        title: 'Launch Failed',
+        description: error instanceof Error ? error.message : 'Could not launch dashboard. Please try again.',
+      })
+    }
   }
 
   const handleReset = () => {
@@ -731,9 +795,9 @@ export const QAWeeklyReport: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_480px] gap-6 xl:gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px] 2xl:grid-cols-[1fr_420px] gap-6 xl:gap-8 items-start">
         {/* ── Left Panel: Input Forms ────────────────────────────────────── */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 min-w-0">
           <HeaderSection />
           <DashboardSectionToggles />
           <TimelineBuilder />
@@ -851,7 +915,7 @@ export const QAWeeklyReport: React.FC = () => {
         </div>
 
         {/* ── Right Panel: Widgets + History ────────────────────────────── */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 min-w-0">
           <DashboardWidgets />
           <DefectChart />
 

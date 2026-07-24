@@ -1,11 +1,15 @@
 // src/modules/QAWeeklyReport/components/DefectStatusModal.tsx
 // Interactive 3D Card Popup for Defect Status Breakdown with Release Bug Status details
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle, Clock, Ban, PauseCircle } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
+import { PremiumTooltip, glowStyle } from './report-preview/chartTheme'
+import { useTheme } from '@/context/ThemeContext'
 import type { ReleaseBugAnalytics } from './ReleaseBugStatus/types'
+import { QATriageLoader } from './QATriageLoader'
+import { ContinuousQATriage } from './ContinuousQATriage'
 
 interface DefectStatusModalProps {
   isOpen: boolean
@@ -26,8 +30,15 @@ export function DefectStatusModal({
   fallbackData,
   projectName
 }: DefectStatusModalProps) {
-
+  const { isDark } = useTheme()
   const hasReleaseBugData = !!releaseBugStatus?.metrics
+  const [isAnalyzing, setIsAnalyzing] = useState(true)
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsAnalyzing(true)
+    }
+  }, [isOpen])
 
   // Prepare data based on source
   const chartData = hasReleaseBugData && releaseBugStatus?.metrics ? [
@@ -45,6 +56,7 @@ export function DefectStatusModal({
   const totalDefects = chartData.reduce((sum, item) => sum + item.value, 0)
 
   const metrics = hasReleaseBugData && releaseBugStatus?.metrics ? releaseBugStatus.metrics : null
+  const chartTheme = isDark ? 'dark' as const : 'light' as const
 
   return (
     <AnimatePresence>
@@ -76,43 +88,54 @@ export function DefectStatusModal({
               style={{ perspective: '1000px', transformStyle: 'preserve-3d' }}
             >
               <div
-                className="relative bg-gradient-to-br from-surface via-surface-secondary to-surface-elevated border border-border/50 rounded-2xl shadow-2xl overflow-hidden"
-                style={{
-                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 100px -20px rgba(99, 102, 241, 0.3)'
-                }}
+                className={`relative rounded-[28px] border overflow-hidden transition-all duration-300 ${isDark ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/60 shadow-md'}`}
               >
+                {/* Premium Gradient Border Glow */}
+                <div className="absolute inset-0 border border-transparent bg-gradient-to-tr from-accent-gold/25 via-blue-500/25 to-transparent rounded-[inherit] opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0" style={{ mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }} />
+
                 {/* Animated gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-br from-accent/5 via-transparent to-purple-500/5 opacity-50" />
+                <div className="absolute inset-0 bg-gradient-to-br from-accent-gold/5 via-transparent to-purple-500/5 opacity-50 pointer-events-none z-0" />
 
                 {/* Glow effect */}
                 <div className="absolute -top-24 -right-24 w-64 h-64 bg-accent/20 rounded-full blur-3xl animate-pulse" />
                 <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
 
-                {/* Content */}
-                <div className="relative z-10">
-                  {/* Header */}
-                  <div className="flex items-start justify-between p-6 pb-4 border-b border-border/30">
-                    <div className="flex-1">
-                      <motion.h2
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        className="text-2xl font-bold text-text-primary flex items-center gap-3"
-                      >
-                        <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
-                          <AlertCircle className="w-5 h-5 text-accent" />
-                        </div>
-                        Defect Status Breakdown
-                      </motion.h2>
-                      <motion.p
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.2 }}
-                        className="text-sm text-text-secondary mt-2"
-                      >
-                        {projectName} • {hasReleaseBugData ? 'Release Bug Status Analytics' : 'Manual Entry Data'}
-                      </motion.p>
-                    </div>
+                {/* CONTINUOUS TYPING ANIMATION */}
+                {!isAnalyzing && <ContinuousQATriage opacity="opacity-[0.15]" position="bottom" />}
+
+                {isAnalyzing ? (
+                  <QATriageLoader onComplete={() => setIsAnalyzing(false)} />
+                ) : (
+                  <motion.div 
+                    key="content"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.5 }}
+                    className="relative z-10"
+                  >
+                    {/* Header */}
+                    <div className="flex items-start justify-between p-6 pb-4 border-b border-border/30">
+                      <div className="flex-1">
+                        <motion.h2
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.1 }}
+                          className="text-2xl font-bold text-text-primary flex items-center gap-3"
+                        >
+                          <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                            <AlertCircle className="w-5 h-5 text-accent" />
+                          </div>
+                          Defect Status Breakdown
+                        </motion.h2>
+                        <motion.p
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.2 }}
+                          className="text-sm text-text-secondary mt-2"
+                        >
+                          {projectName} • {hasReleaseBugData ? 'Release Bug Status Analytics' : 'Manual Entry Data'}
+                        </motion.p>
+                      </div>
                     <motion.button
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -170,23 +193,18 @@ export function DefectStatusModal({
                               cy="50%"
                               innerRadius={60}
                               outerRadius={90}
-                              paddingAngle={2}
+                              paddingAngle={3}
+                              cornerRadius={6}
+                              stroke="none"
                               dataKey="value"
                               animationBegin={100}
                               animationDuration={800}
                             >
                               {chartData.map((entry, idx) => (
-                                <Cell key={idx} fill={entry.hex} />
+                                <Cell key={idx} fill={entry.hex} style={glowStyle(entry.hex, chartTheme)} />
                               ))}
                             </Pie>
-                            <Tooltip
-                              contentStyle={{
-                                backgroundColor: 'var(--surface-elevated)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '8px',
-                                color: 'var(--text-primary)'
-                              }}
-                            />
+                            <Tooltip content={<PremiumTooltip theme={chartTheme} />} />
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="text-center mt-2">
@@ -363,7 +381,8 @@ export function DefectStatusModal({
                       </motion.div>
                     )}
                   </div>
-                </div>
+                </motion.div>
+                )}
               </div>
             </motion.div>
           </div>

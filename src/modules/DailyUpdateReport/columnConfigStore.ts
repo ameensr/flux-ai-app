@@ -110,11 +110,42 @@ interface ColumnConfigState {
   ensureProjectScope: (tableKey: DailyReportTableKey, projectId: string) => Promise<void>
   resetToOrgDefault: (tableKey: DailyReportTableKey, projectId: string) => Promise<void>
   saveAsProjectTemplate: (tableKey: DailyReportTableKey, projectId: string, columns: ColumnConfig[]) => Promise<void>
+
+  // Custom (metadata-driven) column values for /daily-report rows, keyed by
+  // table+project and shared across every `useDynamicColumns` call site —
+  // the KPI-card calculation in index.tsx, plus each table's own inline
+  // editor. Without this shared slice, each call site held its own private
+  // React state, so editing a custom column's value in the table updated
+  // that table's cell instantly but left the KPI cards (a *different*
+  // useDynamicColumns instance) reading stale data until a full reload.
+  customFieldValues: Record<string, CustomValuesMap>
+  getCustomFieldValues: (tableKey: DailyReportTableKey, projectId: string | null) => CustomValuesMap
+  mergeCustomFieldValues: (tableKey: DailyReportTableKey, projectId: string | null, values: CustomValuesMap) => void
+  setCustomFieldValue: (tableKey: DailyReportTableKey, projectId: string | null, rowId: string, internalKey: string, value: any) => void
+  clearCustomFieldValuesForRows: (tableKey: DailyReportTableKey, projectId: string | null, rowIds: string[]) => void
 }
 
 function sortByOrder(cols: ColumnConfig[]): ColumnConfig[] {
   return [...cols].sort((a, b) => a.display_order - b.display_order)
 }
+
+// rowId -> internal_key -> value, for a table's CUSTOM (metadata-driven) columns.
+export interface CustomValuesMap {
+  [rowId: string]: Record<string, any>
+}
+
+// Cache key for the customFieldValues slice below — scoped per table+project
+// since a custom column's values are project-specific.
+function customValuesCacheKey(tableKey: DailyReportTableKey, projectId: string | null | undefined): string {
+  return `${tableKey}:${projectId || ''}`
+}
+
+// Stable shared "empty" reference — MUST be reused (not a fresh `{}` literal)
+// whenever a table+project key has no entries yet, since callers select this
+// value from the Zustand store; returning a new object identity on every
+// call would make a reference-equality snapshot check (e.g. `useSyncExternalStore`)
+// think the store changed on every render, triggering an infinite render loop.
+const EMPTY_CUSTOM_VALUES: CustomValuesMap = {}
 
 export const useColumnConfigStore = create<ColumnConfigState>((set, get) => ({
   supportColumns: fallbackDefaults('support'),
@@ -415,6 +446,45 @@ export const useColumnConfigStore = create<ColumnConfigState>((set, get) => ({
     await get().saveColumns(cloned)
     if (tableKey === 'support') set({ supportScope: 'project' })
     else set({ releaseScope: 'project' })
+  },
+
+  customFieldValues: {},
+
+  getCustomFieldValues: (tableKey, projectId) =>
+    get().customFieldValues[customValuesCacheKey(tableKey, projectId)] ?? EMPTY_CUSTOM_VALUES,
+
+  mergeCustomFieldValues: (tableKey, projectId, values) => {
+    const key = customValuesCacheKey(tableKey, projectId)
+    set(state => ({
+      customFieldValues: {
+        ...state.customFieldValues,
+        [key]: { ...state.customFieldValues[key], ...values },
+      },
+    }))
+  },
+
+  setCustomFieldValue: (tableKey, projectId, rowId, internalKey, value) => {
+    const key = customValuesCacheKey(tableKey, projectId)
+    set(state => ({
+      customFieldValues: {
+        ...state.customFieldValues,
+        [key]: {
+          ...state.customFieldValues[key],
+          [rowId]: { ...(state.customFieldValues[key]?.[rowId] || {}), [internalKey]: value },
+        },
+      },
+    }))
+  },
+
+  clearCustomFieldValuesForRows: (tableKey, projectId, rowIds) => {
+    const key = customValuesCacheKey(tableKey, projectId)
+    set(state => {
+      const existing = state.customFieldValues[key]
+      if (!existing) return state
+      const next = { ...existing }
+      rowIds.forEach(id => delete next[id])
+      return { customFieldValues: { ...state.customFieldValues, [key]: next } }
+    })
   },
 }))
 

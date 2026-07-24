@@ -13,106 +13,23 @@ interface LogoProps {
   dark?: boolean
 }
 
-// ─── The Qaly Icon ────────────────────────────────────────────────────────────
-// Design language:
-//   • A perfect circle — representing quality, completeness, continuous improvement
-//   • A precision orbital arc sweeping 270° — representing AI intelligence, motion
-//   • A confident diagonal tail — the Q signature, also a forward-pointing arrow
-//   • Gradient stroke: indigo → blue (brand identity)
-//   • Bolder stroke weights for high visibility at all sizes
+// ─── The Qaly Wordmark ────────────────────────────────────────────────────────
+// Single source of truth for app branding — this is the exact design used on
+// the Authentication page: a gradient "Q" + "aly" wordmark with a small
+// gradient sparkle accent, plus a muted "AI ENGINE" subtext.
+//   • font-inter font-extrabold, tight tracking
+//   • gradient text (.text-gradient-q, driven by --q-gradient in index.css)
+//   • sparkle dot (.logo-sparkle) with a soft glow
+// Reused everywhere via this one component so every surface (sidebar, header,
+// footer, landing page, report headers, etc.) stays perfectly in sync.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface QIconProps {
-  size: number
-  mono?: boolean
-  gradientId: string
-  glowId: string
-}
-
-const QIcon: React.FC<QIconProps> = ({ size, mono, gradientId, glowId }) => {
-  const cx = 14.5
-  const cy = 14.5
-  const r = 9
-  const strokeW = 2.8
-
-  // Orbital arc: 270° sweep from top clockwise to right
-  const arcStartX = cx
-  const arcStartY = cy - r
-  const arcEndX = cx + r
-  const arcEndY = cy
-
-  // Tail: diagonal from arc end, pointing bottom-right
-  const tailX1 = arcEndX
-  const tailY1 = arcEndY
-  const tailX2 = arcEndX + 5.5
-  const tailY2 = arcEndY + 5.5
-
-  const stroke = mono ? 'currentColor' : `url(#${gradientId})`
-
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 32 32"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#6366F1" />
-          <stop offset="50%" stopColor="#7C5CFF" />
-          <stop offset="100%" stopColor="#2D8CFF" />
-        </linearGradient>
-        <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="1" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-      </defs>
-
-      {/* Main circle — the Q body */}
-      <circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        stroke={stroke}
-        strokeWidth={strokeW}
-        fill="none"
-        strokeLinecap="round"
-        filter={mono ? undefined : `url(#${glowId})`}
-      />
-
-      {/* Orbital arc — intelligence layer, subtly lighter */}
-      <path
-        d={`M ${arcStartX} ${arcStartY} A ${r} ${r} 0 1 1 ${arcEndX} ${arcEndY}`}
-        stroke={stroke}
-        strokeWidth={strokeW * 0.6}
-        fill="none"
-        strokeLinecap="round"
-        opacity={0.35}
-      />
-
-      {/* Precision tail — the Q signature */}
-      <line
-        x1={tailX1}
-        y1={tailY1}
-        x2={tailX2}
-        y2={tailY2}
-        stroke={stroke}
-        strokeWidth={strokeW}
-        strokeLinecap="round"
-        filter={mono ? undefined : `url(#${glowId})`}
-      />
-    </svg>
-  )
-}
-
-// ─── Size map ─────────────────────────────────────────────────────────────────
+// ─── Size map — font sizes (px) tuned to match the Auth page at `lg` ─────────
 const SIZE_MAP = {
-  sm: { icon: 24, qaly: 16, engine: 9, gap: 7, letterSpacing: '-0.02em', engineTracking: '0.12em' },
-  md: { icon: 28, qaly: 19, engine: 10, gap: 8, letterSpacing: '-0.02em', engineTracking: '0.14em' },
-  lg: { icon: 36, qaly: 26, engine: 13, gap: 10, letterSpacing: '-0.025em', engineTracking: '0.15em' },
-  xl: { icon: 50, qaly: 36, engine: 16, gap: 13, letterSpacing: '-0.03em', engineTracking: '0.17em' },
+  sm: { qaly: 16, engine: 8, gap: 6, sparkle: 4 },
+  md: { qaly: 20, engine: 9, gap: 7, sparkle: 5 },
+  lg: { qaly: 30, engine: 12, gap: 8, sparkle: 6 },
+  xl: { qaly: 38, engine: 14, gap: 10, sparkle: 7 },
 }
 
 // ─── Logo ─────────────────────────────────────────────────────────────────────
@@ -125,9 +42,6 @@ export const Logo: React.FC<LogoProps> = ({
   dark = false,
 }) => {
   const s = SIZE_MAP[size]
-  const uid = React.useId().replace(/:/g, '')
-  const gradientId = `qg-${uid}`
-  const glowId = `qgl-${uid}`
 
   // Wordmark color: always high-contrast solid color (no transparent gradient trick)
   const qalyColor = mono
@@ -140,60 +54,41 @@ export const Logo: React.FC<LogoProps> = ({
 
   return (
     <div
-      className={cn('inline-flex items-center select-none', className)}
+      className={cn('inline-flex items-baseline select-none', className)}
       style={{ gap: s.gap }}
       role="img"
       aria-label="Qaly AI Engine"
     >
-      {/* Icon */}
+      {/* "Qaly" wordmark — gradient Q + sparkle, always visible */}
       <motion.div
-        className="shrink-0 flex items-center justify-center"
-        initial={animate ? { opacity: 0, scale: 0.75 } : false}
+        className="font-inter font-extrabold tracking-tighter inline-flex items-center shrink-0"
+        style={{ fontSize: s.qaly, lineHeight: 1, color: qalyColor }}
+        initial={animate ? { opacity: 0, scale: 0.85 } : false}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
       >
-        <QIcon size={s.icon} mono={mono} gradientId={gradientId} glowId={glowId} />
+        <span className={mono ? undefined : 'text-gradient-q'}>Q</span>
+        {!collapsed && (
+          <>
+            aly
+            <span className="logo-sparkle" style={{ width: s.sparkle, height: s.sparkle }} />
+          </>
+        )}
       </motion.div>
 
-      {/* Wordmark */}
+      {/* "AI ENGINE" — refined secondary, hidden when collapsed */}
       <AnimatePresence>
         {!collapsed && (
-          <motion.div
+          <motion.span
             initial={{ opacity: 0, x: -6 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -6 }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1], delay: animate ? 0.12 : 0 }}
-            className="flex items-baseline"
-            style={{ gap: size === 'sm' ? 3 : 4 }}
+            className="font-inter font-medium uppercase whitespace-nowrap"
+            style={{ fontSize: s.engine, letterSpacing: '0.14em', lineHeight: 1, color: engineColor }}
           >
-            {/* "Qaly" — solid, bold, always visible */}
-            <span
-              className="font-clash"
-              style={{
-                fontSize: s.qaly,
-                fontWeight: 700,
-                letterSpacing: s.letterSpacing,
-                lineHeight: 1,
-                color: qalyColor,
-              }}
-            >
-              Qaly
-            </span>
-
-            {/* "AI ENGINE" — refined secondary */}
-            <span
-              style={{
-                fontSize: s.engine,
-                fontWeight: 500,
-                letterSpacing: s.engineTracking,
-                lineHeight: 1,
-                textTransform: 'uppercase',
-                color: engineColor,
-              }}
-            >
-              AI Engine
-            </span>
-          </motion.div>
+            AI Engine
+          </motion.span>
         )}
       </AnimatePresence>
     </div>
@@ -201,21 +96,32 @@ export const Logo: React.FC<LogoProps> = ({
 }
 
 // ─── Icon-only export (for FAB, avatar, favicon contexts) ─────────────────────
+// Renders just the gradient "Q" glyph — the same character used in the full
+// wordmark above — for spaces too tight for the full logo.
 export const QalyIcon: React.FC<{
   size?: number
   mono?: boolean
+  dark?: boolean
   className?: string
   animate?: boolean
-}> = ({ size = 32, mono = false, className, animate = false }) => {
-  const uid = React.useId().replace(/:/g, '')
+}> = ({ size = 32, mono = false, dark = false, className, animate = false }) => {
+  const color = mono ? (dark ? '#111827' : '#ffffff') : undefined
+
   return (
-    <motion.div
-      className={cn('inline-flex items-center justify-center shrink-0', className)}
+    <motion.span
+      className={cn(
+        'inline-flex items-center justify-center shrink-0 font-inter font-extrabold select-none',
+        !mono && 'text-gradient-q',
+        className,
+      )}
+      style={{ fontSize: size, lineHeight: 1, color }}
       initial={animate ? { opacity: 0, scale: 0.8 } : false}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      role="img"
+      aria-label="Qaly AI Engine"
     >
-      <QIcon size={size} mono={mono} gradientId={`qg-icon-${uid}`} glowId={`qgl-icon-${uid}`} />
-    </motion.div>
+      Q
+    </motion.span>
   )
 }

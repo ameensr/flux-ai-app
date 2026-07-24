@@ -7,6 +7,8 @@ import { X, Users, CheckCircle, AlertCircle, Ban, Clock, Activity } from 'lucide
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import type { TeamCapacityData, CapacityDistribution } from '../types/teamCapacity'
 import { getCapacityDistribution } from '../types/teamCapacity'
+import { useTheme } from '@/context/ThemeContext'
+import { PremiumTooltip, glowStyle } from './report-preview/chartTheme'
 
 interface TeamCapacityModalProps {
   isOpen: boolean
@@ -21,6 +23,8 @@ export function TeamCapacityModal({
   data,
   projectName
 }: TeamCapacityModalProps) {
+  const { isDark } = useTheme()
+  const chartTheme = isDark ? 'dark' as const : 'light' as const
 
   // Lock scroll when modal is open and preserve scroll position
   useEffect(() => {
@@ -193,23 +197,18 @@ export function TeamCapacityModal({
                               cy="50%"
                               innerRadius={60}
                               outerRadius={90}
-                              paddingAngle={2}
+                              paddingAngle={3}
+                              cornerRadius={6}
+                              stroke="none"
                               dataKey="value"
                               animationBegin={100}
                               animationDuration={800}
                             >
                               {chartData.map((entry, idx) => (
-                                <Cell key={idx} fill={entry.hex} />
+                                <Cell key={idx} fill={entry.hex} style={glowStyle(entry.hex, chartTheme)} />
                               ))}
                             </Pie>
-                            <Tooltip
-                              contentStyle={{
-                                backgroundColor: 'var(--surface-elevated)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '8px',
-                                color: 'var(--text-primary)'
-                              }}
-                            />
+                            <Tooltip content={<PremiumTooltip theme={chartTheme} />} />
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="text-center mt-2">

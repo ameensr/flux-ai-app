@@ -260,6 +260,19 @@ export async function applySupportMapping(
       if (!entry || entry.action === 'skip') continue
 
       const value = col.is_system ? (row as any)[col.internal_key] : customValuesByRow[row.id]?.[col.id]
+
+      // "Create New" always materializes the column (even with an empty
+      // value for rows that don't have data yet) so it shows up in the QA
+      // Report table as soon as it's mapped — otherwise a brand new DUP
+      // column with no data on any imported row would map successfully but
+      // never actually appear, since the table only renders custom columns
+      // it finds present on at least one imported item.
+      if (entry.action === 'create_new') {
+        ticket.customFields![col.internal_key] = value ?? ''
+        customFieldLabels[col.internal_key] = entry.targetField || col.display_name
+        continue
+      }
+
       if (value === undefined || value === null || value === '') continue
 
       if (entry.action === 'map_existing' && entry.targetField) {
@@ -270,9 +283,6 @@ export async function applySupportMapping(
         } else {
           (ticket as any)[entry.targetField] = value
         }
-      } else if (entry.action === 'create_new') {
-        ticket.customFields![col.internal_key] = value
-        customFieldLabels[col.internal_key] = entry.targetField || col.display_name
       }
     }
 
@@ -306,6 +316,19 @@ export async function applyReleaseMapping(
       if (!entry || entry.action === 'skip') continue
 
       const value = col.is_system ? (row as any)[col.internal_key] : customValuesByRow[row.id]?.[col.id]
+
+      // "Create New" always materializes the column (even with an empty
+      // value for rows that don't have data yet) so it shows up in the QA
+      // Report table as soon as it's mapped — otherwise a brand new DUP
+      // column with no data on any imported row would map successfully but
+      // never actually appear, since the table only renders custom columns
+      // it finds present on at least one imported item.
+      if (entry.action === 'create_new') {
+        item.customFields![col.internal_key] = value ?? ''
+        customFieldLabels[col.internal_key] = entry.targetField || col.display_name
+        continue
+      }
+
       if (value === undefined || value === null || value === '') continue
 
       if (entry.action === 'map_existing' && entry.targetField) {
@@ -316,9 +339,6 @@ export async function applyReleaseMapping(
         } else {
           (item as any)[entry.targetField] = value
         }
-      } else if (entry.action === 'create_new') {
-        item.customFields![col.internal_key] = value
-        customFieldLabels[col.internal_key] = entry.targetField || col.display_name
       }
     }
 

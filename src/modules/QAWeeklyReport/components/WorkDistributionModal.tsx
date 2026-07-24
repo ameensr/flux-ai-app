@@ -4,7 +4,9 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Users, Wrench, TrendingUp } from 'lucide-react'
+import { useTheme } from '@/context/ThemeContext'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts'
+import { PremiumTooltip, glowStyle } from './report-preview/chartTheme'
 
 interface WorkDistributionModalProps {
   isOpen: boolean
@@ -19,8 +21,10 @@ export function WorkDistributionModal({
   workDistributionData,
   projectName
 }: WorkDistributionModalProps) {
+  const { isDark } = useTheme()
 
   const totalWork = workDistributionData.reduce((sum, item) => sum + item.value, 0)
+  const chartTheme = isDark ? 'dark' as const : 'light' as const
 
   return (
     <AnimatePresence>
@@ -52,13 +56,13 @@ export function WorkDistributionModal({
               style={{ perspective: '1000px', transformStyle: 'preserve-3d' }}
             >
               <div
-                className="relative bg-gradient-to-br from-surface via-surface-secondary to-surface-elevated border border-border/50 rounded-2xl shadow-2xl overflow-hidden"
-                style={{
-                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 100px -20px rgba(99, 102, 241, 0.3)'
-                }}
+                className={`relative rounded-[28px] border overflow-hidden transition-all duration-300 ${isDark ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/60 shadow-md'}`}
               >
+                {/* Premium Gradient Border Glow */}
+                <div className="absolute inset-0 border border-transparent bg-gradient-to-tr from-accent-gold/25 via-blue-500/25 to-transparent rounded-[inherit] opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0" style={{ mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }} />
+
                 {/* Animated gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-br from-accent/5 via-transparent to-blue-500/5 opacity-50" />
+                <div className="absolute inset-0 bg-gradient-to-br from-accent-gold/5 via-transparent to-blue-500/5 opacity-50 pointer-events-none z-0" />
 
                 {/* Glow effect */}
                 <div className="absolute -top-24 -right-24 w-64 h-64 bg-accent/20 rounded-full blur-3xl animate-pulse" />
@@ -121,23 +125,18 @@ export function WorkDistributionModal({
                               cy="50%"
                               innerRadius={60}
                               outerRadius={90}
-                              paddingAngle={2}
+                              paddingAngle={3}
+                              cornerRadius={6}
+                              stroke="none"
                               dataKey="value"
                               animationBegin={100}
                               animationDuration={800}
                             >
                               {workDistributionData.map((entry, idx) => (
-                                <Cell key={idx} fill={entry.hex} />
+                                <Cell key={idx} fill={entry.hex} style={glowStyle(entry.hex, chartTheme)} />
                               ))}
                             </Pie>
-                            <Tooltip
-                              contentStyle={{
-                                backgroundColor: 'var(--surface-elevated)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '8px',
-                                color: 'var(--text-primary)'
-                              }}
-                            />
+                            <Tooltip content={<PremiumTooltip theme={chartTheme} />} />
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="text-center mt-2">

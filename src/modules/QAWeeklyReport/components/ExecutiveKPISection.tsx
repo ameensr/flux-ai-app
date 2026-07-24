@@ -23,7 +23,7 @@ interface ExecutiveKPISectionProps {
   onHoverKPI: (label: string | null) => void
   theme: 'light' | 'dark'
   CountUpNumber: React.ComponentType<{ end: number; suffix?: string; decimals?: number }>
-  MiniSparkline: React.ComponentType<{ data: number[]; color: string }>
+  MiniSparkline: React.ComponentType<{ data: number[]; color: string; className?: string }>
 }
 
 export const ExecutiveKPISection: React.FC<ExecutiveKPISectionProps> = ({
@@ -236,7 +236,7 @@ interface KPICardProps {
   onHoverKPI: (label: string | null) => void
   theme: 'light' | 'dark'
   CountUpNumber: React.ComponentType<{ end: number; suffix?: string; decimals?: number }>
-  MiniSparkline: React.ComponentType<{ data: number[]; color: string }>
+  MiniSparkline: React.ComponentType<{ data: number[]; color: string; className?: string }>
   compact?: boolean
 }
 
@@ -256,13 +256,13 @@ const KPICard: React.FC<KPICardProps> = ({
       whileInView="show"
       whileHover="hover"
       variants={{
-        initial: { opacity: 0, y: 15 },
-        show: { opacity: 1, y: 0 },
-        hover: { y: -6, scale: 1.02 }
+        initial: { opacity: 0, y: 30, scale: 0.95 },
+        show: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', damping: 20, stiffness: 100 } },
+        hover: { y: -8, scale: 1.02, transition: { duration: 0.2 } }
       }}
-      viewport={{ once: true }}
-      transition={{ delay: idx * 0.04 }}
-      className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 group relative overflow-visible transition-all duration-300 ${compact ? 'min-h-[120px]' : 'min-h-[140px]'} ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme === 'dark' ? 'bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-lg'}`}
+      viewport={{ once: true, margin: "-40px" }}
+      transition={{ delay: idx * 0.08 }}
+      className={`p-5 rounded-[28px] border flex items-center justify-between group relative overflow-visible transition-all duration-300 ${compact ? 'min-h-[120px]' : 'min-h-[140px]'} ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme === 'dark' ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)] hover:border-white/[0.12] hover:shadow-[0_8px_32px_rgba(0,0,0,0.3)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/60 shadow-[0_4px_20px_rgba(15,23,42,0.03)] hover:shadow-[0_8px_30px_rgba(15,23,42,0.05)]'}`}
       onMouseEnter={() => kpi.tooltip && onHoverKPI(kpi.label)}
       onMouseLeave={() => onHoverKPI(null)}
     >
@@ -309,32 +309,54 @@ const KPICard: React.FC<KPICardProps> = ({
 
       {/* Info Icon Indicator */}
       {kpi.tooltip && (
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-30">
           <Info className="w-3.5 h-3.5 text-accent-gold" />
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <motion.div variants={{ hover: { rotate: [0, -8, 8, 0], scale: 1.15 } }} transition={{ duration: 0.4 }}>
-          <kpi.icon className={`w-5 h-5 ${kpi.color} ${kpi.pulse ? 'animate-pulse' : ''}`} />
-        </motion.div>
-        {kpi.sparklineData && kpi.sparklineData.length > 1 && (
-          <MiniSparkline data={kpi.sparklineData} color={kpi.color.includes('gold') ? '#d4af37' : kpi.color.includes('blue') ? '#60a5fa' : kpi.color.includes('green') ? '#4ade80' : '#a855f7'} />
-        )}
-        {kpi.pulse && (
-          <span className="absolute top-3 right-3 flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-          </span>
-        )}
-      </div>
-      <div>
-        <span className={`${compact ? 'text-2xl' : 'text-3xl'} font-black block tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
-          <CountUpNumber end={kpi.val} suffix={kpi.suffix} />
+      {/* Pulse indicator */}
+      {kpi.pulse && (
+        <span className="absolute top-4 right-4 flex h-2 w-2 z-30">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
         </span>
-        <span className={`text-xs font-extrabold ${theme === 'dark' ? 'text-white/80' : 'text-slate-700'}`}>{kpi.label}</span>
+      )}
+
+      {/* Left side content */}
+      <div className="flex flex-col justify-between h-full w-[60%] z-20 relative py-1">
+        <div className="flex items-center gap-2 mb-2">
+          <motion.div variants={{ hover: { rotate: [0, -8, 8, 0], scale: 1.15 } }} transition={{ duration: 0.4 }}>
+            <kpi.icon className={`w-4 h-4 ${kpi.color} ${kpi.pulse ? 'animate-pulse' : ''}`} />
+          </motion.div>
+          <span className={`text-[11px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis ${theme === 'dark' ? 'text-white/60' : 'text-slate-500'}`}>{kpi.label}</span>
+        </div>
+
+        <div className="mt-1">
+          <span className={`${compact ? 'text-3xl' : 'text-4xl'} font-black block tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+            <CountUpNumber end={kpi.val} suffix={kpi.suffix} />
+          </span>
+        </div>
+        
+        {kpi.desc && !compact && (
+          <p className="text-[10px] text-text-muted leading-normal mt-2 pr-2">{kpi.desc}</p>
+        )}
       </div>
-      <p className="text-[10px] text-text-muted leading-normal">{kpi.desc}</p>
+
+      {/* Right side large sparkline */}
+      <div className="absolute right-0 bottom-0 top-0 w-[55%] pointer-events-none overflow-hidden rounded-r-[28px]">
+        {/* Gradient fade from left to right to blend the sparkline perfectly with the background */}
+        <div className={`absolute inset-y-0 left-0 w-12 z-10 ${theme === 'dark' ? 'bg-gradient-to-r from-[#131826] to-transparent' : 'bg-gradient-to-r from-white to-transparent'}`} />
+        
+        {kpi.sparklineData && kpi.sparklineData.length > 1 && (
+          <div className="absolute right-0 bottom-0 w-full h-[75%] pb-3 pr-4 opacity-50 group-hover:opacity-100 transition-opacity duration-300">
+            <MiniSparkline 
+              data={kpi.sparklineData} 
+              color={kpi.color.includes('gold') ? '#d4af37' : kpi.color.includes('blue') ? '#60a5fa' : kpi.color.includes('green') ? '#4ade80' : kpi.color.includes('red') ? '#f87171' : kpi.color.includes('orange') ? '#fb923c' : '#a855f7'} 
+              className="w-full h-full"
+            />
+          </div>
+        )}
+      </div>
     </motion.div>
   )
 }
