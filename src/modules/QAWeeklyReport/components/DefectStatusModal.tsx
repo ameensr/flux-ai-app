@@ -7,6 +7,7 @@ import { X, TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle, Clock, Ba
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 import { PremiumTooltip, glowStyle } from './report-preview/chartTheme'
 import { useTheme } from '@/context/ThemeContext'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import type { ReleaseBugAnalytics } from './ReleaseBugStatus/types'
 import { QATriageLoader } from './QATriageLoader'
 import { ContinuousQATriage } from './ContinuousQATriage'
@@ -30,6 +31,7 @@ export function DefectStatusModal({
   fallbackData,
   projectName
 }: DefectStatusModalProps) {
+  useBodyScrollLock(isOpen)
   const { isDark } = useTheme()
   const hasReleaseBugData = !!releaseBugStatus?.metrics
   const [isAnalyzing, setIsAnalyzing] = useState(true)
@@ -68,7 +70,8 @@ export function DefectStatusModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100]"
+            className="fixed inset-0 z-[100]"
+            style={{ background: isDark ? 'rgba(0,0,0,0.55)' : 'rgba(15,23,42,0.35)' }}
             onClick={onClose}
           />
 
@@ -104,7 +107,12 @@ export function DefectStatusModal({
                 {!isAnalyzing && <ContinuousQATriage opacity="opacity-[0.15]" position="bottom" />}
 
                 {isAnalyzing ? (
-                  <QATriageLoader onComplete={() => setIsAnalyzing(false)} />
+                  // Generous whitespace so the qaly.ai / QA TRIAGE sequence can breathe
+                  <div className="relative z-10 flex min-h-[440px] sm:min-h-[520px] w-full items-center justify-center px-8 py-14 sm:px-14 sm:py-20">
+                    <div className="w-full max-w-md">
+                      <QATriageLoader onComplete={() => setIsAnalyzing(false)} />
+                    </div>
+                  </div>
                 ) : (
                   <motion.div 
                     key="content"

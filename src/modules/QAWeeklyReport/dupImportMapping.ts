@@ -289,7 +289,9 @@ export async function applySupportMapping(
     if (remarkParts.length > 0) {
       ticket.remarks = [ticket.remarks, ...remarkParts].filter(Boolean).join(' | ')
     }
-    if (!ticket.taskId) ticket.taskId = row.support_id || ''
+    // Do NOT auto-copy support_id → taskId. That silently created a duplicate
+    // "Task ID" column whenever the user chose Create New for SUPPORT ID.
+    // taskId is only filled when explicitly Map-to-Existing → Task ID.
     return ticket
   })
 
@@ -345,9 +347,26 @@ export async function applyReleaseMapping(
     if (remarkParts.length > 0) {
       item.remarks = [item.remarks, ...remarkParts].filter(Boolean).join(' | ')
     }
-    if (!item.taskId) item.taskId = row.task_id || ''
+    // Do NOT auto-copy task_id → taskId (same duplicate-column trap as Support).
     return item
   })
 
   return { items, customFieldLabels }
+}
+
+/** Stable import dedupe key — prefers mapped Task ID, then common Create New keys, then row id. */
+export function supportImportDedupeKey(ticket: SupportTicket): string {
+  if (ticket.taskId) return `task:${ticket.taskId}`
+  const cf = ticket.customFields || {}
+  if (cf.support_id) return `support_id:${cf.support_id}`
+  if (cf.task_id) return `task_id:${cf.task_id}`
+  return `id:${ticket.id}`
+}
+
+export function releaseImportDedupeKey(item: ReleaseItem): string {
+  if (item.taskId) return `task:${item.taskId}`
+  const cf = item.customFields || {}
+  if (cf.task_id) return `task_id:${cf.task_id}`
+  if (cf.support_id) return `support_id:${cf.support_id}`
+  return `id:${item.id}`
 }

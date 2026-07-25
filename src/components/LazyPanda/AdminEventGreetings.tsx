@@ -4,6 +4,7 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { cn } from '@/lib/utils'
 import {
   CalendarHeart, Plus, Edit2, Trash2, Copy, Eye, EyeOff,
@@ -33,6 +34,7 @@ function EventFormModal({
   onClose: () => void
   onSave: (data: GreetingEvent) => void
 }) {
+  useBodyScrollLock(true)
   const isEdit = !!event
 
   const [name, setName] = useState(event?.name ?? '')

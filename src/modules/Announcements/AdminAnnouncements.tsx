@@ -5,6 +5,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useAppStore } from '@/store/useAppStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import { cn } from '@/lib/utils'
@@ -73,6 +74,7 @@ interface FormModalProps {
 }
 
 function FormModal({ announcement, onClose, onSaved }: FormModalProps) {
+  useBodyScrollLock(true)
   const { toast } = useToast()
   const { user, profile } = useAppStore()
   const isEdit = !!announcement

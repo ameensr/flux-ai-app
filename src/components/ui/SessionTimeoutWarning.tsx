@@ -4,6 +4,7 @@
 import React, { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Clock, LogOut, ShieldAlert } from 'lucide-react'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { WARNING_COUNTDOWN_SECONDS } from '@/lib/idleConfig'
 
 interface SessionTimeoutWarningProps {
@@ -87,6 +88,7 @@ function CountdownRing({ secondsLeft }: { secondsLeft: number }) {
 // ── Main Modal ────────────────────────────────────────────────────────────────
 
 export function SessionTimeoutWarning({ visible, secondsLeft, onStay, onLogout }: SessionTimeoutWarningProps) {
+  useBodyScrollLock(visible)
   const stayButtonRef = useRef<HTMLButtonElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
 

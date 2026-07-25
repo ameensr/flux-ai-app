@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
 import { Mail, Zap, Wrench } from 'lucide-react'
+import { toast } from '@/hooks/use-toast'
 
 const inp = 'field-input'
 const lbl = 'label-xs mb-1.5 block'
@@ -64,14 +65,30 @@ export const HeaderSection: React.FC = () => {
 export const KPICards: React.FC = () => {
   const { form, setForm } = useQAReportStore()
 
-  // Auto-populate functions
+  // Auto-populate functions — require source log data before filling the KPI.
   const autoPopulateNewFeatures = () => {
     const count = form.releaseItems?.length || 0
+    if (count === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot Auto Populate',
+        description: 'Update the data in "Release Testing Log" to Auto populate.',
+      })
+      return
+    }
     setForm({ newFeatures: count })
   }
 
   const autoPopulateCodeFixes = () => {
     const count = form.supportTickets?.length || 0
+    if (count === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot Auto Populate',
+        description: 'Update the data in "Support & Exception Log" to Auto populate.',
+      })
+      return
+    }
     setForm({ codeFixes: count })
   }
 

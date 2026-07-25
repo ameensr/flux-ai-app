@@ -160,6 +160,7 @@ export const useQAReportStore = create<QAReportStore>()(
         }
 
         try {
+          const reportName = (report.name || '').trim() || undefined
           const { error } = await supabase
             .from('weekly_reports')
             .upsert({
@@ -171,7 +172,13 @@ export const useQAReportStore = create<QAReportStore>()(
               generated_date: report.generatedDate,
               created_by: report.createdBy,
               markdown: report.markdown,
-              form_data: { ...report.form, projectId: report.projectId, projectName: report.project },
+              // Persist custom name inside form_data (no DB migration required)
+              form_data: {
+                ...report.form,
+                projectId: report.projectId,
+                projectName: report.project,
+                __reportName: reportName ?? null,
+              },
               status: report.status
             })
           if (error) {
@@ -184,8 +191,12 @@ export const useQAReportStore = create<QAReportStore>()(
         }
 
         // Maintain local store cache — keep last 50, never auto-delete from Supabase
+        const normalized: SavedReport = {
+          ...report,
+          name: (report.name || '').trim() || undefined,
+        }
         set((s) => {
-          const merged = [report, ...s.savedReports.filter(r => r.id !== report.id)]
+          const merged = [normalized, ...s.savedReports.filter(r => r.id !== report.id)]
           return { savedReports: merged.slice(0, 50) }
         })
       },
@@ -229,17 +240,23 @@ export const useQAReportStore = create<QAReportStore>()(
 
           if (error) throw error
           if (data) {
-            const mapped: SavedReport[] = data.map(r => ({
-              id: r.id,
-              week: r.week,
-              project: r.project,
-              projectId: r.project_id,
-              generatedDate: r.generated_date,
-              createdBy: r.created_by,
-              markdown: r.markdown,
-              form: ensureFormData({ ...r.form_data, projectId: r.project_id, projectName: r.project }),
-              status: r.status as 'Draft' | 'Final'
-            }))
+            const mapped: SavedReport[] = data.map(r => {
+              const rawName = r.form_data?.__reportName
+              const name = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : undefined
+              const { __reportName: _omit, ...formWithoutName } = (r.form_data || {}) as Record<string, unknown>
+              return {
+                id: r.id,
+                name,
+                week: r.week,
+                project: r.project,
+                projectId: r.project_id,
+                generatedDate: r.generated_date,
+                createdBy: r.created_by,
+                markdown: r.markdown,
+                form: ensureFormData({ ...formWithoutName, projectId: r.project_id, projectName: r.project }),
+                status: r.status as 'Draft' | 'Final'
+              }
+            })
             set({ savedReports: mapped })
           }
         } catch (e) {

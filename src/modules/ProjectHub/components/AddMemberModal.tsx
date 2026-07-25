@@ -6,6 +6,7 @@ import { X, Search, UserPlus, Crown, Star, User as UserIcon, Eye } from 'lucide-
 import { GlassCard } from '@/components/ui/GlassCard'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { searchUsers, assignMember } from '../projectService'
 import type { ProjectRole } from '../types'
 import { PROJECT_ROLE_LABELS, PROJECT_ROLE_DESCRIPTIONS } from '../types'
@@ -26,6 +27,7 @@ interface UserSearchResult {
 }
 
 export function AddMemberModal({ projectId, existingMemberIds, onClose, onSuccess }: AddMemberModalProps) {
+  useBodyScrollLock(true)
   const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState('')
   const [users, setUsers] = useState<UserSearchResult[]>([])

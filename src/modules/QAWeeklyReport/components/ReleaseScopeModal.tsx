@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Layers } from 'lucide-react'
 import { useTheme } from '@/context/ThemeContext'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useColumnConfigStore } from '@/modules/DailyUpdateReport/columnConfigStore'
 import { QATriageLoader, type LineData } from './QATriageLoader'
 import { ContinuousQATriage } from './ContinuousQATriage'
@@ -54,6 +56,7 @@ export function ReleaseScopeModal({
   projectId,
   projectName
 }: ReleaseScopeModalProps) {
+  useBodyScrollLock(isOpen)
   const { isDark } = useTheme()
   const { getColumns, fetchColumnConfigs } = useColumnConfigStore()
 
@@ -80,9 +83,11 @@ export function ReleaseScopeModal({
     })),
   ]
 
-  // Filter active columns based on visibility settings (defaulting to true if not explicitly set to false in some cases, or strictly adhering to visibleColumns)
+  // Respect visibility for BOTH builtins and Create-New custom columns.
   const activeColumns = availableColumns.filter(col =>
-    col.isCustomField || (visibleColumns && visibleColumns[col.id] !== undefined ? visibleColumns[col.id] : true)
+    visibleColumns && Object.prototype.hasOwnProperty.call(visibleColumns, col.id)
+      ? visibleColumns[col.id] !== false
+      : true
   )
 
   useEffect(() => {
@@ -93,14 +98,14 @@ export function ReleaseScopeModal({
     }
   }, [isOpen, fetchColumnConfigs, projectId])
 
-  // Progressively reveal records once the triage loader completes
+  // Progressively reveal records in batches once triage completes (smoother + fewer re-renders)
   useEffect(() => {
-    if (!isAnalyzing && displayedRecordsCount < releaseData.length) {
-      const recordTimer = setTimeout(() => {
-        setDisplayedRecordsCount(prev => prev + 1)
-      }, 100) // Reveal records quickly but smoothly
-      return () => clearTimeout(recordTimer)
-    }
+    if (isAnalyzing || displayedRecordsCount >= releaseData.length) return
+    const BATCH = 12
+    const recordTimer = setTimeout(() => {
+      setDisplayedRecordsCount(prev => Math.min(prev + BATCH, releaseData.length))
+    }, 40)
+    return () => clearTimeout(recordTimer)
   }, [isAnalyzing, displayedRecordsCount, releaseData.length])
 
   // Helper to determine semantic colors for status values
@@ -123,7 +128,7 @@ export function ReleaseScopeModal({
     return 'text-text-primary'
   }
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <>
@@ -133,12 +138,13 @@ export function ReleaseScopeModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100]"
+            className="fixed inset-0 z-[200]"
+            style={{ background: isDark ? 'rgba(0,0,0,0.55)' : 'rgba(15,23,42,0.35)' }}
             onClick={onClose}
           />
 
-          {/* Compact 3D Card Modal */}
-          <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+          {/* Compact 3D Card Modal — portaled to body so parent transforms can't trap fixed layout */}
+          <div className="fixed inset-0 z-[201] flex items-center justify-center p-4 sm:p-6 pointer-events-none">
             <motion.div
               initial={{ opacity: 0, scale: 0.85, y: 50, rotateX: -12 }}
               animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
@@ -153,17 +159,10 @@ export function ReleaseScopeModal({
               style={{ perspective: '1000px', transformStyle: 'preserve-3d' }}
             >
               <div
-                className={`relative flex flex-col h-full rounded-[28px] border overflow-hidden transition-all duration-300 ${isDark ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/60 shadow-md'}`}
+                className={`relative flex flex-col h-full rounded-[28px] border overflow-hidden transition-all duration-300 ${isDark ? 'bg-gradient-to-br from-[#1a2133] to-[#0b0f1a] border-white/[0.08] shadow-[0_4px_24px_rgba(0,0,0,0.35)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/70 shadow-md'}`}
               >
-                {/* Premium Gradient Border Glow */}
-                <div className="absolute inset-0 border border-transparent bg-gradient-to-tr from-accent-gold/25 via-blue-500/25 to-transparent rounded-[inherit] opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0" style={{ mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }} />
-
-                {/* Glow effect */}
-                <div className="absolute -top-24 -right-24 w-64 h-64 bg-accent/20 rounded-full blur-3xl animate-pulse pointer-events-none z-0" />
-                <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl animate-pulse pointer-events-none z-0" style={{ animationDelay: '1s' }} />
-
                 {/* Ambient continuous typing animation once loaded */}
-                {!isAnalyzing && <ContinuousQATriage opacity="opacity-[0.15]" position="bottom" />}
+                {!isAnalyzing && <ContinuousQATriage opacity="opacity-[0.12]" position="bottom" />}
 
                 {isAnalyzing ? (
                   <div className="flex-1 flex items-center justify-center p-6">
@@ -225,7 +224,7 @@ export function ReleaseScopeModal({
                             key={`record-${rIdx}`}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="flex gap-4 p-4 rounded-xl border border-border/30 bg-surface-elevated/50 backdrop-blur-sm hover:border-border/60 transition-all"
+                            className="flex gap-4 p-4 rounded-xl border border-border/30 bg-surface-elevated/50 hover:border-border/60 transition-colors"
                           >
                             <div className="font-bold w-8 pt-1 opacity-50 text-text-primary">
                               {String(rIdx + 1).padStart(2, '0')}
@@ -288,6 +287,7 @@ export function ReleaseScopeModal({
           </div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }

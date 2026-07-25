@@ -1,13 +1,14 @@
 // src/modules/QAWeeklyReport/components/TeamCapacityModal.tsx
 // Interactive 3D Card Modal for Team Capacity Distribution breakdown
 
-import React, { useEffect } from 'react'
+import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Users, CheckCircle, AlertCircle, Ban, Clock, Activity } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import type { TeamCapacityData, CapacityDistribution } from '../types/teamCapacity'
 import { getCapacityDistribution } from '../types/teamCapacity'
 import { useTheme } from '@/context/ThemeContext'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { PremiumTooltip, glowStyle } from './report-preview/chartTheme'
 
 interface TeamCapacityModalProps {
@@ -23,36 +24,9 @@ export function TeamCapacityModal({
   data,
   projectName
 }: TeamCapacityModalProps) {
+  useBodyScrollLock(isOpen)
   const { isDark } = useTheme()
   const chartTheme = isDark ? 'dark' as const : 'light' as const
-
-  // Lock scroll when modal is open and preserve scroll position
-  useEffect(() => {
-    if (isOpen) {
-      // Save current scroll position
-      const scrollY = window.scrollY
-      document.body.style.position = 'fixed'
-      document.body.style.top = `-${scrollY}px`
-      document.body.style.width = '100%'
-      document.body.style.overflow = 'hidden'
-
-      // Store scroll position for restoration
-      return () => {
-        // Restore scroll position when modal closes
-        const scrollYTop = document.body.style.top
-        document.body.style.position = ''
-        document.body.style.top = ''
-        document.body.style.width = ''
-        document.body.style.overflow = ''
-
-        // Extract the numeric value from the top style (e.g., "-100px" -> 100)
-        if (scrollYTop) {
-          const scrollValue = parseInt(scrollYTop.replace('px', '')) * -1
-          window.scrollTo(0, scrollValue)
-        }
-      }
-    }
-  }, [isOpen])
 
   const distribution = getCapacityDistribution(data.stats)
   const totalMembers = data.stats.total_members

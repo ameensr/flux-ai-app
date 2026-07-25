@@ -5,6 +5,7 @@ import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Users, Wrench, TrendingUp } from 'lucide-react'
 import { useTheme } from '@/context/ThemeContext'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts'
 import { PremiumTooltip, glowStyle } from './report-preview/chartTheme'
 
@@ -21,6 +22,7 @@ export function WorkDistributionModal({
   workDistributionData,
   projectName
 }: WorkDistributionModalProps) {
+  useBodyScrollLock(isOpen)
   const { isDark } = useTheme()
 
   const totalWork = workDistributionData.reduce((sum, item) => sum + item.value, 0)

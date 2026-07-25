@@ -10,17 +10,15 @@ import { Plus, Trash2, Copy, Download, Upload, Search, Columns, Eye, EyeOff } fr
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import { ColumnMappingModal } from './ColumnMappingModal'
-import { applySupportMapping, type MappingEntry } from '../dupImportMapping'
-
-const STATUS_COLORS: Record<string, string> = {
-  'Open': 'text-red-400 border-red-400/30 bg-red-400/10',
-  'In Progress': 'text-yellow-400 border-yellow-400/30 bg-yellow-400/10',
-  'Resolved': 'text-blue-400 border-blue-400/30 bg-blue-400/10',
-  'Closed': 'text-green-400 border-green-400/30 bg-green-400/10',
-}
-const PRIORITY_COLORS: Record<string, string> = {
-  'Critical': 'text-red-500', 'High': 'text-orange-400', 'Medium': 'text-yellow-400', 'Low': 'text-green-400',
-}
+import { applySupportMapping, supportImportDedupeKey, type MappingEntry } from '../dupImportMapping'
+import {
+  applyVisibilityToSchema,
+  buildDestinationColumnsFromMapping,
+  hydrateSchemaFromLegacy,
+  mergeColumnSchemas,
+  orderedVisibleColumns,
+  visibilityMapFromSchema,
+} from '../qaReportColumnSchema'
 
 const newTicket = (): SupportTicket => ({
   id: crypto.randomUUID(), taskId: '', description: '', assignedQA: '',
@@ -29,16 +27,6 @@ const newTicket = (): SupportTicket => ({
 
 const sel = 'bg-transparent border-none focus:outline-none text-sm text-white w-full'
 const cell = 'px-3 py-2 border-b border-white/5'
-
-// Define column configuration for the Support Log table
-const SUPPORT_COLUMNS = [
-  { id: 'taskId', label: 'Task ID', defaultVisible: true },
-  { id: 'description', label: 'Description', defaultVisible: true },
-  { id: 'assignedQA', label: 'Assigned QA', defaultVisible: true },
-  { id: 'status', label: 'Status', defaultVisible: true },
-  { id: 'priority', label: 'Priority', defaultVisible: true },
-  { id: 'remarks', label: 'Remarks', defaultVisible: true },
-]
 
 export const SupportLog: React.FC = () => {
   const { form, setForm } = useQAReportStore()
@@ -54,15 +42,35 @@ export const SupportLog: React.FC = () => {
   const fileRef = useRef<HTMLInputElement>(null)
   const columnButtonRef = useRef<HTMLButtonElement>(null)
 
-  // Initialize column visibility from store or use defaults
-  const visibleColumns: Record<string, boolean> = form.visibleSupportColumns || SUPPORT_COLUMNS.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
-
   // Fetch dropdown configs on mount
   useEffect(() => {
     if (dropdownConfigs.length === 0) {
       fetchDropdownConfigs()
     }
   }, [])
+
+  const tickets = form.supportTickets
+
+  // Discover custom field keys/labels from rows (legacy reports / before schema sync)
+  const legacyCustomLabels: Record<string, string> = {}
+  tickets.forEach(t => {
+    if (!t.customFields) return
+    Object.keys(t.customFields).forEach(key => {
+      if (!legacyCustomLabels[key]) {
+        const col = getColumns('support').find(c => c.internal_key === key)
+        legacyCustomLabels[key] = col?.display_name || key
+      }
+    })
+  })
+
+  const columnSchema = hydrateSchemaFromLegacy(
+    'support',
+    form.supportColumnSchema,
+    form.visibleSupportColumns,
+    legacyCustomLabels,
+  )
+  const visibleColumnsList = orderedVisibleColumns(columnSchema)
+  const visibleColumns = visibilityMapFromSchema(columnSchema)
 
   // Calculate dropdown position when menu opens
   useEffect(() => {
@@ -97,10 +105,13 @@ export const SupportLog: React.FC = () => {
     return 'text-text-secondary'
   }
 
-  const tickets = form.supportTickets
-  const filtered = tickets.filter(t =>
-    [t.taskId, t.description, t.assignedQA, t.remarks].some(v => v.toLowerCase().includes(search.toLowerCase()))
-  )
+  const filtered = tickets.filter(t => {
+    const q = search.toLowerCase()
+    if (!q) return true
+    const builtin = [t.taskId, t.description, t.assignedQA, t.remarks].some(v => v.toLowerCase().includes(q))
+    const custom = Object.values(t.customFields || {}).some(v => String(v ?? '').toLowerCase().includes(q))
+    return builtin || custom
+  })
 
   const update = (id: string, patch: Partial<SupportTicket>) =>
     setForm({ supportTickets: tickets.map(t => t.id === id ? { ...t, ...patch } : t) })
@@ -125,42 +136,26 @@ export const SupportLog: React.FC = () => {
   }
 
   const exportCSV = () => {
-    const visibleColumnsList = SUPPORT_COLUMNS.filter(col => visibleColumns[col.id])
-    const dynamicHeaderLabels = Object.values(customFieldLabelMap)
-    const header = [...visibleColumnsList.map(col => col.label), ...dynamicHeaderLabels].join(',')
+    const header = visibleColumnsList.map(col => col.label).join(',')
     const rows = tickets.map(t => {
-      const values = [
-        ...visibleColumnsList.map(col => `"${t[col.id as keyof SupportTicket] || ''}"`),
-        ...customFieldKeys.map(key => `"${t.customFields?.[key] ?? ''}"`),
-      ]
+      const values = visibleColumnsList.map(col => {
+        if (col.kind === 'custom') return `"${t.customFields?.[col.id] ?? ''}"`
+        return `"${(t as any)[col.id] ?? ''}"`
+      })
       return values.join(',')
     })
     const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'support-log.csv'; a.click()
-    toast({ title: 'Export successful', description: `Exported ${tickets.length} rows with ${visibleColumnsList.length + dynamicHeaderLabels.length} columns to CSV` })
+    toast({ title: 'Export successful', description: `Exported ${tickets.length} rows with ${visibleColumnsList.length} columns to CSV` })
   }
 
   const toggleColumn = (colId: string) => {
-    const updated = { ...visibleColumns, [colId]: !visibleColumns[colId] }
-    setForm({ visibleSupportColumns: updated })
-  }
-
-  const visibleColumnsList = SUPPORT_COLUMNS.filter(col => visibleColumns[col.id])
-
-  // Any custom fields created via "Create New" during Import from DUP,
-  // collected from whatever tickets currently carry them, keyed by the
-  // DUP column's stable internal_key with a human label for the header.
-  const customFieldLabelMap: Record<string, string> = {}
-  tickets.forEach(t => {
-    if (!t.customFields) return
-    Object.keys(t.customFields).forEach(key => {
-      if (!customFieldLabelMap[key]) {
-        const col = getColumns('support').find(c => c.internal_key === key)
-        customFieldLabelMap[key] = col?.display_name || key
-      }
+    const nextSchema = applyVisibilityToSchema(columnSchema, colId)
+    setForm({
+      supportColumnSchema: nextSchema,
+      visibleSupportColumns: visibilityMapFromSchema(nextSchema),
     })
-  })
-  const customFieldKeys = Object.keys(customFieldLabelMap)
+  }
 
   const importFromDailyReport = async () => {
     // ⚠️ CRITICAL: The Daily Update Report module tracks its OWN selected
@@ -200,7 +195,7 @@ export const SupportLog: React.FC = () => {
     }
   }
 
-  const handleMappingConfirm = async (mapping: Record<string, MappingEntry>) => {
+  const handleMappingConfirm = async (mapping: Record<string, MappingEntry>, _remember: boolean, destinationOrder: string[]) => {
     setShowMappingModal(false)
     setImporting(true)
     try {
@@ -212,14 +207,25 @@ export const SupportLog: React.FC = () => {
       const columns = getColumns('support')
       const { items } = await applySupportMapping(rows, columns, mapping)
 
-      // Deduplicate by taskId to prevent double-import
-      const existingIds = new Set(tickets.map(t => t.taskId).filter(Boolean))
-      const imported = items.filter(r => r.taskId && !existingIds.has(r.taskId))
+      const existingKeys = new Set(tickets.map(supportImportDedupeKey))
+      const imported = items.filter(r => !existingKeys.has(supportImportDedupeKey(r)))
       if (!imported.length) {
         toast({ title: 'Already imported', description: 'All rows from Daily Report are already present.' })
         return
       }
-      setForm({ supportTickets: [...tickets, ...imported] })
+
+      const incomingSchema = buildDestinationColumnsFromMapping('support', columns, mapping, destinationOrder)
+      // Empty table → schema is exactly the mapping destinations (no leftover default Task ID, etc.).
+      // Appending to existing rows → union so prior columns/data stay available.
+      const nextSchema = tickets.length === 0
+        ? incomingSchema
+        : mergeColumnSchemas(columnSchema, incomingSchema)
+
+      setForm({
+        supportTickets: [...tickets, ...imported],
+        supportColumnSchema: nextSchema,
+        visibleSupportColumns: visibilityMapFromSchema(nextSchema),
+      })
       toast({ title: 'Imported from Daily Report', description: `${imported.length} row${imported.length === 1 ? '' : 's'} added to Support & Exception Log.` })
     } finally {
       setImporting(false)
@@ -315,7 +321,7 @@ export const SupportLog: React.FC = () => {
               )}>Show/Hide Columns</p>
             </div>
             <div className="py-1">
-              {SUPPORT_COLUMNS.map(col => (
+              {columnSchema.map(col => (
                 <button
                   key={col.id}
                   onClick={() => toggleColumn(col.id)}
@@ -326,7 +332,7 @@ export const SupportLog: React.FC = () => {
                       : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   )}
                 >
-                  <span className="flex-1">{col.label}</span>
+                  <span className="flex-1 truncate">{col.label}</span>
                   {visibleColumns[col.id] ? (
                     <Eye className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
                   ) : (
@@ -351,69 +357,74 @@ export const SupportLog: React.FC = () => {
               {visibleColumnsList.map(col => (
                 <th key={col.id} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-text-muted font-bold">{col.label}</th>
               ))}
-              {customFieldKeys.map(key => (
-                <th key={key} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-text-muted font-bold">{customFieldLabelMap[key]}</th>
-              ))}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={visibleColumnsList.length + customFieldKeys.length + 1} className="text-center py-8 text-text-muted text-xs">No tickets. Click Add to create one.</td></tr>
+              <tr><td colSpan={visibleColumnsList.length + 1} className="text-center py-8 text-text-muted text-xs">No tickets. Click Add to create one.</td></tr>
             )}
             {filtered.map(t => (
               <tr key={t.id} className={cn('hover:bg-white/[0.02] transition-colors', selected.has(t.id) && 'bg-accent-gold/5')}>
                 <td className={cell}><input type="checkbox" className="accent-accent-gold" checked={selected.has(t.id)} onChange={() => toggleSelect(t.id)} /></td>
-                {visibleColumns.taskId && (
-                  <td className={cell}><input className={sel} value={t.taskId} onChange={e => update(t.id, { taskId: e.target.value })} placeholder="TK-001" /></td>
-                )}
-                {visibleColumns.description && (
-                  <td className={cell}><input className={sel} value={t.description} onChange={e => update(t.id, { description: e.target.value })} placeholder="Issue description" /></td>
-                )}
-                {visibleColumns.assignedQA && (
-                  <td className={cell}><input className={sel} value={t.assignedQA} onChange={e => update(t.id, { assignedQA: e.target.value })} placeholder="Name" /></td>
-                )}
-                {visibleColumns.status && (
-                  <td className={cell}>
-                    <select className={`${sel} field-input py-0.5 px-1 text-xs`} value={t.status} onChange={e => update(t.id, { status: e.target.value as any })}>
-                      {statusOptions.length > 0 ? (
-                        statusOptions.map(s => <option key={s} value={s}>{s}</option>)
-                      ) : (
-                        ['Open', 'In Progress', 'Resolved', 'Closed'].map(s => <option key={s}>{s}</option>)
-                      )}
-                    </select>
-                  </td>
-                )}
-                {visibleColumns.priority && (
-                  <td className={`${cell}`}>
-                    <select className={`${sel} field-input py-0.5 px-1 text-xs ${getPriorityColor(t.priority)}`} value={t.priority} onChange={e => update(t.id, { priority: e.target.value as any })}>
-                      {priorityOptions.length > 0 ? (
-                        priorityOptions.map(p => <option key={p} value={p}>{p}</option>)
-                      ) : (
-                        ['Critical', 'High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)
-                      )}
-                    </select>
-                  </td>
-                )}
-                {visibleColumns.remarks && (
-                  <td className={cell}><input className={sel} value={t.remarks} onChange={e => update(t.id, { remarks: e.target.value })} placeholder="Remarks" /></td>
-                )}
-                {/* Dynamic columns created via "Create New" during Import from DUP */}
-                {customFieldKeys.map(key => (
-                  <td key={key} className={cell}>
-                    <input
-                      className={sel}
-                      value={t.customFields?.[key] ?? ''}
-                      onChange={e => updateCustomField(t.id, key, e.target.value)}
-                      placeholder={customFieldLabelMap[key]}
-                    />
-                  </td>
-                ))}
+                {visibleColumnsList.map(col => {
+                  if (col.kind === 'custom') {
+                    return (
+                      <td key={col.id} className={cell}>
+                        <input
+                          className={sel}
+                          value={t.customFields?.[col.id] ?? ''}
+                          onChange={e => updateCustomField(t.id, col.id, e.target.value)}
+                          placeholder={col.label}
+                        />
+                      </td>
+                    )
+                  }
+                  if (col.id === 'taskId') {
+                    return <td key={col.id} className={cell}><input className={sel} value={t.taskId} onChange={e => update(t.id, { taskId: e.target.value })} placeholder="TK-001" /></td>
+                  }
+                  if (col.id === 'description') {
+                    return <td key={col.id} className={cell}><input className={sel} value={t.description} onChange={e => update(t.id, { description: e.target.value })} placeholder="Issue description" /></td>
+                  }
+                  if (col.id === 'assignedQA') {
+                    return <td key={col.id} className={cell}><input className={sel} value={t.assignedQA} onChange={e => update(t.id, { assignedQA: e.target.value })} placeholder="Name" /></td>
+                  }
+                  if (col.id === 'status') {
+                    return (
+                      <td key={col.id} className={cell}>
+                        <select className={`${sel} field-input py-0.5 px-1 text-xs`} value={t.status} onChange={e => update(t.id, { status: e.target.value as any })}>
+                          {statusOptions.length > 0 ? (
+                            statusOptions.map(s => <option key={s} value={s}>{s}</option>)
+                          ) : (
+                            ['Open', 'In Progress', 'Resolved', 'Closed'].map(s => <option key={s}>{s}</option>)
+                          )}
+                        </select>
+                      </td>
+                    )
+                  }
+                  if (col.id === 'priority') {
+                    return (
+                      <td key={col.id} className={cell}>
+                        <select className={`${sel} field-input py-0.5 px-1 text-xs ${getPriorityColor(t.priority)}`} value={t.priority} onChange={e => update(t.id, { priority: e.target.value as any })}>
+                          {priorityOptions.length > 0 ? (
+                            priorityOptions.map(p => <option key={p} value={p}>{p}</option>)
+                          ) : (
+                            ['Critical', 'High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)
+                          )}
+                        </select>
+                      </td>
+                    )
+                  }
+                  if (col.id === 'remarks') {
+                    return <td key={col.id} className={cell}><input className={sel} value={t.remarks} onChange={e => update(t.id, { remarks: e.target.value })} placeholder="Remarks" /></td>
+                  }
+                  return null
+                })}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-text-muted">{tickets.length} ticket{tickets.length !== 1 ? 's' : ''} • {visibleColumnsList.length} of {SUPPORT_COLUMNS.length} columns visible</p>
+      <p className="text-[11px] text-text-muted">{tickets.length} ticket{tickets.length !== 1 ? 's' : ''} • {visibleColumnsList.length} of {columnSchema.length} columns visible</p>
 
       <ColumnMappingModal
         open={showMappingModal}

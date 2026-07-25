@@ -166,6 +166,7 @@
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
+    text-decoration: none;
   }
 
   .qaly-nav-item:hover {

@@ -1,8 +1,4 @@
 import React, { useState } from 'react'
-import mammoth from 'mammoth'
-import * as pdfjsLib from 'pdfjs-dist'
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { GlassCard } from "@/components/ui/GlassCard"
@@ -51,6 +47,11 @@ export const TestCaseGenerator = () => {
       let text = ''
 
       if (ext === 'pdf') {
+        // pdfjs-dist (+ its ~1.2MB worker) is loaded on demand so it never
+        // ships in the initial /test-generator bundle for users who don't
+        // import a PDF.
+        const pdfjsLib = await import('pdfjs-dist')
+        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
         const arrayBuffer = await file.arrayBuffer()
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
         const pages = await Promise.all(
@@ -60,6 +61,8 @@ export const TestCaseGenerator = () => {
         )
         text = pages.join('\n')
       } else if (ext === 'docx') {
+        // mammoth is loaded on demand for the same reason.
+        const { default: mammoth } = await import('mammoth')
         const arrayBuffer = await file.arrayBuffer()
         const { value } = await mammoth.extractRawText({ arrayBuffer })
         text = value

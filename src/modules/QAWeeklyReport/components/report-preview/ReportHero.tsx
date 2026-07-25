@@ -1,6 +1,7 @@
 import React from 'react'
 import { motion, type Variants } from 'framer-motion'
-import { Cpu, GitBranch, CheckCircle2, TrendingDown, Layers, CalendarRange, Clock3, FileCheck2 } from 'lucide-react'
+import { Cpu, GitBranch, CheckCircle2, TrendingDown, Layers, CalendarRange, Clock3, FileCheck2, ChevronDown } from 'lucide-react'
+import { HeroMetricSummary } from './HeroMetricSummary'
 
 interface QualityStats {
   score: number
@@ -40,6 +41,8 @@ interface ReportHeroProps {
   onScrollNext: () => void
   rightRailContent?: React.ReactNode
   bottomContent?: React.ReactNode
+  /** Data-driven typing summary under metric tiles — only when Defect Closure Trend is absent */
+  metricSummaryLines?: string[]
 }
 
 function formatGeneratedDate(iso?: string): string | null {
@@ -91,7 +94,8 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
   onOpenReleaseScopeModal,
   onScrollNext,
   rightRailContent,
-  bottomContent
+  bottomContent,
+  metricSummaryLines,
 }) => {
   const generatedLabel = formatGeneratedDate(reportMeta.generatedDate)
 
@@ -99,7 +103,7 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
     <motion.section
       ref={sectionRef}
       variants={sectionVariants}
-      className="grid grid-cols-1 lg:grid-cols-[280px_1fr_320px] lg:gap-10 gap-8 items-start pt-2 relative w-full"
+      className="grid grid-cols-1 lg:grid-cols-[280px_1fr_320px] lg:gap-10 gap-8 items-stretch pt-2 relative w-full"
       style={{ display: visible ? undefined : 'none' }}
     >
       {/* Premium Background Ambient Gradient Orbs & Glowing Aura */}
@@ -223,7 +227,7 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
       </motion.div>
 
       {/* 2. Middle Column: Text and Gradients */}
-      <div className="flex flex-col gap-6 relative z-10">
+      <div className="flex flex-col gap-5 relative z-10 h-full min-h-0">
         {/* Premium segmented metadata rail — a single glass strip with icon-led segments
             and hairline dividers, instead of disconnected shouting pill badges. */}
         <motion.div
@@ -342,50 +346,68 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
             onClick={onOpenReleaseScopeModal}
             className={`relative overflow-hidden rounded-[24px] p-5 shadow-lg bg-gradient-to-br from-[#1e293b]/90 to-[#0f172a]/90 hover:scale-[1.02] hover:shadow-xl cursor-pointer transition-all duration-300 group border ${theme === 'dark' ? 'border-white/10 text-white' : 'border-slate-300/60 text-slate-100'}`}
           >
-            {/* Shimmer Light Beam */}
+            {/* Shimmer Light Beam — white glare so it reads on the dark slate card */}
             <motion.div
               animate={{ x: ['-100%', '200%'] }}
               transition={{ duration: 4, repeat: Infinity, repeatDelay: 5.5, ease: 'easeInOut', delay: 2 }}
-              className="absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-accent-gold/20 to-transparent transform -skew-x-12 pointer-events-none"
+              className="absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-white/25 to-transparent transform -skew-x-12 pointer-events-none z-[1]"
             />
-            <div className="flex items-center justify-between mb-4">
+            <div className="relative z-[2] flex items-center justify-between mb-4">
               <span className="text-[10px] font-bold uppercase tracking-widest text-white/80">Release Scope</span>
               <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0 text-white">
                 <Layers className="w-4 h-4" />
               </span>
             </div>
-            <span className="text-4xl font-black block leading-none"><CountUpNumber end={releaseCount} /></span>
-            <span className="text-xs font-medium text-white/75 mt-1 block">Total release items tracked</span>
+            <span className="relative z-[2] text-4xl font-black block leading-none"><CountUpNumber end={releaseCount} /></span>
+            <span className="relative z-[2] text-xs font-medium text-white/75 mt-1 block">Total release items tracked</span>
           </motion.div>
         </div>
+
+        {/* Fills leftover height under the metric cards so bottoms align with side cards —
+            typing lives here (bottom-anchored) instead of leaving an empty void. */}
+        {metricSummaryLines && metricSummaryLines.length > 0 ? (
+          <div className="flex-1 min-h-[4.5rem] mt-3 relative">
+            <HeroMetricSummary theme={theme} lines={metricSummaryLines} fill />
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0" aria-hidden />
+        )}
+
       </div>
 
       {/* 3. Right Column: Support Tickets and KPIs (rightRailContent) */}
-      <div className="flex flex-col gap-6 h-full w-full lg:row-span-2">
+      <div className={`flex flex-col gap-6 h-full w-full ${bottomContent ? 'lg:row-span-2' : ''}`}>
         {rightRailContent}
       </div>
 
       {/* 4. Bottom Content (Spans Left & Middle columns) */}
       {bottomContent && (
-        <div className="col-span-1 lg:col-span-2 w-full mt-4">
+        <div className="col-span-1 lg:col-span-2 w-full mt-2">
           {bottomContent}
         </div>
       )}
 
-      {/* Scroll Indicator */}
-      <div className="col-span-full flex justify-center pt-8 mt-4">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: [0, 1, 0], y: [0, 8, 0] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-          className="flex flex-col items-center gap-1.5 cursor-pointer text-text-muted hover:text-accent-gold"
+      {/* Minimal scroll cue — sits in the center column under the metric cards */}
+      <div className="lg:col-start-2 flex justify-center pt-2">
+        <button
+          type="button"
           onClick={onScrollNext}
+          className={`inline-flex items-center gap-1.5 group cursor-pointer bg-transparent border-0 p-0 ${
+            theme === 'dark' ? 'text-white/35 hover:text-white/60' : 'text-slate-400/70 hover:text-slate-500'
+          } transition-colors`}
+          aria-label="Scroll to explore"
         >
-          <span className="text-[9px] uppercase font-black tracking-widest">Scroll to Explore</span>
-          <div className="w-5 h-8 rounded-full border-2 border-current flex justify-center p-1 relative">
-            <div className="w-1.5 h-1.5 rounded-full bg-accent-gold" style={{ animation: 'scroll-dot 1.8s ease-in-out infinite' }} />
-          </div>
-        </motion.div>
+          <span className="text-[10px] font-medium tracking-[0.18em] uppercase">
+            Scroll to Explore
+          </span>
+          <motion.span
+            animate={{ y: [0, 3, 0] }}
+            transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+            className="inline-flex"
+          >
+            <ChevronDown className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
+          </motion.span>
+        </button>
       </div>
     </motion.section>
   )

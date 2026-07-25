@@ -8,6 +8,7 @@ export interface ReportRailItem {
   id: string
   project: string
   week: string
+  name?: string
   generatedDate?: string
   status: 'Draft' | 'Final'
 }
@@ -72,8 +73,11 @@ export const ReportRail: React.FC<ReportRailProps> = ({ theme, items, currentRep
                 <div className="flex items-center gap-3 min-w-0">
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === 'Final' ? 'bg-green-400' : 'bg-amber-400'}`} />
                   <div className="min-w-0">
-                    <p className={`text-xs font-bold truncate ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{r.project}</p>
+                    <p className={`text-xs font-bold truncate ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                      {r.name?.trim() || r.project}
+                    </p>
                     <p className={`text-[10px] font-medium truncate ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>
+                      {r.name?.trim() ? r.project + ' · ' : ''}
                       {formatTimestamp(r.generatedDate, r.week)} · {r.status}
                     </p>
                   </div>

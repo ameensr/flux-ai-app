@@ -4,6 +4,7 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Gauge, CheckCircle, AlertCircle, Ban, Calculator } from 'lucide-react'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 interface ReleaseReadinessModalProps {
   isOpen: boolean
@@ -28,6 +29,7 @@ export function ReleaseReadinessModal({
   closureRate,
   projectName
 }: ReleaseReadinessModalProps) {
+  useBodyScrollLock(isOpen)
 
   // Recalculate factors for display
   const passPctFactor = totalCases > 0 ? passedCases / totalCases : 1.0

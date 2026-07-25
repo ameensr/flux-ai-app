@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { cn } from '@/lib/utils'
 
 // ── Password Strength Logic ───────────────────────────────────────────────────
@@ -222,6 +223,7 @@ const ActiveSessions = () => {
   const [signingOut, setSigningOut] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [signingOutAll, setSigningOutAll] = useState(false)
+  useBodyScrollLock(showConfirm)
 
   useEffect(() => {
     if (typeof window === 'undefined') return

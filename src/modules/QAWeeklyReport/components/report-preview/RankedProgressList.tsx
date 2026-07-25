@@ -15,6 +15,8 @@ interface RankedProgressListProps {
   theme: ThemeId
   items: RankedProgressItem[]
   hasPlayed?: boolean
+  /** Tighter row spacing — used in the hero Bug Status rail to leave room for triage animation */
+  compact?: boolean
 }
 
 /**
@@ -22,11 +24,16 @@ interface RankedProgressListProps {
  * and the resolved count/percentage at the row's end. Presentation-only — callers pass in
  * already-computed counts/percentages from real report data.
  */
-export const RankedProgressList: React.FC<RankedProgressListProps> = ({ theme, items, hasPlayed = true }) => {
+export const RankedProgressList: React.FC<RankedProgressListProps> = ({
+  theme,
+  items,
+  hasPlayed = true,
+  compact = false,
+}) => {
   return (
-    <div className="flex flex-col gap-4">
+    <div className={`flex flex-col ${compact ? 'gap-2.5' : 'gap-4'}`}>
       {items.map((item, idx) => (
-        <div key={item.label} className="flex flex-col gap-1.5">
+        <div key={item.label} className={`flex flex-col ${compact ? 'gap-1' : 'gap-1.5'}`}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
               <span className={`w-2 h-2 rounded-full shrink-0 ${item.colorClass}`} />
@@ -36,7 +43,7 @@ export const RankedProgressList: React.FC<RankedProgressListProps> = ({ theme, i
               {item.count} <span className="text-text-muted font-semibold">· {item.percent.toFixed(1)}%</span>
             </span>
           </div>
-          <div className={`h-2 rounded-full overflow-hidden ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-100'}`}>
+          <div className={`${compact ? 'h-1.5' : 'h-2'} rounded-full overflow-hidden ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-100'}`}>
             <motion.div
               initial={{ width: hasPlayed ? `${item.percent}%` : 0 }}
               animate={{ width: `${item.percent}%` }}

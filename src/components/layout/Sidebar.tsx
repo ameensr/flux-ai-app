@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
@@ -15,11 +15,11 @@ import { ROUTES } from '@/lib/routes'
 
 const ALL_MENU_ITEMS = [
   { path: ROUTES.dashboard, label: 'Dashboard', icon: LayoutDashboard, moduleKey: 'dashboard' },
+  { path: ROUTES.dailyReport, label: 'Daily Update Report', icon: ClipboardCheck, moduleKey: 'daily-report' },
   { path: ROUTES.bugRefiner, label: 'AI Bug Refiner', icon: Bug, moduleKey: 'bug-refiner' },
   { path: ROUTES.testGenerator, label: 'Test Case Gen', icon: FileText, moduleKey: 'test-generator' },
   { path: ROUTES.writingAssistant, label: 'Writing Assistant', icon: PenTool, moduleKey: 'writing-assistant' },
   { path: ROUTES.qaReport, label: 'QA Weekly Report', icon: ClipboardList, moduleKey: 'qa-report' },
-  { path: ROUTES.dailyReport, label: 'Daily Update Report', icon: ClipboardCheck, moduleKey: 'daily-report' },
   { path: ROUTES.settings, label: 'Settings', icon: Settings, moduleKey: 'settings' },
   { path: ROUTES.projectHub, label: 'Project Hub', icon: FolderKanban, moduleKey: 'project-hub' },
   { path: ROUTES.admin, label: 'Admin Panel', icon: Shield, moduleKey: 'admin' },
@@ -81,10 +81,11 @@ export const Sidebar = () => {
 
   const NavItem = ({ item }: { item: typeof ALL_MENU_ITEMS[0] }) => {
     const active = isActive(item.path)
+    // Must be a real <a>/<Link> (not a button + navigate) so Ctrl/Cmd+click and
+    // middle-click open the module in a new tab using the browser's native behavior.
     return (
-      <button
-        key={item.path}
-        onClick={() => navigate(item.path)}
+      <Link
+        to={item.path}
         title={!isSidebarOpen ? item.label : undefined}
         aria-label={item.label}
         aria-current={active ? 'page' : undefined}
@@ -117,7 +118,7 @@ export const Sidebar = () => {
             </motion.span>
           )}
         </AnimatePresence>
-      </button>
+      </Link>
     )
   }
 

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase, SUPABASE_URL } from '@/lib/supabase'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { cn } from '@/lib/utils'
 import {
   Users, Search, RefreshCw, MoreVertical, Eye, Edit2,
@@ -119,6 +120,7 @@ function ChangeRoleModal({
   onClose: () => void
   onSaved: (userId: string, newRole: string) => void
 }) {
+  useBodyScrollLock(true)
   const { toast } = useToast()
   const [selectedRole, setSelectedRole] = useState(user.role)
   const [saving, setSaving] = useState(false)

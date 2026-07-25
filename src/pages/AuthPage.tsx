@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from "framer-motion"
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/lib/routes'
 import { Logo } from "@/components/ui/Logo"
@@ -25,6 +25,66 @@ import { BRAND } from '@/lib/brand'
 import { type PandaEvent } from '@/components/LazyPanda'
 import { AssistantPanel } from '@/components/LazyPanda/AssistantPanel'
 import { AuthFooter } from '@/components/LazyPanda/AuthFooter'
+
+// ── Liquid Morphing Blobs (NEW) ──────────────────────────────────────────────
+
+function LiquidBlobs() {
+  const blobs = [
+    { id: 1, x: '15%', y: '15%', size: 400, color: '#6366f1', duration: 25 },
+    { id: 2, x: '75%', y: '20%', size: 350, color: '#8b5cf6', duration: 30 },
+    { id: 3, x: '60%', y: '75%', size: 450, color: '#ec4899', duration: 28 },
+    { id: 4, x: '25%', y: '70%', size: 300, color: '#14b8a6', duration: 22 },
+  ]
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {blobs.map((blob) => (
+        <motion.div
+          key={blob.id}
+          className="absolute"
+          style={{
+            left: blob.x,
+            top: blob.y,
+            width: blob.size,
+            height: blob.size,
+          }}
+          animate={{
+            x: [0, 50, -30, 40, 0],
+            y: [0, -40, 30, -20, 0],
+            scale: [1, 1.2, 0.9, 1.1, 1],
+            rotate: [0, 90, 180, 270, 360],
+          }}
+          transition={{
+            duration: blob.duration,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        >
+          <motion.div
+            className="w-full h-full rounded-full"
+            style={{
+              background: `radial-gradient(circle, ${blob.color}30 0%, transparent 70%)`,
+              filter: 'blur(60px)',
+            }}
+            animate={{
+              borderRadius: [
+                "60% 40% 30% 70% / 60% 30% 70% 40%",
+                "30% 60% 70% 40% / 50% 60% 30% 60%",
+                "40% 60% 60% 40% / 60% 40% 60% 40%",
+                "60% 40% 30% 70% / 60% 30% 70% 40%",
+              ],
+            }}
+            transition={{
+              duration: blob.duration,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
+        </motion.div>
+      ))}
+    </div>
+  )
+}
 
 // ── Animated floating orbs background ─────────────────────────────────────────
 
@@ -96,6 +156,48 @@ function AnimatedGrid() {
   )
 }
 
+// ── Wave Animation (NEW) ──────────────────────────────────────────────────────
+
+function WaveAnimation() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <motion.svg
+        className="absolute bottom-0 w-full"
+        viewBox="0 0 1440 320"
+        preserveAspectRatio="none"
+        style={{ height: '40%' }}
+      >
+        <motion.path
+          fill="url(#wave-gradient)"
+          fillOpacity="0.1"
+          initial={{
+            d: "M0,160L48,144C96,128,192,96,288,106.7C384,117,480,171,576,186.7C672,203,768,181,864,154.7C960,128,1056,96,1152,96C1248,96,1344,128,1392,144L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z",
+          }}
+          animate={{
+            d: [
+              "M0,160L48,144C96,128,192,96,288,106.7C384,117,480,171,576,186.7C672,203,768,181,864,154.7C960,128,1056,96,1152,96C1248,96,1344,128,1392,144L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z",
+              "M0,96L48,112C96,128,192,160,288,165.3C384,171,480,149,576,128C672,107,768,85,864,90.7C960,96,1056,128,1152,138.7C1248,149,1344,139,1392,133.3L1440,128L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z",
+              "M0,160L48,144C96,128,192,96,288,106.7C384,117,480,171,576,186.7C672,203,768,181,864,154.7C960,128,1056,96,1152,96C1248,96,1344,128,1392,144L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z",
+            ],
+          }}
+          transition={{
+            duration: 15,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+        <defs>
+          <linearGradient id="wave-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="var(--accent)" />
+            <stop offset="50%" stopColor="#3b82f6" />
+            <stop offset="100%" stopColor="#a855f7" />
+          </linearGradient>
+        </defs>
+      </motion.svg>
+    </div>
+  )
+}
+
 // ── Sparkle particles ─────────────────────────────────────────────────────────
 
 function SparkleParticles() {
@@ -139,8 +241,38 @@ function SparkleParticles() {
 // ── Animated gradient border card wrapper ─────────────────────────────────────
 
 function AnimatedBorderCard({ children, className }: { children: React.ReactNode; className?: string }) {
+  const cardRef = useRef<HTMLDivElement>(null)
+  const mouseX = useMotionValue(0)
+  const mouseY = useMotionValue(0)
+
+  const rotateX = useTransform(mouseY, [-300, 300], [5, -5])
+  const rotateY = useTransform(mouseX, [-300, 300], [-5, 5])
+
+  const smoothRotateX = useSpring(rotateX, { damping: 20, stiffness: 100 })
+  const smoothRotateY = useSpring(rotateY, { damping: 20, stiffness: 100 })
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return
+    const rect = cardRef.current.getBoundingClientRect()
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    mouseX.set(e.clientX - centerX)
+    mouseY.set(e.clientY - centerY)
+  }
+
+  const handleMouseLeave = () => {
+    mouseX.set(0)
+    mouseY.set(0)
+  }
+
   return (
-    <div className={cn("relative group", className)}>
+    <div
+      ref={cardRef}
+      className={cn("relative group", className)}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{ perspective: '1000px' }}
+    >
       {/* Breathing gradient border — pulses gently, no rotation */}
       <motion.div
         className="absolute -inset-[1px] rounded-3xl"
@@ -167,10 +299,17 @@ function AnimatedBorderCard({ children, className }: { children: React.ReactNode
         }}
         transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
       />
-      {/* Card content */}
-      <div className="relative bg-surface rounded-3xl overflow-hidden">
+      {/* Card content with 3D tilt effect */}
+      <motion.div
+        className="relative bg-surface rounded-3xl overflow-hidden"
+        style={{
+          rotateX: smoothRotateX,
+          rotateY: smoothRotateY,
+          transformStyle: 'preserve-3d',
+        }}
+      >
         {children}
-      </div>
+      </motion.div>
     </div>
   )
 }
@@ -219,6 +358,263 @@ function FloatingParticles() {
   )
 }
 
+// ── Input Focus Particle Burst (NEW) ──────────────────────────────────────────
+
+function ParticleBurst({ x, y, active }: { x: number; y: number; active: boolean }) {
+  const particles = Array.from({ length: 12 }, (_, i) => ({
+    id: i,
+    angle: (i * 360) / 12,
+  }))
+
+  if (!active) return null
+
+  return (
+    <div className="absolute pointer-events-none" style={{ left: x, top: y }}>
+      {particles.map((p) => (
+        <motion.div
+          key={p.id}
+          className="absolute w-1.5 h-1.5 rounded-full bg-accent"
+          initial={{ x: 0, y: 0, opacity: 1, scale: 0 }}
+          animate={{
+            x: Math.cos((p.angle * Math.PI) / 180) * 40,
+            y: Math.sin((p.angle * Math.PI) / 180) * 40,
+            opacity: 0,
+            scale: [0, 1, 0],
+          }}
+          transition={{
+            duration: 0.8,
+            ease: "easeOut",
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ── Creative Password Visibility Toggle (NEW) ─────────────────────────────────
+
+function CreativePasswordToggle({
+  showPassword,
+  onToggle
+}: {
+  showPassword: boolean;
+  onToggle: () => void
+}) {
+  const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([])
+  const [isHovered, setIsHovered] = useState(false)
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    // Add ripple effect
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const id = Date.now()
+
+    setRipples(prev => [...prev, { id, x, y }])
+    setTimeout(() => setRipples(prev => prev.filter(r => r.id !== id)), 600)
+
+    onToggle()
+  }
+
+  return (
+    <motion.button
+      type="button"
+      tabIndex={-1}
+      onClick={handleClick}
+      onMouseDown={(e) => e.preventDefault()}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="absolute right-4 top-1/2 -translate-y-1/2 z-10 cursor-pointer group"
+      aria-label={showPassword ? "Hide password" : "Show password"}
+      style={{ perspective: '1000px' }}
+    >
+      {/* Animated gradient border container */}
+      <motion.div
+        className="relative"
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.9 }}
+        animate={{
+          rotate: showPassword ? 0 : 0,
+        }}
+        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      >
+        {/* Outer glow ring */}
+        <motion.div
+          className="absolute inset-0 rounded-xl"
+          animate={{
+            boxShadow: isHovered
+              ? showPassword
+                ? '0 0 20px rgba(139, 92, 246, 0.6), 0 0 40px rgba(139, 92, 246, 0.3)'
+                : '0 0 20px rgba(59, 130, 246, 0.6), 0 0 40px rgba(59, 130, 246, 0.3)'
+              : '0 0 0px rgba(139, 92, 246, 0)',
+          }}
+          transition={{ duration: 0.3 }}
+        />
+
+        {/* Gradient border */}
+        <motion.div
+          className="absolute -inset-[2px] rounded-xl opacity-0 group-hover:opacity-100"
+          style={{
+            background: showPassword
+              ? 'linear-gradient(135deg, #8b5cf6, #a855f7, #c084fc)'
+              : 'linear-gradient(135deg, #3b82f6, #60a5fa, #93c5fd)',
+          }}
+          animate={{
+            opacity: isHovered ? 1 : 0,
+          }}
+          transition={{ duration: 0.3 }}
+        />
+
+        {/* Main button container */}
+        <motion.div
+          className="relative px-2.5 py-2.5 rounded-xl bg-surface overflow-hidden"
+          animate={{
+            backgroundColor: isHovered
+              ? showPassword
+                ? 'rgba(139, 92, 246, 0.1)'
+                : 'rgba(59, 130, 246, 0.1)'
+              : 'rgba(255, 255, 255, 0.05)',
+          }}
+          transition={{ duration: 0.3 }}
+        >
+          {/* Ripple effects */}
+          <AnimatePresence>
+            {ripples.map((ripple) => (
+              <motion.div
+                key={ripple.id}
+                className="absolute rounded-full"
+                style={{
+                  left: ripple.x,
+                  top: ripple.y,
+                  background: showPassword
+                    ? 'radial-gradient(circle, rgba(139, 92, 246, 0.6) 0%, transparent 70%)'
+                    : 'radial-gradient(circle, rgba(59, 130, 246, 0.6) 0%, transparent 70%)',
+                }}
+                initial={{ width: 0, height: 0, x: 0, y: 0, opacity: 1 }}
+                animate={{
+                  width: 80,
+                  height: 80,
+                  x: -40,
+                  y: -40,
+                  opacity: 0
+                }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+              />
+            ))}
+          </AnimatePresence>
+
+          {/* Icon container with morphing animation */}
+          <div className="relative w-5 h-5">
+            <AnimatePresence mode="wait">
+              {showPassword ? (
+                <motion.div
+                  key="eye-off"
+                  initial={{ rotateY: -90, opacity: 0 }}
+                  animate={{ rotateY: 0, opacity: 1 }}
+                  exit={{ rotateY: 90, opacity: 0 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="absolute inset-0 flex items-center justify-center"
+                  style={{ transformStyle: 'preserve-3d' }}
+                >
+                  <motion.div
+                    animate={{
+                      color: isHovered ? '#8b5cf6' : '#9ca3af',
+                    }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <EyeOff className="w-5 h-5" />
+                  </motion.div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="eye-on"
+                  initial={{ rotateY: -90, opacity: 0 }}
+                  animate={{ rotateY: 0, opacity: 1 }}
+                  exit={{ rotateY: 90, opacity: 0 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="absolute inset-0 flex items-center justify-center"
+                  style={{ transformStyle: 'preserve-3d' }}
+                >
+                  <motion.div
+                    animate={{
+                      color: isHovered ? '#3b82f6' : '#9ca3af',
+                    }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Eye className="w-5 h-5" />
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Scanning line effect when showing password */}
+          <AnimatePresence>
+            {showPassword && isHovered && (
+              <motion.div
+                className="absolute inset-0 pointer-events-none"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <motion.div
+                  className="absolute h-[2px] w-full bg-gradient-to-r from-transparent via-purple-400 to-transparent"
+                  style={{ left: 0 }}
+                  animate={{
+                    top: ['0%', '100%'],
+                  }}
+                  transition={{
+                    duration: 1.5,
+                    repeat: Infinity,
+                    ease: "linear",
+                  }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </motion.div>
+
+      {/* Orbiting particles */}
+      <AnimatePresence>
+        {isHovered && (
+          <>
+            {[0, 1, 2].map((i) => (
+              <motion.div
+                key={i}
+                className="absolute w-1 h-1 rounded-full"
+                style={{
+                  background: showPassword ? '#8b5cf6' : '#3b82f6',
+                  left: '50%',
+                  top: '50%',
+                }}
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{
+                  opacity: [0, 1, 0],
+                  scale: [0, 1, 0],
+                  x: [0, Math.cos((i * 120 * Math.PI) / 180) * 25],
+                  y: [0, Math.sin((i * 120 * Math.PI) / 180) * 25],
+                }}
+                exit={{ opacity: 0, scale: 0 }}
+                transition={{
+                  duration: 1.5,
+                  repeat: Infinity,
+                  delay: i * 0.2,
+                  ease: "easeInOut",
+                }}
+              />
+            ))}
+          </>
+        )}
+      </AnimatePresence>
+    </motion.button>
+  )
+}
+
 // ── Morphing text animation ───────────────────────────────────────────────────
 
 function MorphingHeading({ isLogin }: { isLogin: boolean }) {
@@ -231,9 +627,28 @@ function MorphingHeading({ isLogin }: { isLogin: boolean }) {
           animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
           exit={{ opacity: 0, y: -16, filter: 'blur(6px)' }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="text-2xl sm:text-3xl font-clash font-bold text-text-primary text-center"
+          className="text-2xl sm:text-3xl font-clash font-bold text-text-primary text-center relative"
         >
-          {isLogin ? 'Welcome Back' : 'Create Your Account'}
+          {/* Shimmer effect overlay */}
+          <span className="relative inline-block">
+            {isLogin ? 'Welcome Back' : 'Create Your Account'}
+            <motion.span
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+              style={{
+                backgroundSize: '200% 100%',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+              }}
+              animate={{
+                backgroundPosition: ['-200% 0%', '200% 0%'],
+              }}
+              transition={{
+                duration: 3,
+                repeat: Infinity,
+                ease: "linear",
+              }}
+            />
+          </span>
         </motion.h1>
       </AnimatePresence>
       <AnimatePresence mode="wait">
@@ -307,6 +722,7 @@ export const AuthPage = () => {
   const [password, setPassword] = useState('')
   const [fieldError, setFieldError] = useState<{ email?: string; password?: string; general?: string }>({})
   const [focusedField, setFocusedField] = useState<string | null>(null)
+  const [particleBurst, setParticleBurst] = useState<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false })
 
   // Lazy Panda integration
   const pandaSendRef = useRef<((event: PandaEvent) => void) | null>(null)
@@ -316,6 +732,16 @@ export const AuthPage = () => {
   const [signupSuccessEmail, setSignupSuccessEmail] = useState<string | null>(null)
 
   const clearErrors = () => setFieldError({})
+
+  const triggerParticleBurst = (e: React.FocusEvent<HTMLInputElement>) => {
+    const rect = e.target.getBoundingClientRect()
+    setParticleBurst({
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+      active: true,
+    })
+    setTimeout(() => setParticleBurst(prev => ({ ...prev, active: false })), 100)
+  }
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -407,10 +833,12 @@ export const AuthPage = () => {
     return (
       <div className="min-h-screen bg-background relative overflow-hidden flex items-center justify-center">
         {/* Animated Background Layers */}
+        <LiquidBlobs />
         <FloatingOrbs />
         <AnimatedGrid />
         <SparkleParticles />
         <FloatingParticles />
+        <WaveAnimation />
 
         <motion.div
           initial={{ opacity: 0, y: 40, scale: 0.95 }}
@@ -454,10 +882,15 @@ export const AuthPage = () => {
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Animated Background Layers */}
+      <LiquidBlobs />
       <FloatingOrbs />
       <AnimatedGrid />
       <SparkleParticles />
       <FloatingParticles />
+      <WaveAnimation />
+
+      {/* Particle burst effect */}
+      <ParticleBurst {...particleBurst} />
 
       {/* 2-Column Layout: Assistant Panel (left) + Auth Card (right) */}
       <div className="relative z-10 min-h-screen grid grid-cols-1 lg:grid-cols-[35%_1fr]">
@@ -496,12 +929,9 @@ export const AuthPage = () => {
                 >
                   {/* Header */}
                   <motion.div variants={staggerItem} className="flex flex-col items-center text-center mb-10">
-                    <motion.div
-                      animate={{ rotate: [0, 5, -5, 0] }}
-                      transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                    >
-                      <Logo size="lg" className="mb-8" />
-                    </motion.div>
+                    <div className="mb-8">
+                      <Logo size="lg" animate={false} />
+                    </div>
 
                     <MorphingHeading isLogin={isLogin} />
                   </motion.div>
@@ -554,7 +984,11 @@ export const AuthPage = () => {
                             value={email}
                             tabIndex={1}
                             autoComplete="email"
-                            onFocus={() => { setFocusedField('email'); pandaSend({ type: 'EMAIL_FOCUS' }) }}
+                            onFocus={(e) => {
+                              setFocusedField('email');
+                              pandaSend({ type: 'EMAIL_FOCUS' });
+                              triggerParticleBurst(e);
+                            }}
                             onBlur={() => { setFocusedField(null); pandaSend({ type: 'EMAIL_BLUR' }) }}
                             onChange={(e) => { setEmail(e.target.value); pandaSend({ type: 'EMAIL_TYPING' }); if (fieldError.email) clearErrors() }}
                             className={cn(
@@ -608,7 +1042,11 @@ export const AuthPage = () => {
                             value={password}
                             tabIndex={2}
                             autoComplete={isLogin ? "current-password" : "new-password"}
-                            onFocus={() => { setFocusedField('password'); pandaSend({ type: 'PASSWORD_FOCUS' }) }}
+                            onFocus={(e) => {
+                              setFocusedField('password');
+                              pandaSend({ type: 'PASSWORD_FOCUS' });
+                              triggerParticleBurst(e);
+                            }}
                             onBlur={() => { setFocusedField(null); pandaSend({ type: 'PASSWORD_BLUR' }) }}
                             onChange={(e) => { setPassword(e.target.value); if (fieldError.password) clearErrors() }}
                             className={cn(
@@ -618,24 +1056,14 @@ export const AuthPage = () => {
                                 : "border-border focus:border-accent/50 focus:ring-accent/10"
                             )}
                           />
-                          <motion.button
-                            type="button"
-                            tabIndex={-1}
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
+                          <CreativePasswordToggle
+                            showPassword={showPassword}
+                            onToggle={() => {
                               const next = !showPassword
                               setShowPassword(next)
                               pandaSend({ type: 'PASSWORD_SHOW_TOGGLE', visible: next })
                             }}
-                            onMouseDown={(e) => e.preventDefault()}
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors z-10 cursor-pointer p-1 rounded-lg hover:bg-white/5 active:bg-white/10"
-                            aria-label={showPassword ? "Hide password" : "Show password"}
-                          >
-                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          </motion.button>
+                          />
                         </motion.div>
                         <AnimatePresence>
                           {fieldError.password && (

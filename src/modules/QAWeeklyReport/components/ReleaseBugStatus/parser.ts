@@ -2,7 +2,6 @@
 // Intelligent Excel/CSV parser for bug tracking spreadsheets.
 // Auto-detects column headers from Jira, Azure DevOps, Redmine, Bugzilla, etc.
 
-import * as XLSX from 'xlsx'
 import type {
   ReleaseBugAnalytics,
   BugStatusEntry,
@@ -129,7 +128,11 @@ function generateAISummary(metrics: ReleaseBugMetrics, statusDist: BugStatusEntr
 
 // ── Main Parser ───────────────────────────────────────────────────────────────
 
-export function parseReleaseBugFile(file: File): Promise<ReleaseBugAnalytics> {
+export async function parseReleaseBugFile(file: File): Promise<ReleaseBugAnalytics> {
+  // Loaded on demand (not at module load) to keep the ~860KB xlsx parser out
+  // of this route's chunk until a user actually uploads a file.
+  const XLSX = await import('xlsx')
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
 

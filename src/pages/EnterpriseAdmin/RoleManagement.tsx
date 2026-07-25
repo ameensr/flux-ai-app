@@ -4,12 +4,16 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
-import { invalidatePermissionCache } from '@/lib/rbac'
+import { invalidatePermissionCache, fetchAllRoleModulePermissions } from '@/lib/rbac'
+import { logAuditEvent } from '@/lib/auditLog'
 import { getModulePermissions, PERMISSION_LABELS } from '@/lib/modulePermissions'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/useAppStore'
+import { usePermissions } from '@/hooks/usePermissions'
 import {
   Shield, Plus, Copy, Edit2, Trash2, ChevronDown, ChevronRight,
   Check, X, RefreshCw, Save, Users, ArrowDown, Search, UserCircle,
+  RotateCcw, AlertTriangle,
 } from 'lucide-react'
 import type { EnterpriseRole, ModuleRow, PermRow, RMPRow } from './types'
 import { STATUS_CONFIG } from './types'
@@ -262,11 +266,12 @@ function AssignedUsersModal({
 // ── Role Card ─────────────────────────────────────────────────────────────────
 
 function RoleCard({
-  role, isSelected, userCount, onSelect, onDuplicate, onDelete, onViewUsers,
+  role, isSelected, userCount, canManageRoles, onSelect, onDuplicate, onDelete, onViewUsers,
 }: {
   role: EnterpriseRole
   isSelected: boolean
   userCount: number
+  canManageRoles: boolean
   onSelect: () => void
   onDuplicate: () => void
   onDelete: () => void
@@ -297,16 +302,18 @@ function RoleCard({
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-text-muted uppercase tracking-widest shrink-0">System</span>
           )}
         </div>
-        <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-          <button onClick={onDuplicate} className="p-1.5 rounded-lg hover:bg-white/5 text-text-muted hover:text-white transition-all" title="Duplicate">
-            <Copy className="w-3 h-3" />
-          </button>
-          {!role.is_system && (
-            <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-all" title="Delete">
-              <Trash2 className="w-3 h-3" />
+        {canManageRoles && (
+          <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+            <button onClick={onDuplicate} className="p-1.5 rounded-lg hover:bg-white/5 text-text-muted hover:text-white transition-all" title="Duplicate">
+              <Copy className="w-3 h-3" />
             </button>
-          )}
-        </div>
+            {!role.is_system && (
+              <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-all" title="Delete">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <p className="text-text-muted text-xs mb-3 line-clamp-2">{role.description || 'No description'}</p>
       <div className="flex items-center justify-between">
@@ -326,14 +333,16 @@ function RoleCard({
 }
 
 function PermissionCard({
-  module, permissions, roleId, localState, saving, isAdmin, onToggle,
+  module, permissions, roleId, localState, dirtyKeys, savingAll, isAdmin, canEditMatrix, onToggle,
 }: {
   module: ModuleRow
   permissions: PermRow[]
   roleId: string
   localState: Record<string, boolean>
-  saving: string | null
+  dirtyKeys: Set<string>
+  savingAll: boolean
   isAdmin: boolean
+  canEditMatrix: boolean
   onToggle: (moduleId: string, permId: string) => void
 }) {
   const [expanded, setExpanded] = useState(true)
@@ -345,10 +354,18 @@ function PermissionCard({
   // If no permissions are supported, don't render this module
   if (filteredPermissions.length === 0) return null
 
+  // Read-only for admin (always-granted banner shown elsewhere) OR for a role
+  // that can view this matrix but lacks can_manage_permissions on admin-hub.
+  const readOnly = isAdmin || !canEditMatrix
+
   const enabledCount = isAdmin ? filteredPermissions.length : filteredPermissions.filter(p => localState[`${roleId}:${module.id}:${p.id}`]).length
+  const hasDirty = !readOnly && filteredPermissions.some(p => dirtyKeys.has(`${roleId}:${module.id}:${p.id}`))
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden">
+    <div className={cn(
+      'rounded-2xl border overflow-hidden transition-colors',
+      hasDirty ? 'border-accent-gold/30 bg-accent-gold/[0.03]' : 'border-white/5 bg-white/[0.02]'
+    )}>
       <button
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors"
@@ -357,6 +374,9 @@ function PermissionCard({
           {expanded ? <ChevronDown className="w-4 h-4 text-text-muted" /> : <ChevronRight className="w-4 h-4 text-text-muted" />}
           <span className="font-semibold text-white text-sm">{module.module_name}</span>
           <span className="text-[10px] text-text-muted">{module.module_key}</span>
+          {hasDirty && (
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-gold" title="Unsaved changes" />
+          )}
         </div>
         <span className={cn(
           'text-[10px] px-2 py-0.5 rounded-full font-bold',
@@ -379,13 +399,19 @@ function PermissionCard({
               {filteredPermissions.map(perm => {
                 const key = `${roleId}:${module.id}:${perm.id}`
                 const enabled = isAdmin ? true : (localState[key] ?? false)
-                const isSaving = saving === key
+                const isDirty = dirtyKeys.has(key)
                 return (
                   <button
                     key={perm.id}
-                    onClick={() => !isAdmin && onToggle(module.id, perm.id)}
-                    disabled={isSaving || isAdmin}
-                    title={isAdmin ? 'Granted — system administrator' : `${enabled ? 'Disable' : 'Enable'} ${perm.permission_name}`}
+                    onClick={() => !readOnly && onToggle(module.id, perm.id)}
+                    disabled={savingAll || readOnly}
+                    title={
+                      isAdmin
+                        ? 'Granted — system administrator'
+                        : !canEditMatrix
+                          ? 'You need the "Manage Permissions" admin-hub capability to edit this'
+                          : `${enabled ? 'Disable' : 'Enable'} ${perm.permission_name}`
+                    }
                     className={cn(
                       'flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all duration-200',
                       isAdmin
@@ -393,7 +419,8 @@ function PermissionCard({
                         : enabled
                           ? 'bg-accent-gold/15 border-accent-gold/40 text-accent-gold hover:bg-accent-gold/25'
                           : 'bg-white/[0.02] border-white/5 text-text-muted hover:border-white/15 hover:text-white',
-                      isSaving && 'opacity-50 cursor-wait'
+                      isDirty && !readOnly && 'ring-1 ring-accent-gold/60',
+                      (savingAll || (!isAdmin && !canEditMatrix)) && 'opacity-50 cursor-not-allowed'
                     )}
                   >
                     {enabled
@@ -401,6 +428,7 @@ function PermissionCard({
                       : <X className="w-3 h-3" />
                     }
                     {PERMISSION_LABELS[perm.permission_key as keyof typeof PERMISSION_LABELS] ?? perm.permission_name}
+                    {isDirty && !readOnly && <span className="w-1 h-1 rounded-full bg-accent-gold" />}
                   </button>
                 )
               })}
@@ -414,11 +442,23 @@ function PermissionCard({
 
 export function RoleManagement() {
   const { toast } = useToast()
+  const { role: currentUserRole } = useAppStore()
+  const { can } = usePermissions()
+  const isAdminUser = currentUserRole === 'admin' || currentUserRole === 'super_admin'
+  // "Manage Roles" = create/duplicate/delete roles. "Manage Permissions" =
+  // toggle/save the permission matrix for a role. These are separate
+  // admin-hub capabilities so a role can be granted one without the other
+  // (e.g. a support lead who can adjust permissions but shouldn't be able
+  // to create or delete roles outright).
+  const canManageRoles = isAdminUser || can('admin-hub', 'can_manage_roles')
+  const canManagePermissions = isAdminUser || can('admin-hub', 'can_manage_permissions')
   const [data, setData] = useState<MatrixData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState<string | null>(null)
+  const [savingAll, setSavingAll] = useState(false)
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
   const [localState, setLocalState] = useState<Record<string, boolean>>({})
+  // Pending, unsaved edits: key -> new value. Only written to the DB on Save.
+  const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({})
   const [userCounts, setUserCounts] = useState<Record<string, number>>({})
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [viewUsersRole, setViewUsersRole] = useState<EnterpriseRole | null>(null)
@@ -426,14 +466,24 @@ export function RoleManagement() {
   const [newRoleDesc, setNewRoleDesc] = useState('')
   const [creating, setCreating] = useState(false)
 
+  const savedStateRef = useRef<Record<string, boolean>>({})
+  const dirtyKeys = new Set(Object.keys(pendingChanges))
+  const hasUnsavedChanges = dirtyKeys.size > 0
+
   const fetchMatrix = useCallback(async () => {
     setLoading(true)
     try {
-      const [rolesRes, modulesRes, permsRes, rmpRes, profilesRes] = await Promise.all([
+      const [rolesRes, modulesRes, permsRes, rmpRows, profilesRes] = await Promise.all([
         supabase.from('roles').select('*').order('priority'),
         supabase.from('modules').select('*').eq('is_active', true).order('sort_order'),
         supabase.from('permissions').select('*').order('permission_key'),
-        supabase.from('role_module_permissions').select('*'),
+        // Paginated — a plain select('*') silently truncates at PostgREST's
+        // default 1000-row Max Rows limit on a fully-seeded matrix (roles x
+        // modules x permissions commonly exceeds 1000), which is what made
+        // saved permission changes intermittently "disappear" after a
+        // refresh even though they were correctly persisted. See
+        // fetchAllRoleModulePermissions in lib/rbac.ts for the full story.
+        fetchAllRoleModulePermissions(),
         supabase.from('profiles').select('role'),
       ])
 
@@ -442,10 +492,10 @@ export function RoleManagement() {
       if (permsRes.error) throw permsRes.error
 
       // Enrich roles with inherits_from_name
-      const rawRoles: EnterpriseRole[] = (rolesRes.data ?? []).map(r => ({
+      const rawRoles: EnterpriseRole[] = (rolesRes.data ?? []).map((r: EnterpriseRole) => ({
         ...r,
         inherits_from_name: r.inherits_from
-          ? (rolesRes.data ?? []).find((x: any) => x.id === r.inherits_from)?.role_name ?? null
+          ? (rolesRes.data ?? []).find((x: EnterpriseRole) => x.id === r.inherits_from)?.role_name ?? null
           : null,
       }))
 
@@ -453,7 +503,7 @@ export function RoleManagement() {
         roles: rawRoles,
         modules: modulesRes.data ?? [],
         permissions: permsRes.data ?? [],
-        matrix: rmpRes.data ?? [],
+        matrix: rmpRows as RMPRow[],
       }
       setData(json)
 
@@ -461,7 +511,9 @@ export function RoleManagement() {
       for (const row of json.matrix) {
         init[`${row.role_id}:${row.module_id}:${row.permission_id}`] = row.is_enabled
       }
+      savedStateRef.current = init
       setLocalState(init)
+      setPendingChanges({})
       setSelectedRoleId(prev => prev ?? (json.roles[0]?.id ?? null))
 
       const counts: Record<string, number> = {}
@@ -480,69 +532,175 @@ export function RoleManagement() {
 
   useEffect(() => { fetchMatrix() }, [fetchMatrix])
 
-  const toggle = async (moduleId: string, permId: string) => {
-    if (!selectedRoleId) return
-    const key = `${selectedRoleId}:${moduleId}:${permId}`
-    const current = localState[key] ?? false
-    const next = !current
-    setLocalState(prev => ({ ...prev, [key]: next }))
-    setSaving(key)
-    try {
-      // Try upsert first
-      const { error } = await supabase
-        .from('role_module_permissions')
-        .upsert(
-          { role_id: selectedRoleId, module_id: moduleId, permission_id: permId, is_enabled: next },
-          { onConflict: 'role_id,module_id,permission_id', ignoreDuplicates: false }
-        )
-      if (error) {
-        // Fallback: try update if row exists, otherwise insert
-        const { data: existing } = await supabase
-          .from('role_module_permissions')
-          .select('id')
-          .eq('role_id', selectedRoleId)
-          .eq('module_id', moduleId)
-          .eq('permission_id', permId)
-          .maybeSingle()
-
-        if (existing) {
-          const { error: updateErr } = await supabase
-            .from('role_module_permissions')
-            .update({ is_enabled: next })
-            .eq('id', existing.id)
-          if (updateErr) throw updateErr
-        } else {
-          const { error: insertErr } = await supabase
-            .from('role_module_permissions')
-            .insert({ role_id: selectedRoleId, module_id: moduleId, permission_id: permId, is_enabled: next })
-          if (insertErr) throw insertErr
-        }
+  // Warn before leaving the page/tab with unsaved permission changes.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = ''
       }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasUnsavedChanges])
+
+  // Toggle only updates local UI state + the pending-changes set. Nothing is
+  // written to the database until "Save Changes" is clicked.
+  const toggle = (moduleId: string, permId: string) => {
+    if (!selectedRoleId || !canManagePermissions) return
+    const key = `${selectedRoleId}:${moduleId}:${permId}`
+    const next = !(localState[key] ?? false)
+    setLocalState(prev => ({ ...prev, [key]: next }))
+
+    const savedValue = savedStateRef.current[key] ?? false
+    setPendingChanges(prev => {
+      const updated = { ...prev }
+      if (next === savedValue) {
+        // Reverted back to the saved value — no longer a pending change.
+        delete updated[key]
+      } else {
+        updated[key] = next
+      }
+      return updated
+    })
+  }
+
+  // Persist every pending change in one batch write.
+  const saveChanges = async () => {
+    if (!selectedRoleId || dirtyKeys.size === 0 || !canManagePermissions) return
+    setSavingAll(true)
+    try {
+      const rows = Object.entries(pendingChanges).map(([key, is_enabled]) => {
+        const [role_id, module_id, permission_id] = key.split(':')
+        return { role_id, module_id, permission_id, is_enabled }
+      })
+
+      // .select() is required to detect an RLS-blocked write. rmp_admin_write
+      // only allows this for callers whose OWN profiles.role is literally
+      // 'admin'/'super_admin' — a role granted "Manage Permissions" via this
+      // very screen (but whose literal role is something else, e.g. a
+      // custom role or 'manager') passes the frontend's canManagePermissions
+      // check but gets silently blocked at the database layer. Without
+      // .select(), that silent block looks identical to success: error is
+      // null, "Permissions Saved" shows, the toggle looks enabled — until
+      // the next page load re-fetches the real (unchanged) DB state and the
+      // toggle reverts. Comparing returned rows against what we tried to
+      // write catches that.
+      const { data: written, error } = await supabase
+        .from('role_module_permissions')
+        .upsert(rows, { onConflict: 'role_id,module_id,permission_id', ignoreDuplicates: false })
+        .select('role_id,module_id,permission_id')
+
+      if (error) throw error
+
+      if (!written || written.length < rows.length) {
+        throw new Error(
+          "Some permission changes weren't saved — you may not have permission to modify this role's matrix. " +
+          'Ask an admin/super_admin to verify your access, or check that Roles & Permissions RLS is up to date.'
+        )
+      }
+
+      const oldValue = Object.fromEntries(
+        Object.keys(pendingChanges).map(key => [key, savedStateRef.current[key] === true])
+      )
+      savedStateRef.current = { ...savedStateRef.current, ...pendingChanges }
+      setPendingChanges({})
+
       const role = data?.roles.find(r => r.id === selectedRoleId)
       if (role) invalidatePermissionCache(role.role_key)
+
+      logAuditEvent({
+        action: 'permission_changed',
+        targetType: 'role',
+        targetId: selectedRoleId,
+        module: 'role_module_permissions',
+        oldValue,
+        newValue: pendingChanges,
+      })
+
+      toast({ title: 'Permissions Saved', description: `${rows.length} change${rows.length !== 1 ? 's' : ''} applied.` })
     } catch (e: any) {
-      setLocalState(prev => ({ ...prev, [key]: current }))
-      toast({ variant: 'destructive', title: 'Failed to update permission', description: e?.message })
+      toast({ variant: 'destructive', title: 'Failed to save permissions', description: e?.message })
     } finally {
-      setSaving(null)
+      setSavingAll(false)
     }
   }
 
+  // Revert all unsaved edits back to the last-saved state.
+  const discardChanges = () => {
+    setLocalState(savedStateRef.current)
+    setPendingChanges({})
+  }
+
+  const selectRole = (roleId: string) => {
+    if (roleId === selectedRoleId) return
+    if (hasUnsavedChanges && !confirm('You have unsaved permission changes for this role. Switch roles and discard them?')) {
+      return
+    }
+    setPendingChanges({})
+    setLocalState(savedStateRef.current)
+    setSelectedRoleId(roleId)
+  }
+
   const handleDuplicate = async (role: EnterpriseRole) => {
+    if (!canManageRoles) return
     const newKey = `${role.role_key}_copy_${Date.now()}`
-    const { error } = await supabase.from('roles').insert({
-      role_key: newKey,
-      role_name: `${role.role_name} (Copy)`,
-      description: role.description,
-      priority: role.priority + 1,
-      is_system: false,
-    })
+    const { data: newRole, error } = await supabase
+      .from('roles')
+      .insert({
+        role_key: newKey,
+        role_name: `${role.role_name} (Copy)`,
+        description: role.description,
+        priority: role.priority + 1,
+        is_system: false,
+      })
+      .select('id')
+      .single()
     if (error) { toast({ variant: 'destructive', title: 'Failed', description: error.message }); return }
-    toast({ title: 'Role Duplicated' })
+
+    // The roles_seed_permissions trigger (migration 046) auto-zero-fills the
+    // new role's role_module_permissions the instant it's inserted above. To
+    // make "Duplicate" actually clone the source role's matrix (rather than
+    // producing an empty, deny-by-default role with the same name), copy
+    // every enabled permission from the source role onto the new one.
+    if (newRole?.id) {
+      const sourceEnabled = (data?.matrix ?? []).filter(
+        row => row.role_id === role.id && row.is_enabled
+      )
+      if (sourceEnabled.length > 0) {
+        const rows = sourceEnabled.map(row => ({
+          role_id: newRole.id,
+          module_id: row.module_id,
+          permission_id: row.permission_id,
+          is_enabled: true,
+        }))
+        const { error: copyError } = await supabase
+          .from('role_module_permissions')
+          .upsert(rows, { onConflict: 'role_id,module_id,permission_id' })
+        if (copyError) {
+          toast({
+            variant: 'destructive',
+            title: 'Role duplicated, but permissions could not be copied',
+            description: copyError.message,
+          })
+          fetchMatrix()
+          return
+        }
+      }
+    }
+
+    logAuditEvent({
+      action: 'role_created',
+      targetType: 'role',
+      targetId: newRole?.id ?? null,
+      newValue: { role_key: newKey, role_name: `${role.role_name} (Copy)`, duplicated_from: role.role_key },
+    })
+    toast({ title: 'Role Duplicated', description: 'Permissions copied from the source role.' })
     fetchMatrix()
   }
 
   const handleDelete = async (role: EnterpriseRole) => {
+    if (!canManageRoles) return
     if (role.is_system) { toast({ variant: 'destructive', title: 'Cannot delete system roles' }); return }
     if ((userCounts[role.id] ?? 0) > 0) {
       toast({ variant: 'destructive', title: 'Role has users', description: 'Reassign users before deleting.' }); return
@@ -550,23 +708,39 @@ export function RoleManagement() {
     if (!confirm(`Delete role "${role.role_name}"?`)) return
     const { error } = await supabase.from('roles').delete().eq('id', role.id)
     if (error) { toast({ variant: 'destructive', title: 'Failed', description: error.message }); return }
+    logAuditEvent({
+      action: 'role_deleted',
+      targetType: 'role',
+      targetId: role.id,
+      oldValue: { role_key: role.role_key, role_name: role.role_name },
+    })
     toast({ title: 'Role Deleted' })
     fetchMatrix()
   }
 
   const handleCreate = async () => {
-    if (!newRoleName.trim()) return
+    if (!newRoleName.trim() || !canManageRoles) return
     setCreating(true)
     const key = newRoleName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
-    const { error } = await supabase.from('roles').insert({
-      role_key: key,
-      role_name: newRoleName.trim(),
-      description: newRoleDesc.trim() || null,
-      priority: 50,
-      is_system: false,
-    })
+    const { data: created, error } = await supabase
+      .from('roles')
+      .insert({
+        role_key: key,
+        role_name: newRoleName.trim(),
+        description: newRoleDesc.trim() || null,
+        priority: 50,
+        is_system: false,
+      })
+      .select('id')
+      .single()
     setCreating(false)
     if (error) { toast({ variant: 'destructive', title: 'Failed', description: error.message }); return }
+    logAuditEvent({
+      action: 'role_created',
+      targetType: 'role',
+      targetId: created?.id ?? null,
+      newValue: { role_key: key, role_name: newRoleName.trim() },
+    })
     toast({ title: 'Role Created' })
     setShowCreateModal(false)
     setNewRoleName('')
@@ -593,15 +767,23 @@ export function RoleManagement() {
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-bold text-white uppercase tracking-widest">Roles</h3>
               <div className="flex gap-2">
-                <button onClick={fetchMatrix} className="p-1.5 rounded-lg hover:bg-white/5 text-text-muted hover:text-white transition-all">
+                <button
+                  onClick={() => {
+                    if (hasUnsavedChanges && !confirm('You have unsaved permission changes. Refresh and discard them?')) return
+                    fetchMatrix()
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-white/5 text-text-muted hover:text-white transition-all"
+                >
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent-gold text-background text-xs font-bold hover:opacity-90 transition-opacity"
-                >
-                  <Plus className="w-3.5 h-3.5" /> New Role
-                </button>
+                {canManageRoles && (
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent-gold text-background text-xs font-bold hover:opacity-90 transition-opacity"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> New Role
+                  </button>
+                )}
               </div>
             </div>
 
@@ -620,7 +802,8 @@ export function RoleManagement() {
                       role={role}
                       isSelected={selectedRoleId === role.id}
                       userCount={userCounts[role.id] ?? 0}
-                      onSelect={() => setSelectedRoleId(role.id)}
+                      canManageRoles={canManageRoles}
+                      onSelect={() => selectRole(role.id)}
                       onDuplicate={() => handleDuplicate(role)}
                       onDelete={() => handleDelete(role)}
                       onViewUsers={() => setViewUsersRole(role)}
@@ -667,7 +850,21 @@ export function RoleManagement() {
                 </div>
               )}
 
-              <div className="space-y-3">
+              {/* Read-only notice for users who can view this matrix but lack
+                  the admin-hub "Manage Permissions" capability to edit it. */}
+              {!isAdminRole && !canManagePermissions && (
+                <div className="flex items-start gap-3 p-4 rounded-2xl border border-white/10 bg-white/[0.03]">
+                  <AlertTriangle className="w-4 h-4 text-text-muted mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-text-secondary mb-0.5">Read-only view</p>
+                    <p className="text-[11px] text-text-muted leading-relaxed">
+                      You can view this permission matrix, but editing it requires the "Manage Permissions" admin-hub capability.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3 pb-20">
                 {data.modules.map(mod => (
                   <PermissionCard
                     key={mod.id}
@@ -675,8 +872,10 @@ export function RoleManagement() {
                     permissions={data.permissions}
                     roleId={activeRole.id}
                     localState={localState}
-                    saving={saving}
+                    dirtyKeys={dirtyKeys}
+                    savingAll={savingAll}
                     isAdmin={isAdminRole}
+                    canEditMatrix={canManagePermissions}
                     onToggle={(moduleId, permId) => toggle(moduleId, permId)}
                   />
                 ))}
@@ -685,6 +884,47 @@ export function RoleManagement() {
           )}
         </div>
       )}
+
+      {/* Sticky Save/Discard bar — appears only when there are unsaved edits */}
+      <AnimatePresence>
+        {hasUnsavedChanges && !isAdminRole && (
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 40 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 px-5 py-3.5 rounded-2xl border shadow-2xl"
+            style={{ backgroundColor: 'var(--surface-elevated)', borderColor: 'var(--border)' }}
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-accent-gold shrink-0" />
+              <span className="text-sm font-semibold text-white whitespace-nowrap">
+                {dirtyKeys.size} unsaved change{dirtyKeys.size !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={discardChanges}
+                disabled={savingAll}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-white/10 text-text-muted hover:text-white text-xs font-bold transition-all disabled:opacity-50"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Discard
+              </button>
+              <button
+                onClick={saveChanges}
+                disabled={savingAll}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent-gold text-background text-xs font-bold hover:opacity-90 disabled:opacity-50 transition-all"
+              >
+                {savingAll
+                  ? <div className="w-3.5 h-3.5 border-2 border-background/30 border-t-background rounded-full animate-spin" />
+                  : <Save className="w-3.5 h-3.5" />
+                }
+                Save Changes
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Create Role Modal */}
       <AnimatePresence>

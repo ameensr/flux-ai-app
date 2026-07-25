@@ -268,7 +268,14 @@ export const DailyUpdateReport: React.FC = () => {
           { label: 'Passed/Fixed', val: completedSupport, icon: CheckCircle, color: 'text-green-400 bg-green-500/5', ...bucketCardTooltip(supportRoleCol, 'Completed') },
           { label: 'Pending Run', val: pendingSupport, icon: Clock, color: 'text-yellow-400 bg-yellow-500/5', ...bucketCardTooltip(supportRoleCol, 'Pending') },
           { label: 'Blocked Issues', val: blockedSupport, icon: AlertCircle, color: 'text-red-400 bg-red-500/5', ...bucketCardTooltip(supportRoleCol, 'Blocked') },
-          { label: 'Overdue', val: overdueTasksCount, icon: AlertTriangle, color: 'text-rose-400 bg-rose-500/5', isClickable: true, tooltip: 'Rows whose Planned End Date has already passed and which have no Actual End Date yet. Click this card to filter the table to only these rows.' },
+          {
+            label: 'Overdue',
+            val: overdueTasksCount,
+            icon: AlertTriangle,
+            color: 'text-rose-400 bg-rose-500/5',
+            isClickable: true,
+            tooltip: 'Uses the "Planned End Date" and "Actual End Date" columns — keep those exact names for this count to work. A row is Overdue when Planned End Date has a past value and Actual End Date is still empty. Click this card to filter the table to only those rows.',
+          },
         ] : [
           { label: 'Release Tasks', val: totalRelease, icon: Layers, color: 'text-pink-400 bg-pink-500/5', tooltip: 'Total number of rows currently in the Release Testing Log for this project.' },
           { label: 'Smoke Passed', val: completedRelease, icon: CheckCircle, color: 'text-green-400 bg-green-500/5', ...bucketCardTooltip(releaseRoleCol, 'Completed') },

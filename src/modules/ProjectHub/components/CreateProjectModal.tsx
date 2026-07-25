@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Plus, Trash2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useTheme } from '@/context/ThemeContext'
 import { createProject } from '../projectService'
 import type { CreateProjectInput, ProjectStatus } from '../types'
@@ -17,6 +18,7 @@ interface CreateProjectModalProps {
 }
 
 export function CreateProjectModal({ onClose, onSuccess }: CreateProjectModalProps) {
+  useBodyScrollLock(true)
   const { toast } = useToast()
   const { isDark } = useTheme()
   const [loading, setLoading] = useState(false)

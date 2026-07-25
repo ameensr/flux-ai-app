@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react'
+﻿import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import type { Variants } from 'framer-motion'
 import DOMPurify from 'dompurify'
 import {
   TrendingUp, TrendingDown, Mail, Zap, Wrench, Shield, Check,
-  AlertTriangle, HelpCircle, Activity, Sun, Moon, Maximize2,
+  AlertTriangle, HelpCircle, Activity, Maximize2,
   Minimize2, RefreshCw, X, ChevronRight,
   BookOpen, Star, Sparkles, FileText, LayoutGrid, Users, History, CheckCheck,
   ArrowRightLeft, GitCompare, Palette, Lock, Unlock,
@@ -24,8 +24,12 @@ import { ReportTableShell, reportTableHeadClass, reportTableRowClass } from './r
 import { ReportSkeleton } from './report-preview/ReportSkeleton'
 import { ReportRail } from './report-preview/ReportRail'
 import { RankedProgressList } from './report-preview/RankedProgressList'
+import { buildHeroMetricSummaryLines } from './report-preview/HeroMetricSummary'
 import { ContinuousQATriage } from './ContinuousQATriage'
 import { ChartCallout } from './report-preview/ChartCallout'
+import { ImmersiveBackground } from './report-preview/ImmersiveBackground'
+import { DashboardLaunchOverlay } from './DashboardLaunchOverlay'
+import { hydrateSchemaFromLegacy, orderedVisibleColumns, type QAReportTableColumn } from '../qaReportColumnSchema'
 import { useColumnConfigStore } from '@/modules/DailyUpdateReport/columnConfigStore'
 
 // Display preferences (Dashboard Display Sections toggles, historical/timeline visibility,
@@ -47,6 +51,8 @@ function withLiveDisplayPrefs<T extends Record<string, any>>(form: T): T {
       showTimeline: live.showTimeline ?? form.showTimeline,
       visibleSupportColumns: live.visibleSupportColumns ?? form.visibleSupportColumns,
       visibleReleaseColumns: live.visibleReleaseColumns ?? form.visibleReleaseColumns,
+      supportColumnSchema: live.supportColumnSchema ?? form.supportColumnSchema,
+      releaseColumnSchema: live.releaseColumnSchema ?? form.releaseColumnSchema,
     }
   } catch {
     return form
@@ -137,7 +143,7 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
       size: landscape;
       margin: 12mm 10mm;
     }
-    
+
     body, html, #root, .min-h-screen {
       overflow: visible !important;
       height: auto !important;
@@ -148,13 +154,38 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
     * {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
-      box-shadow: none !important;
       text-shadow: none !important;
     }
 
-    /* Hide interactive elements, controls, sidebar buttons */
+    /* Hide interactive-only chrome — the report content itself keeps its live
+       styling (colors, gradients, layout) so the PDF matches what's on screen. */
     .print\:hidden, button, header, nav, select, .fixed.bottom-4 {
       display: none !important;
+    }
+
+    /* backdrop-filter renders inconsistently (or not at all) across print engines,
+       so swap it off — the cards themselves already carry mostly-opaque gradient
+       backgrounds, so they keep the same look without needing the blur. */
+    .qaly-report-root [class*="backdrop-blur"],
+    .qaly-report-root .glassmorphic-card {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+
+    /* A static replica of the live ambient gradient backdrop — the animated
+       ImmersiveBackground canvas/aurora layer is hidden for print (animations
+       and canvas don't reliably rasterize), so this keeps the same colorful
+       depth behind the translucent cards instead of a flat page background. */
+    .qaly-report-root::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background: ${theme === 'dark'
+        ? 'radial-gradient(circle at 30% 22%, rgba(212,175,55,0.16), transparent 42%), radial-gradient(circle at 88% 78%, rgba(59,130,246,0.13), transparent 48%), radial-gradient(circle at 8% 78%, rgba(168,85,247,0.10), transparent 42%), #070a13'
+        : 'radial-gradient(circle at 30% 22%, rgba(250,204,21,0.12), transparent 42%), radial-gradient(circle at 88% 78%, rgba(96,165,250,0.10), transparent 48%), radial-gradient(circle at 8% 78%, rgba(196,181,253,0.08), transparent 42%), #f8fafc'
+      } !important;
     }
 
     /* Prevent cards and charts from splitting across pages */
@@ -169,24 +200,55 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
       color: ${theme === 'dark' ? '#ffffff' : '#0f172a'} !important;
     }
 
-    /* Align columns nicely for standard paper width */
-    .max-w-7xl {
-      max-width: 100% !important;
-      width: 100% !important;
-      padding: 0 !important;
-      margin: 0 !important;
+    /* ── Print Friendly Report mode — a deliberately low-ink, high-contrast
+       variant (independent of the current theme) for actual paper printing.
+       Flattens every card to a plain white surface with a light border and
+       dark ink text; drops the ambient gradient, blur, shadows and motion. ── */
+    html.print-friendly-mode body,
+    html.print-friendly-mode html,
+    html.print-friendly-mode #root,
+    html.print-friendly-mode .min-h-screen,
+    html.print-friendly-mode .qaly-report-root {
+      background: #ffffff !important;
+      color: #0f172a !important;
     }
 
-    /* Correct chart dimensions on print page */
-    .h-56, .h-60, .h-64, .h-72, .h-80 {
-      height: 240px !important;
-      page-break-inside: avoid !important;
+    html.print-friendly-mode .qaly-report-root::before {
+      display: none !important;
     }
 
-    .recharts-responsive-container {
-      width: 100% !important;
-      height: 220px !important;
-      min-height: 220px !important;
+    html.print-friendly-mode .qaly-report-root * {
+      box-shadow: none !important;
+      text-shadow: none !important;
+      filter: none !important;
+      animation: none !important;
+      background-image: none !important;
+    }
+
+    html.print-friendly-mode .qaly-report-root .rounded-2xl,
+    html.print-friendly-mode .qaly-report-root .rounded-3xl,
+    html.print-friendly-mode .qaly-report-root .rounded-\\[24px\\],
+    html.print-friendly-mode .qaly-report-root .rounded-\\[28px\\],
+    html.print-friendly-mode .qaly-report-root .rounded-\\[32px\\] {
+      background: #ffffff !important;
+      border: 1px solid #d8dee8 !important;
+    }
+
+    /* Utility classes designed for a dark backdrop (white text/borders) would be
+       invisible against the forced white page — repoint them to readable ink. */
+    html.print-friendly-mode .qaly-report-root [class*="text-white"] {
+      color: #0f172a !important;
+    }
+    html.print-friendly-mode .qaly-report-root [class*="border-white"] {
+      border-color: #d8dee8 !important;
+    }
+    html.print-friendly-mode .qaly-report-root h1,
+    html.print-friendly-mode .qaly-report-root h2,
+    html.print-friendly-mode .qaly-report-root h3,
+    html.print-friendly-mode .qaly-report-root h4,
+    html.print-friendly-mode .qaly-report-root h5,
+    html.print-friendly-mode .qaly-report-root h6 {
+      color: #0f172a !important;
     }
   }
 `
@@ -198,7 +260,7 @@ import {
 import { toast } from '@/hooks/use-toast'
 import { AIService } from '@/services/ai/ai-service'
 import { useQAReportStore } from '../store'
-import { ensureFormData } from '../types'
+import { ensureFormData, isPassStatus, isFailStatus, isBlockedStatus } from '../types'
 import { getSectionVisibility } from './DashboardSectionToggles'
 import type { QAReportForm, SupportTicket, ReleaseItem, HistoricalDefect } from '../types'
 import { useTheme } from '@/context/ThemeContext'
@@ -214,7 +276,6 @@ import { resolveChartAnimation, glowStyle, GlowAreaGradient, StackedAreaGradient
 
 // Report preview has its own isolated theme system — independent of the global dark/light toggle.
 type ReportThemeId = 'light' | 'dark'
-import pptxgen from 'pptxgenjs'
 
 // No mock/dummy data — historical analytics use only the user's real saved reports
 
@@ -330,6 +391,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const { savedReports, saveReport, fetchReports } = useQAReportStore()
   const [searchParams] = useSearchParams()
   const reportIdFromUrl = searchParams.get('reportId')
+  const launchedFromForm = searchParams.get('launch') === '1'
 
   // Subscribed (not `.getState()`) so this component re-renders once the
   // Daily Update column config finishes loading — needed to resolve
@@ -358,14 +420,46 @@ const ReportPreviewDashboardContent: React.FC = () => {
     return { keys, labels }
   }
 
+  const resolvePreviewColumns = (
+    tableKey: 'support' | 'release',
+    schema: QAReportTableColumn[] | undefined,
+    legacyVisibility: Record<string, boolean> | undefined,
+    rows: Array<{ customFields?: Record<string, any> }>,
+    dupColumns: typeof dupSupportColumnsForLabels,
+  ) => {
+    const { keys, labels } = buildCustomFieldEntries(rows, dupColumns)
+    // Prefer labels already stored on the schema (Create New renamed labels)
+    const customLabels = { ...labels }
+    for (const col of schema || []) {
+      if (col.kind === 'custom') customLabels[col.id] = col.label
+    }
+    const hydrated = hydrateSchemaFromLegacy(tableKey, schema, legacyVisibility, customLabels)
+    return orderedVisibleColumns(hydrated)
+  }
+
+  // Fresh Launch from /qa-report → play RELEASE TRIAGE in this tab, then reveal dashboard
+  const [showLaunchTriage, setShowLaunchTriage] = useState(() => {
+    if (launchedFromForm && typeof window !== 'undefined') {
+      sessionStorage.removeItem('qaly-dashboard-entrance-played')
+    }
+    return launchedFromForm
+  })
+  const [dashboardRevealed, setDashboardRevealed] = useState(!launchedFromForm)
+
   // Track if entrance animations have already been played (e.g. page refresh)
-  const hasPlayed = typeof window !== 'undefined' && sessionStorage.getItem('qaly-dashboard-entrance-played') === 'true'
+  // Skip when launching from form so the dashboard entrance plays after triage.
+  const hasPlayed =
+    typeof window !== 'undefined' &&
+    !launchedFromForm &&
+    sessionStorage.getItem('qaly-dashboard-entrance-played') === 'true'
   // Charts skip their draw-in animation once played this session, and always for reduced-motion users
   const chartAnimationEnabled = resolveChartAnimation(hasPlayed)
 
   useEffect(() => {
-    sessionStorage.setItem('qaly-dashboard-entrance-played', 'true')
-  }, [])
+    if (!showLaunchTriage) {
+      sessionStorage.setItem('qaly-dashboard-entrance-played', 'true')
+    }
+  }, [showLaunchTriage])
 
   const containerVariants: Variants = {
     hidden: { opacity: hasPlayed ? 1 : 0 },
@@ -414,12 +508,40 @@ const ReportPreviewDashboardContent: React.FC = () => {
   })
   // isLoaded starts true only if we have localStorage data (no reportId) or will be set after fetch
   const [isLoaded, setIsLoaded] = useState(() => !reportIdFromUrl && !!localStorage.getItem('current-qa-report-data'))
+  const isLoadedRef = useRef(isLoaded)
+  isLoadedRef.current = isLoaded
   // Report metadata (generated timestamp / draft-final status) — sourced from the saved report record,
   // never fabricated. Absent for reports launched directly from the form before saving.
   const [reportMeta, setReportMeta] = useState<{ generatedDate?: string; status?: 'Draft' | 'Final'; createdBy?: string }>({})
   const vis = getSectionVisibility(data)
   // Helper: returns null if section is disabled
   const gated = (key: string, content: React.ReactNode) => vis[key] !== false ? content : null
+
+  const stripLaunchParam = useCallback(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      if (!params.has('launch')) return
+      params.delete('launch')
+      const qs = params.toString()
+      window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const handleLaunchTriageComplete = useCallback(() => {
+    const reveal = () => {
+      if (!isLoadedRef.current) {
+        window.setTimeout(reveal, 60)
+        return
+      }
+      stripLaunchParam()
+      setDashboardRevealed(true)
+      // Let the dashboard breathe in under the overlay, then dismiss triage
+      window.setTimeout(() => setShowLaunchTriage(false), 280)
+    }
+    reveal()
+  }, [stripLaunchParam])
 
   // Nav items mirror the actual rendered section order — a section only appears here if
   // its corresponding vis flag (or underlying data) means it will actually be rendered.
@@ -432,7 +554,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
     { id: 'defects', label: 'Defects', show: vis.show_defectAnalysis !== false },
     { id: 'comparison', label: 'WoW', show: vis.show_wowComparison !== false }
   ]
-  const { theme: globalTheme } = useTheme()
+  const { theme: globalTheme, toggleTheme } = useTheme()
   const theme = globalTheme === 'light' ? 'light' : 'dark'
   // No longer user-toggleable (the "Motion" control was removed from the top bar) — ambient
   // background motion just follows whatever preference was last saved, defaulting to on.
@@ -453,6 +575,54 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const [showTeamCapacityModal, setShowTeamCapacityModal] = useState(false)
   const [showQualityScoreModal, setShowQualityScoreModal] = useState(false)
   const [showReleaseScopeModal, setShowReleaseScopeModal] = useState(false)
+
+  // Pause expensive ambient canvas while any modal / launch overlay is open
+  const particlesPaused =
+    showLaunchTriage ||
+    showDefectModal ||
+    showWorkDistributionModal ||
+    showProductionIssuesModal ||
+    showReleaseReadinessModal ||
+    showTeamCapacityModal ||
+    showQualityScoreModal ||
+    showReleaseScopeModal
+
+  const releasePreviewColumns = useMemo(
+    () =>
+      resolvePreviewColumns(
+        'release',
+        data.releaseColumnSchema,
+        data.visibleReleaseColumns,
+        data.releaseItems,
+        dupReleaseColumnsForLabels,
+      ),
+    // resolvePreviewColumns closes over stable helpers in this render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data.releaseColumnSchema, data.visibleReleaseColumns, data.releaseItems, dupReleaseColumnsForLabels],
+  )
+
+  const supportPreviewColumns = useMemo(
+    () =>
+      resolvePreviewColumns(
+        'support',
+        data.supportColumnSchema,
+        data.visibleSupportColumns,
+        data.supportTickets,
+        dupSupportColumnsForLabels,
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data.supportColumnSchema, data.visibleSupportColumns, data.supportTickets, dupSupportColumnsForLabels],
+  )
+
+  const releaseScopeVisibleColumns = useMemo(() => {
+    if (data.releaseColumnSchema?.length) {
+      return Object.fromEntries(data.releaseColumnSchema.map(c => [c.id, c.visible !== false]))
+    }
+    if (data.visibleReleaseColumns) return data.visibleReleaseColumns
+    const map: Record<string, boolean> = {}
+    for (const c of releasePreviewColumns) map[c.id] = true
+    return map
+  }, [data.releaseColumnSchema, data.visibleReleaseColumns, releasePreviewColumns])
   const [hoveredKPI, setHoveredKPI] = useState<string | null>(null)
   const [expandedKPICategories, setExpandedKPICategories] = useState<Record<string, boolean>>(() => {
     const saved = localStorage.getItem('qaly-expanded-kpi-categories')
@@ -482,8 +652,6 @@ const ReportPreviewDashboardContent: React.FC = () => {
   })
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
   const [activeSection, setActiveSection] = useState('overview')
-
-  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const sectionsRef = {
     overview: useRef<HTMLDivElement>(null),
@@ -546,14 +714,24 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
 
   // ── Calculation Utilities ──────────────────────────────────────────────────
+  // Test Pass Rate — same pass matcher as /qa-report Release table & quality score
+  // (Pass / Passed / Completed / Success, case-insensitive). Exact `=== 'Pass'`
+  // missed live DUP statuses and showed 0% incorrectly.
   const releaseCount = data.releaseItems.length
-  const releasePassed = data.releaseItems.filter(i => i?.status === 'Pass').length
-  const releaseFailed = data.releaseItems.filter(i => i?.status === 'Fail').length
-  const releaseBlocked = data.releaseItems.filter(i => i?.status === 'Blocked').length
+  const releasePassed = data.releaseItems.filter(i => isPassStatus(i?.status)).length
+  const releaseFailed = data.releaseItems.filter(i => isFailStatus(i?.status)).length
+  const releaseBlocked = data.releaseItems.filter(i => isBlockedStatus(i?.status)).length
   const passRate = releaseCount ? Math.round((releasePassed / releaseCount) * 100) : 0
 
-  const activeDefectsTotal = data.defectsLastWeek.reported
-  const defectClosureRate = activeDefectsTotal ? Math.round((data.defectsLastWeek.closed / activeDefectsTotal) * 100) : 0
+  // Defect Closure — prefer uploaded Release Bug Status (live sheet metrics);
+  // fall back to manual Defects — Last Week fields from the form.
+  const bugMetrics = data.releaseBugStatus?.metrics
+  const activeDefectsTotal = bugMetrics?.totalBugs || data.defectsLastWeek.reported
+  const defectClosureRate = bugMetrics && bugMetrics.totalBugs > 0
+    ? Math.round(bugMetrics.closurePercentage)
+    : (data.defectsLastWeek.reported
+      ? Math.round((data.defectsLastWeek.closed / data.defectsLastWeek.reported) * 100)
+      : 0)
 
   // ── Executive Quality Score Calculation ──
   const qualityStats = calculateQAScore(data)
@@ -595,9 +773,9 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
   // ── Sprint Health calculations ──
   const totalCases = data.releaseItems.length
-  const passedCases = data.releaseItems.filter(i => i?.status === 'Pass').length
-  const failedCases = data.releaseItems.filter(i => i?.status === 'Fail').length
-  const blockedCases = data.releaseItems.filter(i => i?.status === 'Blocked').length
+  const passedCases = releasePassed
+  const failedCases = releaseFailed
+  const blockedCases = releaseBlocked
   const inProgressCases = data.releaseItems.filter(i => i?.status === 'In Progress').length
   const notExecutedCases = data.releaseItems.filter(i => i?.status === 'Not Started').length
   const pendingCases = inProgressCases + blockedCases
@@ -758,22 +936,87 @@ const ReportPreviewDashboardContent: React.FC = () => {
     return 'None'
   }
 
-  // ── Confetti Particle system on health score > 90% ──
-  const [confetti, setConfetti] = useState<any[]>([])
+  // ── Confetti "Popper" Particle system on health score > 90% ──
+  // Simulates two physical party-popper cannons firing from the bottom corners:
+  // a fast upward burst that arcs under gravity, with air-drag deceleration,
+  // per-axis 3D tumble (rotateX/Y/Z) so strips catch the "light" as they flip,
+  // and a gentle side-to-side flutter as pieces settle — plus a soft fade-out
+  // near the floor instead of an abrupt pop-out-of-existence.
+  interface ConfettiPiece {
+    x: number
+    y: number
+    vx: number
+    vy: number
+    gravity: number
+    drag: number
+    rotX: number
+    rotY: number
+    rotZ: number
+    rotXSpeed: number
+    rotYSpeed: number
+    rotZSpeed: number
+    wobblePhase: number
+    wobbleSpeed: number
+    wobbleAmp: number
+    color: string
+    width: number
+    height: number
+    shape: 'strip' | 'square' | 'circle'
+    delay: number
+    age: number
+    opacity: number
+  }
+
+  const [confetti, setConfetti] = useState<ConfettiPiece[]>([])
+
+  const spawnConfettiBurst = () => {
+    const colors = ['#d4af37', '#facc15', '#fef08a', '#f5f5f5', '#eab308']
+    const shapes: ConfettiPiece['shape'][] = ['strip', 'strip', 'square', 'circle']
+    const w = window.innerWidth
+    const h = window.innerHeight
+
+    const makeCannon = (originX: number, baseAngleDeg: number, count: number): ConfettiPiece[] =>
+      Array.from({ length: count }, () => {
+        const spreadDeg = (Math.random() - 0.5) * 55
+        const angle = ((baseAngleDeg + spreadDeg) * Math.PI) / 180
+        const speed = 9 + Math.random() * 10
+        const shape = shapes[Math.floor(Math.random() * shapes.length)]
+        const isStrip = shape === 'strip'
+        return {
+          x: originX,
+          y: h + 10,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          gravity: 0.32 + Math.random() * 0.1,
+          drag: 0.986 + Math.random() * 0.008,
+          rotX: Math.random() * 360,
+          rotY: Math.random() * 360,
+          rotZ: Math.random() * 360,
+          rotXSpeed: (Math.random() - 0.5) * 22,
+          rotYSpeed: (Math.random() - 0.5) * 22,
+          rotZSpeed: (Math.random() - 0.5) * 14,
+          wobblePhase: Math.random() * Math.PI * 2,
+          wobbleSpeed: 0.08 + Math.random() * 0.1,
+          wobbleAmp: 0.6 + Math.random() * 1.2,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          width: isStrip ? 4 + Math.random() * 3 : 6 + Math.random() * 4,
+          height: isStrip ? 10 + Math.random() * 8 : shape === 'circle' ? 6 + Math.random() * 4 : 6 + Math.random() * 4,
+          shape,
+          delay: Math.floor(Math.random() * 10),
+          age: 0,
+          opacity: 1
+        }
+      })
+
+    // Two cannons fire from the bottom corners, arcing up and inward across the screen.
+    const leftCannon = makeCannon(w * 0.08, -62, 90)
+    const rightCannon = makeCannon(w * 0.92, -118, 90)
+    setConfetti([...leftCannon, ...rightCannon])
+  }
+
   useEffect(() => {
     if (qualityStats.score >= 90) {
-      const colors = ['#d4af37', '#facc15', '#fef08a']
-      const particles = Array.from({ length: 100 }, () => ({
-        x: Math.random() * window.innerWidth,
-        y: Math.random() * -100 - 20,
-        vx: Math.random() * 3 - 1.5,
-        vy: Math.random() * 4 + 3,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        size: Math.random() * 3 + 2,
-        rotation: Math.random() * 360,
-        rotationSpeed: Math.random() * 2 - 1
-      }))
-      setConfetti(particles)
+      spawnConfettiBurst()
       toast({ title: 'Quality Goal Achieved! 🏆', description: 'QA Health score has exceeded 90% this week.' })
     }
   }, [qualityStats.score])
@@ -781,14 +1024,36 @@ const ReportPreviewDashboardContent: React.FC = () => {
   useEffect(() => {
     if (confetti.length === 0) return
     let animationFrameId: number
+    const floor = window.innerHeight
+    const fadeZone = 140
+
     const updateConfetti = () => {
       setConfetti(prev => {
-        const next = prev.map(p => ({
-          ...p,
-          x: p.x + p.vx,
-          y: p.y + p.vy,
-          rotation: p.rotation + p.rotationSpeed
-        })).filter(p => p.y < window.innerHeight)
+        const next = prev
+          .map(p => {
+            if (p.delay > 0) return { ...p, delay: p.delay - 1 }
+            const vy = (p.vy + p.gravity)
+            const vx = p.vx * p.drag
+            const wobblePhase = p.wobblePhase + p.wobbleSpeed
+            const x = p.x + vx + Math.sin(wobblePhase) * p.wobbleAmp
+            const y = p.y + vy
+            const distanceToFloor = floor - y
+            const opacity = distanceToFloor < fadeZone ? Math.max(0, distanceToFloor / fadeZone) : 1
+            return {
+              ...p,
+              x,
+              y,
+              vx,
+              vy,
+              wobblePhase,
+              rotX: p.rotX + p.rotXSpeed,
+              rotY: p.rotY + p.rotYSpeed,
+              rotZ: p.rotZ + p.rotZSpeed,
+              age: p.age + 1,
+              opacity
+            }
+          })
+          .filter(p => p.y < floor + 20 && p.opacity > 0.01)
         if (next.length > 0) {
           animationFrameId = requestAnimationFrame(updateConfetti)
         }
@@ -819,80 +1084,6 @@ const ReportPreviewDashboardContent: React.FC = () => {
     columnConfigStore.fetchColumnConfigs('release', data?.projectId || null)
   }, [data?.projectId])
 
-  // ── Canvas Particle System ──
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    if (!enableParticles) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      return
-    }
-
-    let animationFrameId: number
-    let width = (canvas.width = window.innerWidth)
-    let height = (canvas.height = window.innerHeight)
-
-    const particleColors = theme === 'dark'
-      ? ['rgba(212,175,55,0.14)', 'rgba(59,130,246,0.14)', 'rgba(168,85,247,0.14)', 'rgba(16,185,129,0.14)']
-      : ['rgba(184,150,12,0.09)', 'rgba(37,99,235,0.09)', 'rgba(124,58,237,0.09)', 'rgba(5,150,105,0.09)']
-
-    const particles: any[] = Array.from({ length: 40 }, () => ({
-      x: Math.random() * width,
-      y: Math.random() * height,
-      vx: Math.random() * 0.3 - 0.15,
-      vy: Math.random() * 0.3 - 0.15,
-      radius: Math.random() * 2.5 + 1.2,
-      color: particleColors[Math.floor(Math.random() * particleColors.length)]
-    }))
-
-    const handleResize = () => {
-      width = canvas.width = window.innerWidth
-      height = canvas.height = window.innerHeight
-    }
-    window.addEventListener('resize', handleResize)
-
-    const animate = () => {
-      ctx.clearRect(0, 0, width, height)
-
-      particles.forEach((p, i) => {
-        p.x += p.vx
-        p.y += p.vy
-        if (p.x < 0 || p.x > width) p.vx *= -1
-        if (p.y < 0 || p.y > height) p.vy *= -1
-
-        ctx.beginPath()
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
-        ctx.fillStyle = p.color
-        ctx.fill()
-
-        for (let j = i + 1; j < particles.length; j++) {
-          const p2 = particles[j]
-          const dist = Math.hypot(p.x - p2.x, p.y - p2.y)
-          if (dist < 130) {
-            ctx.beginPath()
-            ctx.moveTo(p.x, p.y)
-            ctx.lineTo(p2.x, p2.y)
-            ctx.strokeStyle = theme === 'dark'
-              ? `rgba(255,255,255,${(1 - dist / 130) * 0.04})`
-              : `rgba(0,0,0,${(1 - dist / 130) * 0.04})`
-            ctx.lineWidth = 0.8
-            ctx.stroke()
-          }
-        }
-      })
-      animationFrameId = requestAnimationFrame(animate)
-    }
-
-    animate()
-    return () => {
-      cancelAnimationFrame(animationFrameId)
-      window.removeEventListener('resize', handleResize)
-    }
-  }, [theme, enableParticles])
-
   // Write theme classes
   useEffect(() => {
     localStorage.setItem('qaly-report-theme', theme)
@@ -903,23 +1094,31 @@ const ReportPreviewDashboardContent: React.FC = () => {
     }
   }, [theme])
 
-  // Scroll spy observer
+  // Scroll spy — rAF-throttled to avoid setState storms while scrolling
   useEffect(() => {
+    let raf = 0
     const handleScroll = () => {
-      const scrollPos = window.scrollY + 200
-      for (const [key, ref] of Object.entries(sectionsRef)) {
-        if (ref.current) {
-          const offsetTop = ref.current.offsetTop
-          const offsetHeight = ref.current.offsetHeight
-          if (scrollPos >= offsetTop && scrollPos < offsetTop + offsetHeight) {
-            setActiveSection(key)
-            break
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        const scrollPos = window.scrollY + 200
+        for (const [key, ref] of Object.entries(sectionsRef)) {
+          if (ref.current) {
+            const offsetTop = ref.current.offsetTop
+            const offsetHeight = ref.current.offsetHeight
+            if (scrollPos >= offsetTop && scrollPos < offsetTop + offsetHeight) {
+              setActiveSection(prev => (prev === key ? prev : key))
+              break
+            }
           }
         }
-      }
+      })
     }
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
   }, [])
 
   // Keyboard navigation for Presentation
@@ -1114,6 +1313,39 @@ Do not return markdown wraps, only raw JSON text.
     return candidates.reduce((best, cur) => (cur.closedDefects / cur.reportedDefects) > (best.closedDefects / best.reportedDefects) ? cur : best, candidates[0])
   })()
 
+  // Defect Closure Trend occupies the space under the hero metrics when enabled + enough history.
+  // When that chart is absent, show a low-opacity typed data summary under the 3 metric cards.
+  const showDefectClosureTrend =
+    vis.show_defectClosureTrend !== false && historicalChartsData.length >= 2
+
+  const heroMetricSummaryLines = useMemo(() => {
+    if (showDefectClosureTrend) return []
+    return buildHeroMetricSummaryLines({
+      projectName: data.projectName,
+      releaseCount,
+      releasePassed,
+      passRate,
+      defectClosureRate,
+      qualityScore: qualityStats.score,
+      qualityLabel: qualityStats.label,
+      totalBugs: bugMetrics?.totalBugs,
+      activeBugs: bugMetrics?.activeBugs,
+      supportTickets: data.supportTickets?.length || 0,
+    })
+  }, [
+    showDefectClosureTrend,
+    data.projectName,
+    data.supportTickets?.length,
+    releaseCount,
+    releasePassed,
+    passRate,
+    defectClosureRate,
+    qualityStats.score,
+    qualityStats.label,
+    bugMetrics?.totalBugs,
+    bugMetrics?.activeBugs,
+  ])
+
   // ── Table Adapters ──
   const prodIssuesData = [
     { category: 'Escaped Issue', lastWeek: data.lastWeek.escapedIssue ?? (data.lastWeek as any).codeFix, mtd: data.monthToDate.escapedIssue ?? (data.monthToDate as any).codeFix },
@@ -1181,285 +1413,38 @@ Do not return markdown wraps, only raw JSON text.
     URL.revokeObjectURL(url)
   }
 
-  const downloadPPTX = () => {
-    const ppt = new pptxgen()
-
-    // Set 16:9 widescreen layout
-    ppt.layout = 'LAYOUT_16X9'
-
-    const darkBg = '0F172A' // Slate-900 background style
-    const goldText = 'D4AF37'
-    const whiteText = 'FFFFFF'
-    const grayText = '94A3B8'
-
-    // Slide 1: Title Slide
-    const s1 = ppt.addSlide()
-    s1.background = { fill: darkBg }
-    s1.addText('QALY AI ENGINE — EXECUTIVE WEEKLY STATUS REPORT', {
-      x: 0.8,
-      y: 1.8,
-      w: 11.2,
-      h: 0.5,
-      fontSize: 16,
-      bold: true,
-      color: goldText,
-      fontFace: 'Segoe UI'
-    })
-    s1.addText(data.projectName.toUpperCase(), {
-      x: 0.8,
-      y: 2.3,
-      w: 11.2,
-      h: 1.2,
-      fontSize: 38,
-      bold: true,
-      color: whiteText,
-      fontFace: 'Segoe UI'
-    })
-    s1.addText(`Report Week: ${data.weekStart} to ${data.weekEnd}`, {
-      x: 0.8,
-      y: 3.6,
-      w: 11.2,
-      h: 0.5,
-      fontSize: 14,
-      color: grayText,
-      fontFace: 'Segoe UI'
-    })
-    s1.addText('CONFIDENTIAL DEVELOPER & OPERATIONS OUTLINE', {
-      x: 0.8,
-      y: 6.0,
-      w: 11.2,
-      h: 0.4,
-      fontSize: 10,
-      bold: true,
-      color: 'F43F5E',
-      fontFace: 'Segoe UI'
-    })
-
-    // Slide 2: KPI Metrics Overview
-    const s2 = ppt.addSlide()
-    s2.background = { fill: darkBg }
-    s2.addText('Key Performance Indicators', {
-      x: 0.8,
-      y: 0.5,
-      w: 11.2,
-      h: 0.6,
-      fontSize: 24,
-      bold: true,
-      color: goldText,
-      fontFace: 'Segoe UI'
-    })
-
-    const kpiData = [
-      { title: 'Support Emails', val: data.supportEmails, desc: 'Active support queue exceptions' },
-      { title: 'New Features', val: data.newFeatures, desc: 'Sprint modules tested' },
-      { title: 'Code Fixes', val: data.codeFixes, desc: 'Regression patches verified' },
-      { title: 'Defects Open', val: data.defectsLastWeek.open, desc: 'Unresolved active bugs' },
-      { title: 'Defects Closed', val: data.defectsLastWeek.closed, desc: 'Bugs verified and closed' }
-    ]
-
-    kpiData.forEach((kpi, idx) => {
-      const xPos = 0.8 + idx * 2.3
-      // Draw background shape for card
-      s2.addShape('rect', {
-        x: xPos,
-        y: 1.8,
-        w: 2.1,
-        h: 3.5,
-        fill: { color: '1E293B' },
-        line: { color: '334155', width: 1 }
-      })
-
-      s2.addText(kpi.title, {
-        x: xPos + 0.1,
-        y: 2.1,
-        w: 1.9,
-        h: 0.4,
-        fontSize: 11,
-        bold: true,
-        color: grayText,
-        fontFace: 'Segoe UI',
-        align: 'center'
-      })
-
-      s2.addText(String(kpi.val), {
-        x: xPos + 0.1,
-        y: 2.7,
-        w: 1.9,
-        h: 0.8,
-        fontSize: 38,
-        bold: true,
-        color: goldText,
-        fontFace: 'Segoe UI',
-        align: 'center'
-      })
-
-      s2.addText(kpi.desc, {
-        x: xPos + 0.1,
-        y: 3.8,
-        w: 1.9,
-        h: 1.0,
-        fontSize: 10,
-        color: grayText,
-        fontFace: 'Segoe UI',
-        align: 'center'
-      })
-    })
-
-    // Slide 3: Sprint Quality & Readiness Details
-    const s3 = ppt.addSlide()
-    s3.background = { fill: darkBg }
-    s3.addText('Sprint Quality & Release Readiness', {
-      x: 0.8,
-      y: 0.5,
-      w: 11.2,
-      h: 0.6,
-      fontSize: 24,
-      bold: true,
-      color: goldText,
-      fontFace: 'Segoe UI'
-    })
-
-    s3.addText('Executive Quality Score', {
-      x: 0.8,
-      y: 1.6,
-      w: 3.5,
-      h: 0.3,
-      fontSize: 13,
-      bold: true,
-      color: grayText,
-      fontFace: 'Segoe UI'
-    })
-    s3.addText(`${qualityStats.score}`, {
-      x: 0.8,
-      y: 1.9,
-      w: 3.5,
-      h: 0.9,
-      fontSize: 58,
-      bold: true,
-      color: goldText,
-      fontFace: 'Segoe UI'
-    })
-    s3.addText(`${qualityStats.label.toUpperCase()}\n\n${qualityStats.desc}`, {
-      x: 0.8,
-      y: 3.0,
-      w: 3.5,
-      h: 2.0,
-      fontSize: 11,
-      color: whiteText,
-      fontFace: 'Segoe UI'
-    })
-
-    // Health metrics card block
-    s3.addShape('rect', {
-      x: 4.8,
-      y: 1.6,
-      w: 7.0,
-      h: 3.8,
-      fill: { color: '1E293B' },
-      line: { color: '334155', width: 1 }
-    })
-    s3.addText('Regression & Sprint Health Analytics', {
-      x: 5.1,
-      y: 1.9,
-      w: 6.4,
-      h: 0.4,
-      fontSize: 16,
-      bold: true,
-      color: goldText,
-      fontFace: 'Segoe UI'
-    })
-
-    const bullets = [
-      `QA Health Verification Score: ${sprintHealthScore}%`,
-      `Estimated Release Readiness Level: ${releaseReadinessScore}%`,
-      `Total Release Ticket Volume: ${totalCases} test items`,
-      `Passed Regression Checks: ${passedCases} items`,
-      `Failed / Broken Regressions: ${failedCases} items`,
-      `Blocked / Impeded Regressions: ${blockedCases} items`
-    ]
-    s3.addText(bullets.map(b => `• ${b}`).join('\n\n'), {
-      x: 5.1,
-      y: 2.5,
-      w: 6.4,
-      h: 2.6,
-      fontSize: 12,
-      color: whiteText,
-      fontFace: 'Segoe UI'
-    })
-
-    // Slide 4: AI Insights & Summary Achievements
-    const s4 = ppt.addSlide()
-    s4.background = { fill: darkBg }
-    s4.addText('AI Weekly Achievements Summary', {
-      x: 0.8,
-      y: 0.5,
-      w: 11.2,
-      h: 0.6,
-      fontSize: 24,
-      bold: true,
-      color: goldText,
-      fontFace: 'Segoe UI'
-    })
-
-    const achs = aiSummary.achievements.map(a => `• ${a}`).join('\n\n')
-    s4.addText(achs || '• No developer notes or achievements compiled.', {
-      x: 0.8,
-      y: 1.5,
-      w: 11.2,
-      h: 4.5,
-      fontSize: 14,
-      color: whiteText,
-      fontFace: 'Segoe UI'
-    })
-
-    // Slide 5: Roadmap Priorities
-    const s5 = ppt.addSlide()
-    s5.background = { fill: darkBg }
-    s5.addText('Roadmap & Next Week Priorities', {
-      x: 0.8,
-      y: 0.5,
-      w: 11.2,
-      h: 0.6,
-      fontSize: 24,
-      bold: true,
-      color: goldText,
-      fontFace: 'Segoe UI'
-    })
-
-    const prs = data.nextPriorities.map(p => `• ${p.title} (Owner: ${p.owner}, Due: ${p.dueDate})\n  ${p.description}`).join('\n\n')
-    s5.addText(prs || '• No immediate priority queue changes configured.', {
-      x: 0.8,
-      y: 1.5,
-      w: 11.2,
-      h: 4.5,
-      fontSize: 11.5,
-      color: whiteText,
-      fontFace: 'Segoe UI'
-    })
-
-    // Save output
-    const outName = `${data.projectName.toLowerCase().replace(/\s+/g, '-')}-presentation`
-    ppt.writeFile({ fileName: outName })
-      .then(() => {
-        toast({ title: 'PowerPoint Exported!', description: `Saved ${outName}.pptx successfully.` })
-      })
-      .catch((err) => {
-        console.error(err)
-        toast({ variant: 'destructive', title: 'Export Failed', description: 'Could not create PowerPoint (.pptx) file.' })
-      })
-  }
-
   const handlePrint = () => {
     setShowExportMenu(false)
     // Allow React to close the export dropdown before triggering print
     setTimeout(() => window.print(), 300)
   }
 
-  if (!isLoaded) {
+  // "Print Friendly Report" � a low-ink, high-contrast variant for actual paper
+  // printing: flattens the premium gradients/glass cards to plain white cards
+  // with light borders and dark ink text, independent of whatever theme (dark
+  // or light) the user currently has the live dashboard in.
+  const handlePrintFriendly = () => {
+    setShowExportMenu(false)
+    document.documentElement.classList.add('print-friendly-mode')
+    let cleaned = false
+    const cleanup = () => {
+      if (cleaned) return
+      cleaned = true
+      document.documentElement.classList.remove('print-friendly-mode')
+      window.removeEventListener('afterprint', cleanup)
+    }
+    window.addEventListener('afterprint', cleanup)
+    // Safety net in case the browser doesn't fire `afterprint` (some older/embedded webviews).
+    setTimeout(cleanup, 15000)
+    // Allow React to close the export dropdown and the class to apply before printing
+    setTimeout(() => window.print(), 300)
+  }
+
+  if (!isLoaded && !showLaunchTriage) {
     return <ReportSkeleton theme={theme} />
   }
 
-  if (!data.weekStart) {
+  if (isLoaded && !data.weekStart) {
     return (
       <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center font-montreal transition-colors duration-300 ${theme === 'dark' ? 'bg-[#070a13] text-white' : 'bg-[#f8fafc] text-slate-900'}`}>
         <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 ${theme === 'dark' ? 'bg-white/5' : 'bg-black/5'}`}>
@@ -1477,93 +1462,72 @@ Do not return markdown wraps, only raw JSON text.
   }
 
   return (
-    <div className={`qaly-report-root min-h-screen ${tS.font} ${tS.bg} transition-colors duration-300 relative overflow-hidden pb-20 print:overflow-visible print:bg-white print:text-black`}>
-      {/* ── React Confetti Layer ── */}
-      {confetti.map((c, i) => (
-        <div
-          key={i}
-          className="fixed pointer-events-none z-50 rounded-sm"
-          style={{
-            left: c.x,
-            top: c.y,
-            width: c.size,
-            height: c.size,
-            background: c.color,
-            transform: `rotate(${c.rotation}deg)`,
-            transition: 'top 0.1s linear, left 0.1s linear'
-          }}
-        />
-      ))}
-
-      <style dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(getCustomStyles(theme), { FORCE_BODY: true }) }} />
-
-      {/* ── Canvas Animated Particles ── */}
-      <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none print:hidden" />
-
-      {/* ── Background Glow — subtle ambient depth, softened for a more professional tone ── */}
-      {enableParticles && (
-        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden print:hidden">
-          {/* Blob 1: Golden Aura (Top Center-Right) */}
-          <motion.div
-            animate={{
-              x: [0, 25, -15, 10, 0],
-              y: [0, -30, 20, -10, 0],
-              scale: [1, 1.06, 0.96, 1.03, 1]
-            }}
-            transition={{
-              duration: 30,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-            className={`absolute top-[-20%] left-[25%] w-[600px] h-[600px] rounded-full blur-[150px] opacity-[0.12] ${theme === 'dark' ? 'bg-gradient-to-br from-[#d4af37]/30 to-[#facc15]/5' : 'bg-gradient-to-br from-yellow-400/25 to-amber-300/5'}`}
-          />
-
-          {/* Blob 2: Cobalt Aura (Bottom Right) */}
-          <motion.div
-            animate={{
-              x: [0, -22, 15, -12, 0],
-              y: [0, 25, -18, 15, 0],
-              scale: [1, 1.04, 0.97, 1.05, 1]
-            }}
-            transition={{
-              duration: 34,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-            className={`absolute bottom-[-10%] right-[-5%] w-[560px] h-[560px] rounded-full blur-[160px] opacity-[0.10] ${theme === 'dark' ? 'bg-gradient-to-tr from-blue-600/25 to-indigo-500/5' : 'bg-gradient-to-tr from-blue-400/20 to-sky-300/5'}`}
-          />
-
-          {/* Blob 3: Indigo Aura (Middle Left) */}
-          <motion.div
-            animate={{
-              x: [0, 18, -12, 8, 0],
-              y: [0, 18, -20, 10, 0],
-              scale: [1, 1.05, 0.98, 1.03, 1]
-            }}
-            transition={{
-              duration: 38,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-            className={`absolute top-[35%] left-[-15%] w-[460px] h-[460px] rounded-full blur-[140px] opacity-[0.09] ${theme === 'dark' ? 'bg-gradient-to-tr from-purple-600/20 to-pink-500/5' : 'bg-gradient-to-tr from-purple-400/15 to-fuchsia-300/5'}`}
-          />
+    <>
+    {(!isLoaded || !data.weekStart) && showLaunchTriage && (
+      <div className={`min-h-screen ${theme === 'dark' ? 'bg-[#070a13]' : 'bg-[#f8fafc]'}`} />
+    )}
+    {isLoaded && !!data.weekStart && (
+    <>
+    {/*
+      Reveal uses opacity/translate only — avoid filter/scale on this root.
+      Those create a containing block that breaks position:fixed modals
+      (Release Scope, Defect Status, etc.) and their entrance animations.
+    */}
+    <motion.div
+      className={`qaly-report-root min-h-screen ${tS.font} ${tS.bg} transition-colors duration-300 relative overflow-hidden pb-20 print:overflow-visible`}
+      initial={launchedFromForm ? { opacity: 0, y: 12 } : false}
+      animate={
+        dashboardRevealed
+          ? { opacity: 1, y: 0 }
+          : { opacity: 0, y: 8 }
+      }
+      transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {/* ── React Confetti "Popper" Layer ── */}
+      {confetti.length > 0 && (
+        <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden" style={{ perspective: 600 }}>
+          {confetti.map((c, i) => (
+            <div
+              key={i}
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                width: c.width,
+                height: c.height,
+                background: c.color,
+                borderRadius: c.shape === 'circle' ? '50%' : 1,
+                opacity: c.delay > 0 ? 0 : c.opacity,
+                boxShadow: `0 0 3px ${c.color}55`,
+                transformStyle: 'preserve-3d',
+                transform: `translate3d(${c.x}px, ${c.y}px, 0) rotateX(${c.rotX}deg) rotateY(${c.rotY}deg) rotateZ(${c.rotZ}deg)`,
+                willChange: 'transform, opacity'
+              }}
+            />
+          ))}
         </div>
       )}
 
-      {/* ── Sticky Top Navigation — Premium Glassmorphic Bar ── */}
+      <style dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(getCustomStyles(theme), { FORCE_BODY: true }) }} />
+
+      {/* ── Immersive Background — breathing gradient aurora + mouse-parallax particle space ── */}
+      <ImmersiveBackground theme={theme} enabled={enableParticles} paused={particlesPaused} />
+
+      {/* ── Sticky Top Navigation — near-opaque to avoid blurring the animated backdrop while scrolling ── */}
       {!isPresentation && (
-        <header className="sticky top-0 z-40 transition-all duration-300 print:hidden" style={{ backdropFilter: 'blur(20px) saturate(1.8)' }}>
+        <header className="sticky top-0 z-40 transition-colors duration-300 print:hidden">
           <div
-            className="border-b px-4 sm:px-6 py-3"
+            className="border-b py-3"
             style={{
-              backgroundColor: theme === 'dark' ? 'rgba(9,9,11,0.72)' : 'rgba(255,255,255,0.72)',
+              backgroundColor: theme === 'dark' ? 'rgba(9,9,11,0.94)' : 'rgba(255,255,255,0.96)',
               borderColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
               boxShadow: theme === 'dark'
-                ? '0 4px 30px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03)'
-                : '0 4px 30px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.8)',
+                ? '0 4px 20px rgba(0,0,0,0.35)'
+                : '0 4px 16px rgba(0,0,0,0.04)',
             }}
           >
-            <div className="max-w-7xl mx-auto flex items-center gap-4">
+            {/* Same shell as page cards: max-w-[1600px] + px-4/sm:px-6 */}
+            <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 flex items-center gap-4">
               {/* Logo & Brand */}
               <div className="flex items-center gap-3 shrink-0">
                 <Logo size="sm" animate={false} />
@@ -1580,6 +1544,7 @@ Do not return markdown wraps, only raw JSON text.
 
               <ReportActionBar
                 theme={theme}
+                onToggleTheme={toggleTheme}
                 clientMode={clientMode}
                 onToggleClientMode={() => {
                   const next = !clientMode
@@ -1594,7 +1559,7 @@ Do not return markdown wraps, only raw JSON text.
                 showExportMenu={showExportMenu}
                 onToggleExportMenu={() => setShowExportMenu(v => !v)}
                 onPrint={() => { handlePrint(); setShowExportMenu(false) }}
-                onDownloadPPTX={() => { downloadPPTX(); setShowExportMenu(false) }}
+                onPrintFriendly={handlePrintFriendly}
                 onDownloadHTML={() => { downloadHTML(); setShowExportMenu(false) }}
                 onDownloadMarkdown={() => { downloadMarkdown(); setShowExportMenu(false) }}
                 onClose={() => window.close()}
@@ -1643,7 +1608,7 @@ Do not return markdown wraps, only raw JSON text.
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="max-w-[1600px] w-full mx-auto px-4 sm:px-6 relative z-10 pt-8 sm:pt-12 flex flex-col gap-16"
+        className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 relative z-10 pt-6 sm:pt-8 flex flex-col gap-10 sm:gap-12"
       >
 
         {/* ══════════════════════════════════════════════════════════
@@ -1675,16 +1640,23 @@ Do not return markdown wraps, only raw JSON text.
             onScrollNext={() => scrollToSection('kpis')}
             rightRailContent={
               <div className="flex flex-col gap-6 h-full">
-                {/* Bug Status Distribution */}
-                <div className={`p-5 rounded-3xl ${tS.softCard} flex-1 overflow-hidden flex flex-col relative`}>
-                  <ContinuousQATriage opacity="opacity-[0.3]" />
-                  <div className="relative z-10 flex flex-col h-full">
+                {/* Bug Status — list capped so bottom whitespace lets ContinuousQATriage show */}
+                <div
+                  className={`p-5 rounded-3xl ${tS.softCard} flex-1 flex flex-col relative overflow-hidden`}
+                >
+                  <ContinuousQATriage
+                    position="bottom"
+                    opacity={theme === 'dark' ? 'opacity-[0.28]' : 'opacity-[0.32]'}
+                    paused={particlesPaused}
+                  />
+                  <div className="relative z-10 flex flex-col">
                     <h3 className={`text-base font-bold mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Bug Status</h3>
-                    <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted mb-4 block">Current Release</span>
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3 block">Current Release</span>
                     {data.releaseBugStatus && data.releaseBugStatus.statusDistribution ? (
                       <RankedProgressList
                         theme={theme}
                         hasPlayed={hasPlayed}
+                        compact
                         items={data.releaseBugStatus.statusDistribution.map((row: any, idx: number) => ({
                           label: row.status,
                           count: row.count,
@@ -1695,12 +1667,18 @@ Do not return markdown wraps, only raw JSON text.
                     ) : (
                       <span className="text-xs text-text-muted">No bug data available.</span>
                     )}
+                    {/* Open band — triage typing lives here; fades before reaching status rows */}
+                    <div
+                      className="mt-3 shrink-0 h-[72px] sm:h-[84px] pointer-events-none"
+                      aria-hidden
+                    />
                   </div>
                 </div>
               </div>
             }
+            metricSummaryLines={heroMetricSummaryLines}
             bottomContent={
-              vis.show_defectClosureTrend !== false && historicalChartsData.length >= 2 ? (
+              showDefectClosureTrend ? (
                 <div className={`p-6 rounded-[32px] ${tS.softCard} h-[340px] w-full flex flex-col gap-4 relative overflow-hidden group border ${theme === 'dark' ? 'border-white/[0.05]' : 'border-transparent'}`}>
                   <div className="flex items-center justify-between">
                     <h3 className={`text-lg font-bold font-clash ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Defect Closure Trend</h3>
@@ -1746,13 +1724,13 @@ Do not return markdown wraps, only raw JSON text.
 
           {(() => {
             // Calculate KPIs from Release Bug Status, Release Testing Status, and Support & Exception Log
+            // Use the same status matchers as hero Test Pass Rate / Release table (Pass/Passed/Completed/Success).
             const releaseBugMetrics = data.releaseBugStatus?.metrics
-            const releaseTestingPassed = data.releaseItems?.filter(i => i?.status === 'Pass').length || 0
-            const releaseTestingFailed = data.releaseItems?.filter(i => i?.status === 'Fail').length || 0
-            const releaseTestingBlocked = data.releaseItems?.filter(i => i?.status === 'Blocked').length || 0
+            const releaseTestingPassed = data.releaseItems?.filter(i => isPassStatus(i?.status)).length || 0
+            const releaseTestingFailed = data.releaseItems?.filter(i => isFailStatus(i?.status)).length || 0
+            const releaseTestingBlocked = data.releaseItems?.filter(i => isBlockedStatus(i?.status)).length || 0
             const releaseTestingTotal = data.releaseItems?.length || 0
             const supportTicketsTotal = data.supportTickets?.length || 0
-            const supportCritical = data.supportTickets?.filter(t => t?.priority === 'Critical').length || 0
             const supportHigh = data.supportTickets?.filter(t => t?.priority === 'High').length || 0
             const supportResolved = data.supportTickets?.filter(t => t?.status === 'Resolved' || t?.status === 'Closed').length || 0
 
@@ -1768,7 +1746,7 @@ Do not return markdown wraps, only raw JSON text.
                 desc: `${releaseTestingPassed}/${releaseTestingTotal} features validated`,
                 sparklineData: getHistoricalValues(f => {
                   const total = f.releaseItems?.length || 0
-                  const passed = f.releaseItems?.filter((i: any) => i?.status === 'Pass').length || 0
+                  const passed = f.releaseItems?.filter((i: any) => isPassStatus(i?.status)).length || 0
                   return total > 0 ? Math.round((passed / total) * 100) : 0
                 }),
                 tooltip: 'Are we ready to release? • Target: 90%+',
@@ -1804,17 +1782,6 @@ Do not return markdown wraps, only raw JSON text.
                 desc: qualityStats.label,
                 sparklineData: getHistoricalValues(f => calculateQAScore(f).score),
                 tooltip: 'Overall QA confidence',
-                category: 'primary' as const
-              },
-              {
-                label: 'Critical Tickets',
-                val: supportCritical,
-                icon: AlertTriangle,
-                color: 'text-red-500',
-                desc: 'Immediate action needed',
-                sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => t?.priority === 'Critical').length || 0),
-                pulse: supportCritical > 3,
-                tooltip: 'Production outages requiring immediate action',
                 category: 'primary' as const
               },
 
@@ -1860,7 +1827,7 @@ Do not return markdown wraps, only raw JSON text.
                 icon: Check,
                 color: 'text-green-400',
                 desc: 'Release tests passed',
-                sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => i?.status === 'Pass').length || 0),
+                sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => isPassStatus(i?.status)).length || 0),
                 tooltip: 'Successfully validated test cases',
                 category: 'testingQuality' as const
               },
@@ -1870,7 +1837,7 @@ Do not return markdown wraps, only raw JSON text.
                 icon: X,
                 color: 'text-red-400',
                 desc: 'Release tests failed',
-                sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => i?.status === 'Fail').length || 0),
+                sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => isFailStatus(i?.status)).length || 0),
                 pulse: releaseTestingFailed > 3,
                 tooltip: 'Tests requiring fixes before release',
                 category: 'testingQuality' as const
@@ -1881,7 +1848,7 @@ Do not return markdown wraps, only raw JSON text.
                 icon: Shield,
                 color: 'text-orange-400',
                 desc: 'Release tests blocked',
-                sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => i?.status === 'Blocked').length || 0),
+                sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => isBlockedStatus(i?.status)).length || 0),
                 tooltip: 'Blocked by dependencies or environment',
                 category: 'testingQuality' as const
               },
@@ -2132,43 +2099,14 @@ Do not return markdown wraps, only raw JSON text.
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10">
                 <tr className={reportTableHeadClass(theme)}>
-                  {(() => {
-                    const releaseColumns = [
-                      { id: 'taskId', label: 'Task ID', defaultVisible: true },
-                      { id: 'featureName', label: 'Feature', defaultVisible: true },
-                      { id: 'assignee', label: 'Assignee', defaultVisible: true },
-                      { id: 'status', label: 'Status', defaultVisible: true },
-                      { id: 'priority', label: 'Priority', defaultVisible: true },
-                      { id: 'remarks', label: 'Remarks', defaultVisible: true },
-                    ]
-                    const visibleColumns = data.visibleReleaseColumns || releaseColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
-                    const visibleColumnsList = releaseColumns.filter(col => visibleColumns[col.id])
-                    const { keys: customKeys, labels: customLabels } = buildCustomFieldEntries(data.releaseItems, dupReleaseColumnsForLabels)
-                    return [
-                      ...visibleColumnsList.map(col => (
-                        <th key={col.id} className={`py-3.5 px-5 ${col.id === 'status' || col.id === 'priority' ? 'text-center' : ''}`}>{col.label}</th>
-                      )),
-                      ...customKeys.map(key => (
-                        <th key={key} className="py-3.5 px-5">{customLabels[key]}</th>
-                      )),
-                    ]
-                  })()}
+                  {releasePreviewColumns.map(col => (
+                    <th key={col.id} className={`py-3.5 px-5 ${col.id === 'status' || col.id === 'priority' ? 'text-center' : ''}`}>{col.label}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {data.releaseItems.map((item, idx) => {
-                  const releaseColumns = [
-                    { id: 'taskId', label: 'Task ID', defaultVisible: true },
-                    { id: 'featureName', label: 'Feature', defaultVisible: true },
-                    { id: 'assignee', label: 'Assignee', defaultVisible: true },
-                    { id: 'status', label: 'Status', defaultVisible: true },
-                    { id: 'priority', label: 'Priority', defaultVisible: true },
-                    { id: 'remarks', label: 'Remarks', defaultVisible: true },
-                  ]
-                  const visibleColumns = data.visibleReleaseColumns || releaseColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
-                  const visibleColumnsList = releaseColumns.filter(col => visibleColumns[col.id])
-                  const { keys: customKeys } = buildCustomFieldEntries(data.releaseItems, dupReleaseColumnsForLabels)
-
+                  const visibleColumnsList = releasePreviewColumns
                   return (
                     <motion.tr
                       key={item.id}
@@ -2179,6 +2117,9 @@ Do not return markdown wraps, only raw JSON text.
                       className={reportTableRowClass(theme, idx)}
                     >
                       {visibleColumnsList.map(col => {
+                        if (col.kind === 'custom') {
+                          return <td key={col.id} className={`py-3.5 px-5 text-text-secondary ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>{item.customFields?.[col.id] ?? ''}</td>
+                        }
                         if (col.id === 'taskId') {
                           return <td key={col.id} className="py-3.5 px-5 font-mono font-bold text-accent-gold">{item.taskId}</td>
                         }
@@ -2207,26 +2148,11 @@ Do not return markdown wraps, only raw JSON text.
                         }
                         return null
                       })}
-                      {customKeys.map(key => (
-                        <td key={key} className={`py-3.5 px-5 text-text-secondary ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>{item.customFields?.[key] ?? ''}</td>
-                      ))}
                     </motion.tr>
                   )
                 })}
                 {data.releaseItems.length === 0 && (
-                  <tr><td colSpan={(() => {
-                    const releaseColumns = [
-                      { id: 'taskId', label: 'Task ID', defaultVisible: true },
-                      { id: 'featureName', label: 'Feature', defaultVisible: true },
-                      { id: 'assignee', label: 'Assignee', defaultVisible: true },
-                      { id: 'status', label: 'Status', defaultVisible: true },
-                      { id: 'priority', label: 'Priority', defaultVisible: true },
-                      { id: 'remarks', label: 'Remarks', defaultVisible: true },
-                    ]
-                    const visibleColumns = data.visibleReleaseColumns || releaseColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
-                    const { keys: customKeys } = buildCustomFieldEntries(data.releaseItems, dupReleaseColumnsForLabels)
-                    return releaseColumns.filter(col => visibleColumns[col.id]).length + customKeys.length
-                  })()} className="py-10 text-center text-xs text-text-muted">No release testing items configured yet.</td></tr>
+                  <tr><td colSpan={Math.max(1, releasePreviewColumns.length)} className="py-10 text-center text-xs text-text-muted">No release testing items configured yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -2325,43 +2251,14 @@ Do not return markdown wraps, only raw JSON text.
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10">
                 <tr className={reportTableHeadClass(theme)}>
-                  {(() => {
-                    const supportColumns = [
-                      { id: 'taskId', label: 'Ticket', defaultVisible: true },
-                      { id: 'description', label: 'Description', defaultVisible: true },
-                      { id: 'assignedQA', label: 'QA', defaultVisible: true },
-                      { id: 'status', label: 'Status', defaultVisible: true },
-                      { id: 'priority', label: 'Priority', defaultVisible: true },
-                      { id: 'remarks', label: 'Remarks', defaultVisible: true },
-                    ]
-                    const visibleColumns = data.visibleSupportColumns || supportColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
-                    const visibleColumnsList = supportColumns.filter(col => visibleColumns[col.id])
-                    const { keys: customKeys, labels: customLabels } = buildCustomFieldEntries(data.supportTickets, dupSupportColumnsForLabels)
-                    return [
-                      ...visibleColumnsList.map(col => (
-                        <th key={col.id} className="py-3.5 px-5">{col.label}</th>
-                      )),
-                      ...customKeys.map(key => (
-                        <th key={key} className="py-3.5 px-5">{customLabels[key]}</th>
-                      )),
-                    ]
-                  })()}
+                  {supportPreviewColumns.map(col => (
+                    <th key={col.id} className="py-3.5 px-5">{col.label}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {data.supportTickets.map((ticket, idx) => {
-                  const supportColumns = [
-                    { id: 'taskId', label: 'Ticket', defaultVisible: true },
-                    { id: 'description', label: 'Description', defaultVisible: true },
-                    { id: 'assignedQA', label: 'QA', defaultVisible: true },
-                    { id: 'status', label: 'Status', defaultVisible: true },
-                    { id: 'priority', label: 'Priority', defaultVisible: true },
-                    { id: 'remarks', label: 'Remarks', defaultVisible: true },
-                  ]
-                  const visibleColumns = data.visibleSupportColumns || supportColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
-                  const visibleColumnsList = supportColumns.filter(col => visibleColumns[col.id])
-                  const { keys: customKeys } = buildCustomFieldEntries(data.supportTickets, dupSupportColumnsForLabels)
-
+                  const visibleColumnsList = supportPreviewColumns
                   return (
                     <motion.tr
                       key={ticket.id}
@@ -2372,6 +2269,9 @@ Do not return markdown wraps, only raw JSON text.
                       className={reportTableRowClass(theme, idx)}
                     >
                       {visibleColumnsList.map(col => {
+                        if (col.kind === 'custom') {
+                          return <td key={col.id} className={`py-3.5 px-5 text-text-secondary ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>{ticket.customFields?.[col.id] ?? ''}</td>
+                        }
                         if (col.id === 'taskId') {
                           return <td key={col.id} className="py-3.5 px-5 font-mono font-bold text-blue-400">{ticket.taskId}</td>
                         }
@@ -2400,26 +2300,11 @@ Do not return markdown wraps, only raw JSON text.
                         }
                         return null
                       })}
-                      {customKeys.map(key => (
-                        <td key={key} className={`py-3.5 px-5 text-text-secondary ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>{ticket.customFields?.[key] ?? ''}</td>
-                      ))}
                     </motion.tr>
                   )
                 })}
                 {data.supportTickets.length === 0 && (
-                  <tr><td colSpan={(() => {
-                    const supportColumns = [
-                      { id: 'taskId', label: 'Ticket', defaultVisible: true },
-                      { id: 'description', label: 'Description', defaultVisible: true },
-                      { id: 'assignedQA', label: 'QA', defaultVisible: true },
-                      { id: 'status', label: 'Status', defaultVisible: true },
-                      { id: 'priority', label: 'Priority', defaultVisible: true },
-                      { id: 'remarks', label: 'Remarks', defaultVisible: true },
-                    ]
-                    const visibleColumns = data.visibleSupportColumns || supportColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
-                    const { keys: customKeys } = buildCustomFieldEntries(data.supportTickets, dupSupportColumnsForLabels)
-                    return supportColumns.filter(col => visibleColumns[col.id]).length + customKeys.length
-                  })()} className="py-10 text-center text-xs text-text-muted">No support tickets logged yet.</td></tr>
+                  <tr><td colSpan={Math.max(1, supportPreviewColumns.length)} className="py-10 text-center text-xs text-text-muted">No support tickets logged yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -2668,7 +2553,7 @@ Do not return markdown wraps, only raw JSON text.
                     >
                       <option value="">Choose Report A...</option>
                       {activeHistory.map(r => (
-                        <option key={r.id} value={r.id}>{r.week || r.form.weekStart} - {r.form.projectName}</option>
+                        <option key={r.id} value={r.id}>{(r.name || r.week || r.form.weekStart)} - {r.form.projectName}</option>
                       ))}
                     </select>
                   </div>
@@ -2684,7 +2569,7 @@ Do not return markdown wraps, only raw JSON text.
                     >
                       <option value="">Choose Report B...</option>
                       {activeHistory.map(r => (
-                        <option key={r.id} value={r.id}>{r.week || r.form.weekStart} - {r.form.projectName}</option>
+                        <option key={r.id} value={r.id}>{(r.name || r.week || r.form.weekStart)} - {r.form.projectName}</option>
                       ))}
                     </select>
                   </div>
@@ -3326,10 +3211,10 @@ Do not return markdown wraps, only raw JSON text.
 
       {/* ── Footer — Consistent with main app ── */}
       <footer
-        className="mt-16 py-4 px-4"
+        className="mt-16 py-4"
         style={{ borderTop: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'}` }}
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
+        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 flex items-center justify-center gap-3">
           <Logo size="sm" animate={false} />
           <span className={`text-xs tracking-wide ${theme === 'dark' ? 'text-white/35' : 'text-slate-400'}`}>
             &copy; {new Date().getFullYear()} {BRAND.name}
@@ -3341,7 +3226,9 @@ Do not return markdown wraps, only raw JSON text.
         </div>
       </footer>
 
-      {/* ── Defect Status Modal ── */}
+    </motion.div>
+
+      {/* Modals must stay outside the reveal motion root so fixed positioning works */}
       <DefectStatusModal
         isOpen={showDefectModal}
         onClose={() => setShowDefectModal(false)}
@@ -3350,7 +3237,6 @@ Do not return markdown wraps, only raw JSON text.
         projectName={data.projectName}
       />
 
-      {/* ── Work Distribution Modal ── */}
       <WorkDistributionModal
         isOpen={showWorkDistributionModal}
         onClose={() => setShowWorkDistributionModal(false)}
@@ -3358,7 +3244,6 @@ Do not return markdown wraps, only raw JSON text.
         projectName={data.projectName}
       />
 
-      {/* ── Production Issues Modal ── */}
       <ProductionIssuesModal
         isOpen={showProductionIssuesModal}
         onClose={() => setShowProductionIssuesModal(false)}
@@ -3366,7 +3251,6 @@ Do not return markdown wraps, only raw JSON text.
         projectName={data.projectName}
       />
 
-      {/* ── Release Readiness Modal ── */}
       <ReleaseReadinessModal
         isOpen={showReleaseReadinessModal}
         onClose={() => setShowReleaseReadinessModal(false)}
@@ -3379,19 +3263,15 @@ Do not return markdown wraps, only raw JSON text.
         projectName={data.projectName}
       />
 
-      {/* ── Team Capacity Modal ── */}
-      {
-        data.teamCapacity && (
-          <TeamCapacityModal
-            isOpen={showTeamCapacityModal}
-            onClose={() => setShowTeamCapacityModal(false)}
-            data={data.teamCapacity}
-            projectName={data.projectName}
-          />
-        )
-      }
+      {data.teamCapacity && (
+        <TeamCapacityModal
+          isOpen={showTeamCapacityModal}
+          onClose={() => setShowTeamCapacityModal(false)}
+          data={data.teamCapacity}
+          projectName={data.projectName}
+        />
+      )}
 
-      {/* ── Executive Quality Score Modal ── */}
       <ExecutiveQualityScoreModal
         isOpen={showQualityScoreModal}
         onClose={() => setShowQualityScoreModal(false)}
@@ -3401,16 +3281,23 @@ Do not return markdown wraps, only raw JSON text.
         color={qualityStats.color}
       />
 
-      {/* ── Release Scope Modal ── */}
       <ReleaseScopeModal
         isOpen={showReleaseScopeModal}
         onClose={() => setShowReleaseScopeModal(false)}
         releaseData={data.releaseItems || []}
-        visibleColumns={data.visibleReleaseColumns || {}}
+        visibleColumns={releaseScopeVisibleColumns}
         projectId={data.projectId}
         projectName={data.projectName}
       />
-    </div >
+    </>
+    )}
+
+    <DashboardLaunchOverlay
+      open={showLaunchTriage}
+      projectName={data.projectName}
+      onComplete={handleLaunchTriageComplete}
+    />
+    </>
   )
 }
 

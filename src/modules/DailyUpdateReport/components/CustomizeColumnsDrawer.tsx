@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
   useColumnConfigStore, generateInternalKey, generateOptionId, isOptionBasedType, normalizeColumnDisplayName,
@@ -84,6 +85,7 @@ function sampleValueForColumn(col: ColumnConfig, rowIdx: number): string {
 export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
   open, onClose, tableKey, projectId, projectName, onSaved,
 }) => {
+  useBodyScrollLock(open)
   const { toast } = useToast()
   const { can } = usePermissions()
   const {

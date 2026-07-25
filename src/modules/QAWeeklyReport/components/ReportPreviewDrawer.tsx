@@ -1,12 +1,15 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import DOMPurify from 'dompurify'
 import { useQAReportStore } from '../store'
 import { useAppStore } from '@/store/useAppStore'
 import { toast } from '@/hooks/use-toast'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { X, Save, CheckCircle2, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { defaultReportName, findMatchingWeekReport, getReportDisplayName } from '../types'
+import { SaveReportNameModal, type SaveReportConfirmPayload } from './SaveReportNameModal'
 
 // Minimal markdown → HTML for the drawer preview
 function mdToHtml(md: string): string {
@@ -168,17 +171,66 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
   markdown,
   onSaved,
 }) => {
-  const { form, saveReport } = useQAReportStore()
+  useBodyScrollLock(open)
+  const { form, saveReport, savedReports } = useQAReportStore()
   const { profile } = useAppStore()
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [savedName, setSavedName] = useState<string | null>(null)
+  const [nameModalOpen, setNameModalOpen] = useState(false)
 
-  const handleSave = async () => {
+  const suggestedName = useMemo(
+    () => defaultReportName(form),
+    [form.projectName, form.reportTitle, form.weekStart, form.weekEnd],
+  )
+
+  const projectReports = useMemo(
+    () => savedReports.filter(r => r.projectId === form.projectId),
+    [savedReports, form.projectId],
+  )
+
+  const existingNames = useMemo(
+    () => projectReports.map(r => getReportDisplayName(r)).filter(Boolean),
+    [projectReports],
+  )
+
+  const recentNames = useMemo(() => {
+    const seen = new Set<string>()
+    const names: string[] = []
+    for (const r of [...projectReports].sort(
+      (a, b) => new Date(b.generatedDate).getTime() - new Date(a.generatedDate).getTime(),
+    )) {
+      const n = getReportDisplayName(r).trim()
+      const key = n.toLowerCase()
+      if (!n || seen.has(key)) continue
+      seen.add(key)
+      names.push(n)
+      if (names.length >= 12) break
+    }
+    return names
+  }, [projectReports])
+
+  const matchingExisting = useMemo(() => {
+    const match = findMatchingWeekReport(savedReports, form.projectId, form.weekStart, form.weekEnd)
+    if (!match) return null
+    return {
+      id: match.id,
+      name: getReportDisplayName(match),
+      status: match.status,
+      week: match.week,
+      generatedDate: match.generatedDate,
+    }
+  }, [savedReports, form.projectId, form.weekStart, form.weekEnd])
+
+  const handleConfirmName = async (payload: SaveReportConfirmPayload) => {
+    setNameModalOpen(false)
     setSaving(true)
     try {
-      const id = crypto.randomUUID()
+      const isUpdate = payload.saveMode === 'update' && !!payload.existingId
+      const id = isUpdate ? payload.existingId! : crypto.randomUUID()
       await saveReport({
         id,
+        name: payload.name,
         markdown,
         form,
         week: `${form.weekStart} – ${form.weekEnd}`,
@@ -186,19 +238,20 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
         projectId: form.projectId,
         generatedDate: new Date().toISOString(),
         createdBy: profile?.full_name || profile?.email || 'Unknown',
-        status: 'Final',
+        status: payload.status,
       })
 
-      // Refresh reports list to ensure database and UI are in sync
       await useQAReportStore.getState().fetchReports(form.projectId)
 
       setSaved(true)
+      setSavedName(payload.name)
       onSaved()
       toast({
-        title: 'Report Saved Successfully',
-        description: 'Your report has been saved to the database and is ready to launch.'
+        title: isUpdate ? 'Report Updated' : payload.status === 'Draft' ? 'Draft Saved' : 'Report Saved Successfully',
+        description: isUpdate
+          ? `Updated “${payload.name}” as ${payload.status}.`
+          : `Saved as “${payload.name}” (${payload.status}).${payload.status === 'Final' ? ' Ready to launch the dashboard.' : ''}`,
       })
-      // Don't auto-close, let user see the success state and close manually
     } catch (error) {
       console.error('Save error:', error)
       const errorMessage = error instanceof Error ? error.message : 'Could not save report. Please try again.'
@@ -214,6 +267,8 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
 
   const handleClose = () => {
     setSaved(false)
+    setSavedName(null)
+    setNameModalOpen(false)
     onClose()
   }
 
@@ -285,12 +340,17 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
               {saved && (
                 <div className="px-4 py-2.5 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
                   <p className="text-xs font-bold text-green-500 mb-1">✓ Report Saved to History</p>
+                  {savedName && (
+                    <p className="text-[11px] font-semibold text-green-500/90 mb-0.5 truncate" title={savedName}>
+                      {savedName}
+                    </p>
+                  )}
                   <p className="text-[10px] text-green-500/70">You can now close this and launch the Executive Dashboard</p>
                 </div>
               )}
               <div className="flex items-center gap-3">
                 <button
-                  onClick={handleSave}
+                  onClick={() => setNameModalOpen(true)}
                   disabled={saving || saved}
                   className={cn(
                     'flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all',
@@ -330,5 +390,19 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
     </AnimatePresence>
   )
 
-  return createPortal(drawerContent, document.body)
+  return (
+    <>
+      {createPortal(drawerContent, document.body)}
+      <SaveReportNameModal
+        open={nameModalOpen}
+        mode="save"
+        initialName={suggestedName}
+        existingNames={existingNames}
+        recentNames={recentNames}
+        matchingExisting={matchingExisting}
+        onCancel={() => setNameModalOpen(false)}
+        onConfirm={handleConfirmName}
+      />
+    </>
+  )
 }

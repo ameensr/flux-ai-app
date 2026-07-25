@@ -4,6 +4,7 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Star, TrendingUp, AlertTriangle, CheckCircle, Zap, Shield, Users, Target } from 'lucide-react'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import type { QAReportForm } from '../types'
 import { isPassStatus, isFailStatus } from '../types'
 
@@ -24,6 +25,7 @@ export function ExecutiveQualityScoreModal({
   label,
   color
 }: ExecutiveQualityScoreModalProps) {
+  useBodyScrollLock(isOpen)
 
   // Calculate all component scores
   const releaseCount = data.releaseItems?.length || 0

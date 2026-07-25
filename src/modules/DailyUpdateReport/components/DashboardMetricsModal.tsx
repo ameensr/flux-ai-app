@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Gauge, Info, Save, AlertTriangle, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useColumnConfigStore, findDashboardRoleColumn, isOptionBasedType } from '../columnConfigStore'
 import type { ColumnConfig, DailyReportTableKey, DashboardRole, OutcomeBucket, DropdownOptionItem } from '../types'
 
@@ -49,6 +50,7 @@ interface DashboardMetricsModalProps {
 }
 
 export const DashboardMetricsModal: React.FC<DashboardMetricsModalProps> = ({ open, onClose, tableKey }) => {
+  useBodyScrollLock(open)
   const { toast } = useToast()
   const { getColumns, saveColumn } = useColumnConfigStore()
   const role = DASHBOARD_ROLE_FOR_TABLE[tableKey]

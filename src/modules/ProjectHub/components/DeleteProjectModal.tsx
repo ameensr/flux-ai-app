@@ -4,6 +4,7 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertTriangle, Trash2 } from 'lucide-react'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useTheme } from '@/context/ThemeContext'
 
 interface DeleteProjectModalProps {
@@ -19,6 +20,7 @@ export function DeleteProjectModal({
   onClose,
   onConfirm
 }: DeleteProjectModalProps) {
+  useBodyScrollLock(true)
   const { isDark } = useTheme()
   const [confirmText, setConfirmText] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)

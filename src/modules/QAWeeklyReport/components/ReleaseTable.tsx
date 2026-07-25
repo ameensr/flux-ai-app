@@ -11,15 +11,15 @@ import { Plus, Trash2, Copy, Download, Upload, Search, Columns, Eye, EyeOff } fr
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import { ColumnMappingModal } from './ColumnMappingModal'
-import { applyReleaseMapping, type MappingEntry } from '../dupImportMapping'
-
-const STATUS_COLORS: Record<string, string> = {
-  'Not Started': 'text-text-muted', 'In Progress': 'text-yellow-400',
-  'Pass': 'text-green-400', 'Fail': 'text-red-400', 'Blocked': 'text-orange-400',
-}
-const PRIORITY_COLORS: Record<string, string> = {
-  'Critical': 'text-red-500', 'High': 'text-orange-400', 'Medium': 'text-yellow-400', 'Low': 'text-green-400',
-}
+import { applyReleaseMapping, releaseImportDedupeKey, type MappingEntry } from '../dupImportMapping'
+import {
+  applyVisibilityToSchema,
+  buildDestinationColumnsFromMapping,
+  hydrateSchemaFromLegacy,
+  mergeColumnSchemas,
+  orderedVisibleColumns,
+  visibilityMapFromSchema,
+} from '../qaReportColumnSchema'
 
 const newItem = (): ReleaseItem => ({
   id: crypto.randomUUID(), taskId: '', featureName: '', assignee: '',
@@ -28,16 +28,6 @@ const newItem = (): ReleaseItem => ({
 
 const sel = 'bg-transparent border-none focus:outline-none text-sm text-white w-full'
 const cell = 'px-3 py-2 border-b border-white/5'
-
-// Define column configuration for the Release Testing Status table
-const RELEASE_COLUMNS = [
-  { id: 'taskId', label: 'Task ID', defaultVisible: true },
-  { id: 'featureName', label: 'Feature Name', defaultVisible: true },
-  { id: 'assignee', label: 'Assignee', defaultVisible: true },
-  { id: 'status', label: 'Status', defaultVisible: true },
-  { id: 'priority', label: 'Priority', defaultVisible: true },
-  { id: 'remarks', label: 'Remarks', defaultVisible: true },
-]
 
 export const ReleaseTable: React.FC = () => {
   const { form, setForm } = useQAReportStore()
@@ -52,15 +42,34 @@ export const ReleaseTable: React.FC = () => {
   const [showMappingModal, setShowMappingModal] = useState(false)
   const columnButtonRef = useRef<HTMLButtonElement>(null)
 
-  // Initialize column visibility from store or use defaults
-  const visibleColumns: Record<string, boolean> = form.visibleReleaseColumns || RELEASE_COLUMNS.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
-
   // Fetch dropdown configs on mount
   useEffect(() => {
     if (dropdownConfigs.length === 0) {
       fetchDropdownConfigs()
     }
   }, [])
+
+  const items = form.releaseItems
+
+  const legacyCustomLabels: Record<string, string> = {}
+  items.forEach(i => {
+    if (!i.customFields) return
+    Object.keys(i.customFields).forEach(key => {
+      if (!legacyCustomLabels[key]) {
+        const col = getColumns('release').find(c => c.internal_key === key)
+        legacyCustomLabels[key] = col?.display_name || key
+      }
+    })
+  })
+
+  const columnSchema = hydrateSchemaFromLegacy(
+    'release',
+    form.releaseColumnSchema,
+    form.visibleReleaseColumns,
+    legacyCustomLabels,
+  )
+  const visibleColumnsList = orderedVisibleColumns(columnSchema)
+  const visibleColumns = visibilityMapFromSchema(columnSchema)
 
   // Calculate dropdown position when menu opens
   useEffect(() => {
@@ -105,10 +114,13 @@ export const ReleaseTable: React.FC = () => {
     return 'text-text-muted'
   }
 
-  const items = form.releaseItems
-  const filtered = items.filter(i =>
-    [i.taskId, i.featureName, i.assignee, i.remarks].some(v => v.toLowerCase().includes(search.toLowerCase()))
-  )
+  const filtered = items.filter(i => {
+    const q = search.toLowerCase()
+    if (!q) return true
+    const builtin = [i.taskId, i.featureName, i.assignee, i.remarks].some(v => v.toLowerCase().includes(q))
+    const custom = Object.values(i.customFields || {}).some(v => String(v ?? '').toLowerCase().includes(q))
+    return builtin || custom
+  })
 
   const update = (id: string, patch: Partial<ReleaseItem>) =>
     setForm({ releaseItems: items.map(i => i.id === id ? { ...i, ...patch } : i) })
@@ -132,40 +144,26 @@ export const ReleaseTable: React.FC = () => {
   }
 
   const exportCSV = () => {
-    const visibleColumnsList = RELEASE_COLUMNS.filter(col => visibleColumns[col.id])
-    const dynamicHeaderLabels = Object.values(customFieldLabelMap)
-    const header = [...visibleColumnsList.map(col => col.label), ...dynamicHeaderLabels].join(',')
+    const header = visibleColumnsList.map(col => col.label).join(',')
     const rows = items.map(i => {
-      const values = [
-        ...visibleColumnsList.map(col => `"${i[col.id as keyof ReleaseItem] || ''}"`),
-        ...customFieldKeys.map(key => `"${i.customFields?.[key] ?? ''}"`),
-      ]
+      const values = visibleColumnsList.map(col => {
+        if (col.kind === 'custom') return `"${i.customFields?.[col.id] ?? ''}"`
+        return `"${(i as any)[col.id] ?? ''}"`
+      })
       return values.join(',')
     })
     const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'release-testing-status.csv'; a.click()
-    toast({ title: 'Export successful', description: `Exported ${items.length} rows with ${visibleColumnsList.length + dynamicHeaderLabels.length} columns to CSV` })
+    toast({ title: 'Export successful', description: `Exported ${items.length} rows with ${visibleColumnsList.length} columns to CSV` })
   }
 
   const toggleColumn = (colId: string) => {
-    const updated = { ...visibleColumns, [colId]: !visibleColumns[colId] }
-    setForm({ visibleReleaseColumns: updated })
-  }
-
-  const visibleColumnsList = RELEASE_COLUMNS.filter(col => visibleColumns[col.id])
-
-  // Any custom fields created via "Create New" during Import from DUP
-  const customFieldLabelMap: Record<string, string> = {}
-  items.forEach(i => {
-    if (!i.customFields) return
-    Object.keys(i.customFields).forEach(key => {
-      if (!customFieldLabelMap[key]) {
-        const col = getColumns('release').find(c => c.internal_key === key)
-        customFieldLabelMap[key] = col?.display_name || key
-      }
+    const nextSchema = applyVisibilityToSchema(columnSchema, colId)
+    setForm({
+      releaseColumnSchema: nextSchema,
+      visibleReleaseColumns: visibilityMapFromSchema(nextSchema),
     })
-  })
-  const customFieldKeys = Object.keys(customFieldLabelMap)
+  }
 
   const importFromDailyReport = async () => {
     // ⚠️ CRITICAL: The Daily Update Report module tracks its OWN selected
@@ -203,7 +201,7 @@ export const ReleaseTable: React.FC = () => {
     }
   }
 
-  const handleMappingConfirm = async (mapping: Record<string, MappingEntry>) => {
+  const handleMappingConfirm = async (mapping: Record<string, MappingEntry>, _remember: boolean, destinationOrder: string[]) => {
     setShowMappingModal(false)
     setImporting(true)
     try {
@@ -215,13 +213,23 @@ export const ReleaseTable: React.FC = () => {
       const columns = getColumns('release')
       const { items: mappedItems } = await applyReleaseMapping(rows, columns, mapping)
 
-      const existingIds = new Set(items.map(i => i.taskId).filter(Boolean))
-      const imported = mappedItems.filter(r => r.taskId && !existingIds.has(r.taskId))
+      const existingKeys = new Set(items.map(releaseImportDedupeKey))
+      const imported = mappedItems.filter(r => !existingKeys.has(releaseImportDedupeKey(r)))
       if (!imported.length) {
         toast({ title: 'Already imported', description: 'All rows from Daily Report are already present.' })
         return
       }
-      setForm({ releaseItems: [...items, ...imported] })
+
+      const incomingSchema = buildDestinationColumnsFromMapping('release', columns, mapping, destinationOrder)
+      const nextSchema = items.length === 0
+        ? incomingSchema
+        : mergeColumnSchemas(columnSchema, incomingSchema)
+
+      setForm({
+        releaseItems: [...items, ...imported],
+        releaseColumnSchema: nextSchema,
+        visibleReleaseColumns: visibilityMapFromSchema(nextSchema),
+      })
       toast({ title: 'Imported from Daily Report', description: `${imported.length} row${imported.length === 1 ? '' : 's'} added to Release Testing Log.` })
     } finally {
       setImporting(false)
@@ -240,7 +248,7 @@ export const ReleaseTable: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="label-xs">Release Testing Log</span>
-            {items.length > 0 && (
+            {items.length > 0 && visibleColumns.status !== false && (
               <span
                 className="text-[10px] font-bold text-green-400 cursor-help"
                 title={`Base on completed status: ${items.filter(i => isPassStatus(i.status)).length} passed out of ${items.length} total items`}
@@ -331,7 +339,7 @@ export const ReleaseTable: React.FC = () => {
               )}>Show/Hide Columns</p>
             </div>
             <div className="py-1">
-              {RELEASE_COLUMNS.map(col => (
+              {columnSchema.map(col => (
                 <button
                   key={col.id}
                   onClick={() => toggleColumn(col.id)}
@@ -342,7 +350,7 @@ export const ReleaseTable: React.FC = () => {
                       : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   )}
                 >
-                  <span className="flex-1">{col.label}</span>
+                  <span className="flex-1 truncate">{col.label}</span>
                   {visibleColumns[col.id] ? (
                     <Eye className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
                   ) : (
@@ -367,68 +375,74 @@ export const ReleaseTable: React.FC = () => {
               {visibleColumnsList.map(col => (
                 <th key={col.id} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-text-muted font-bold">{col.label}</th>
               ))}
-              {customFieldKeys.map(key => (
-                <th key={key} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-text-muted font-bold">{customFieldLabelMap[key]}</th>
-              ))}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={visibleColumnsList.length + customFieldKeys.length + 1} className="text-center py-8 text-text-muted text-xs">No items. Click Add to create one.</td></tr>
+              <tr><td colSpan={visibleColumnsList.length + 1} className="text-center py-8 text-text-muted text-xs">No items. Click Add to create one.</td></tr>
             )}
             {filtered.map(item => (
               <tr key={item.id} className={cn('hover:bg-white/[0.02] transition-colors', selected.has(item.id) && 'bg-accent-gold/5')}>
                 <td className={cell}><input type="checkbox" className="accent-accent-gold" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)} /></td>
-                {visibleColumns.taskId && (
-                  <td className={cell}><input className={sel} value={item.taskId} onChange={e => update(item.id, { taskId: e.target.value })} placeholder="RT-001" /></td>
-                )}
-                {visibleColumns.featureName && (
-                  <td className={cell}><input className={sel} value={item.featureName} onChange={e => update(item.id, { featureName: e.target.value })} placeholder="Feature name" /></td>
-                )}
-                {visibleColumns.assignee && (
-                  <td className={cell}><input className={sel} value={item.assignee} onChange={e => update(item.id, { assignee: e.target.value })} placeholder="Name" /></td>
-                )}
-                {visibleColumns.status && (
-                  <td className={cell}>
-                    <select className={`${sel} field-input py-0.5 px-1 text-xs ${getStatusColor(item.status)}`} value={item.status} onChange={e => update(item.id, { status: e.target.value as any })}>
-                      {statusOptions.length > 0 ? (
-                        statusOptions.map(s => <option key={s} value={s}>{s}</option>)
-                      ) : (
-                        ['Not Started', 'In Progress', 'Pass', 'Fail', 'Blocked'].map(s => <option key={s}>{s}</option>)
-                      )}
-                    </select>
-                  </td>
-                )}
-                {visibleColumns.priority && (
-                  <td className={cell}>
-                    <select className={`${sel} field-input py-0.5 px-1 text-xs ${getPriorityColor(item.priority)}`} value={item.priority} onChange={e => update(item.id, { priority: e.target.value as any })}>
-                      {priorityOptions.length > 0 ? (
-                        priorityOptions.map(p => <option key={p} value={p}>{p}</option>)
-                      ) : (
-                        ['Critical', 'High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)
-                      )}
-                    </select>
-                  </td>
-                )}
-                {visibleColumns.remarks && (
-                  <td className={cell}><input className={sel} value={item.remarks} onChange={e => update(item.id, { remarks: e.target.value })} placeholder="Remarks" /></td>
-                )}
-                {customFieldKeys.map(key => (
-                  <td key={key} className={cell}>
-                    <input
-                      className={sel}
-                      value={item.customFields?.[key] ?? ''}
-                      onChange={e => updateCustomField(item.id, key, e.target.value)}
-                      placeholder={customFieldLabelMap[key]}
-                    />
-                  </td>
-                ))}
+                {visibleColumnsList.map(col => {
+                  if (col.kind === 'custom') {
+                    return (
+                      <td key={col.id} className={cell}>
+                        <input
+                          className={sel}
+                          value={item.customFields?.[col.id] ?? ''}
+                          onChange={e => updateCustomField(item.id, col.id, e.target.value)}
+                          placeholder={col.label}
+                        />
+                      </td>
+                    )
+                  }
+                  if (col.id === 'taskId') {
+                    return <td key={col.id} className={cell}><input className={sel} value={item.taskId} onChange={e => update(item.id, { taskId: e.target.value })} placeholder="RT-001" /></td>
+                  }
+                  if (col.id === 'featureName') {
+                    return <td key={col.id} className={cell}><input className={sel} value={item.featureName} onChange={e => update(item.id, { featureName: e.target.value })} placeholder="Feature name" /></td>
+                  }
+                  if (col.id === 'assignee') {
+                    return <td key={col.id} className={cell}><input className={sel} value={item.assignee} onChange={e => update(item.id, { assignee: e.target.value })} placeholder="Name" /></td>
+                  }
+                  if (col.id === 'status') {
+                    return (
+                      <td key={col.id} className={cell}>
+                        <select className={`${sel} field-input py-0.5 px-1 text-xs ${getStatusColor(item.status)}`} value={item.status} onChange={e => update(item.id, { status: e.target.value as any })}>
+                          {statusOptions.length > 0 ? (
+                            statusOptions.map(s => <option key={s} value={s}>{s}</option>)
+                          ) : (
+                            ['Not Started', 'In Progress', 'Pass', 'Fail', 'Blocked'].map(s => <option key={s}>{s}</option>)
+                          )}
+                        </select>
+                      </td>
+                    )
+                  }
+                  if (col.id === 'priority') {
+                    return (
+                      <td key={col.id} className={cell}>
+                        <select className={`${sel} field-input py-0.5 px-1 text-xs ${getPriorityColor(item.priority)}`} value={item.priority} onChange={e => update(item.id, { priority: e.target.value as any })}>
+                          {priorityOptions.length > 0 ? (
+                            priorityOptions.map(p => <option key={p} value={p}>{p}</option>)
+                          ) : (
+                            ['Critical', 'High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)
+                          )}
+                        </select>
+                      </td>
+                    )
+                  }
+                  if (col.id === 'remarks') {
+                    return <td key={col.id} className={cell}><input className={sel} value={item.remarks} onChange={e => update(item.id, { remarks: e.target.value })} placeholder="Remarks" /></td>
+                  }
+                  return null
+                })}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-text-muted">{items.length} item{items.length !== 1 ? 's' : ''} • {visibleColumnsList.length} of {RELEASE_COLUMNS.length} columns visible</p>
+      <p className="text-[11px] text-text-muted">{items.length} item{items.length !== 1 ? 's' : ''} • {visibleColumnsList.length} of {columnSchema.length} columns visible</p>
 
       <ColumnMappingModal
         open={showMappingModal}

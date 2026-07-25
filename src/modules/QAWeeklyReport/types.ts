@@ -132,12 +132,20 @@ export interface QAReportForm {
   showTimeline?: boolean
   customTimeline?: TimelineNode[]
   dashboardSections?: Record<string, boolean>
-  visibleSupportColumns?: Record<string, boolean> // Column visibility state for Support Log
-  visibleReleaseColumns?: Record<string, boolean> // Column visibility state for Release Testing
+  /** @deprecated Prefer supportColumnSchema — kept for backward compatibility with older saved reports */
+  visibleSupportColumns?: Record<string, boolean>
+  /** @deprecated Prefer releaseColumnSchema — kept for backward compatibility with older saved reports */
+  visibleReleaseColumns?: Record<string, boolean>
+  /** Unified Support & Exception Log column schema (builtins + Create New customs, order + visibility) */
+  supportColumnSchema?: import('./qaReportColumnSchema').QAReportTableColumn[]
+  /** Unified Release Testing Log column schema */
+  releaseColumnSchema?: import('./qaReportColumnSchema').QAReportTableColumn[]
 }
 
 export interface SavedReport {
   id: string
+  /** User-facing report name (editable on save / in history). Falls back to week range. */
+  name?: string
   week: string
   project: string
   projectId?: string
@@ -146,6 +154,64 @@ export interface SavedReport {
   markdown: string
   form: QAReportForm
   status: 'Draft' | 'Final'
+}
+
+/** Suggested name when saving — prefers form reportTitle so Header and History stay aligned. */
+export function defaultReportName(
+  form: Pick<QAReportForm, 'projectName' | 'reportTitle' | 'weekStart' | 'weekEnd'>,
+): string {
+  const title = (form.reportTitle || '').trim()
+  if (title) return title
+
+  const fmt = (d: string) => {
+    if (!d) return ''
+    try {
+      return new Date(d.includes('T') ? d : `${d}T00:00:00`).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
+    } catch {
+      return d
+    }
+  }
+  const period =
+    form.weekStart && form.weekEnd
+      ? `${fmt(form.weekStart)} – ${fmt(form.weekEnd)}`
+      : fmt(form.weekStart) || 'Untitled week'
+  const project = (form.projectName || 'Project').trim()
+  return `${project} — ${period}`
+}
+
+/** Most recent saved report for the same project + week dates (for update-existing). */
+export function findMatchingWeekReport(
+  reports: SavedReport[],
+  projectId: string | undefined,
+  weekStart: string,
+  weekEnd: string,
+): SavedReport | undefined {
+  if (!projectId || !weekStart || !weekEnd) return undefined
+  const matches = reports.filter(
+    r =>
+      r.projectId === projectId &&
+      r.form?.weekStart === weekStart &&
+      r.form?.weekEnd === weekEnd,
+  )
+  if (!matches.length) return undefined
+  return [...matches].sort(
+    (a, b) => new Date(b.generatedDate).getTime() - new Date(a.generatedDate).getTime(),
+  )[0]
+}
+
+/** Display label for history / rails — prefers custom name, then week range. */
+export function getReportDisplayName(
+  r: Pick<SavedReport, 'name' | 'week' | 'project'> & { form?: Pick<QAReportForm, 'weekStart' | 'weekEnd'> },
+): string {
+  const custom = (r.name || '').trim()
+  if (custom) return custom
+  if (r.week?.trim()) return r.week.trim()
+  if (r.form?.weekStart && r.form?.weekEnd) return `${r.form.weekStart} – ${r.form.weekEnd}`
+  return r.project || 'Untitled report'
 }
 
 export const ensureFormData = (form: any): QAReportForm => {
@@ -262,6 +328,8 @@ export const ensureFormData = (form: any): QAReportForm => {
     dashboardSections: f.dashboardSections || null,
     visibleSupportColumns: f.visibleSupportColumns || undefined,
     visibleReleaseColumns: f.visibleReleaseColumns || undefined,
+    supportColumnSchema: Array.isArray(f.supportColumnSchema) ? f.supportColumnSchema : undefined,
+    releaseColumnSchema: Array.isArray(f.releaseColumnSchema) ? f.releaseColumnSchema : undefined,
   }
 }
 
@@ -288,6 +356,8 @@ export function createFormSnapshot(form: QAReportForm): string {
   delete (snapshot as any).showTimeline
   delete (snapshot as any).visibleSupportColumns
   delete (snapshot as any).visibleReleaseColumns
+  delete (snapshot as any).supportColumnSchema
+  delete (snapshot as any).releaseColumnSchema
   return canonicalStringify(snapshot)
 }
 

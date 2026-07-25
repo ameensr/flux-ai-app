@@ -1,20 +1,20 @@
 // src/modules/Announcements/AnnouncementsPage.tsx
-// Full Announcements listing page — all active announcements for the current user.
+// Announcement detail modal, shared by AnnouncementsWidget.
+// NOTE: this file previously also exported a standalone `AnnouncementsPage`
+// full-listing page component, but it was never registered on any route
+// (confirmed via full-repo search — announcements are admin-only per
+// routes.ts, surfaced only through AnnouncementsWidget/AdminAnnouncements)
+// and was removed as confirmed dead code.
 
-import React, { useEffect, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
-import { useAppStore } from '@/store/useAppStore'
-import { useAnnouncementsStore } from './store'
+import { motion } from 'framer-motion'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { PRIORITY_CONFIG, CATEGORY_CONFIG } from './types'
 import type { AnnouncementWithMeta } from './types'
 import { cn } from '@/lib/utils'
 import {
-  Megaphone, Pin, ExternalLink, ChevronLeft, Paperclip,
-  CheckCircle, Clock, Search, X, ArrowRight, Filter,
+  Pin, ExternalLink, Paperclip,
+  CheckCircle, Clock, X, ArrowRight,
 } from 'lucide-react'
-import { ROUTES } from '@/lib/routes'
-import { GlassCard } from '@/components/ui/GlassCard'
 
 // ── Announcement Detail Modal ─────────────────────────────────────────────────
 
@@ -27,6 +27,7 @@ export function DetailModal({
   onClose: () => void
   onAcknowledge: (id: string) => void
 }) {
+  useBodyScrollLock(true)
   const pCfg = PRIORITY_CONFIG[announcement.priority]
   const cCfg = CATEGORY_CONFIG[announcement.category]
 
@@ -129,177 +130,3 @@ export function DetailModal({
   )
 }
 
-// ── Main Announcements Page ───────────────────────────────────────────────────
-
-export function AnnouncementsPage() {
-  const navigate = useNavigate()
-  const { user, role } = useAppStore()
-  const { announcements, loading, fetchForUser, markRead, acknowledge } = useAnnouncementsStore()
-  const [search, setSearch] = useState('')
-  const [filterPriority, setFilterPriority] = useState('')
-  const [filterCategory, setFilterCategory] = useState('')
-  const [selectedAnnouncement, setSelectedAnnouncement] = useState<AnnouncementWithMeta | null>(null)
-
-  useEffect(() => {
-    if (user?.id && role) {
-      fetchForUser(role, user.id)
-    }
-  }, [user?.id, role])
-
-  const handleOpen = (a: AnnouncementWithMeta) => {
-    if (!a.is_read && user?.id) markRead(a.id, user.id)
-    setSelectedAnnouncement(a)
-  }
-
-  const handleAcknowledge = (id: string) => {
-    if (user?.id) acknowledge(id, user.id)
-  }
-
-  // Filter
-  const filtered = announcements.filter(a => {
-    if (filterPriority && a.priority !== filterPriority) return false
-    if (filterCategory && a.category !== filterCategory) return false
-    if (search) {
-      const q = search.toLowerCase()
-      return a.title.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
-    }
-    return true
-  })
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="py-6 sm:py-10"
-    >
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <button
-            onClick={() => navigate(ROUTES.dashboard)}
-            className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest mb-3 transition-colors"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            <ChevronLeft className="w-3.5 h-3.5" /> Back to Dashboard
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.2)' }}>
-              <Megaphone className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Announcements</h1>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{announcements.length} active announcement{announcements.length !== 1 ? 's' : ''}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-6">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search announcements…" className="field-input pl-9 h-9 text-xs" />
-        </div>
-        <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} className="field-input h-9 text-xs w-32">
-          <option value="">All Priority</option>
-          {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </select>
-        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="field-input h-9 text-xs w-32">
-          <option value="">All Categories</option>
-          {Object.entries(CATEGORY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </select>
-      </div>
-
-      {/* Content */}
-      {loading ? (
-        <div className="flex items-center justify-center py-24">
-          <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-20">
-          <Megaphone className="w-12 h-12 mx-auto mb-4" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
-          <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
-            {search || filterPriority || filterCategory ? 'No matching announcements' : 'No announcements'}
-          </p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            {search || filterPriority || filterCategory ? 'Try adjusting your filters.' : 'Check back later for updates.'}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filtered.map((a, i) => {
-            const pCfg = PRIORITY_CONFIG[a.priority]
-            const cCfg = CATEGORY_CONFIG[a.category]
-            const isNew = Date.now() - new Date(a.publish_date || a.created_at).getTime() < 48 * 60 * 60 * 1000
-
-            return (
-              <motion.div
-                key={a.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
-                onClick={() => handleOpen(a)}
-                className="p-5 rounded-2xl border cursor-pointer transition-all group"
-                style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.background = 'var(--hover)' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--card-bg)' }}
-              >
-                {/* Top badges */}
-                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-                  {a.is_pinned && <Pin className="w-3 h-3 text-accent-gold" />}
-                  <span className={cn('text-[9px] px-2 py-0.5 rounded-full border font-bold uppercase tracking-widest', pCfg.color)}>{pCfg.label}</span>
-                  <span className={cn('text-[9px] px-2 py-0.5 rounded-full border font-bold uppercase tracking-widest', cCfg.color)}>{cCfg.label}</span>
-                  {isNew && <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 font-bold uppercase">New</span>}
-                  {a.requires_ack && !a.is_acknowledged && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-bold uppercase">Needs Ack</span>
-                  )}
-                  {a.is_acknowledged && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 font-bold uppercase flex items-center gap-0.5">
-                      <CheckCircle className="w-2.5 h-2.5" /> Done
-                    </span>
-                  )}
-                </div>
-
-                {/* Title */}
-                <h3 className="text-sm font-bold leading-snug mb-1.5 line-clamp-2 transition-colors group-hover:text-[var(--accent)]" style={{ color: 'var(--text-primary)' }}>
-                  {a.title}
-                </h3>
-
-                {/* Description */}
-                <p className="text-xs leading-relaxed line-clamp-3 mb-3" style={{ color: 'var(--text-secondary)' }}>
-                  {a.description}
-                </p>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                      <Clock className="w-2.5 h-2.5" />
-                      {new Date(a.publish_date || a.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {a.attachment_url && <Paperclip className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />}
-                    {a.external_link && <ExternalLink className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />}
-                  </div>
-                </div>
-              </motion.div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Detail Modal */}
-      <AnimatePresence>
-        {selectedAnnouncement && (
-          <DetailModal
-            announcement={selectedAnnouncement}
-            onClose={() => setSelectedAnnouncement(null)}
-            onAcknowledge={handleAcknowledge}
-          />
-        )}
-      </AnimatePresence>
-    </motion.div>
-  )
-}

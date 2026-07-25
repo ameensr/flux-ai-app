@@ -19,11 +19,43 @@ import { DefectAnalysis, HistoricalProgress, NextPriorities, HistoricalDefectOpt
 import { DashboardWidgets, DefectChart, ReportHistory } from './components/Widgets'
 import { toast } from '@/hooks/use-toast'
 import { FileText, RefreshCw, RotateCcw, AlertCircle, Plus, Trash, History as HistoryIcon, Settings, Eye, Lock } from 'lucide-react'
-import type { QAReportForm, TimelineNode, SupportTicket, ReleaseItem } from './types'
+import type { QAReportForm, TimelineNode } from './types'
 import { createFormSnapshot, isPassStatus } from './types'
 import { ROUTES } from '@/lib/routes'
 import { calculateQAScore } from './utils/qualityCalculator'
 import { useColumnConfigStore } from '@/modules/DailyUpdateReport/columnConfigStore'
+import {
+  hydrateSchemaFromLegacy,
+  orderedVisibleColumns,
+  type QAReportTableColumn,
+} from './qaReportColumnSchema'
+
+function collectCustomFieldLabels(
+  rows: Array<{ customFields?: Record<string, string> }>,
+  dupColumns: Array<{ internal_key: string; display_name: string }>,
+  schema?: QAReportTableColumn[],
+): Record<string, string> {
+  const labels: Record<string, string> = {}
+  for (const row of rows) {
+    if (!row.customFields) continue
+    for (const key of Object.keys(row.customFields)) {
+      if (labels[key]) continue
+      labels[key] = dupColumns.find(c => c.internal_key === key)?.display_name || key
+    }
+  }
+  for (const col of schema || []) {
+    if (col.kind === 'custom') labels[col.id] = col.label
+  }
+  return labels
+}
+
+function cellValueForColumn(
+  row: Record<string, any>,
+  col: QAReportTableColumn,
+): string {
+  if (col.kind === 'custom') return String(row.customFields?.[col.id] ?? '')
+  return String(row[col.id] ?? '')
+}
 
 function buildMarkdown(f: QAReportForm): string {
   const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
@@ -93,104 +125,53 @@ function buildMarkdown(f: QAReportForm): string {
     if (f.automationTeam.length) lines.push(`- **Automation Team:** ${f.automationTeam.join(', ')}`)
   }
 
-  // Support Log with column visibility
+  // Support Log — same schema order/visibility as SupportLog.tsx
   lines.push('\n## Support & Exception Log')
   if (!f.supportTickets.length) { lines.push(na) } else {
-    // Define support columns (must match SupportLog.tsx)
-    const supportColumns = [
-      { id: 'taskId', label: 'Task ID', defaultVisible: true },
-      { id: 'description', label: 'Description', defaultVisible: true },
-      { id: 'assignedQA', label: 'Assigned QA', defaultVisible: true },
-      { id: 'status', label: 'Status', defaultVisible: true },
-      { id: 'priority', label: 'Priority', defaultVisible: true },
-      { id: 'remarks', label: 'Remarks', defaultVisible: true },
-    ]
-    // Get visible columns from form or use defaults
-    const visibleSupportColumns = f.visibleSupportColumns || supportColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
-    const visibleSupportColumnsList = supportColumns.filter(col => visibleSupportColumns[col.id])
-
-    // Any dynamic columns created via "Create New" during Import from DUP,
-    // labeled using the DUP column's current display_name (resolved by its
-    // stable internal_key so renames in the Daily Update module don't break this).
     const dupSupportColumns = useColumnConfigStore.getState().getColumns('support')
-    const customKeys: string[] = []
-    const customLabels: Record<string, string> = {}
-    f.supportTickets.forEach(t => {
-      if (!t.customFields) return
-      Object.keys(t.customFields).forEach(k => {
-        if (!customKeys.includes(k)) {
-          customKeys.push(k)
-          customLabels[k] = dupSupportColumns.find(c => c.internal_key === k)?.display_name || k
-        }
-      })
-    })
+    const supportSchema = hydrateSchemaFromLegacy(
+      'support',
+      f.supportColumnSchema,
+      f.visibleSupportColumns,
+      collectCustomFieldLabels(f.supportTickets, dupSupportColumns, f.supportColumnSchema),
+    )
+    const visibleSupportColumnsList = orderedVisibleColumns(supportSchema)
 
-    // Build table header
-    const header = [...visibleSupportColumnsList.map(col => col.label), ...customKeys.map(k => customLabels[k])].join(' | ')
-    const separator = [...visibleSupportColumnsList, ...customKeys].map(() => '---').join('|')
+    const header = visibleSupportColumnsList.map(col => col.label).join(' | ')
+    const separator = visibleSupportColumnsList.map(() => '---').join('|')
     lines.push(`| ${header} |`)
     lines.push(`|${separator}|`)
 
-    // Build table rows
     f.supportTickets.forEach(t => {
-      const values = [
-        ...visibleSupportColumnsList.map(col => {
-          const colId = col.id as keyof SupportTicket
-          return t[colId] || ''
-        }),
-        ...customKeys.map(k => t.customFields?.[k] ?? ''),
-      ]
+      const values = visibleSupportColumnsList.map(col => cellValueForColumn(t, col))
       lines.push(`| ${values.join(' | ')} |`)
     })
   }
 
-  // Release Testing with column visibility
+  // Release Testing — same schema order/visibility as ReleaseTable.tsx
   lines.push('\n## Release Testing Status')
   if (!f.releaseItems.length) { lines.push(na) } else {
-    lines.push(`**Pass Rate: ${passRate}% (${passCount}/${f.releaseItems.length})**`)
-
-    // Define release columns (must match ReleaseTable.tsx)
-    const releaseColumns = [
-      { id: 'taskId', label: 'Task ID', defaultVisible: true },
-      { id: 'featureName', label: 'Feature Name', defaultVisible: true },
-      { id: 'assignee', label: 'Assignee', defaultVisible: true },
-      { id: 'status', label: 'Status', defaultVisible: true },
-      { id: 'priority', label: 'Priority', defaultVisible: true },
-      { id: 'remarks', label: 'Remarks', defaultVisible: true },
-    ]
-    // Get visible columns from form or use defaults
-    const visibleReleaseColumns = f.visibleReleaseColumns || releaseColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.defaultVisible }), {} as Record<string, boolean>)
-    const visibleReleaseColumnsList = releaseColumns.filter(col => visibleReleaseColumns[col.id])
-
-    // Any dynamic columns created via "Create New" during Import from DUP
     const dupReleaseColumns = useColumnConfigStore.getState().getColumns('release')
-    const customReleaseKeys: string[] = []
-    const customReleaseLabels: Record<string, string> = {}
-    f.releaseItems.forEach(i => {
-      if (!i.customFields) return
-      Object.keys(i.customFields).forEach(k => {
-        if (!customReleaseKeys.includes(k)) {
-          customReleaseKeys.push(k)
-          customReleaseLabels[k] = dupReleaseColumns.find(c => c.internal_key === k)?.display_name || k
-        }
-      })
-    })
+    const releaseSchema = hydrateSchemaFromLegacy(
+      'release',
+      f.releaseColumnSchema,
+      f.visibleReleaseColumns,
+      collectCustomFieldLabels(f.releaseItems, dupReleaseColumns, f.releaseColumnSchema),
+    )
+    const visibleReleaseColumnsList = orderedVisibleColumns(releaseSchema)
+    const statusVisible = visibleReleaseColumnsList.some(c => c.id === 'status')
 
-    // Build table header
-    const header = [...visibleReleaseColumnsList.map(col => col.label), ...customReleaseKeys.map(k => customReleaseLabels[k])].join(' | ')
-    const separator = [...visibleReleaseColumnsList, ...customReleaseKeys].map(() => '---').join('|')
+    if (statusVisible) {
+      lines.push(`**Pass Rate: ${passRate}% (${passCount}/${f.releaseItems.length})**`)
+    }
+
+    const header = visibleReleaseColumnsList.map(col => col.label).join(' | ')
+    const separator = visibleReleaseColumnsList.map(() => '---').join('|')
     lines.push(`\n| ${header} |`)
     lines.push(`|${separator}|`)
 
-    // Build table rows
     f.releaseItems.forEach(i => {
-      const values = [
-        ...visibleReleaseColumnsList.map(col => {
-          const colId = col.id as keyof typeof i
-          return i[colId] || ''
-        }),
-        ...customReleaseKeys.map(k => i.customFields?.[k] ?? ''),
-      ]
+      const values = visibleReleaseColumnsList.map(col => cellValueForColumn(i, col))
       lines.push(`| ${values.join(' | ')} |`)
     })
   }
@@ -373,28 +354,33 @@ function TimelineBuilder() {
   }
 
   return (
-    <div className="p-6 rounded-3xl border glass-panel flex flex-col gap-4 text-left">
+    <div className="p-6 rounded-3xl glass-panel flex flex-col gap-4 text-left">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h3 className="text-sm font-bold text-white">Customize QA Progress Timeline</h3>
-          <p className="text-[11px] text-text-muted">Add custom timeline nodes or load them automatically from history.</p>
+          <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Customize QA Progress Timeline</h3>
+          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Add custom timeline nodes or load them automatically from history.</p>
         </div>
         <button
           type="button"
           onClick={handleAutoPopulate}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#d4af37]/10 border border-[#d4af37]/20 text-accent-gold text-xs font-bold hover:bg-[#d4af37]/20 transition-all"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-accent-gold text-xs font-bold transition-all"
+          style={{ background: 'rgba(212,175,55,0.10)', border: '1px solid rgba(212,175,55,0.22)' }}
         >
           <HistoryIcon className="w-3.5 h-3.5" /> Auto-populate from History
         </button>
       </div>
 
       <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
-        {timeline.map((node, index) => (
-          <div key={node.id} className="p-4 rounded-2xl border border-white/5 bg-white/[0.01] flex flex-col gap-3 relative group text-left">
+        {timeline.map((node) => (
+          <div
+            key={node.id}
+            className="p-4 rounded-2xl flex flex-col gap-3 relative group text-left"
+            style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}
+          >
             <button
               type="button"
               onClick={() => deleteNode(node.id)}
-              className="absolute top-4 right-4 p-1.5 rounded-lg bg-red-500/10 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
+              className="absolute top-4 right-4 p-1.5 rounded-lg bg-red-500/10 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
               title="Delete node"
             >
               <Trash className="w-3.5 h-3.5" />
@@ -402,71 +388,71 @@ function TimelineBuilder() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pr-8">
               <div>
-                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Week / Cycle Label</label>
+                <label className="text-[10px] block font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Week / Cycle Label</label>
                 <input
                   type="text"
                   value={node.week}
                   onChange={(e) => updateNode(node.id, { week: e.target.value })}
                   placeholder="e.g. Week 1 or Sprint 1"
-                  className="field-input h-9 text-xs bg-black/45 border-white/10"
+                  className="field-input h-9 text-xs"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Health Index (%)</label>
+                <label className="text-[10px] block font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Health Index (%)</label>
                 <input
                   type="number"
                   value={node.healthScore}
                   onChange={(e) => updateNode(node.id, { healthScore: Number(e.target.value) })}
                   placeholder="e.g. 95"
-                  className="field-input h-9 text-xs bg-black/45 border-white/10"
+                  className="field-input h-9 text-xs"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div>
-                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Emails</label>
+                <label className="text-[10px] block font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Emails</label>
                 <input
                   type="number"
                   value={node.emails}
                   onChange={(e) => updateNode(node.id, { emails: Number(e.target.value) })}
-                  className="field-input h-9 text-xs bg-black/45 border-white/10"
+                  className="field-input h-9 text-xs"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Features</label>
+                <label className="text-[10px] block font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Features</label>
                 <input
                   type="number"
                   value={node.features}
                   onChange={(e) => updateNode(node.id, { features: Number(e.target.value) })}
-                  className="field-input h-9 text-xs bg-black/45 border-white/10"
+                  className="field-input h-9 text-xs"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Fixes</label>
+                <label className="text-[10px] block font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Fixes</label>
                 <input
                   type="number"
                   value={node.fixes}
                   onChange={(e) => updateNode(node.id, { fixes: Number(e.target.value) })}
-                  className="field-input h-9 text-xs bg-black/45 border-white/10"
+                  className="field-input h-9 text-xs"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Open Bugs</label>
+                <label className="text-[10px] block font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Open Bugs</label>
                 <input
                   type="number"
                   value={node.openDefects}
                   onChange={(e) => updateNode(node.id, { openDefects: Number(e.target.value) })}
-                  className="field-input h-9 text-xs text-red-400 bg-black/45 border-white/10"
+                  className="field-input h-9 text-xs text-red-500"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-text-muted block font-semibold uppercase tracking-wider mb-1">Closed Bugs</label>
+                <label className="text-[10px] block font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Closed Bugs</label>
                 <input
                   type="number"
                   value={node.closedDefects}
                   onChange={(e) => updateNode(node.id, { closedDefects: Number(e.target.value) })}
-                  className="field-input h-9 text-xs text-green-400 bg-black/45 border-white/10"
+                  className="field-input h-9 text-xs text-green-600"
                 />
               </div>
             </div>
@@ -474,8 +460,8 @@ function TimelineBuilder() {
         ))}
 
         {timeline.length === 0 && (
-          <div className="text-center py-6 border border-dashed border-white/10 rounded-2xl">
-            <p className="text-xs text-text-muted">No custom timeline entries. Bypassing customization will render automatic history.</p>
+          <div className="text-center py-6 border border-dashed rounded-2xl" style={{ borderColor: 'var(--border)' }}>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No custom timeline entries. Bypassing customization will render automatic history.</p>
           </div>
         )}
       </div>
@@ -483,7 +469,10 @@ function TimelineBuilder() {
       <button
         type="button"
         onClick={addNode}
-        className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-white/10 hover:border-white/20 text-xs font-bold text-text-secondary hover:text-white transition-all bg-white/[0.01] hover:bg-white/[0.02]"
+        className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed text-xs font-bold transition-all"
+        style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--hover)' }}
+        onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)' }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)' }}
       >
         <Plus className="w-4 h-4" /> Add Timeline Entry
       </button>
@@ -502,7 +491,6 @@ export const QAWeeklyReport: React.FC = () => {
   const canGenerateAI = can('qa-report', 'can_generate_ai')
   const [errors, setErrors] = useState<string[]>([])
   const [isLaunching, setIsLaunching] = useState(false)
-  const [launchMessage, setLaunchMessage] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [isPreviewed, setIsPreviewed] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
@@ -675,36 +663,29 @@ export const QAWeeklyReport: React.FC = () => {
       const currentSnapshot = createFormSnapshot(form)
       const matchedReport = reports.find(r => createFormSnapshot(r.form) === currentSnapshot)
       const reportId = matchedReport?.id ?? ''
+      // `launch=1` tells the new tab to play qaly.ai / RELEASE TRIAGE before revealing the dashboard
+      const params = new URLSearchParams()
+      if (reportId) params.set('reportId', reportId)
+      params.set('launch', '1')
+      const url = `${window.location.origin}${ROUTES.reportPreview}?${params.toString()}`
 
-      // Start premium animation experience
       setIsLaunching(true)
-      setLaunchMessage('Preparing Executive Dashboard...')
+      const newWindow = window.open(url, '_blank')
+      setIsLaunching(false)
 
-      // Switch message halfway
-      setTimeout(() => {
-        setLaunchMessage('Loading KPIs, Analytics & Historical Insights...')
-      }, 450)
+      if (!newWindow) {
+        toast({
+          variant: 'destructive',
+          title: 'Popup Blocked',
+          description: 'Please allow popups for this site to launch the dashboard.',
+        })
+        return
+      }
 
-      // Complete transition and open new tab
-      setTimeout(() => {
-        const url = `${window.location.origin}${ROUTES.reportPreview}${reportId ? `?reportId=${reportId}` : ''}`
-        const newWindow = window.open(url, '_blank', 'noopener')
-
-        if (!newWindow) {
-          toast({
-            variant: 'destructive',
-            title: 'Popup Blocked',
-            description: 'Please allow popups for this site to launch the dashboard.',
-          })
-        } else {
-          toast({
-            title: 'Dashboard Launched!',
-            description: 'Opening the Executive Dashboard in a new tab.'
-          })
-        }
-
-        setIsLaunching(false)
-      }, 900)
+      toast({
+        title: 'Dashboard Launching',
+        description: 'Opening Executive Dashboard — analysis runs in the new tab.',
+      })
     } catch (error) {
       console.error('Launch error:', error)
       setIsLaunching(false)
@@ -1097,110 +1078,6 @@ export const QAWeeklyReport: React.FC = () => {
         onSaved={handleDrawerSaved}
       />
 
-      {/* ── Premium Launch Animation Overlay ── */}
-      <AnimatePresence>
-        {isLaunching && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center overflow-hidden pointer-events-auto launch-overlay"
-          >
-            {/* Soft expanding glowing background orb */}
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: [0.8, 1.4, 1.2], opacity: [0, 0.4, 0.25] }}
-              transition={{ duration: 0.9, ease: 'easeOut' }}
-              className="absolute w-[450px] h-[450px] rounded-full bg-accent-gold/20 blur-[100px] pointer-events-none"
-            />
-
-            {/* Light streaks/particles moving upward */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ y: '100%', x: `${15 + i * 15}%`, opacity: 0, scaleY: 0.5 }}
-                  animate={{ y: '-20%', opacity: [0, 1, 0], scaleY: [0.5, 1.5, 0.5] }}
-                  transition={{
-                    duration: 0.8,
-                    ease: 'easeOut',
-                    delay: i * 0.05
-                  }}
-                  className="absolute w-[1px] h-32 bg-gradient-to-t from-transparent via-accent-gold to-transparent"
-                />
-              ))}
-            </div>
-
-            {/* Dashboard Icon & Animation */}
-            <div className="relative flex items-center justify-center mb-8">
-              {/* Ripple circles */}
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0.6 }}
-                animate={{ scale: 2.2, opacity: 0 }}
-                transition={{ duration: 0.75, ease: 'easeOut' }}
-                className="absolute w-24 h-24 rounded-full border border-accent-gold/30"
-              />
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0.5 }}
-                animate={{ scale: 1.6, opacity: 0 }}
-                transition={{ duration: 0.75, ease: 'easeOut', delay: 0.15 }}
-                className="absolute w-24 h-24 rounded-full border border-accent-gold/20"
-              />
-
-              {/* Glowing core wrapper */}
-              <motion.div
-                animate={{
-                  rotate: [0, 3, -3, 0],
-                  scale: [1, 1.1, 1.05, 1],
-                  boxShadow: [
-                    '0 0 20px rgba(212,175,55,0.1)',
-                    '0 0 40px rgba(212,175,55,0.3)',
-                    '0 0 20px rgba(212,175,55,0.1)'
-                  ]
-                }}
-                transition={{ duration: 0.9, ease: 'easeInOut' }}
-                className="w-20 h-20 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center z-10 backdrop-blur-md"
-              >
-                <FileText className="w-10 h-10 text-accent-gold" />
-              </motion.div>
-            </div>
-
-            {/* Messages */}
-            <div className="z-10 text-center flex flex-col gap-2.5 px-6 max-w-sm">
-              <motion.h4
-                key={launchMessage}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
-                className="text-base font-extrabold text-white tracking-wide min-h-[48px] flex items-center justify-center"
-              >
-                {launchMessage}
-              </motion.h4>
-
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.4 }}
-                transition={{ delay: 0.2, duration: 0.4 }}
-                className="text-xs text-white/50 font-medium"
-              >
-                QA Executive Analytics Suite
-              </motion.p>
-
-              {/* Premium Progress Bar */}
-              <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden mt-4 mx-auto">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: '100%' }}
-                  transition={{ duration: 0.9, ease: 'easeInOut' }}
-                  className="h-full bg-accent-gold shadow-[0_0_8px_#d4af37]"
-                />
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   )
 }

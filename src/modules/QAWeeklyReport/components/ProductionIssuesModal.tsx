@@ -5,6 +5,7 @@ import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertTriangle, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { useTheme } from '@/context/ThemeContext'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts'
 import { PremiumTooltip, BarFillGradient, BAR_RADIUS, legendPreset } from './report-preview/chartTheme'
 
@@ -21,6 +22,7 @@ export function ProductionIssuesModal({
   prodIssuesData,
   projectName
 }: ProductionIssuesModalProps) {
+  useBodyScrollLock(isOpen)
   const { isDark } = useTheme()
 
   const totalLastWeek = prodIssuesData.reduce((sum, item) => sum + item.lastWeek, 0)

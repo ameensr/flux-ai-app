@@ -87,34 +87,90 @@ export const ExecutiveKPISection: React.FC<ExecutiveKPISectionProps> = ({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Executive Summary Strip */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={`p-4 rounded-2xl border ${theme === 'dark' ? 'bg-gradient-to-r from-accent-gold/5 via-blue-500/5 to-purple-500/5 border-white/10' : 'bg-gradient-to-r from-amber-50 via-blue-50 to-purple-50 border-slate-200'}`}
+      {/* Executive Insight — minimal status line */}
+      {(() => {
+        const activeIssues = kpiMetrics.filter(m => m.pulse).length
+        const passRate = primaryMetrics.find(m => m.label === 'Release Testing Progress')?.val || 0
+        const activeBugs = primaryMetrics.find(m => m.label === 'Active Bugs')?.val || 0
+
+        const level =
+          activeIssues === 0 && passRate >= 90
+            ? 'high'
+            : activeIssues <= 2 && passRate >= 75
+              ? 'moderate'
+              : 'attention'
+
+        const tone =
+          level === 'high'
+            ? { dot: 'bg-emerald-400', label: 'High', detail: 'All systems healthy · Ready for deployment' }
+            : level === 'moderate'
+              ? { dot: 'bg-amber-400', label: 'Moderate', detail: 'Minor issues detected · Proceed with caution' }
+              : {
+                  dot: 'bg-rose-400',
+                  label: 'Needs attention',
+                  detail: `${activeIssues} critical item${activeIssues === 1 ? '' : 's'} · ${activeBugs} active bug${activeBugs === 1 ? '' : 's'}`,
+                }
+
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5 border-b ${
+              theme === 'dark' ? 'border-white/[0.06]' : 'border-slate-200/80'
+            }`}
+          >
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${
+                theme === 'dark' ? 'text-white/35' : 'text-slate-400'
+              }`}
+            >
+              Executive Insight
+            </span>
+
+            <span
+              className={`hidden sm:block w-px h-3 ${
+                theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'
+              }`}
+              aria-hidden
+            />
+
+            <span className="inline-flex items-center gap-2 min-w-0">
+              <span className="relative flex h-1.5 w-1.5 shrink-0">
+                {level === 'attention' && (
+                  <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${tone.dot}`} />
+                )}
+                <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+              </span>
+              <span
+                className={`text-[11px] font-semibold tracking-wide ${
+                  theme === 'dark' ? 'text-white/75' : 'text-slate-700'
+                }`}
+              >
+                Release confidence · {tone.label}
+              </span>
+              <span
+                className={`text-[11px] font-normal truncate ${
+                  theme === 'dark' ? 'text-white/40' : 'text-slate-500'
+                }`}
+              >
+                {tone.detail}
+              </span>
+            </span>
+          </motion.div>
+        )
+      })()}
+
+      {/* Primary Metrics — column count matches card count so the row fills evenly */}
+      <div
+        className={`grid gap-4 grid-cols-1 sm:grid-cols-2 ${
+          primaryMetrics.length === 3
+            ? 'lg:grid-cols-3'
+            : primaryMetrics.length >= 4
+              ? 'lg:grid-cols-4'
+              : ''
+        }`}
       >
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-[10px] font-black uppercase tracking-widest text-accent-gold">Executive Insight</span>
-          <span className={`text-xs font-semibold ${theme === 'dark' ? 'text-white/80' : 'text-slate-700'}`}>
-            {(() => {
-              const activeIssues = kpiMetrics.filter(m => m.pulse).length
-              const passRate = primaryMetrics.find(m => m.label === 'Release Testing Progress')?.val || 0
-              const activeBugs = primaryMetrics.find(m => m.label === 'Active Bugs')?.val || 0
-
-              if (activeIssues === 0 && passRate >= 90) {
-                return '🟢 Release Confidence: HIGH • All systems healthy • Ready for deployment'
-              } else if (activeIssues <= 2 && passRate >= 75) {
-                return '🟡 Release Confidence: MODERATE • Minor issues detected • Proceed with caution'
-              } else {
-                return `🔴 Release Confidence: NEEDS ATTENTION • ${activeIssues} critical items • ${activeBugs} active bugs`
-              }
-            })()}
-          </span>
-        </div>
-      </motion.div>
-
-      {/* Primary Metrics - Always Visible */}
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-4">
         {primaryMetrics.map((kpi, idx) => (
           <KPICard
             key={kpi.label}

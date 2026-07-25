@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
 import { usePermissions } from '@/hooks/usePermissions'
-import { Trash2, ExternalLink, Search, Copy } from 'lucide-react'
+import { Trash2, ExternalLink, Search, Copy, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
-import { createFormSnapshot, isPassStatus } from '../types'
+import { createFormSnapshot, getReportDisplayName, isPassStatus } from '../types'
+import { SaveReportNameModal, type SaveReportConfirmPayload } from './SaveReportNameModal'
 
 // ── Pie Chart ─────────────────────────────────────────────────────────────────
 
@@ -184,7 +185,7 @@ export const DefectChart: React.FC = () => {
 // ── Report History ────────────────────────────────────────────────────────────
 
 export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => void }> = ({ onReportLoaded }) => {
-  const { savedReports, deleteReport, setGeneratedReport, setForm, historySearch, setHistorySearch, projects, form, fetchReports } = useQAReportStore()
+  const { savedReports, deleteReport, saveReport, setGeneratedReport, setForm, historySearch, setHistorySearch, projects, form, fetchReports } = useQAReportStore()
   const { can } = usePermissions()
   const canDelete = can('qa-report', 'can_delete')
   const [page, setPage] = useState(1)
@@ -192,6 +193,7 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
 
   const [searchProject, setSearchProject] = useState(form.projectId || '')
   const [localSearchText, setLocalSearchText] = useState(historySearch)
+  const [renaming, setRenaming] = useState<typeof savedReports[0] | null>(null)
 
   useEffect(() => {
     if (form.projectId) {
@@ -203,7 +205,10 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
     if (searchProject && r.projectId !== searchProject) return false
 
     if (historySearch) {
-      const matchText = [r.project, r.week, r.createdBy].some(v => v?.toLowerCase().includes(historySearch.toLowerCase()))
+      const q = historySearch.toLowerCase()
+      const matchText = [getReportDisplayName(r), r.project, r.week, r.createdBy, r.status].some(v =>
+        v?.toLowerCase().includes(q),
+      )
       if (!matchText) return false
     }
 
@@ -212,6 +217,30 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
 
   const pages = Math.ceil(filtered.length / PER_PAGE)
   const visible = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
+
+  const renameExistingNames = useMemo(() => {
+    if (!renaming) return []
+    return savedReports
+      .filter(r => r.projectId === renaming.projectId && r.id !== renaming.id)
+      .map(r => getReportDisplayName(r))
+  }, [renaming, savedReports])
+
+  const renameRecentNames = useMemo(() => {
+    if (!renaming) return []
+    const seen = new Set<string>()
+    const names: string[] = []
+    for (const r of [...savedReports]
+      .filter(r => r.projectId === renaming.projectId)
+      .sort((a, b) => new Date(b.generatedDate).getTime() - new Date(a.generatedDate).getTime())) {
+      const n = getReportDisplayName(r).trim()
+      const key = n.toLowerCase()
+      if (!n || seen.has(key)) continue
+      seen.add(key)
+      names.push(n)
+      if (names.length >= 12) break
+    }
+    return names
+  }, [renaming, savedReports])
 
   // Reset to last valid page if current page exceeds available pages
   useEffect(() => {
@@ -225,22 +254,58 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
   const open = (r: typeof savedReports[0]) => {
     setGeneratedReport(r.markdown)
     setForm(r.form)
-    toast({ title: 'Report Loaded', description: `${r.project} — ${r.week}` })
+    toast({ title: 'Report Loaded', description: getReportDisplayName(r) })
     if (onReportLoaded) {
       onReportLoaded(createFormSnapshot(r.form))
     }
   }
 
-  const duplicate = (r: typeof savedReports[0]) => {
-    const newR = { ...r, id: crypto.randomUUID(), generatedDate: new Date().toISOString() }
-    useQAReportStore.getState().saveReport(newR)
-    toast({ title: 'Duplicated', description: 'Report duplicated in history.' })
+  const duplicate = async (r: typeof savedReports[0]) => {
+    const base = getReportDisplayName(r)
+    const newR = {
+      ...r,
+      id: crypto.randomUUID(),
+      name: `${base} (Copy)`,
+      generatedDate: new Date().toISOString(),
+    }
+    try {
+      await saveReport(newR)
+      toast({ title: 'Duplicated', description: `Saved as “${newR.name}”.` })
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'Duplicate Failed',
+        description: e instanceof Error ? e.message : 'Could not duplicate the report.',
+      })
+    }
+  }
+
+  const handleRenameConfirm = async (payload: SaveReportConfirmPayload) => {
+    if (!renaming) return
+    const target = renaming
+    const statusChanged = target.status !== payload.status
+    setRenaming(null)
+    try {
+      await saveReport({ ...target, name: payload.name, status: payload.status })
+      toast({
+        title: statusChanged ? 'Report Updated' : 'Report Renamed',
+        description: statusChanged
+          ? `“${payload.name}” marked as ${payload.status}.`
+          : `Updated to “${payload.name}”.`,
+      })
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'Update Failed',
+        description: e instanceof Error ? e.message : 'Could not update the report.',
+      })
+    }
   }
 
   const handleDelete = async (r: typeof savedReports[0]) => {
     try {
       await deleteReport(r.id)
-      toast({ title: 'Report Deleted', description: `${r.project} — ${r.week} removed from history.` })
+      toast({ title: 'Report Deleted', description: `“${getReportDisplayName(r)}” removed from history.` })
     } catch (e) {
       toast({
         variant: 'destructive',
@@ -285,7 +350,7 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
                 <Search className="w-3.5 h-3.5 text-text-muted" />
                 <input
                   className="bg-transparent text-xs text-text-primary focus:outline-none w-full placeholder:text-text-muted"
-                  placeholder="Filter text..."
+                  placeholder="Search by name, project, week..."
                   value={localSearchText}
                   onChange={e => setLocalSearchText(e.target.value)}
                   onKeyDown={e => {
@@ -308,19 +373,41 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
 
       <div className="flex flex-col gap-2">
         {visible.length === 0 && <p className="text-xs text-text-muted">No results.</p>}
-        {visible.map(r => (
-          <div key={r.id} className="flex items-center justify-between gap-2 p-3 rounded-2xl bg-hover/20 border border-border hover:border-accent/20 transition-all group">
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-text-primary truncate">{r.project}</p>
-              <p className="text-[11px] text-text-muted">{r.week} · {new Date(r.generatedDate).toLocaleDateString()} at {new Date(r.generatedDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+        {visible.map(r => {
+          const displayName = getReportDisplayName(r)
+          const isDraft = r.status === 'Draft'
+          return (
+            <div key={r.id} className="flex items-center justify-between gap-2 p-3 rounded-2xl bg-hover/20 border border-border hover:border-accent/20 transition-all group">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <p className="text-sm font-bold text-text-primary truncate" title={displayName}>{displayName}</p>
+                  <span
+                    className={cn(
+                      'shrink-0 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider',
+                      isDraft
+                        ? 'bg-amber-500/15 text-amber-500'
+                        : 'bg-green-500/15 text-green-500',
+                    )}
+                  >
+                    {r.status}
+                  </span>
+                </div>
+                <p className="text-[11px] text-text-muted truncate">
+                  {r.project}
+                  {r.week && r.name ? ` · ${r.week}` : ''}
+                  {' · '}
+                  {new Date(r.generatedDate).toLocaleDateString()} at {new Date(r.generatedDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => open(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-accent-gold transition-all" title="Open"><ExternalLink className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setRenaming(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-text-primary transition-all" title="Edit name & status"><Pencil className="w-3.5 h-3.5" /></button>
+                <button onClick={() => duplicate(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-text-primary transition-all" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
+                {canDelete && <button onClick={() => handleDelete(r)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>}
+              </div>
             </div>
-            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => open(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-accent-gold transition-all" title="Open"><ExternalLink className="w-3.5 h-3.5" /></button>
-              <button onClick={() => duplicate(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-text-primary transition-all" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
-              {canDelete && <button onClick={() => handleDelete(r)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>}
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {pages > 1 && (
@@ -332,6 +419,21 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
           ))}
         </div>
       )}
+
+      <SaveReportNameModal
+        open={!!renaming}
+        mode="rename"
+        initialName={renaming ? getReportDisplayName(renaming) : ''}
+        initialStatus={renaming?.status || 'Final'}
+        existingNames={renameExistingNames}
+        recentNames={renameRecentNames}
+        ignoreName={renaming ? getReportDisplayName(renaming) : undefined}
+        confirmLabel="Save changes"
+        title="Edit report"
+        description="Update the name or change Draft / Final status."
+        onCancel={() => setRenaming(null)}
+        onConfirm={handleRenameConfirm}
+      />
     </GlassCard>
   )
 }

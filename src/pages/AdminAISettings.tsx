@@ -7,6 +7,7 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { FloatingButton } from '@/components/ui/FloatingButton'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
 import { useToast } from '@/hooks/use-toast'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useTheme } from '@/context/ThemeContext'
 import { aiProviderService, type AIProviderConfig, type CreateProviderPayload } from '@/services/ai/aiProviderService'
 import {
@@ -158,6 +159,7 @@ export const AdminAISettings = () => {
   const [testingId, setTestingId] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; latency: number }>>({})
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  useBodyScrollLock(showForm)
 
   useEffect(() => { load() }, [])
 

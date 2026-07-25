@@ -116,6 +116,46 @@ export function invalidatePermissionCache(roleKey?: string) {
   else cache.clear()
 }
 
+/**
+ * Fetches every row of public.role_module_permissions, paginating past
+ * PostgREST's default "Max Rows" API limit (1000 by default in Supabase
+ * project settings). A plain `.select('*')` with no `.range()` silently
+ * truncates to that limit — no error is raised — so on a fully-seeded RBAC
+ * matrix (roles x modules x permissions can exceed 1000 rows) an admin's
+ * saved permission change may or may not appear in the next fetch depending
+ * on where that row happens to fall in Postgres's return order (there is no
+ * ORDER BY, so this is effectively arbitrary and can shift between saves).
+ * This is what caused permissions to "not be highlighted" after a save +
+ * refresh, even though the write itself was correctly persisted in the DB.
+ *
+ * Used by both RoleManagement.tsx and PermissionTemplates.tsx, which each
+ * need the complete, unfiltered matrix to render/apply against.
+ */
+export async function fetchAllRoleModulePermissions(): Promise<
+  { id: string; role_id: string; module_id: string; permission_id: string; is_enabled: boolean }[]
+> {
+  const PAGE_SIZE = 1000
+  const all: { id: string; role_id: string; module_id: string; permission_id: string; is_enabled: boolean }[] = []
+  let from = 0
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('role_module_permissions')
+      .select('id, role_id, module_id, permission_id, is_enabled')
+      .order('id', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+
+    if (error) throw error
+    if (!data || data.length === 0) break
+
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+
+  return all
+}
+
 export function canAccessModule(map: RolePermissionMap, moduleKey: string): boolean {
   return map[moduleKey]?.['can_view'] === true
 }

@@ -1,43 +1,79 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Eye, EyeOff, Play, Download, Printer, FileText, LayoutGrid, Copy, X } from 'lucide-react'
+import { Eye, EyeOff, Play, Download, Printer, FileText, LayoutGrid, Copy, X, Sun, Moon } from 'lucide-react'
 
 type ThemeId = 'light' | 'dark'
 
 interface ReportActionBarProps {
   theme: ThemeId
+  onToggleTheme: () => void
   clientMode: boolean
   onToggleClientMode: () => void
   onPresent: () => void
   showExportMenu: boolean
   onToggleExportMenu: () => void
   onPrint: () => void
-  onDownloadPPTX: () => void
+  onPrintFriendly: () => void
   onDownloadHTML: () => void
   onDownloadMarkdown: () => void
   onClose: () => void
 }
 
 /**
- * Consolidated action area for report-preview: view options (client mode),
- * Present mode, the Export menu (Print/PPTX/HTML/Markdown), and Close. All handlers are
- * passed through unchanged from the dashboard — this component only organizes them visually.
+ * Consolidated action area for report-preview: theme toggle, view options (client
+ * mode), Present mode, the Export menu (Print to PDF/Print Friendly/HTML/Markdown),
+ * and Close. All handlers are passed through unchanged from the dashboard — this
+ * component only organizes them visually.
  */
 export const ReportActionBar: React.FC<ReportActionBarProps> = ({
   theme,
+  onToggleTheme,
   clientMode,
   onToggleClientMode,
   onPresent,
   showExportMenu,
   onToggleExportMenu,
   onPrint,
-  onDownloadPPTX,
+  onPrintFriendly,
   onDownloadHTML,
   onDownloadMarkdown,
   onClose
 }) => {
   return (
     <div className="flex items-center gap-2">
+      {/* Theme toggle */}
+      <button
+        onClick={onToggleTheme}
+        title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+        className={`relative flex items-center justify-center w-8 h-8 rounded-xl border overflow-hidden transition-all ${theme === 'dark' ? 'bg-white/[0.04] border-white/[0.06] text-amber-300 hover:bg-white/[0.08]' : 'bg-black/[0.03] border-black/[0.06] text-amber-500 hover:bg-black/[0.05]'}`}
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          {theme === 'dark' ? (
+            <motion.span
+              key="moon"
+              initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+              animate={{ opacity: 1, rotate: 0, scale: 1 }}
+              exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              className="flex items-center justify-center"
+            >
+              <Moon className="w-3.5 h-3.5" />
+            </motion.span>
+          ) : (
+            <motion.span
+              key="sun"
+              initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+              animate={{ opacity: 1, rotate: 0, scale: 1 }}
+              exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              className="flex items-center justify-center"
+            >
+              <Sun className="w-3.5 h-3.5" />
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </button>
+
       {/* View options group */}
       <button
         onClick={onToggleClientMode}
@@ -78,8 +114,8 @@ export const ReportActionBar: React.FC<ReportActionBarProps> = ({
                 <button onClick={onPrint} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
                   <Printer className="w-4 h-4 text-accent-gold" /> Print to PDF
                 </button>
-                <button onClick={onDownloadPPTX} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
-                  <FileText className="w-4 h-4 text-blue-400" /> PowerPoint Outline
+                <button onClick={onPrintFriendly} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
+                  <FileText className="w-4 h-4 text-blue-400" /> Print Friendly Report
                 </button>
                 <button onClick={onDownloadHTML} className={`flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${theme === 'dark' ? 'hover:bg-white/5 text-white' : 'hover:bg-black/5 text-slate-800'}`}>
                   <LayoutGrid className="w-4 h-4 text-purple-400" /> Standalone HTML

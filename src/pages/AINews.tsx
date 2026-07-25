@@ -4,6 +4,7 @@
 import React, { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { cn } from '@/lib/utils'
 import {
   Newspaper, RefreshCw, ExternalLink, Clock, ArrowLeft, ArrowRight, Zap, X,
@@ -173,6 +174,7 @@ function openNewsSource(url: string, toast: (msg: string) => void) {
 // ── Article Detail Modal ──────────────────────────────────────────────────────
 
 function ArticleDetail({ article, onClose }: { article: NewsArticle; onClose: () => void }) {
+  useBodyScrollLock(true)
   const handleGoToNews = () => {
     openNewsSource(article.url, (msg) => alert(msg))
   }

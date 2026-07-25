@@ -1,7 +1,6 @@
 // src/modules/QAWeeklyReport/utils/capacityParser.ts
 // Simplified parser for team capacity Excel files
 
-import * as XLSX from 'xlsx'
 import type { TeamMemberCapacity, TeamCapacityData } from '../types/teamCapacity'
 import { getMemberStatus, calculateCapacityStats } from '../types/teamCapacity'
 
@@ -12,6 +11,10 @@ interface ParsedRow {
 }
 
 export async function parseTeamCapacityExcel(file: File): Promise<TeamCapacityData> {
+  // Loaded on demand (not at module load) to keep the ~860KB xlsx parser out
+  // of this route's chunk until a user actually uploads a file.
+  const XLSX = await import('xlsx')
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
 
