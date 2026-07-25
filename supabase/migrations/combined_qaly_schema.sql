@@ -1,84 +1,46 @@
--- ══════════════════════════════════════════════════════════════════════════════
+-- ============================================================================
 -- COMBINED QALY-AI SCHEMA — Single-file Supabase bootstrap migration
 --
 -- PURPOSE
---   Initializes a brand-new, empty Supabase project (e.g. "Qaly-ai" production)
---   with the complete schema required to run this application, WITHOUT copying
---   any Flux-ai (development) data, users, secrets, or API keys.
+--   Initializes a brand-new, empty Supabase project (production "Qaly-ai")
+--   with the complete schema required by the CURRENT application.
+--   Does NOT copy Flux-ai development data, users, secrets, or API keys.
+--
+-- ARCHITECTURE
+--   LOCAL DEVELOPMENT  → Flux-ai  (numbered migrations via `supabase db reset`)
+--   VERCEL / ORG PROD  → Qaly-ai  (THIS file once on a fresh Supabase project)
 --
 -- HOW THIS FILE WAS BUILT
---   Reconciled from all 50 files in supabase/migrations/001..059, cross-checked
---   against every supabase.from()/rpc() call in src/ and supabase/functions/ to
---   resolve drift between the migration history and what the application
---   actually queries. Where the two disagreed, the application code was
---   treated as ground truth (see discrepancy notes inline below). This file
---   represents the FINAL state after all 50 migrations, not their individual
---   incremental steps.
+--   Reconciled from migrations 000..061 + every supabase.from()/rpc() call in
+--   src/ and supabase/functions/. Application code is ground truth where
+--   migration history drifted (notably projects: use 034 `name`/`tags` shape,
+--   never the obsolete 021 `project_name` shape).
 --
--- KNOWN DISCREPANCIES RECONCILED (see inline comments at each point too)
---   1. public.profiles is never CREATEd by any migration in this repo (only
---      ALTERed) — it must have been created directly via the Supabase
---      dashboard. Reconstructed here from every ALTER TABLE profiles
---      statement (003, 008, 010-012, 025, 031, 033) plus real usage in
---      src/pages/AuthPage.tsx, src/App.tsx, src/store/useAppStore.ts, and
---      src/pages/EnterpriseAdmin/UserManagement.tsx.
---   2. public.projects was CREATE TABLE'd twice with two incompatible shapes:
---      021_project_master.sql (project_name/project_code/is_active) and
---      034_project_hub.sql (name/status enum/tags/metadata). Every real
---      query in src/modules/ProjectHub/projectService.ts and
---      src/modules/QAWeeklyReport/store.ts uses the 034 shape (`name`,
---      `project_code`, `status`, `tags`, `description`) — that shape is used
---      here as ground truth.
---   3. 030_team_capacity.sql defines team_capacity_reports.report_id as a FK
---      to public.qa_weekly_reports(id) — a table that is never created
---      anywhere and never queried by any application code (the real table is
---      `weekly_reports`). That FK would make the table uncreatable on a
---      fresh database, so it is DROPPED here. Neither team_capacity table is
---      currently queried by the frontend (Team Capacity upload appears to be
---      processed client-side only) — both tables are still included for
---      schema completeness/data-preservation, but this is flagged as
---      POTENTIALLY UNUSED for follow-up verification.
---   4. 037_admin_hub_rbac.sql contains plain JSON, not SQL, and was never a
---      valid migration — its content (a module list) is already represented
---      by the real `insert into public.modules` statements below. Skipped.
---   5. Migration numbers 029 and 045-055 do not exist in the repo, and a
---      comment inside 056 references a "migration 046" that also does not
---      exist — both indicate undocumented manual schema changes were made
---      directly against the live database outside of tracked migrations.
---      Everything reconstructed here was verified against actual code
---      queries where possible, but full parity cannot be guaranteed without
---      running this file against a clean project and diffing against the
---      live Flux-ai schema (see Phase 10 validation notes in chat).
+-- SECURITY
+--   SECURITY DEFINER helpers live in schema `private` (not exposed by PostgREST).
+--   Public INVOKER wrappers exist only for app RPCs:
+--     get_role_permissions, check_module_permission
+--   Trigger functions remain in `public` with locked search_path.
 --
--- EXPLICITLY EXCLUDED (by design — see task requirements)
---   - No auth.* internal Supabase tables are created or modified.
---   - No user accounts, passwords, sessions, or auth tokens.
---   - No real projects, reports, support logs, or other business data.
---   - No ai_provider_configs rows (contains encrypted API keys/secrets) —
---     the table is created empty; an admin must configure a provider via
---     the Admin > AI Settings UI after deploy.
---   - No `teams` table — this feature was fully removed by migrations 032/036
---     in favor of `projects` + `project_members`. Columns left behind on
---     other tables for historical compatibility (team_id) are kept as plain
---     nullable UUID columns with NO foreign key (matches the live schema
---     after 036's `DROP TABLE teams CASCADE`, which silently drops the FKs
---     that pointed to it).
---   - No Supabase Storage buckets — confirmed via grep that this app does not
---     call supabase.storage anywhere; attachment_url/avatar_url are plain
---     text URL columns, not Storage references.
+-- USAGE (fresh Qaly-ai only)
+--   1. Create new Supabase project
+--   2. SQL Editor → paste/run THIS FILE once
+--   3. Register first user via the app
+--   4. Run Super Admin assignment (SECTION at end of this file)
+--   5. Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY on Vercel
 --
--- USAGE
---   Run this file ONCE via the Supabase SQL editor (or `psql`) against a
---   brand-new, empty Supabase project. Do NOT add this file to the numbered
---   001..059 migration sequence used by `supabase db push` against the
---   existing Flux-ai project — it would be redundant there and is not named
---   with a numeric prefix specifically to avoid the CLI picking it up
---   automatically.
--- ══════════════════════════════════════════════════════════════════════════════
+-- DO NOT
+--   - Run this on Flux-ai if numbered migrations already applied
+--   - Commit secrets / real emails / business data into this file
+--   - Use DROP SCHEMA public CASCADE for normal setup
+-- ============================================================================
 
-
--- ══════════════════════════════════════════════════════════════════════════════
 -- SECTION 0: Extensions
+
+create schema if not exists private;
+revoke all on schema private from public;
+grant usage on schema private to postgres;
+
 -- ══════════════════════════════════════════════════════════════════════════════
 
 create extension if not exists pgcrypto; -- gen_random_uuid()
@@ -223,14 +185,14 @@ drop policy if exists "profiles_admin_update_by_service"  on public.profiles;
 
 -- get_my_role(): SECURITY DEFINER helper to avoid recursive RLS lookups
 -- (see 011_fix_profiles_rls.sql for the original recursion bug this fixes)
-create or replace function public.get_my_role()
+create or replace function private.get_my_role()
 returns text
 language sql stable security definer set search_path = public
 as $$
   select role from public.profiles where id = auth.uid() limit 1;
 $$;
 
-grant execute on function public.get_my_role() to authenticated, anon;
+grant execute on function private.get_my_role() to authenticated;
 
 -- All authenticated users can read all profiles (no sensitive secrets stored here)
 create policy "profiles_read_authenticated" on public.profiles
@@ -244,16 +206,16 @@ create policy "profiles_self_insert" on public.profiles
 -- previously conflicted with profiles_admin_update's WITH CHECK clause.
 create policy "profiles_self_update" on public.profiles
   for update
-  using ( auth.uid() = id and public.get_my_role() not in ('admin', 'super_admin') )
-  with check ( auth.uid() = id and public.get_my_role() not in ('admin', 'super_admin') );
+  using ( auth.uid() = id and private.get_my_role() not in ('admin', 'super_admin') )
+  with check ( auth.uid() = id and private.get_my_role() not in ('admin', 'super_admin') );
 
 create policy "profiles_admin_update" on public.profiles
   for update
-  using ( public.get_my_role() in ('admin', 'super_admin') )
-  with check ( public.get_my_role() in ('admin', 'super_admin') );
+  using ( private.get_my_role() in ('admin', 'super_admin') )
+  with check ( private.get_my_role() in ('admin', 'super_admin') );
 
 create policy "profiles_admin_delete" on public.profiles
-  for delete using ( public.get_my_role() in ('admin', 'super_admin') );
+  for delete using ( private.get_my_role() in ('admin', 'super_admin') );
 
 -- Auto-create a profile row whenever a new user signs up via Supabase Auth.
 -- (source: 006_profile_trigger.sql)
@@ -339,7 +301,7 @@ create policy "plans_read_all" on public.plans for select using (true);
 -- (source: 004_rbac_helpers.sql, 005_rbac_get_permissions.sql)
 -- ══════════════════════════════════════════════════════════════════════════════
 
-create or replace function public.check_module_permission(
+create or replace function private.check_module_permission(
   p_role_key       text,
   p_module_key     text,
   p_permission_key text
@@ -363,10 +325,10 @@ as $$
   );
 $$;
 
-grant execute on function public.check_module_permission(text, text, text) to authenticated;
+grant execute on function private.check_module_permission(text, text, text) to authenticated;
 
 -- RPC used by the frontend permission engine (loadPermissionsForRole in src/lib/rbac.ts)
-create or replace function public.get_role_permissions(p_role_key text)
+create or replace function private.get_role_permissions(p_role_key text)
 returns table (
   module_key     text,
   permission_key text,
@@ -385,9 +347,9 @@ as $$
   where r.role_key = p_role_key;
 $$;
 
-grant execute on function public.get_role_permissions(text) to authenticated, anon;
+grant execute on function private.get_role_permissions(text) to authenticated;
 
-create or replace function public.is_admin()
+create or replace function private.is_admin()
 returns boolean language sql stable security definer as $$
   select exists (
     select 1 from public.profiles
@@ -395,7 +357,7 @@ returns boolean language sql stable security definer as $$
   )
 $$;
 
-create or replace function public.is_super_admin()
+create or replace function private.is_super_admin()
 returns boolean language sql stable security definer as $$
   select exists (
     select 1 from public.profiles
@@ -468,7 +430,13 @@ drop policy if exists "audit_service_insert" on public.audit_logs;
 create policy "audit_admin_read" on public.audit_logs for select using (
   exists (select 1 from public.profiles where id = auth.uid() and role in ('admin','super_admin'))
 );
-create policy "audit_service_insert" on public.audit_logs for insert with check (true);
+create policy "audit_service_insert" on public.audit_logs
+  for insert to authenticated, service_role
+  with check (
+    auth.role() = 'service_role'
+    or private.is_admin()
+    or private.is_super_admin()
+  );
 
 create index if not exists audit_logs_created_at_idx on public.audit_logs (created_at desc);
 create index if not exists audit_logs_actor_id_idx   on public.audit_logs (actor_id);
@@ -640,7 +608,7 @@ create index if not exists idx_project_members_user_id    on public.project_memb
 
 -- Final version from 040_fix_qa_lead_project_access.sql: qa_lead excluded so
 -- QA Leads follow strict project-membership rules like regular users.
-create or replace function public.is_project_manager()
+create or replace function private.is_project_manager()
 returns boolean language sql stable security definer as $$
   select exists (
     select 1 from public.profiles
@@ -648,7 +616,7 @@ returns boolean language sql stable security definer as $$
   )
 $$;
 
-create or replace function public.is_project_member(project_uuid uuid)
+create or replace function private.is_project_member(project_uuid uuid)
 returns boolean language sql stable security definer as $$
   select exists (
     select 1 from public.project_members
@@ -656,7 +624,7 @@ returns boolean language sql stable security definer as $$
   )
 $$;
 
-create or replace function public.is_project_owner_or_lead(project_uuid uuid)
+create or replace function private.is_project_owner_or_lead(project_uuid uuid)
 returns boolean language sql stable security definer as $$
   select exists (
     select 1 from public.project_members
@@ -667,7 +635,7 @@ returns boolean language sql stable security definer as $$
 $$;
 
 -- Final version from 043_fix_project_deletion_permissions.sql
-create or replace function public.is_project_owner(project_uuid uuid)
+create or replace function private.is_project_owner(project_uuid uuid)
 returns boolean language sql stable security definer as $$
   select exists (
     select 1 from public.project_members
@@ -677,12 +645,12 @@ returns boolean language sql stable security definer as $$
   )
 $$;
 
-create or replace function public.my_org_id()
+create or replace function private.my_org_id()
 returns uuid language sql stable security definer as $$
   select null::uuid
 $$;
 
-create or replace function public.get_user_project_role(p_project_id uuid)
+create or replace function private.get_user_project_role(p_project_id uuid)
 returns text language plpgsql security definer stable as $$
 declare
   v_role text;
@@ -695,19 +663,19 @@ begin
 end;
 $$;
 
-create or replace function public.can_edit_in_project(p_project_id uuid)
+create or replace function private.can_edit_in_project(p_project_id uuid)
 returns boolean language plpgsql security definer stable as $$
 declare
   v_role text;
 begin
-  if public.is_admin() then return true; end if;
+  if private.is_admin() then return true; end if;
   if p_project_id is null then return true; end if;
-  v_role := public.get_user_project_role(p_project_id);
+  v_role := private.get_user_project_role(p_project_id);
   return v_role in ('owner', 'lead', 'member');
 end;
 $$;
 
-create or replace function public.can_modify_project_member_role(
+create or replace function private.can_modify_project_member_role(
   p_member_id uuid,
   p_new_role  text
 ) returns boolean language plpgsql stable security definer as $$
@@ -717,8 +685,8 @@ declare
   v_project_id uuid;
   v_owner_count int;
 begin
-  if public.is_super_admin() then return true; end if;
-  if public.is_admin() or public.is_project_manager() then return true; end if;
+  if private.is_super_admin() then return true; end if;
+  if private.is_admin() or private.is_project_manager() then return true; end if;
 
   select project_id, project_role into v_project_id, v_target_current_role
   from public.project_members where id = p_member_id;
@@ -750,7 +718,7 @@ begin
 end;
 $$;
 
-create or replace function public.can_remove_project_member(
+create or replace function private.can_remove_project_member(
   p_member_id uuid
 ) returns boolean language plpgsql stable security definer as $$
 declare
@@ -760,8 +728,8 @@ declare
   v_project_id uuid;
   v_owner_count int;
 begin
-  if public.is_super_admin() then return true; end if;
-  if public.is_admin() or public.is_project_manager() then return true; end if;
+  if private.is_super_admin() then return true; end if;
+  if private.is_admin() or private.is_project_manager() then return true; end if;
 
   select project_id, project_role, user_id into v_project_id, v_target_role, v_target_user_id
   from public.project_members where id = p_member_id;
@@ -811,17 +779,17 @@ drop policy if exists "projects_update" on public.projects;
 drop policy if exists "projects_delete" on public.projects;
 
 create policy "projects_select" on public.projects for select using (
-  public.is_admin() or public.is_project_manager() or public.is_project_member(id)
+  private.is_admin() or private.is_project_manager() or private.is_project_member(id)
 );
 create policy "projects_insert" on public.projects for insert with check (
-  public.is_admin() or public.is_project_manager()
+  private.is_admin() or private.is_project_manager()
 );
 create policy "projects_update" on public.projects for update using (
-  public.is_admin() or public.is_project_owner_or_lead(id) or public.is_project_manager()
+  private.is_admin() or private.is_project_owner_or_lead(id) or private.is_project_manager()
 );
 -- Final version from 043_fix_project_deletion_permissions.sql: owners only, not leads
 create policy "projects_delete" on public.projects for delete using (
-  public.is_admin() or public.is_project_owner(id)
+  private.is_admin() or private.is_project_owner(id)
 );
 
 -- ── RLS: project_members ──────────────────────────────────────────────────────
@@ -834,17 +802,17 @@ drop policy if exists "project_members_update" on public.project_members;
 drop policy if exists "project_members_delete" on public.project_members;
 
 create policy "project_members_select" on public.project_members for select using (
-  public.is_admin() or public.is_project_member(project_id) or public.is_project_manager()
+  private.is_admin() or private.is_project_member(project_id) or private.is_project_manager()
 );
 create policy "project_members_insert" on public.project_members for insert with check (
-  public.is_admin() or public.is_project_owner_or_lead(project_id) or public.is_project_manager()
+  private.is_admin() or private.is_project_owner_or_lead(project_id) or private.is_project_manager()
 );
 -- Final version from 039_fix_project_member_role_hierarchy.sql: hierarchy-enforced
 create policy "project_members_update" on public.project_members for update using (
-  public.can_modify_project_member_role(id, project_role)
+  private.can_modify_project_member_role(id, project_role)
 );
 create policy "project_members_delete" on public.project_members for delete using (
-  public.can_remove_project_member(id)
+  private.can_remove_project_member(id)
 );
 
 -- ── Triggers: last-owner protection (039) ─────────────────────────────────────
@@ -854,7 +822,7 @@ returns trigger language plpgsql as $$
 declare
   v_owner_count int;
 begin
-  if public.is_super_admin() then return new; end if;
+  if private.is_super_admin() then return new; end if;
   if old.project_role = 'owner' and new.project_role != 'owner' then
     select count(*) into v_owner_count from public.project_members
     where project_id = old.project_id and project_role = 'owner';
@@ -876,7 +844,7 @@ returns trigger language plpgsql as $$
 declare
   v_owner_count int;
 begin
-  if public.is_super_admin() then return old; end if;
+  if private.is_super_admin() then return old; end if;
   if old.project_role = 'owner' then
     select count(*) into v_owner_count from public.project_members
     where project_id = old.project_id and project_role = 'owner';
@@ -913,8 +881,14 @@ create table if not exists public.project_deletion_audit (
 alter table public.project_deletion_audit enable row level security;
 drop policy if exists "project_deletion_audit_select" on public.project_deletion_audit;
 drop policy if exists "project_deletion_audit_insert" on public.project_deletion_audit;
-create policy "project_deletion_audit_select" on public.project_deletion_audit for select using (public.is_admin());
-create policy "project_deletion_audit_insert" on public.project_deletion_audit for insert with check (true);
+create policy "project_deletion_audit_select" on public.project_deletion_audit for select using (private.is_admin());
+create policy "project_deletion_audit_insert" on public.project_deletion_audit
+  for insert to authenticated, service_role
+  with check (
+    auth.role() = 'service_role'
+    or private.is_admin()
+    or private.is_super_admin()
+  );
 
 -- Logs project deletion details before CASCADE delete removes all associated
 -- data (weekly_reports/daily_support_logs/daily_release_testing_status are
@@ -1083,7 +1057,7 @@ drop policy if exists "daily_report_configs_write"      on public.daily_report_d
 
 -- Final SELECT from 036_remove_teams.sql (team_id retained only as legacy column, not used for scoping anymore)
 create policy "daily_report_configs_select" on public.daily_report_dropdown_configs for select using (
-  team_id is null or public.is_admin()
+  team_id is null or private.is_admin()
 );
 
 -- Final WRITE policy from 038_fix_daily_report_config_permissions.sql
@@ -1093,8 +1067,8 @@ create policy "daily_report_configs_write" on public.daily_report_dropdown_confi
     where p.id = auth.uid()
       and (
         p.role = 'super_admin'
-        or public.is_admin()
-        or public.check_module_permission(p.role, 'daily-report', 'can_configure')
+        or private.is_admin()
+        or private.check_module_permission(p.role, 'daily-report', 'can_configure')
       )
   )
 );
@@ -1154,23 +1128,23 @@ drop policy if exists "daily_support_logs_delete"   on public.daily_support_logs
 
 -- Final policies from 042_daily_report_project_role_access.sql
 create policy "daily_support_logs_select" on public.daily_support_logs for select using (
-  public.is_admin()
+  private.is_admin()
   or user_id = auth.uid()
-  or (project_id is not null and public.is_project_member(project_id))
+  or (project_id is not null and private.is_project_member(project_id))
   or (project_id is null and team_id is null)
 );
 create policy "daily_support_logs_insert" on public.daily_support_logs for insert with check (
   auth.uid() = user_id
-  and (public.is_admin() or project_id is null or public.can_edit_in_project(project_id))
+  and (private.is_admin() or project_id is null or private.can_edit_in_project(project_id))
 );
 create policy "daily_support_logs_update" on public.daily_support_logs for update using (
-  public.is_admin()
-  or (project_id is not null and public.is_project_member(project_id) and public.can_edit_in_project(project_id))
+  private.is_admin()
+  or (project_id is not null and private.is_project_member(project_id) and private.can_edit_in_project(project_id))
   or (project_id is null and user_id = auth.uid())
 );
 create policy "daily_support_logs_delete" on public.daily_support_logs for delete using (
-  public.is_admin()
-  or (project_id is not null and public.is_project_member(project_id) and public.can_edit_in_project(project_id))
+  private.is_admin()
+  or (project_id is not null and private.is_project_member(project_id) and private.can_edit_in_project(project_id))
   or (project_id is null and user_id = auth.uid())
 );
 
@@ -1209,28 +1183,28 @@ drop policy if exists "daily_release_testing_status_update"   on public.daily_re
 drop policy if exists "daily_release_testing_status_delete"   on public.daily_release_testing_status;
 
 create policy "daily_release_testing_status_select" on public.daily_release_testing_status for select using (
-  public.is_admin()
+  private.is_admin()
   or user_id = auth.uid()
-  or (project_id is not null and public.is_project_member(project_id))
+  or (project_id is not null and private.is_project_member(project_id))
   or (project_id is null and team_id is null)
 );
 create policy "daily_release_testing_status_insert" on public.daily_release_testing_status for insert with check (
   auth.uid() = user_id
-  and (public.is_admin() or project_id is null or public.can_edit_in_project(project_id))
+  and (private.is_admin() or project_id is null or private.can_edit_in_project(project_id))
 );
 create policy "daily_release_testing_status_update" on public.daily_release_testing_status for update using (
-  public.is_admin()
-  or (project_id is not null and public.is_project_member(project_id) and public.can_edit_in_project(project_id))
+  private.is_admin()
+  or (project_id is not null and private.is_project_member(project_id) and private.can_edit_in_project(project_id))
   or (project_id is null and user_id = auth.uid())
 );
 create policy "daily_release_testing_status_delete" on public.daily_release_testing_status for delete using (
-  public.is_admin()
-  or (project_id is not null and public.is_project_member(project_id) and public.can_edit_in_project(project_id))
+  private.is_admin()
+  or (project_id is not null and private.is_project_member(project_id) and private.can_edit_in_project(project_id))
   or (project_id is null and user_id = auth.uid())
 );
 
-grant execute on function public.get_user_project_role(uuid) to authenticated;
-grant execute on function public.can_edit_in_project(uuid)   to authenticated;
+grant execute on function private.get_user_project_role(uuid) to authenticated;
+grant execute on function private.can_edit_in_project(uuid)   to authenticated;
 
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -1347,36 +1321,36 @@ create policy "column_configs_select" on public.daily_report_column_configs for 
 );
 
 create policy "column_configs_write" on public.daily_report_column_configs for all using (
-  public.is_admin()
+  private.is_admin()
   or (
     project_id is null and exists (
       select 1 from public.profiles p where p.id = auth.uid()
-        and public.check_module_permission(p.role, 'daily-report', 'can_manage_org_config')
+        and private.check_module_permission(p.role, 'daily-report', 'can_manage_org_config')
     )
   )
   or (
     project_id is not null and (
-      public.is_project_owner_or_lead(project_id)
+      private.is_project_owner_or_lead(project_id)
       or exists (
         select 1 from public.profiles p where p.id = auth.uid()
-          and public.check_module_permission(p.role, 'daily-report', 'can_manage_project_config')
+          and private.check_module_permission(p.role, 'daily-report', 'can_manage_project_config')
       )
     )
   )
 ) with check (
-  public.is_admin()
+  private.is_admin()
   or (
     project_id is null and exists (
       select 1 from public.profiles p where p.id = auth.uid()
-        and public.check_module_permission(p.role, 'daily-report', 'can_manage_org_config')
+        and private.check_module_permission(p.role, 'daily-report', 'can_manage_org_config')
     )
   )
   or (
     project_id is not null and (
-      public.is_project_owner_or_lead(project_id)
+      private.is_project_owner_or_lead(project_id)
       or exists (
         select 1 from public.profiles p where p.id = auth.uid()
-          and public.check_module_permission(p.role, 'daily-report', 'can_manage_project_config')
+          and private.check_module_permission(p.role, 'daily-report', 'can_manage_project_config')
       )
     )
   )
@@ -1397,7 +1371,7 @@ create policy "custom_field_values_write" on public.daily_report_custom_field_va
   )
   and exists (
     select 1 from public.profiles p where p.id = auth.uid()
-      and (p.role in ('admin', 'super_admin') or public.check_module_permission(p.role, 'daily-report', 'can_edit'))
+      and (p.role in ('admin', 'super_admin') or private.check_module_permission(p.role, 'daily-report', 'can_edit'))
   )
 ) with check (
   (
@@ -1406,7 +1380,7 @@ create policy "custom_field_values_write" on public.daily_report_custom_field_va
   )
   and exists (
     select 1 from public.profiles p where p.id = auth.uid()
-      and (p.role in ('admin', 'super_admin') or public.check_module_permission(p.role, 'daily-report', 'can_edit'))
+      and (p.role in ('admin', 'super_admin') or private.check_module_permission(p.role, 'daily-report', 'can_edit'))
   )
 );
 
@@ -1418,36 +1392,36 @@ create policy "column_mappings_select" on public.daily_report_column_mappings fo
 );
 
 create policy "column_mappings_write" on public.daily_report_column_mappings for all using (
-  public.is_admin()
+  private.is_admin()
   or (
     project_id is null and exists (
       select 1 from public.profiles p where p.id = auth.uid()
-        and public.check_module_permission(p.role, 'daily-report', 'can_manage_org_config')
+        and private.check_module_permission(p.role, 'daily-report', 'can_manage_org_config')
     )
   )
   or (
     project_id is not null and (
-      public.is_project_owner_or_lead(project_id)
+      private.is_project_owner_or_lead(project_id)
       or exists (
         select 1 from public.profiles p where p.id = auth.uid()
-          and public.check_module_permission(p.role, 'daily-report', 'can_manage_project_config')
+          and private.check_module_permission(p.role, 'daily-report', 'can_manage_project_config')
       )
     )
   )
 ) with check (
-  public.is_admin()
+  private.is_admin()
   or (
     project_id is null and exists (
       select 1 from public.profiles p where p.id = auth.uid()
-        and public.check_module_permission(p.role, 'daily-report', 'can_manage_org_config')
+        and private.check_module_permission(p.role, 'daily-report', 'can_manage_org_config')
     )
   )
   or (
     project_id is not null and (
-      public.is_project_owner_or_lead(project_id)
+      private.is_project_owner_or_lead(project_id)
       or exists (
         select 1 from public.profiles p where p.id = auth.uid()
-          and public.check_module_permission(p.role, 'daily-report', 'can_manage_project_config')
+          and private.check_module_permission(p.role, 'daily-report', 'can_manage_project_config')
       )
     )
   )
@@ -2121,8 +2095,10 @@ on conflict do nothing;
 -- run it again (or via the Admin UI) after the first admin account exists.
 -- ══════════════════════════════════════════════════════════════════════════════
 
+-- Skip on empty Auth (fresh project). After first user exists, either re-run
+-- this block or configure prompts via Admin UI.
 insert into public.ai_module_prompts (module_key, module_name, system_prompt, created_by)
-select v.module_key, v.module_name, v.system_prompt, (select id from auth.users order by created_at limit 1)
+select v.module_key, v.module_name, v.system_prompt, u.id
 from (values
   ('test-case-generator', 'Test Case Generator',
    'You are a senior QA engineer. Given a requirement, return ONLY a valid JSON array (no markdown, no explanation) of test case objects. Each object must have exactly these fields: "title" (string), "priority" ("High" | "Medium" | "Low"), "status" ("Draft" | "Ready" | "Automated").'),
@@ -2133,9 +2109,196 @@ from (values
   ('ai-copilot', 'AI Copilot',
    'You are Flux AI, an expert QA and software engineering assistant. Provide concise, accurate, and actionable answers. Format responses with markdown when helpful.')
 ) as v(module_key, module_name, system_prompt)
-where exists (select 1 from auth.users limit 1)
+cross join lateral (
+  select id from auth.users order by id limit 1
+) u
 on conflict do nothing;
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- END OF COMBINED SCHEMA
 -- ══════════════════════════════════════════════════════════════════════════════
+
+-- Pin search_path on all private helpers
+do $$
+declare r record;
+begin
+  for r in
+    select p.oid::regprocedure as sig
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private'
+  loop
+    execute format('alter function %s set search_path = public', r.sig);
+    execute format('revoke all on function %s from public', r.sig);
+    execute format('revoke execute on function %s from anon', r.sig);
+  end loop;
+end $$;
+
+
+-- ============================================================================
+-- SECTION: private-schema grants + public INVOKER RPC wrappers
+-- ============================================================================
+
+grant usage on schema private to postgres, authenticated, service_role;
+
+grant execute on all functions in schema private to authenticated;
+grant execute on all functions in schema private to service_role;
+
+-- App RPCs (SECURITY INVOKER → call private DEFINER bodies)
+create or replace function public.get_role_permissions(p_role_key text)
+returns table(module_key text, permission_key text, is_enabled boolean)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select g.module_key, g.permission_key, g.is_enabled
+  from private.get_role_permissions(p_role_key) as g;
+$$;
+
+create or replace function public.check_module_permission(
+  p_role_key text,
+  p_module_key text,
+  p_permission_key text
+)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select private.check_module_permission(p_role_key, p_module_key, p_permission_key);
+$$;
+
+revoke all on function public.get_role_permissions(text) from public;
+revoke all on function public.check_module_permission(text, text, text) from public;
+revoke execute on function public.get_role_permissions(text) from anon;
+revoke execute on function public.check_module_permission(text, text, text) from anon;
+grant execute on function public.get_role_permissions(text) to authenticated;
+grant execute on function public.check_module_permission(text, text, text) to authenticated, service_role;
+
+-- Lock search_path on remaining public trigger helpers
+do $$
+declare
+  r record;
+begin
+  for r in
+    select p.oid::regprocedure as sig
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in (
+        'handle_new_user', 'set_updated_at', 'set_projects_updated_at',
+        'set_announcement_author', 'update_announcements_updated_at',
+        'update_team_capacity_updated_at', 'prevent_last_owner_role_change',
+        'prevent_last_owner_deletion', 'log_project_deletion'
+      )
+  loop
+    execute format('alter function %s set search_path = public', r.sig);
+    execute format('revoke all on function %s from public', r.sig);
+    execute format('revoke execute on function %s from anon, authenticated', r.sig);
+  end loop;
+end $$;
+
+-- ============================================================================
+-- SECTION: Admin Hub module + admin-only permissions (037)
+-- ============================================================================
+
+insert into public.modules (module_key, module_name, route_path, icon, is_active, sort_order)
+values ('admin-hub', 'Admin Hub', '/admin', 'Shield', true, 5)
+on conflict (module_key) do update set
+  module_name = excluded.module_name,
+  route_path = excluded.route_path,
+  is_active = excluded.is_active,
+  sort_order = excluded.sort_order;
+
+insert into public.permissions (permission_key, permission_name, description) values
+  ('can_manage_users',         'Manage Users',         'Create, update, and deactivate users'),
+  ('can_manage_permissions',   'Manage Permissions',   'Edit role-module permission matrix'),
+  ('can_manage_ai_providers',  'Manage AI Providers',  'Configure AI provider keys and models'),
+  ('can_manage_announcements', 'Manage Announcements', 'Create and manage announcements'),
+  ('can_view_audit_logs',      'View Audit Logs',      'View system audit and login history'),
+  ('can_manage_templates',     'Manage Templates',     'Manage permission templates'),
+  ('can_manage_maintenance',   'Manage Maintenance',   'Toggle maintenance mode'),
+  ('can_manage_system',        'Manage System',        'System-level administration')
+on conflict (permission_key) do nothing;
+
+do $$
+declare
+  v_module_id uuid;
+  v_role_admin uuid;
+  v_role_super uuid;
+  v_perm record;
+begin
+  select id into v_module_id from public.modules where module_key = 'admin-hub';
+  select id into v_role_admin from public.roles where role_key = 'admin';
+  select id into v_role_super from public.roles where role_key = 'super_admin';
+
+  if v_module_id is null then
+    raise exception 'admin-hub module missing';
+  end if;
+
+  for v_perm in
+    select id from public.permissions
+    where permission_key in (
+      'can_view', 'can_create', 'can_edit', 'can_delete',
+      'can_manage_users', 'can_manage_roles', 'can_manage_permissions',
+      'can_manage_ai_providers', 'can_manage_announcements',
+      'can_view_audit_logs', 'can_manage_templates',
+      'can_manage_maintenance', 'can_manage_system'
+    )
+  loop
+    if v_role_admin is not null then
+      insert into public.role_module_permissions (role_id, module_id, permission_id, is_enabled)
+      values (v_role_admin, v_module_id, v_perm.id, true)
+      on conflict (role_id, module_id, permission_id) do update set is_enabled = true;
+    end if;
+    if v_role_super is not null then
+      insert into public.role_module_permissions (role_id, module_id, permission_id, is_enabled)
+      values (v_role_super, v_module_id, v_perm.id, true)
+      on conflict (role_id, module_id, permission_id) do update set is_enabled = true;
+    end if;
+  end loop;
+end $$;
+
+-- ============================================================================
+-- SECTION: Super Admin assignment (run AFTER first user registers)
+-- ============================================================================
+-- Preferred workflow:
+--   1. Run this entire combined migration on a fresh Qaly-ai project
+--   2. Start the app pointed at that project
+--   3. Register the intended admin via normal Auth signup
+--   4. Confirm the profile row exists
+--   5. Uncomment and run the assignment query below (replace the email)
+--   6. Run the verification query
+--   7. Logout/login so the app reloads permissions
+--
+-- Replace your-admin@example.com with the registered Super Admin email.
+-- DO NOT commit a real personal email into this file.
+
+/*
+-- ASSIGN Super Admin (safe: updates only the matching profile)
+UPDATE public.profiles AS p
+SET role = 'super_admin',
+    status = 'active'
+FROM auth.users AS u
+WHERE p.id = u.id
+  AND lower(u.email) = lower('your-admin@example.com');
+
+-- VERIFY assignment
+SELECT
+  u.id          AS auth_user_id,
+  u.email,
+  p.id          AS profile_id,
+  p.role,
+  p.status,
+  p.full_name,
+  p.created_at
+FROM auth.users u
+JOIN public.profiles p ON p.id = u.id
+WHERE lower(u.email) = lower('your-admin@example.com');
+*/
+
+-- ============================================================================
+-- END OF combined_qaly_schema.sql
+-- ============================================================================

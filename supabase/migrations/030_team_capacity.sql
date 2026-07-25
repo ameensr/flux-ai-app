@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS public.team_capacity_reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   
   -- Report metadata
-  report_id UUID REFERENCES public.qa_weekly_reports(id) ON DELETE CASCADE,
+  report_id UUID REFERENCES public.weekly_reports(id) ON DELETE CASCADE,
   uploaded_by UUID REFERENCES auth.users(id),
   file_name TEXT NOT NULL,
   upload_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
