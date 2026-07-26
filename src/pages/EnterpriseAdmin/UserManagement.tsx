@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import {
   Users, Search, RefreshCw, MoreVertical, Eye, Edit2,
   KeyRound, UserCog, UserX, Trash2, UserCheck, ChevronUp, ChevronDown, Clock, Save, X,
+  AlertTriangle, FolderKanban, FileText, Loader2, ShieldAlert,
 } from 'lucide-react'
 import type { EnterpriseUser, EnterpriseRole, Department, Plan, UserStatus } from './types'
 import { STATUS_CONFIG, PLAN_CONFIG } from './types'
@@ -105,6 +106,339 @@ function ActionMenu({ user, onAction }: { user: EnterpriseUser; onAction: (actio
         )}
       </AnimatePresence>
     </>
+  )
+}
+
+// ── Delete User Modal (dependency notes for admins) ───────────────────────────
+
+type UserDeleteDependencies = {
+  ownedProjects: { id: string; name: string; project_code: string | null }[]
+  leadProjects: { id: string; name: string; project_code: string | null }[]
+  memberProjects: { id: string; name: string; project_role: string }[]
+  createdProjects: { id: string; name: string }[]
+  weeklyReportsCount: number
+  supportLogsCount: number
+  releaseLogsCount: number
+}
+
+async function fetchUserDeleteDependencies(userId: string): Promise<UserDeleteDependencies> {
+  const empty: UserDeleteDependencies = {
+    ownedProjects: [],
+    leadProjects: [],
+    memberProjects: [],
+    createdProjects: [],
+    weeklyReportsCount: 0,
+    supportLogsCount: 0,
+    releaseLogsCount: 0,
+  }
+
+  const [membershipsRes, createdRes, weeklyRes, supportRes, releaseRes] = await Promise.all([
+    supabase
+      .from('project_members')
+      .select('project_role, project:projects(id, name, project_code)')
+      .eq('user_id', userId),
+    supabase
+      .from('projects')
+      .select('id, name')
+      .eq('created_by', userId),
+    supabase
+      .from('weekly_reports')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId),
+    supabase
+      .from('daily_support_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId),
+    supabase
+      .from('daily_release_testing_status')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId),
+  ])
+
+  const ownedProjects: UserDeleteDependencies['ownedProjects'] = []
+  const leadProjects: UserDeleteDependencies['leadProjects'] = []
+  const memberProjects: UserDeleteDependencies['memberProjects'] = []
+
+  for (const row of (membershipsRes.data || []) as any[]) {
+    const p = row.project
+    if (!p?.id) continue
+    if (row.project_role === 'owner') {
+      ownedProjects.push({ id: p.id, name: p.name, project_code: p.project_code })
+    } else if (row.project_role === 'lead') {
+      leadProjects.push({ id: p.id, name: p.name, project_code: p.project_code })
+    } else {
+      memberProjects.push({ id: p.id, name: p.name, project_role: row.project_role })
+    }
+  }
+
+  return {
+    ownedProjects,
+    leadProjects,
+    memberProjects,
+    createdProjects: (createdRes.data || []) as { id: string; name: string }[],
+    weeklyReportsCount: weeklyRes.count ?? 0,
+    supportLogsCount: supportRes.count ?? 0,
+    releaseLogsCount: releaseRes.count ?? 0,
+  }
+}
+
+function DeleteUserModal({
+  user,
+  onClose,
+  onDeleted,
+}: {
+  user: EnterpriseUser
+  onClose: () => void
+  onDeleted: (userId: string) => void
+}) {
+  useBodyScrollLock(true)
+  const { toast } = useToast()
+  const [loadingDeps, setLoadingDeps] = useState(true)
+  const [deps, setDeps] = useState<UserDeleteDependencies | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoadingDeps(true)
+      try {
+        const data = await fetchUserDeleteDependencies(user.id)
+        if (!cancelled) setDeps(data)
+      } catch {
+        if (!cancelled) setDeps(null)
+      } finally {
+        if (!cancelled) setLoadingDeps(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [user.id])
+
+  const notes = useMemo(() => {
+    if (!deps) return [] as { tone: 'danger' | 'warn' | 'info'; text: string }[]
+    const items: { tone: 'danger' | 'warn' | 'info'; text: string }[] = []
+
+    for (const p of deps.ownedProjects) {
+      const code = p.project_code ? ` (${p.project_code})` : ''
+      items.push({
+        tone: 'danger',
+        text: `This user is currently a Project Owner of "${p.name}"${code}.`,
+      })
+    }
+    for (const p of deps.leadProjects) {
+      const code = p.project_code ? ` (${p.project_code})` : ''
+      items.push({
+        tone: 'warn',
+        text: `This user is a Project Lead on "${p.name}"${code}.`,
+      })
+    }
+    if (deps.memberProjects.length > 0) {
+      const names = deps.memberProjects.slice(0, 5).map(p => p.name).join(', ')
+      const more = deps.memberProjects.length > 5 ? ` +${deps.memberProjects.length - 5} more` : ''
+      items.push({
+        tone: 'info',
+        text: `Member of ${deps.memberProjects.length} project(s): ${names}${more}.`,
+      })
+    }
+    for (const p of deps.createdProjects) {
+      // Avoid duplicate if already listed as owner
+      if (deps.ownedProjects.some(o => o.id === p.id)) continue
+      items.push({
+        tone: 'warn',
+        text: `Created project "${p.name}" (may still be linked as creator).`,
+      })
+    }
+    if (deps.weeklyReportsCount > 0) {
+      items.push({
+        tone: 'info',
+        text: `${deps.weeklyReportsCount} QA Weekly Report(s) linked to this user will be removed.`,
+      })
+    }
+    if (deps.supportLogsCount > 0) {
+      items.push({
+        tone: 'info',
+        text: `${deps.supportLogsCount} Daily Support Log row(s) linked to this user will be removed.`,
+      })
+    }
+    if (deps.releaseLogsCount > 0) {
+      items.push({
+        tone: 'info',
+        text: `${deps.releaseLogsCount} Release Testing Log row(s) linked to this user will be removed.`,
+      })
+    }
+
+    if (items.length === 0) {
+      items.push({
+        tone: 'info',
+        text: 'No project ownership or major linked data found for this user.',
+      })
+    }
+
+    return items
+  }, [deps])
+
+  const handleConfirmDelete = async () => {
+    setDeleting(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('Your session has expired. Please refresh the page or sign in again.')
+      }
+      const resp = await fetch(
+        `${SUPABASE_URL}/functions/v1/admin-permissions?action=delete_user&user_id=${encodeURIComponent(user.id)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ user_id: user.id }),
+        }
+      )
+      const result = await resp.json()
+      if (!resp.ok) throw new Error(result.error ?? 'Delete failed')
+      toast({
+        title: 'User Deleted',
+        description: `${user.full_name || user.email} has been permanently removed.`,
+      })
+      onDeleted(user.id)
+      onClose()
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Failed to delete user', description: e.message })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const toneStyles = {
+    danger: { bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.25)', color: '#f87171' },
+    warn: { bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.25)', color: '#fbbf24' },
+    info: { bg: 'var(--hover)', border: 'var(--border)', color: 'var(--text-secondary)' },
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'var(--overlay)' }}
+      onClick={deleting ? undefined : onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 16 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 16 }}
+        transition={{ duration: 0.2 }}
+        onClick={e => e.stopPropagation()}
+        className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden"
+        style={{ backgroundColor: 'var(--surface-elevated)', borderColor: 'var(--border)' }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-user-title"
+      >
+        <div className="p-6 pb-4">
+          <div className="flex items-start gap-3 mb-4">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: 'rgba(239,68,68,0.12)' }}
+            >
+              <ShieldAlert className="w-5 h-5 text-red-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 id="delete-user-title" className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+                Delete User?
+              </h3>
+              <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+                {user.full_name || user.email}
+                {user.full_name ? ` · ${user.email}` : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={deleting}
+              className="p-1.5 rounded-lg transition-all disabled:opacity-50"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div
+            className="rounded-xl px-3 py-2.5 mb-4 text-xs leading-relaxed"
+            style={{
+              background: 'rgba(239,68,68,0.06)',
+              border: '1px solid rgba(239,68,68,0.18)',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            This action is permanent. The auth account, profile, and linked memberships will be removed.
+          </div>
+
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              Dependency notes
+            </p>
+          </div>
+
+          {loadingDeps ? (
+            <div className="flex items-center justify-center gap-2 py-8" style={{ color: 'var(--text-muted)' }}>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-xs">Checking linked projects & data…</span>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1 mb-1">
+              {notes.map((note, i) => {
+                const s = toneStyles[note.tone]
+                return (
+                  <div
+                    key={i}
+                    className="flex items-start gap-2.5 rounded-lg px-3 py-2.5 text-xs leading-relaxed"
+                    style={{ background: s.bg, border: `1px solid ${s.border}`, color: s.color }}
+                  >
+                    {note.tone === 'danger' || note.tone === 'warn' ? (
+                      <FolderKanban className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    ) : (
+                      <FileText className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    )}
+                    <span>{note.text}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div
+          className="flex gap-2 px-6 py-4"
+          style={{ borderTop: '1px solid var(--border)', background: 'var(--hover)' }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={deleting}
+            className="flex-1 py-2.5 rounded-xl text-xs font-medium transition hover:opacity-80 disabled:opacity-50"
+            style={{
+              background: 'var(--surface-elevated)',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirmDelete}
+            disabled={deleting || loadingDeps}
+            className="flex-1 py-2.5 rounded-xl text-xs font-semibold transition hover:opacity-90 flex items-center justify-center gap-1.5 disabled:opacity-60 bg-red-500 text-white"
+          >
+            {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            {deleting ? 'Deleting…' : 'Delete User'}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   )
 }
 
@@ -265,6 +599,7 @@ export function UserManagement() {
 
   // Change role modal state
   const [roleModalUser, setRoleModalUser] = useState<EnterpriseUser | null>(null)
+  const [deleteModalUser, setDeleteModalUser] = useState<EnterpriseUser | null>(null)
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -351,30 +686,7 @@ export function UserManagement() {
         toast({ variant: 'destructive', title: 'Failed', description: e.message })
       }
     } else if (action === 'delete') {
-      if (!confirm(`Delete ${user.full_name || user.email}? This cannot be undone.`)) return
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session || !session.access_token) {
-          throw new Error('Your session has expired. Please refresh the page or sign in again.')
-        }
-        const resp = await fetch(
-          `${SUPABASE_URL}/functions/v1/admin-permissions?action=delete_user&user_id=${encodeURIComponent(user.id)}`,
-          {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({ user_id: user.id }),
-          }
-        )
-        const result = await resp.json()
-        if (!resp.ok) throw new Error(result.error ?? 'Delete failed')
-        setUsers(prev => prev.filter(u => u.id !== user.id))
-        toast({ title: 'User Deleted', description: `${user.full_name || user.email} has been permanently removed.` })
-      } catch (e: any) {
-        toast({ variant: 'destructive', title: 'Failed to delete user', description: e.message })
-      }
+      setDeleteModalUser(user)
     } else if (action === 'reset_password') {
       const { error } = await supabase.auth.resetPasswordForEmail(user.email)
       if (error) { toast({ variant: 'destructive', title: 'Failed', description: error.message }); return }
@@ -613,6 +925,17 @@ export function UserManagement() {
             roles={roles}
             onClose={() => setRoleModalUser(null)}
             onSaved={handleRoleSaved}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Delete User Modal — dependency notes for admins */}
+      <AnimatePresence>
+        {deleteModalUser && (
+          <DeleteUserModal
+            user={deleteModalUser}
+            onClose={() => setDeleteModalUser(null)}
+            onDeleted={(userId) => setUsers(prev => prev.filter(u => u.id !== userId))}
           />
         )}
       </AnimatePresence>

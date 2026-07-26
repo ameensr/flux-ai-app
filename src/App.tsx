@@ -39,6 +39,9 @@ const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.S
 const AdminPanel = lazy(() => import('@/pages/AdminPanel').then(m => ({ default: m.AdminPanel })))
 const EnterpriseAdmin = lazy(() => import('@/pages/EnterpriseAdmin').then(m => ({ default: m.EnterpriseAdmin })))
 const AICopilot = lazy(() => import('@/components/ai/AICopilot').then(m => ({ default: m.AICopilot })))
+const RequireFullNameGate = lazy(() =>
+  import('@/components/ai/RequireFullNameGate').then(m => ({ default: m.RequireFullNameGate }))
+)
 const DailyUpdateReport = lazy(() => import('@/modules/DailyUpdateReport').then(m => ({ default: m.DailyUpdateReport })))
 const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINews })))
 const MaintenancePage = lazy(() => import('@/pages/MaintenancePage').then(m => ({ default: m.MaintenancePage })))
@@ -274,7 +277,14 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
   }, [])
 
   if (!ready) return <FullPageLoader />
-  return <>{children}</>
+  return (
+    <>
+      <Suspense fallback={null}>
+        <RequireFullNameGate />
+      </Suspense>
+      {children}
+    </>
+  )
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import {
   LayoutDashboard, Bug, FileText, PenTool, Settings,
   ChevronLeft, Shield, LogOut, ClipboardList,
-  ClipboardCheck, FolderKanban,
+  ClipboardCheck, FolderKanban, UserRound,
 } from 'lucide-react'
 import { Logo } from '../ui/Logo'
 import { supabase } from '@/lib/supabase'
@@ -78,6 +78,38 @@ export const Sidebar = () => {
   // Split nav into main + bottom items
   const mainItems = visibleItems.filter(i => !['settings', 'project-hub', 'admin'].includes(i.moduleKey))
   const bottomItems = visibleItems.filter(i => ['settings', 'project-hub', 'admin'].includes(i.moduleKey))
+
+  const displayName = profile?.full_name?.trim() || ''
+  const hasName = displayName.length > 0
+  const emailLocal = profile?.email?.split('@')[0] || ''
+  const initials = (hasName ? displayName : emailLocal || '?')
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .map(w => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '?'
+  const roleLabel = profile
+    ? (({
+        super_admin: 'Super Admin',
+        admin: 'Administrator',
+        pro: 'Pro',
+        free: 'Free',
+        manager: 'Manager',
+        qa_lead: 'QA Lead',
+        qa_engineer: 'QA Engineer',
+        developer: 'Developer',
+        standard: 'Standard',
+        guest: 'Guest',
+      } as Record<string, string>)[profile.role]
+      || profile.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))
+    : ''
+  const roleDot =
+    profile?.role === 'admin' || profile?.role === 'super_admin'
+      ? 'bg-red-400'
+      : profile?.role === 'pro'
+        ? 'bg-violet-400'
+        : 'bg-slate-400'
 
   const NavItem = ({ item }: { item: typeof ALL_MENU_ITEMS[0] }) => {
     const active = isActive(item.path)
@@ -195,37 +227,78 @@ export const Sidebar = () => {
 
           {bottomItems.map(item => <NavItem key={item.path} item={item} />)}
 
-          {/* Role badge */}
-          <AnimatePresence>
-            {isSidebarOpen && profile && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="mx-1 px-3 py-2 rounded-lg flex items-center gap-2"
-                style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}
-              >
-                <div className={cn(
-                  'w-1.5 h-1.5 rounded-full shrink-0',
-                  profile.role === 'admin' || profile.role === 'super_admin' ? 'bg-red-400' : profile.role === 'pro' ? 'bg-violet-400' : 'bg-slate-400',
-                )} />
-                <span className="text-[11px] font-medium truncate" style={{ color: 'var(--text-muted)' }}>
-                  {({
-                    super_admin: 'Super Admin',
-                    admin: 'Administrator',
-                    pro: 'Pro',
-                    free: 'Free',
-                    manager: 'Manager',
-                    qa_lead: 'QA Lead',
-                    qa_engineer: 'QA Engineer',
-                    developer: 'Developer',
-                    standard: 'Standard',
-                    guest: 'Guest',
-                  } as Record<string, string>)[profile.role] || profile.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                </span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* User identity — just above Sign Out */}
+          {profile && (
+            <div className={cn('mt-1', !isSidebarOpen && 'flex justify-center')}>
+              {isSidebarOpen ? (
+                <Link
+                  to={ROUTES.settings}
+                  title={hasName ? displayName : 'Add your name in Settings'}
+                  className="mx-1 block rounded-xl overflow-hidden transition-all group"
+                  style={{
+                    background: 'var(--surface-secondary)',
+                    border: '1px solid var(--border)',
+                    boxShadow: 'var(--shadow-sm)',
+                  }}
+                >
+                  <div
+                    className="h-0.5 w-full"
+                    style={{
+                      background: 'linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 20%, transparent))',
+                    }}
+                  />
+                  <div className="px-2.5 py-2.5 flex items-center gap-2.5">
+                    <div
+                      className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-[11px] font-bold tracking-wide"
+                      style={{
+                        background: hasName
+                          ? 'color-mix(in srgb, var(--accent) 16%, transparent)'
+                          : 'var(--hover)',
+                        color: hasName ? 'var(--accent)' : 'var(--text-muted)',
+                        border: '1px solid var(--border)',
+                      }}
+                    >
+                      {hasName ? initials : <UserRound className="w-3.5 h-3.5" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className="text-[12.5px] font-semibold truncate leading-tight"
+                        style={{ color: hasName ? 'var(--text-primary)' : 'var(--text-muted)' }}
+                      >
+                        {hasName ? displayName : 'Add your name'}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                        <span className={cn('w-1 h-1 rounded-full shrink-0', roleDot)} />
+                        <span
+                          className="text-[10px] font-medium truncate"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          {roleLabel}
+                          {!hasName && profile.email ? ` · ${profile.email}` : ''}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ) : (
+                <Link
+                  to={ROUTES.settings}
+                  title={hasName ? displayName : 'Add your name in Settings'}
+                  aria-label={hasName ? displayName : 'Add your name'}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-bold transition-all"
+                  style={{
+                    background: hasName
+                      ? 'color-mix(in srgb, var(--accent) 16%, transparent)'
+                      : 'var(--hover)',
+                    color: hasName ? 'var(--accent)' : 'var(--text-muted)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  {hasName ? initials : <UserRound className="w-3.5 h-3.5" />}
+                </Link>
+              )}
+            </div>
+          )}
 
           {/* Sign out */}
           <button
