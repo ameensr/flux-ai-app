@@ -30,7 +30,7 @@ export const ProjectMembershipCard: React.FC = () => {
             .map((p) => ({
               id: p.id,
               name: p.name,
-              project_code: p.project_code,
+              project_code: p.project_code ?? '',
             }))
         )
       } catch {
