@@ -233,7 +233,7 @@ export const Sidebar = () => {
               {isSidebarOpen ? (
                 <Link
                   to={ROUTES.settings}
-                  title={hasName ? displayName : 'Add your name in Settings'}
+                  title={hasName ? `${displayName} · ${roleLabel}` : 'Add your name in Settings'}
                   className="mx-1 block rounded-xl overflow-hidden transition-all group"
                   style={{
                     background: 'var(--surface-secondary)',
@@ -241,12 +241,26 @@ export const Sidebar = () => {
                     boxShadow: 'var(--shadow-sm)',
                   }}
                 >
+                  {/* Top accent — expands + soft shimmer on hover */}
                   <div
-                    className="h-0.5 w-full"
-                    style={{
-                      background: 'linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 20%, transparent))',
-                    }}
-                  />
+                    className="relative h-0.5 w-full overflow-hidden"
+                    style={{ background: 'var(--divider)' }}
+                  >
+                    <span
+                      className="absolute inset-y-0 left-0 w-0 group-hover:w-full transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                      style={{
+                        background:
+                          'linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent))',
+                      }}
+                    />
+                    <span
+                      className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 opacity-0 group-hover:opacity-100 group-hover:translate-x-[280%] transition-all duration-700 ease-out"
+                      style={{
+                        background:
+                          'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-fg) 55%, transparent), transparent)',
+                      }}
+                    />
+                  </div>
                   <div className="px-2.5 py-2.5 flex items-center gap-2.5">
                     <div
                       className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-[11px] font-bold tracking-wide"
@@ -268,7 +282,7 @@ export const Sidebar = () => {
                         {hasName ? displayName : 'Add your name'}
                       </p>
                       <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                        <span className={cn('w-1 h-1 rounded-full shrink-0', roleDot)} />
+                        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', roleDot)} />
                         <span
                           className="text-[10px] font-medium truncate"
                           style={{ color: 'var(--text-muted)' }}
@@ -283,7 +297,7 @@ export const Sidebar = () => {
               ) : (
                 <Link
                   to={ROUTES.settings}
-                  title={hasName ? displayName : 'Add your name in Settings'}
+                  title={hasName ? `${displayName} · ${roleLabel}` : `${roleLabel} · Add your name`}
                   aria-label={hasName ? displayName : 'Add your name'}
                   className="w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-bold transition-all"
                   style={{
