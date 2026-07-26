@@ -9,4 +9,8 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    // Large vendor chunks (pdf.js, xlsx) are expected; keep warning noise down on CI.
+    chunkSizeWarningLimit: 1000,
+  },
 });
