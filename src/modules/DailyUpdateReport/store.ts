@@ -247,20 +247,9 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         return
       }
 
-      // Layer 1: Database-level filtering - only fetch projects where user is a member.
-      // Exception: only true admins (admin/super_admin) see every active project —
-      // this matches is_admin() being the sole unrestricted-visibility bypass left in
-      // the projects/project_members RLS policies as of migration 051.
-      //
-      // ⚠️ 'manager' was previously grouped into this "see everything" bucket, and any
-      // project the manager wasn't an actual member of had its role fabricated as a
-      // fallback 'member' below. That contradicts migration 051, which scoped manager
-      // visibility to ONLY projects they created (is_project_creator) or are a real
-      // project_members row for (is_project_member) — everything else is invisible to
-      // them at the database level too, so the fabricated 'member' badge was pure
-      // frontend fiction: it made a manager's Settings page list projects they have
-      // zero actual access to, with a role they don't actually hold. Managers now use
-      // the same membership + creator query as regular users below.
+      // Layer 1: Database-level filtering via RLS (migration 065).
+      // Admins/super_admins see every active project. Everyone else — including
+      // managers — only sees projects they have a project_members row for.
       const isSuperAdmin = role === 'admin' || role === 'super_admin'
 
       console.log('[DailyReportStore] Is Super Admin?', isSuperAdmin)
@@ -281,17 +270,12 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         error = response.error
         console.log('[DailyReportStore] Admin query result:', { data, error })
       } else {
-        // Everyone else (manager, qa_lead, and other roles) only sees projects they're
-        // an actual project_members row for, PLUS any project they created but aren't
-        // (or are no longer) a member row for — mirroring is_project_member(id) OR
-        // is_project_creator(id) from the projects_select / project_members_select RLS
-        // policies (migration 051) exactly, instead of a hardcoded role allowlist.
-        console.log('[DailyReportStore] Fetching as regular user - membership + creator query')
+        // Managers / qa_leads / members: membership only (RLS also enforces this)
+        console.log('[DailyReportStore] Fetching as regular user - membership query')
 
-        const [memberResponse, creatorResponse] = await Promise.all([
-          supabase
-            .from('project_members')
-            .select(`
+        const memberResponse = await supabase
+          .from('project_members')
+          .select(`
               project_id,
               project_role,
               projects!inner (
@@ -301,22 +285,14 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
                 status
               )
             `)
-            .eq('user_id', user.id)
-            .eq('projects.status', 'active'),
-          supabase
-            .from('projects')
-            .select('id, name, project_code')
-            .eq('status', 'active')
-            .eq('created_by', user.id),
-        ])
+          .eq('user_id', user.id)
+          .eq('projects.status', 'active')
 
-console.log('[DailyReportStore] Membership query response:', memberResponse)
-        console.log('[DailyReportStore] Created-by query response:', creatorResponse)
-
+        console.log('[DailyReportStore] Membership query response:', memberResponse)
 
         const byId = new Map<string, any>()
 
-if (memberResponse.data) {
+        if (memberResponse.data) {
           for (const item of memberResponse.data as any[]) {
             byId.set(item.projects.id, {
               id: item.projects.id,
@@ -325,25 +301,11 @@ if (memberResponse.data) {
               project_role: item.project_role,
             })
           }
-
-        }
-
-        // Projects created by this user that don't already have a member-row entry
-        // (e.g. their own membership row was removed later) still show up, without a
-        // fabricated role — default to 'owner' since project creation auto-assigns
-        // ownership (see createProject() in projectService.ts) and this only fires
-        // for the edge case where that original ownership row is gone.
-        if (creatorResponse.data) {
-          for (const p of creatorResponse.data as any[]) {
-            if (!byId.has(p.id)) {
-              byId.set(p.id, { id: p.id, name: p.name, project_code: p.project_code, project_role: 'owner' })
-            }
-          }
         }
 
         data = Array.from(byId.values())
-        error = memberResponse.error || creatorResponse.error
-        console.log('[DailyReportStore] Merged membership+creator data:', data)
+        error = memberResponse.error
+        console.log('[DailyReportStore] Membership projects:', data)
       }
 
       if (error) {

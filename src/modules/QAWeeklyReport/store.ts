@@ -69,15 +69,54 @@ export const useQAReportStore = create<QAReportStore>()(
 
       fetchProjects: async (activeOnly = true) => {
         try {
-          let query = supabase
-            .from('projects')
-            .select('id, name, project_code, description, status, created_by, created_at, updated_at')
+          const user = useAppStore.getState().user
+          const role = useAppStore.getState().role
+          const isAdmin = role === 'admin' || role === 'super_admin'
 
-          if (activeOnly) {
-            query = query.eq('status', 'active')
+          let data: any[] | null = null
+          let error: any = null
+
+          if (isAdmin) {
+            let query = supabase
+              .from('projects')
+              .select('id, name, project_code, description, status, created_by, created_at, updated_at')
+
+            if (activeOnly) {
+              query = query.eq('status', 'active')
+            }
+
+            const response = await query.order('name', { ascending: true })
+            data = response.data
+            error = response.error
+          } else if (user?.id) {
+            // Managers and other roles: only projects they belong to (RLS 065 also enforces)
+            let query = supabase
+              .from('project_members')
+              .select(`
+                projects!inner (
+                  id, name, project_code, description, status, created_by, created_at, updated_at
+                )
+              `)
+              .eq('user_id', user.id)
+
+            if (activeOnly) {
+              query = query.eq('projects.status', 'active')
+            }
+
+            const response = await query
+            error = response.error
+            const byId = new Map<string, any>()
+            for (const row of (response.data || []) as any[]) {
+              const p = row.projects
+              if (p?.id) byId.set(p.id, p)
+            }
+            data = Array.from(byId.values()).sort((a, b) =>
+              String(a.name || '').localeCompare(String(b.name || ''))
+            )
+          } else {
+            data = []
           }
 
-          const { data, error } = await query.order('name', { ascending: true })
           if (error) throw error
           if (data) {
             const mapped: ProjectConfig[] = data.map(p => ({

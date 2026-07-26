@@ -697,18 +697,18 @@ begin
 end;
 $$;
 
+-- Final (065): only admins get global bypass — managers must be owner/lead on that project
 create or replace function private.can_modify_project_member_role(
   p_member_id uuid,
   p_new_role  text
-) returns boolean language plpgsql stable security definer as $$
+) returns boolean language plpgsql stable security definer set search_path = public as $$
 declare
   v_current_user_role text;
   v_target_current_role text;
   v_project_id uuid;
   v_owner_count int;
 begin
-  if private.is_super_admin() then return true; end if;
-  if private.is_admin() or private.is_project_manager() then return true; end if;
+  if private.is_admin() then return true; end if;
 
   select project_id, project_role into v_project_id, v_target_current_role
   from public.project_members where id = p_member_id;
@@ -742,7 +742,7 @@ $$;
 
 create or replace function private.can_remove_project_member(
   p_member_id uuid
-) returns boolean language plpgsql stable security definer as $$
+) returns boolean language plpgsql stable security definer set search_path = public as $$
 declare
   v_current_user_role text;
   v_target_role text;
@@ -750,8 +750,7 @@ declare
   v_project_id uuid;
   v_owner_count int;
 begin
-  if private.is_super_admin() then return true; end if;
-  if private.is_admin() or private.is_project_manager() then return true; end if;
+  if private.is_admin() then return true; end if;
 
   select project_id, project_role, user_id into v_project_id, v_target_role, v_target_user_id
   from public.project_members where id = p_member_id;
@@ -800,14 +799,16 @@ drop policy if exists "projects_insert" on public.projects;
 drop policy if exists "projects_update" on public.projects;
 drop policy if exists "projects_delete" on public.projects;
 
+-- Final visibility (065): admins see all; everyone else only membership projects
 create policy "projects_select" on public.projects for select using (
-  private.is_admin() or private.is_project_manager() or private.is_project_member(id)
+  private.is_admin() or private.is_project_member(id)
 );
 create policy "projects_insert" on public.projects for insert with check (
   private.is_admin() or private.is_project_manager()
 );
+-- Final update (065): no blanket manager bypass
 create policy "projects_update" on public.projects for update using (
-  private.is_admin() or private.is_project_owner_or_lead(id) or private.is_project_manager()
+  private.is_admin() or private.is_project_owner_or_lead(id)
 );
 -- Final version from 043_fix_project_deletion_permissions.sql: owners only, not leads
 create policy "projects_delete" on public.projects for delete using (
@@ -823,11 +824,21 @@ drop policy if exists "project_members_insert" on public.project_members;
 drop policy if exists "project_members_update" on public.project_members;
 drop policy if exists "project_members_delete" on public.project_members;
 
+-- Final visibility (065): admins see all; others only their projects' memberships
 create policy "project_members_select" on public.project_members for select using (
-  private.is_admin() or private.is_project_member(project_id) or private.is_project_manager()
+  private.is_admin() or private.is_project_member(project_id)
 );
+-- Final insert (065): creator may self-bootstrap as owner; no manager join-any-project
 create policy "project_members_insert" on public.project_members for insert with check (
-  private.is_admin() or private.is_project_owner_or_lead(project_id) or private.is_project_manager()
+  private.is_admin()
+  or private.is_project_owner_or_lead(project_id)
+  or (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.projects p
+      where p.id = project_id and p.created_by = auth.uid()
+    )
+  )
 );
 -- Final version from 039_fix_project_member_role_hierarchy.sql: hierarchy-enforced
 create policy "project_members_update" on public.project_members for update using (
@@ -862,11 +873,18 @@ create trigger prevent_last_owner_role_change_trigger
   for each row execute function public.prevent_last_owner_role_change();
 
 create or replace function public.prevent_last_owner_deletion()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 declare
   v_owner_count int;
 begin
-  if private.is_super_admin() then return old; end if;
+  -- Project CASCADE delete: allow removing all members including last owner
+  if current_setting('app.cascading_project_delete', true) = 'true' then
+    return old;
+  end if;
+
+  -- Admins / super_admins may remove any member (including last owner)
+  if private.is_admin() then return old; end if;
+
   if old.project_role = 'owner' then
     select count(*) into v_owner_count from public.project_members
     where project_id = old.project_id and project_role = 'owner';
@@ -919,8 +937,11 @@ create policy "project_deletion_audit_insert" on public.project_deletion_audit
 -- run, and by the time this trigger can fire, the whole script will have
 -- finished and those tables will exist).
 create or replace function public.log_project_deletion()
-returns trigger language plpgsql security definer as $$
+returns trigger language plpgsql security definer set search_path = public as $$
 begin
+  -- Skip last-owner guard while project_members rows cascade away
+  perform set_config('app.cascading_project_delete', 'true', true);
+
   insert into public.project_deletion_audit (
     project_id, project_name, project_code, deleted_by, associated_data_counts, metadata
   )
@@ -982,7 +1003,7 @@ drop policy if exists "weekly_reports_select_team" on public.weekly_reports;
 drop policy if exists "weekly_reports_update_team" on public.weekly_reports;
 drop policy if exists "weekly_reports_delete_team" on public.weekly_reports;
 
--- Final policies from 059_weekly_reports_team_visibility.sql
+-- Final policies from 059 + tightened update/delete in 065 (shared-project only)
 create policy "weekly_reports_select_team" on public.weekly_reports
   for select using (
     auth.uid() = user_id
@@ -994,7 +1015,7 @@ create policy "weekly_reports_select_team" on public.weekly_reports
         where pm1.user_id = auth.uid() and pm2.user_id = weekly_reports.user_id
       )
     )
-    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role in ('admin', 'super_admin'))
+    or private.is_admin()
   );
 
 create policy "weekly_reports_insert_own" on public.weekly_reports
@@ -1003,13 +1024,29 @@ create policy "weekly_reports_insert_own" on public.weekly_reports
 create policy "weekly_reports_update_team" on public.weekly_reports
   for update using (
     auth.uid() = user_id
-    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role in ('manager', 'admin', 'super_admin'))
+    or private.is_admin()
+    or (
+      exists (select 1 from public.profiles p where p.id = auth.uid() and p.role in ('manager', 'qa_lead'))
+      and exists (
+        select 1 from public.project_members pm1
+        join public.project_members pm2 on pm1.project_id = pm2.project_id
+        where pm1.user_id = auth.uid() and pm2.user_id = weekly_reports.user_id
+      )
+    )
   );
 
 create policy "weekly_reports_delete_team" on public.weekly_reports
   for delete using (
     auth.uid() = user_id
-    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role in ('manager', 'admin', 'super_admin'))
+    or private.is_admin()
+    or (
+      exists (select 1 from public.profiles p where p.id = auth.uid() and p.role in ('manager', 'qa_lead'))
+      and exists (
+        select 1 from public.project_members pm1
+        join public.project_members pm2 on pm1.project_id = pm2.project_id
+        where pm1.user_id = auth.uid() and pm2.user_id = weekly_reports.user_id
+      )
+    )
   );
 
 
