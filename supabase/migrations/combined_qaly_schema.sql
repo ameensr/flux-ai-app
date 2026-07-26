@@ -2284,6 +2284,62 @@ begin
 end $$;
 
 -- ============================================================================
+-- SECTION 22: Table privileges for authenticated (PostgREST)
+-- Source: 063_grant_authenticated_table_privileges.sql
+--
+-- RLS alone is not enough. Without these GRANTs the app fails with:
+--   "permission denied for table departments"
+--   "permission denied for table role_module_permissions"
+-- Run as part of every fresh / Testing / Staging / Prod apply.
+-- ============================================================================
+
+do $$
+declare
+  r record;
+begin
+  for r in
+    select tablename
+    from pg_tables
+    where schemaname = 'public'
+  loop
+    execute format(
+      'grant select, insert, update, delete on table public.%I to authenticated',
+      r.tablename
+    );
+  end loop;
+end $$;
+
+grant usage, select on all sequences in schema public to authenticated;
+
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public
+  grant usage, select on sequences to authenticated;
+
+-- Prefer DEFINER for the public RPC so permission loads survive grant drift
+create or replace function public.get_role_permissions(p_role_key text)
+returns table(module_key text, permission_key text, is_enabled boolean)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    m.module_key,
+    p.permission_key,
+    rmp.is_enabled
+  from public.role_module_permissions rmp
+  join public.roles       r on r.id = rmp.role_id
+  join public.modules     m on m.id = rmp.module_id
+  join public.permissions p on p.id = rmp.permission_id
+  where r.role_key = p_role_key;
+$$;
+
+revoke all on function public.get_role_permissions(text) from public;
+revoke execute on function public.get_role_permissions(text) from anon;
+grant execute on function public.get_role_permissions(text) to authenticated;
+
+-- ============================================================================
 -- SECTION: Super Admin assignment (run AFTER first user registers)
 -- ============================================================================
 -- Preferred workflow:
