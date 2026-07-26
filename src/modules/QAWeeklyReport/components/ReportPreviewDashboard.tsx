@@ -9,7 +9,7 @@ import {
   Minimize2, RefreshCw, X, ChevronRight,
   BookOpen, Star, Sparkles, FileText, LayoutGrid, Users, History, CheckCheck,
   ArrowRightLeft, GitCompare, Palette, Lock, Unlock,
-  Code2, ChevronDown, Info
+  Code2, ChevronDown, Info, CalendarDays, UserRound, Target
 } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
 import { BRAND } from '@/lib/brand'
@@ -3179,29 +3179,119 @@ Do not return markdown wraps, only raw JSON text.
             className="flex flex-col gap-5"
           >
             <div className="flex items-center gap-2">
-              <Star className="w-5 h-5 text-accent-gold" />
+              <Target className="w-5 h-5 text-accent-gold" />
               <h2 className="text-2xl font-extrabold font-clash">Next Week Priorities</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {data.nextPriorities.map((priority, idx) => (
-                <div
-                  key={priority.id}
-                  className={`p-5 rounded-2xl border flex flex-col gap-2 relative ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold font-mono text-accent-gold">0{idx + 1}.</span>
-                    <span className={`text-[10px] uppercase font-bold tracking-wider ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>Due: {priority.dueDate}</span>
-                  </div>
-                  <h3 className={`text-sm font-extrabold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{priority.title}</h3>
-                  <p className="text-xs text-text-secondary leading-normal">{priority.description}</p>
-                  <div className="flex items-center justify-between border-t border-divider pt-3 mt-1">
-                    <span className="text-[10px] font-black uppercase text-blue-400 tracking-wider">Owner: {priority.owner}</span>
-                  </div>
-                </div>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {data.nextPriorities.map((priority, idx) => {
+                const accents = theme === 'dark'
+                  ? [
+                      { bar: 'bg-amber-400', glow: 'from-amber-400/25', chip: 'text-amber-300', ring: 'border-amber-400/30', soft: 'bg-amber-400/10' },
+                      { bar: 'bg-sky-400', glow: 'from-sky-400/25', chip: 'text-sky-300', ring: 'border-sky-400/30', soft: 'bg-sky-400/10' },
+                      { bar: 'bg-emerald-400', glow: 'from-emerald-400/25', chip: 'text-emerald-300', ring: 'border-emerald-400/30', soft: 'bg-emerald-400/10' },
+                      { bar: 'bg-rose-400', glow: 'from-rose-400/25', chip: 'text-rose-300', ring: 'border-rose-400/30', soft: 'bg-rose-400/10' },
+                      { bar: 'bg-indigo-400', glow: 'from-indigo-400/25', chip: 'text-indigo-300', ring: 'border-indigo-400/30', soft: 'bg-indigo-400/10' },
+                    ]
+                  : [
+                      { bar: 'bg-amber-500', glow: 'from-amber-400/20', chip: 'text-amber-700', ring: 'border-amber-300', soft: 'bg-amber-50' },
+                      { bar: 'bg-sky-500', glow: 'from-sky-400/20', chip: 'text-sky-700', ring: 'border-sky-300', soft: 'bg-sky-50' },
+                      { bar: 'bg-emerald-500', glow: 'from-emerald-400/20', chip: 'text-emerald-700', ring: 'border-emerald-300', soft: 'bg-emerald-50' },
+                      { bar: 'bg-rose-500', glow: 'from-rose-400/20', chip: 'text-rose-700', ring: 'border-rose-300', soft: 'bg-rose-50' },
+                      { bar: 'bg-indigo-500', glow: 'from-indigo-400/20', chip: 'text-indigo-700', ring: 'border-indigo-300', soft: 'bg-indigo-50' },
+                    ]
+                const accent = accents[idx % accents.length]
+                const n = String(idx + 1).padStart(2, '0')
+                const ownerInitial = (priority.owner || '?').trim().charAt(0).toUpperCase()
+
+                return (
+                  <motion.div
+                    key={priority.id}
+                    initial={{ opacity: 0, y: 18 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-40px' }}
+                    transition={{ duration: 0.45, delay: Math.min(idx * 0.06, 0.3) }}
+                    className={`group relative overflow-hidden rounded-[26px] border p-5 flex flex-col min-h-[180px] transition-all duration-300 ${
+                      theme === 'dark'
+                        ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)] hover:border-white/[0.14] hover:shadow-[0_10px_36px_rgba(0,0,0,0.35)]'
+                        : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/70 shadow-md hover:shadow-xl hover:border-slate-300/80'
+                    }`}
+                  >
+                    {/* Left rank rail */}
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${accent.bar} opacity-80 group-hover:opacity-100 transition-opacity`} />
+
+                    {/* Soft corner glow */}
+                    <div className={`absolute -top-16 -right-10 w-36 h-36 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br ${accent.glow} to-transparent pointer-events-none`} />
+
+                    {/* Giant watermark index */}
+                    <span
+                      aria-hidden
+                      className={`absolute -right-1 -bottom-3 text-[88px] leading-none font-clash font-black select-none pointer-events-none transition-transform duration-500 group-hover:scale-105 ${
+                        theme === 'dark' ? 'text-white/[0.04]' : 'text-slate-900/[0.04]'
+                      }`}
+                    >
+                      {n}
+                    </span>
+
+                    <div className="relative z-10 flex flex-col gap-3 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-black tracking-[0.14em] uppercase ${accent.soft} ${accent.ring} ${accent.chip}`}>
+                          <Star className="w-3 h-3" />
+                          P{n}
+                        </div>
+                        {priority.dueDate ? (
+                          <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold tracking-wide ${
+                            theme === 'dark' ? 'bg-white/5 text-white/55 border border-white/10' : 'bg-slate-100 text-slate-500 border border-slate-200'
+                          }`}>
+                            <CalendarDays className="w-3 h-3" />
+                            {priority.dueDate}
+                          </div>
+                        ) : (
+                          <span className={`text-[10px] font-bold tracking-wide ${theme === 'dark' ? 'text-white/30' : 'text-slate-400'}`}>
+                            No due date
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className={`text-[15px] font-extrabold leading-snug pr-6 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                        {priority.title || 'Untitled priority'}
+                      </h3>
+
+                      {priority.description ? (
+                        <p className={`text-xs leading-relaxed flex-1 ${theme === 'dark' ? 'text-white/55' : 'text-slate-500'}`}>
+                          {priority.description}
+                        </p>
+                      ) : (
+                        <p className={`text-xs italic flex-1 ${theme === 'dark' ? 'text-white/25' : 'text-slate-400'}`}>
+                          No description provided
+                        </p>
+                      )}
+
+                      <div className={`mt-auto pt-3 flex items-center gap-2.5 border-t ${theme === 'dark' ? 'border-white/[0.06]' : 'border-slate-100'}`}>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black border ${accent.soft} ${accent.ring} ${accent.chip}`}>
+                          {priority.owner ? ownerInitial : <UserRound className="w-3.5 h-3.5" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-[9px] font-bold uppercase tracking-[0.12em] ${theme === 'dark' ? 'text-white/35' : 'text-slate-400'}`}>
+                            Owner
+                          </p>
+                          <p className={`text-xs font-semibold truncate ${theme === 'dark' ? 'text-white/80' : 'text-slate-700'}`}>
+                            {priority.owner || 'Unassigned'}
+                          </p>
+                        </div>
+                        <ChevronRight className={`w-4 h-4 shrink-0 opacity-0 -translate-x-1 group-hover:opacity-60 group-hover:translate-x-0 transition-all ${theme === 'dark' ? 'text-white' : 'text-slate-500'}`} />
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              })}
               {data.nextPriorities.length === 0 && (
-                <div className="col-span-full p-8 text-center text-xs text-text-muted">No priorities set for next week.</div>
+                <div className={`col-span-full p-10 text-center rounded-[26px] border border-dashed ${
+                  theme === 'dark' ? 'border-white/10 text-white/35' : 'border-slate-200 text-slate-400'
+                }`}>
+                  <Target className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                  <p className="text-xs font-medium">No priorities set for next week.</p>
+                </div>
               )}
             </div>
           </motion.section>
