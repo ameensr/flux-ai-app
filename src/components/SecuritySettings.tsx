@@ -171,21 +171,23 @@ const SecurityScore = () => {
 }
 
 // ── Active Sessions ───────────────────────────────────────────────────────────
-type SessionDeviceType = 'monitor' | 'smartphone' | 'globe'
-type Session = { id: string; device: string; current: boolean; time: string; deviceType: SessionDeviceType }
+// Supabase Auth does not expose a client-side list of other devices. We show
+// this device accurately and always offer "sign out all other sessions", which
+// uses GoTrue's documented `signOut({ scope: 'others' })` to revoke every
+// refresh token except the current one.
 
-const SESSION_STORAGE_KEY = 'security.active-sessions'
+const LEGACY_SESSION_STORAGE_KEY = 'security.active-sessions'
 
-const getBrowserInfo = () => {
+const getCurrentDeviceInfo = () => {
   if (typeof window === 'undefined') {
-    return { device: 'Current browser', time: 'Current Session' }
+    return { device: 'Current browser', deviceType: 'monitor' as const }
   }
 
   const ua = window.navigator.userAgent
   let browser = 'Browser'
   if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome'
   else if (ua.includes('Firefox')) browser = 'Firefox'
-  else if (ua.includes('Safari')) browser = 'Safari'
+  else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari'
   else if (ua.includes('Edg')) browser = 'Edge'
   else if (ua.includes('Opera') || ua.includes('OPR')) browser = 'Opera'
 
@@ -196,80 +198,47 @@ const getBrowserInfo = () => {
   else if (ua.includes('Android')) os = 'Android'
   else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS'
 
-  return { device: `${browser} • ${os}`, time: 'Current Session' }
-}
+  const deviceType: 'monitor' | 'smartphone' =
+    /Android|iPhone|iPad|Mobile/i.test(ua) ? 'smartphone' : 'monitor'
 
-const getInitialSessions = (): Session[] => {
-  if (typeof window === 'undefined') return []
-
-  try {
-    const stored = window.localStorage.getItem(SESSION_STORAGE_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed as Session[]
-      }
-    }
-  } catch {
-    // Fall back to a single current session if storage is unavailable.
-  }
-
-  const { device, time } = getBrowserInfo()
-  return [{ id: 'current', device, current: true, time, deviceType: 'monitor' }]
+  return { device: `${browser} • ${os}`, deviceType }
 }
 
 const ActiveSessions = () => {
-  const [sessions, setSessions] = useState<Session[]>(() => getInitialSessions())
-  const [signingOut, setSigningOut] = useState<string | null>(null)
+  const currentDevice = useMemo(() => getCurrentDeviceInfo(), [])
   const [showConfirm, setShowConfirm] = useState(false)
   const [signingOutAll, setSigningOutAll] = useState(false)
   useBodyScrollLock(showConfirm)
 
+  // Clear the old fake localStorage session list (no longer used)
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessions))
-  }, [sessions])
-
-  const handleSignOut = async (id: string) => {
-    const target = sessions.find(session => session.id === id)
-    if (!target) return
-
-    setSigningOut(id)
     try {
-      const { error } = await supabase.auth.signOut({ scope: target.current ? 'global' : 'others' })
-      if (error) throw error
-      setSessions(prev => prev.filter(session => session.id !== id))
-      toast({
-        title: target.current ? 'Signed out' : 'Session ended',
-        description: target.current ? 'You have been signed out of this device.' : 'That device has been signed out.'
-      })
-    } catch (err: unknown) {
-      setSessions(prev => prev.filter(session => session.id !== id))
-      const msg = err instanceof Error ? err.message : 'Something went wrong.'
-      toast({ title: 'Error', description: msg, variant: 'destructive' })
-    } finally {
-      setSigningOut(null)
+      window.localStorage.removeItem(LEGACY_SESSION_STORAGE_KEY)
+    } catch {
+      // ignore
     }
-  }
+  }, [])
 
   const handleSignOutAll = async () => {
     setSigningOutAll(true)
     try {
+      // Revokes all other refresh tokens; keeps this device signed in
       const { error } = await supabase.auth.signOut({ scope: 'others' })
       if (error) throw error
-      setSessions(prev => prev.filter(session => session.current))
-      toast({ title: 'Signed out all other devices', description: 'All other sessions have been terminated.' })
+      toast({
+        title: 'Signed out all other devices',
+        description: 'Other sessions have been terminated. You remain signed in here.',
+      })
+      setShowConfirm(false)
     } catch (err: unknown) {
-      setSessions(prev => prev.filter(session => session.current))
       const msg = err instanceof Error ? err.message : 'Something went wrong.'
-      toast({ title: 'Error', description: msg, variant: 'destructive' })
+      toast({ title: 'Could not sign out other devices', description: msg, variant: 'destructive' })
     } finally {
       setSigningOutAll(false)
-      setShowConfirm(false)
     }
   }
 
-  const otherSessions = sessions.filter(session => !session.current)
+  const DeviceIcon = currentDevice.deviceType === 'smartphone' ? Smartphone : Monitor
 
   return (
     <GlassCard hoverEffect={false}>
@@ -279,55 +248,46 @@ const ActiveSessions = () => {
         </div>
         <div>
           <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Active Sessions</h2>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Devices currently signed in.</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Manage where you are signed in. Other devices are revoked server-side.
+          </p>
         </div>
       </div>
 
       <div className="space-y-2.5">
-        {sessions.map(session => {
-          const Icon = session.deviceType === 'smartphone' ? Smartphone : session.deviceType === 'globe' ? Globe : Monitor
-          return (
-            <div key={session.id} className="flex items-center justify-between rounded-lg p-3"
-              style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}>
-              <div className="flex items-center gap-3">
-                <Icon className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-                <div>
-                  <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{session.device}</p>
-                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{session.time}</p>
-                </div>
-              </div>
-              {session.current
-                ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium">Active</span>
-                : (
-                  <button
-                    onClick={() => handleSignOut(session.id)}
-                    disabled={signingOut === session.id}
-                    className="text-[11px] px-2 py-1 rounded-md hover:opacity-80 transition flex items-center gap-1 disabled:opacity-50"
-                    style={{ background: 'rgba(239,68,68,0.08)', color: '#EF4444' }}
-                  >
-                    {signingOut === session.id
-                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                      : <LogOut className="w-3 h-3" />}
-                    {signingOut === session.id ? 'Signing out…' : 'Sign Out'}
-                  </button>
-                )}
+        <div
+          className="flex items-center justify-between rounded-lg p-3"
+          style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <DeviceIcon className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
+            <div className="min-w-0">
+              <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                {currentDevice.device}
+              </p>
+              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>This device · Current session</p>
             </div>
-          )
-        })}
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium shrink-0">
+            Active
+          </span>
+        </div>
       </div>
 
-      {otherSessions.length > 0 && (
-        <button
-          onClick={() => setShowConfirm(true)}
-          disabled={signingOutAll}
-          className="mt-3 w-full text-xs font-medium py-2 rounded-lg transition hover:opacity-80 flex items-center justify-center gap-1.5 disabled:opacity-50"
-          style={{ background: 'rgba(239,68,68,0.06)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.15)' }}
-        >
-          <LogOut className="w-3.5 h-3.5" /> Sign Out All Other Devices
-        </button>
-      )}
+      <p className="mt-3 text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+        If you signed in on another computer or phone, use the button below to end those sessions immediately. You will stay signed in on this device.
+      </p>
 
-      {/* Confirmation Dialog */}
+      <button
+        type="button"
+        onClick={() => setShowConfirm(true)}
+        disabled={signingOutAll}
+        className="mt-3 w-full text-xs font-medium py-2 rounded-lg transition hover:opacity-80 flex items-center justify-center gap-1.5 disabled:opacity-50"
+        style={{ background: 'rgba(239,68,68,0.06)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.15)' }}
+      >
+        <LogOut className="w-3.5 h-3.5" /> Sign Out All Other Devices
+      </button>
+
       <AnimatePresence>
         {showConfirm && (
           <motion.div
@@ -336,7 +296,7 @@ const ActiveSessions = () => {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
-            onClick={e => { if (e.target === e.currentTarget) setShowConfirm(false) }}
+            onClick={e => { if (e.target === e.currentTarget && !signingOutAll) setShowConfirm(false) }}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -344,25 +304,33 @@ const ActiveSessions = () => {
               exit={{ scale: 0.95, opacity: 0 }}
               className="rounded-xl p-6 w-full max-w-sm shadow-2xl"
               style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="sign-out-others-title"
             >
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.1)' }}>
                   <ShieldAlert className="w-4.5 h-4.5 text-red-400" />
                 </div>
-                <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Sign Out All Other Devices?</h3>
+                <h3 id="sign-out-others-title" className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Sign Out All Other Devices?
+                </h3>
               </div>
               <p className="text-xs leading-relaxed mb-5" style={{ color: 'var(--text-muted)' }}>
-                This will immediately end all other active sessions. You will remain signed in on this device.
+                This ends every other active session for your account. You will remain signed in on this device only.
               </p>
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={() => setShowConfirm(false)}
-                  className="flex-1 py-2 rounded-lg text-xs font-medium transition hover:opacity-80"
+                  disabled={signingOutAll}
+                  className="flex-1 py-2 rounded-lg text-xs font-medium transition hover:opacity-80 disabled:opacity-50"
                   style={{ background: 'var(--hover)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={handleSignOutAll}
                   disabled={signingOutAll}
                   className="flex-1 py-2 rounded-lg text-xs font-semibold transition hover:opacity-90 flex items-center justify-center gap-1.5 disabled:opacity-60"

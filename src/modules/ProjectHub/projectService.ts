@@ -121,12 +121,19 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
   if (error) throw error
   if (!data) throw new Error('Failed to create project')
 
-  // Automatically add creator as project owner
-  await assignMember({
-    project_id: data.id,
-    user_id: userData.user.id,
-    project_role: 'owner'
-  })
+  // DB trigger also adds creator as owner; keep this as a safe fallback.
+  try {
+    await assignMember({
+      project_id: data.id,
+      user_id: userData.user.id,
+      project_role: 'owner'
+    })
+  } catch (memberError: any) {
+    // Already owner (trigger / unique) — project create still succeeded
+    if (memberError?.code !== '23505' && !String(memberError?.message || '').includes('already a member')) {
+      console.warn('[createProject] owner assignment fallback:', memberError)
+    }
+  }
 
   return data as Project
 }

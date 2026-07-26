@@ -799,9 +799,11 @@ drop policy if exists "projects_insert" on public.projects;
 drop policy if exists "projects_update" on public.projects;
 drop policy if exists "projects_delete" on public.projects;
 
--- Final visibility (065): admins see all; everyone else only membership projects
+-- Final visibility (065/066): admins, members, or project creator
 create policy "projects_select" on public.projects for select using (
-  private.is_admin() or private.is_project_member(id)
+  private.is_admin()
+  or private.is_project_member(id)
+  or created_by = auth.uid()
 );
 create policy "projects_insert" on public.projects for insert with check (
   private.is_admin() or private.is_project_manager()
@@ -815,6 +817,28 @@ create policy "projects_delete" on public.projects for delete using (
   private.is_admin() or private.is_project_owner(id)
 );
 
+-- Auto-assign creator as owner (066) so INSERT RETURNING + membership work
+create or replace function private.add_project_creator_as_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.created_by is not null then
+    insert into public.project_members (project_id, user_id, project_role, assigned_by)
+    values (new.id, new.created_by, 'owner', new.created_by)
+    on conflict (project_id, user_id) do nothing;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists projects_add_creator_as_owner on public.projects;
+create trigger projects_add_creator_as_owner
+  after insert on public.projects
+  for each row execute function private.add_project_creator_as_owner();
+
 -- ── RLS: project_members ──────────────────────────────────────────────────────
 
 alter table public.project_members enable row level security;
@@ -824,9 +848,11 @@ drop policy if exists "project_members_insert" on public.project_members;
 drop policy if exists "project_members_update" on public.project_members;
 drop policy if exists "project_members_delete" on public.project_members;
 
--- Final visibility (065): admins see all; others only their projects' memberships
+-- Final visibility (066): admins, own rows, or fellow project members
 create policy "project_members_select" on public.project_members for select using (
-  private.is_admin() or private.is_project_member(project_id)
+  private.is_admin()
+  or user_id = auth.uid()
+  or private.is_project_member(project_id)
 );
 -- Final insert (065): creator may self-bootstrap as owner; no manager join-any-project
 create policy "project_members_insert" on public.project_members for insert with check (
