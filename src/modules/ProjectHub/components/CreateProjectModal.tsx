@@ -45,13 +45,22 @@ export function CreateProjectModal({ onClose, onSuccess }: CreateProjectModalPro
       return
     }
 
+    if (!formData.project_code?.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Project code is required'
+      })
+      return
+    }
+
     try {
       setLoading(true)
       await createProject({
         ...formData,
         name: formData.name.trim(),
         description: formData.description?.trim() || undefined,
-        project_code: formData.project_code?.trim() || undefined,
+        project_code: formData.project_code.trim(),
         start_date: formData.start_date || undefined,
         target_end_date: formData.target_end_date || undefined,
         tags: formData.tags && formData.tags.length > 0 ? formData.tags : undefined
@@ -183,7 +192,7 @@ export function CreateProjectModal({ onClose, onSuccess }: CreateProjectModalPro
             {/* Project Code */}
             <div>
               <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-                Project Code
+                Project Code <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -196,9 +205,10 @@ export function CreateProjectModal({ onClose, onSuccess }: CreateProjectModalPro
                   border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
                   color: 'var(--text-primary)'
                 }}
+                required
               />
               <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
-                Optional unique identifier for the project
+                Unique identifier for the project
               </p>
             </div>
 

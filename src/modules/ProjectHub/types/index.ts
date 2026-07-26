@@ -46,8 +46,8 @@ export interface ProjectMemberWithProfile extends ProjectMember {
 
 export interface CreateProjectInput {
   name: string
+  project_code: string
   description?: string
-  project_code?: string
   status?: ProjectStatus
   start_date?: string
   target_end_date?: string
