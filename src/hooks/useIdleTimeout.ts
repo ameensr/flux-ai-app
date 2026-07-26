@@ -9,6 +9,7 @@ import {
   IDLE_STORAGE_KEY,
   LOGOUT_SIGNAL_KEY,
 } from '@/lib/idleConfig'
+import { bindIdleOperationRegistrar } from '@/lib/idleOperations'
 import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/store/useAppStore'
 
@@ -115,18 +116,21 @@ export function useIdleTimeout(): UseIdleTimeoutReturn {
       if (themeValue) localStorage.setItem(themeKey, themeValue)
     } catch { /* best effort */ }
 
-    // Show toast (imported lazily to avoid circular deps)
+    // Flash message survives the hard redirect (storage was just cleared)
     if (showToast) {
-      // Use the toast function directly from the module
-      const { toast } = await import('@/hooks/use-toast')
-      toast({
-        title: 'Session expired',
-        description: 'You have been logged out due to inactivity.',
-      })
+      try {
+        sessionStorage.setItem(
+          'qaly-session-expired',
+          JSON.stringify({
+            title: 'Session expired',
+            description: 'You have been logged out due to inactivity.',
+          }),
+        )
+      } catch { /* non-critical */ }
     }
 
-    // Redirect to login and replace history entry
-    window.history.replaceState(null, '', '/login')
+    // Hard navigate so React Router + auth guards land cleanly on login
+    window.location.assign('/login')
 
     isLoggingOutRef.current = false
   }, [setUser, setProfile, setPermissionMap, setPermissionsLoaded])
@@ -186,30 +190,6 @@ export function useIdleTimeout(): UseIdleTimeoutReturn {
     }, SESSION_IDLE_TIMEOUT_MS - WARNING_COUNTDOWN_SECONDS * 1000)
   }, [clearTimers, startWarningCountdown])
 
-  // ── Activity handler (throttled) ──────────────────────────────────────────
-
-  const handleActivity = useCallback(() => {
-    const now = Date.now()
-    if (now - throttleRef.current < ACTIVITY_THROTTLE_MS) return
-    throttleRef.current = now
-    lastActivityRef.current = now
-
-    // If we're in warning phase, user activity dismisses it
-    if (phaseRef.current === 'warning') {
-      stayLoggedIn()
-      return
-    }
-
-    if (phaseRef.current === 'active') {
-      resetIdleTimer()
-      // Notify other tabs of activity
-      try {
-        channelRef.current?.postMessage({ type: 'activity' } satisfies IdleMessage)
-        localStorage.setItem(IDLE_STORAGE_KEY, now.toString())
-      } catch { /* non-critical */ }
-    }
-  }, [resetIdleTimer])
-
   // ── Public actions ────────────────────────────────────────────────────────
 
   const stayLoggedIn = useCallback(() => {
@@ -230,14 +210,46 @@ export function useIdleTimeout(): UseIdleTimeoutReturn {
 
   const registerOperation = useCallback((key: string) => {
     activeOpsRef.current.add(key)
+    // Pause idle countdown while a protected operation is running
+    clearTimers()
+    if (phaseRef.current === 'warning') {
+      setPhase('active')
+      setSecondsLeft(WARNING_COUNTDOWN_SECONDS)
+    }
     return () => {
       activeOpsRef.current.delete(key)
-      // If we were in active phase and ops just finished, ensure timer is running
-      if (activeOpsRef.current.size === 0 && phaseRef.current === 'active') {
+      // Resume idle timer once all protected ops finish
+      if (activeOpsRef.current.size === 0 && phaseRef.current === 'active' && !isLoggingOutRef.current) {
         resetIdleTimer()
       }
     }
+  }, [clearTimers, resetIdleTimer])
+
+  // ── Activity handler (throttled) ──────────────────────────────────────────
+  // Warning phase is intentional: only Stay / Logout buttons dismiss it.
+  // Stray mouse/keyboard must not auto-extend the session.
+
+  const handleActivity = useCallback(() => {
+    if (phaseRef.current !== 'active') return
+    if (isLoggingOutRef.current) return
+
+    const now = Date.now()
+    if (now - throttleRef.current < ACTIVITY_THROTTLE_MS) return
+    throttleRef.current = now
+    lastActivityRef.current = now
+
+    resetIdleTimer()
+    try {
+      channelRef.current?.postMessage({ type: 'activity' } satisfies IdleMessage)
+      localStorage.setItem(IDLE_STORAGE_KEY, now.toString())
+    } catch { /* non-critical */ }
   }, [resetIdleTimer])
+
+  // Expose registerOperation to non-React services (AI gateway, etc.)
+  useEffect(() => {
+    bindIdleOperationRegistrar(registerOperation)
+    return () => bindIdleOperationRegistrar(null)
+  }, [registerOperation])
 
   // ── Cross-tab synchronization ─────────────────────────────────────────────
 

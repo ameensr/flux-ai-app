@@ -6,6 +6,7 @@
 import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/store/useAppStore'
 import { hasModulePermission } from '@/lib/rbac'
+import { beginIdleOperation, withIdleOperation } from '@/lib/idleOperations'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
@@ -329,94 +330,99 @@ export const aiProviderService = {
 
 /**
  * Calls OpenRouter with retry on transient failures.
+ * Holds an idle-session lock so long AI requests don't trigger auto-logout.
  */
 export async function callAIGateway(payload: {
   prompt: string
   systemPrompt?: string
   module?: string
 }): Promise<string> {
-  const config = await getProviderConfig()
-  const effectiveModel = resolveModel(config.model, payload.module)
-  let lastError = ''
+  return withIdleOperation(`ai-gateway:${payload.module || 'default'}`, async () => {
+    const config = await getProviderConfig()
+    const effectiveModel = resolveModel(config.model, payload.module)
+    let lastError = ''
 
-  const messages: { role: string; content: string }[] = []
-  if (payload.systemPrompt) {
-    messages.push({ role: 'system', content: payload.systemPrompt })
-  }
-  messages.push({ role: 'user', content: payload.prompt })
+    const messages: { role: string; content: string }[] = []
+    if (payload.systemPrompt) {
+      messages.push({ role: 'system', content: payload.systemPrompt })
+    }
+    messages.push({ role: 'user', content: payload.prompt })
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const res = await fetchWithTimeout(OPENROUTER_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${config.apiKey}`,
-          'HTTP-Referer': SITE_URL,
-          'X-Title': SITE_NAME,
-        },
-        body: JSON.stringify({
-          model: effectiveModel,
-          messages,
-          max_tokens: config.maxTokens,
-          temperature: config.temperature,
-        }),
-      }, REQUEST_TIMEOUT_MS)
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetchWithTimeout(OPENROUTER_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${config.apiKey}`,
+            'HTTP-Referer': SITE_URL,
+            'X-Title': SITE_NAME,
+          },
+          body: JSON.stringify({
+            model: effectiveModel,
+            messages,
+            max_tokens: config.maxTokens,
+            temperature: config.temperature,
+          }),
+        }, REQUEST_TIMEOUT_MS)
 
-      if (res.ok) {
-        const data = await res.json()
-        const content = data.choices?.[0]?.message?.content
-        if (!content) throw new Error('AI returned empty response. Please try again.')
-        return content
-      }
+        if (res.ok) {
+          const data = await res.json()
+          const content = data.choices?.[0]?.message?.content
+          if (!content) throw new Error('AI returned empty response. Please try again.')
+          return content
+        }
 
-      // Parse error
-      const errBody = await res.json().catch(() => ({ error: { message: 'AI request failed' } }))
-      lastError = errBody.error?.message || `Provider returned ${res.status}`
+        // Parse error
+        const errBody = await res.json().catch(() => ({ error: { message: 'AI request failed' } }))
+        lastError = errBody.error?.message || `Provider returned ${res.status}`
 
-      if (isTransientError(res.status) && attempt < MAX_RETRIES) {
-        await delay(RETRY_DELAY_MS * (attempt + 1))
-        continue
-      }
+        if (isTransientError(res.status) && attempt < MAX_RETRIES) {
+          await delay(RETRY_DELAY_MS * (attempt + 1))
+          continue
+        }
 
-      if (attempt < MAX_RETRIES) {
-        await delay(RETRY_DELAY_MS)
-        continue
-      }
-    } catch (e: any) {
-      if (e.name === 'AbortError') {
-        lastError = 'AI request timed out'
-      } else {
-        lastError = e.message || 'Network error'
-      }
-      if (attempt < MAX_RETRIES) {
-        await delay(RETRY_DELAY_MS)
-        continue
+        if (attempt < MAX_RETRIES) {
+          await delay(RETRY_DELAY_MS)
+          continue
+        }
+      } catch (e: any) {
+        if (e.name === 'AbortError') {
+          lastError = 'AI request timed out'
+        } else {
+          lastError = e.message || 'Network error'
+        }
+        if (attempt < MAX_RETRIES) {
+          await delay(RETRY_DELAY_MS)
+          continue
+        }
       }
     }
-  }
 
-  throw new Error(`${lastError}. All retry attempts exhausted. Please try again later.`)
+    throw new Error(`${lastError}. All retry attempts exhausted. Please try again later.`)
+  })
 }
 
 /**
  * Streaming variant — calls OpenRouter with stream: true.
+ * Holds an idle-session lock until the stream completes or is cancelled.
  */
 export async function callAIGatewayStream(payload: {
   prompt: string
   module?: string
   systemPrompt?: string
 }): Promise<ReadableStream<Uint8Array>> {
-  const config = await getProviderConfig()
-  const effectiveModel = resolveModel(config.model, payload.module)
-
-  const messages: { role: string; content: string }[] = []
-  if (payload.systemPrompt) {
-    messages.push({ role: 'system', content: payload.systemPrompt })
-  }
-  messages.push({ role: 'user', content: payload.prompt })
-
+  const release = beginIdleOperation(`ai-stream:${payload.module || 'default'}`)
   try {
+    const config = await getProviderConfig()
+    const effectiveModel = resolveModel(config.model, payload.module)
+
+    const messages: { role: string; content: string }[] = []
+    if (payload.systemPrompt) {
+      messages.push({ role: 'system', content: payload.systemPrompt })
+    }
+    messages.push({ role: 'user', content: payload.prompt })
+
     const res = await fetchWithTimeout(OPENROUTER_URL, {
       method: 'POST',
       headers: {
@@ -439,8 +445,33 @@ export async function callAIGatewayStream(payload: {
       throw new Error(err.error?.message || 'AI stream request failed')
     }
     if (!res.body) throw new Error('No stream body received')
-    return res.body
+
+    // Release idle lock when the consumer finishes or cancels the stream
+    const upstream = res.body
+    return new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const reader = upstream.getReader()
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            controller.enqueue(value)
+          }
+          controller.close()
+        } catch (err) {
+          controller.error(err)
+        } finally {
+          reader.releaseLock()
+          release()
+        }
+      },
+      cancel() {
+        upstream.cancel().catch(() => {})
+        release()
+      },
+    })
   } catch (e: any) {
+    release()
     if (e.name === 'AbortError') {
       throw new Error('AI stream timed out. The provider may be overloaded — please try again.')
     }

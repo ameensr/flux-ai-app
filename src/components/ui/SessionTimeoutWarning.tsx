@@ -195,7 +195,8 @@ export function SessionTimeoutWarning({ visible, secondsLeft, onStay, onLogout }
                 id="session-timeout-desc"
                 className="text-sm text-text-secondary font-montreal leading-relaxed mb-8"
               >
-                You've been inactive for a while. For your security, you'll be logged out soon.
+                You've been inactive for a while. For your security, you'll be logged out
+                when the timer hits zero. Click <span className="font-semibold text-text-primary">Stay Logged In</span> to continue.
               </p>
 
               {/* Countdown Ring */}

@@ -111,7 +111,6 @@ function DashboardWrapper() {
           <Outlet />
         </Suspense>
         <Suspense fallback={null}><AICopilot /></Suspense>
-        <Toaster />
       </DashboardLayout>
       <SessionTimeoutWarning
         visible={phase === 'warning'}
@@ -125,15 +124,20 @@ function DashboardWrapper() {
 
 // ── Report Preview wrapper (standalone, no sidebar) ───────────────────────────
 function ReportPreviewWrapper() {
-  const { registerOperation } = useIdleTimeout()
+  const { phase, secondsLeft, stayLoggedIn, logoutNow, registerOperation } = useIdleTimeout()
   return (
     <IdleContext.Provider value={registerOperation}>
       <ErrorBoundary>
         <Suspense fallback={<FullPageLoader />}>
           <ReportPreviewDashboard />
         </Suspense>
-        <Toaster />
       </ErrorBoundary>
+      <SessionTimeoutWarning
+        visible={phase === 'warning'}
+        secondsLeft={secondsLeft}
+        onStay={stayLoggedIn}
+        onLogout={logoutNow}
+      />
     </IdleContext.Provider>
   )
 }
@@ -283,8 +287,28 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
         <RequireFullNameGate />
       </Suspense>
       {children}
+      <Toaster />
+      <SessionExpiredToast />
     </>
   )
+}
+
+/** Shows the idle-logout flash message after a hard redirect to /login */
+function SessionExpiredToast() {
+  const { toast } = useToast()
+  React.useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('qaly-session-expired')
+      if (!raw) return
+      sessionStorage.removeItem('qaly-session-expired')
+      const payload = JSON.parse(raw) as { title?: string; description?: string }
+      toast({
+        title: payload.title || 'Session expired',
+        description: payload.description || 'You have been logged out due to inactivity.',
+      })
+    } catch { /* ignore */ }
+  }, [toast])
+  return null
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
