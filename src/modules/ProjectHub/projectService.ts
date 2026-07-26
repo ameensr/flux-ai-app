@@ -7,6 +7,7 @@ import type {
   ProjectWithMembers,
   ProjectMember,
   ProjectMemberWithProfile,
+  ProjectRole,
   CreateProjectInput,
   UpdateProjectInput,
   AssignMemberInput,
@@ -467,13 +468,14 @@ export async function fetchProjectStats(): Promise<ProjectStats> {
 // My Projects (for current user)
 // ══════════════════════════════════════════════════════════════════════════════
 
-export async function fetchMyProjects(): Promise<ProjectWithMembers[]> {
+export async function fetchMyProjects(): Promise<(ProjectWithMembers & { my_project_role: ProjectRole })[]> {
   const { data: userData } = await supabase.auth.getUser()
   if (!userData.user) throw new Error('Not authenticated')
 
   const { data, error } = await supabase
     .from('project_members')
     .select(`
+      project_role,
       project:projects(
         *,
         members:project_members(
@@ -492,19 +494,19 @@ export async function fetchMyProjects(): Promise<ProjectWithMembers[]> {
 
   if (error) throw error
 
-  // Type the response properly
   type ProjectMemberWithProject = {
+    project_role: ProjectRole
     project: ProjectWithMembers
   }
 
   const typedData = (data || []) as unknown as ProjectMemberWithProject[]
 
   return typedData
-    .map(item => item.project)
-    .filter(Boolean)
-    .map(project => ({
-      ...project,
-      members: project.members || [],
-      member_count: project.members?.length || 0
-    })) as ProjectWithMembers[]
+    .filter(item => item.project)
+    .map(item => ({
+      ...item.project,
+      members: item.project.members || [],
+      member_count: item.project.members?.length || 0,
+      my_project_role: item.project_role,
+    }))
 }

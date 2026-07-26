@@ -4,11 +4,39 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { FolderKanban, AlertCircle, CheckCircle } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { fetchMyProjects } from '@/modules/ProjectHub/projectService'
+import type { ProjectRole } from '@/modules/ProjectHub/types'
 
 type MembershipProject = {
   id: string
   name: string
   project_code: string
+  project_role: ProjectRole
+}
+
+/** User-facing tag: management roles vs contributor roles */
+function getRoleTag(role: ProjectRole): { label: string; bg: string; color: string; border: string } {
+  if (role === 'owner' || role === 'lead') {
+    return {
+      label: role === 'owner' ? 'Owner' : 'Lead',
+      bg: 'rgba(99, 102, 241, 0.12)',
+      color: '#6366f1',
+      border: 'rgba(99, 102, 241, 0.28)',
+    }
+  }
+  if (role === 'viewer') {
+    return {
+      label: 'Viewer',
+      bg: 'rgba(148, 163, 184, 0.12)',
+      color: '#94a3b8',
+      border: 'rgba(148, 163, 184, 0.28)',
+    }
+  }
+  return {
+    label: 'Member',
+    bg: 'rgba(16, 185, 129, 0.12)',
+    color: '#10b981',
+    border: 'rgba(16, 185, 129, 0.28)',
+  }
 }
 
 export const ProjectMembershipCard: React.FC = () => {
@@ -31,6 +59,7 @@ export const ProjectMembershipCard: React.FC = () => {
               id: p.id,
               name: p.name,
               project_code: p.project_code ?? '',
+              project_role: p.my_project_role,
             }))
         )
       } catch {
@@ -77,36 +106,56 @@ export const ProjectMembershipCard: React.FC = () => {
         </p>
       ) : hasProjects ? (
         <div className="space-y-2.5">
-          {projects.map((project) => (
-            <div
-              key={project.id}
-              className="flex items-start gap-2.5 p-2.5 rounded-lg transition-all"
-              style={{
-                background: 'var(--hover)',
-                border: '1px solid var(--border)',
-              }}
-            >
-              <CheckCircle
-                className="w-3.5 h-3.5 shrink-0 mt-0.5"
-                style={{ color: 'rgba(16,185,129,0.8)' }}
-              />
-              <div className="flex-1 min-w-0">
-                <p
-                  className="text-xs font-semibold truncate"
-                  style={{ color: 'var(--text-primary)' }}
-                  title={project.name}
-                >
-                  {project.name}
-                </p>
-                <p
-                  className="text-[10px] font-mono mt-0.5"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  {project.project_code}
-                </p>
+          {projects.map((project) => {
+            const tag = getRoleTag(project.project_role)
+            return (
+              <div
+                key={project.id}
+                className="flex items-start gap-2.5 p-2.5 rounded-lg transition-all"
+                style={{
+                  background: 'var(--hover)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <CheckCircle
+                  className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                  style={{ color: 'rgba(16,185,129,0.8)' }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p
+                      className="text-xs font-semibold truncate"
+                      style={{ color: 'var(--text-primary)' }}
+                      title={project.name}
+                    >
+                      {project.name}
+                    </p>
+                    <span
+                      className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                      style={{
+                        background: tag.bg,
+                        color: tag.color,
+                        border: `1px solid ${tag.border}`,
+                      }}
+                      title={
+                        project.project_role === 'owner' || project.project_role === 'lead'
+                          ? 'You manage this project'
+                          : 'You are a member of this project'
+                      }
+                    >
+                      {tag.label}
+                    </span>
+                  </div>
+                  <p
+                    className="text-[10px] font-mono mt-0.5"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    {project.project_code}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       ) : (
         <div
