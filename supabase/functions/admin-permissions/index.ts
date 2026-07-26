@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { supabase } = await requireAdmin(req)
+    const { userId: actorId, supabase } = await requireAdmin(req)
     const url = new URL(req.url)
     const action = url.searchParams.get('action')
 
@@ -104,16 +104,49 @@ Deno.serve(async (req) => {
 
     // DELETE a user from auth.users + profiles (hard delete)
     if (req.method === 'DELETE' && action === 'delete_user') {
-      const { user_id } = await req.json()
+      let body: { user_id?: string } = {}
+      try {
+        body = await req.json()
+      } catch {
+        // Some runtimes strip DELETE bodies — fall back to query string
+        body = {}
+      }
+      const user_id = body.user_id || url.searchParams.get('user_id') || undefined
       if (!user_id) return json({ error: 'Missing user_id' }, 400)
-      
-      // Delete from profiles first to prevent foreign key constraint violation on auth.users deletion
-      const { error: profileError } = await supabase.from('profiles').delete().eq('id', user_id)
-      if (profileError) throw profileError
 
-      const { error } = await supabase.auth.admin.deleteUser(user_id)
-      if (error) throw error
-      
+      if (user_id === actorId) {
+        return json({ error: 'You cannot delete your own account from User Management' }, 400)
+      }
+
+      // Remove memberships / bypass last-owner trigger, then delete auth user
+      // (profiles.id references auth.users ON DELETE CASCADE).
+      const { error: prepError } = await supabase.rpc('admin_prepare_user_deletion', {
+        target_user_id: user_id,
+        actor_user_id: actorId,
+      })
+      if (prepError) {
+        console.error('[delete_user] prepare failed:', prepError)
+        throw new Error(prepError.message || 'Failed to prepare user deletion')
+      }
+
+      // Prefer deleting auth user (cascades profile). Fallback: wipe profile then auth.
+      const { error: authDeleteError } = await supabase.auth.admin.deleteUser(user_id)
+      if (authDeleteError) {
+        console.error('[delete_user] auth.admin.deleteUser failed:', authDeleteError)
+
+        const { error: profileError } = await supabase.from('profiles').delete().eq('id', user_id)
+        if (profileError) {
+          console.error('[delete_user] profile delete fallback failed:', profileError)
+          throw new Error(profileError.message || authDeleteError.message || 'Failed to delete user')
+        }
+
+        const { error: authRetryError } = await supabase.auth.admin.deleteUser(user_id)
+        if (authRetryError) {
+          // Profile gone — surface auth error clearly
+          throw new Error(authRetryError.message || 'Failed to delete auth user after profile cleanup')
+        }
+      }
+
       return json({ success: true })
     }
 

@@ -358,7 +358,7 @@ export function UserManagement() {
           throw new Error('Your session has expired. Please refresh the page or sign in again.')
         }
         const resp = await fetch(
-          `${SUPABASE_URL}/functions/v1/admin-permissions?action=delete_user`,
+          `${SUPABASE_URL}/functions/v1/admin-permissions?action=delete_user&user_id=${encodeURIComponent(user.id)}`,
           {
             method: 'DELETE',
             headers: {

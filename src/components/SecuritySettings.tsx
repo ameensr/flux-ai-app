@@ -171,58 +171,150 @@ const SecurityScore = () => {
 }
 
 // ── Active Sessions ───────────────────────────────────────────────────────────
-// Supabase Auth does not expose a client-side list of other devices. We show
-// this device accurately and always offer "sign out all other sessions", which
-// uses GoTrue's documented `signOut({ scope: 'others' })` to revoke every
-// refresh token except the current one.
+// Lists real rows from auth.sessions via public.list_my_sessions() RPC so Chrome
+// + Firefox (and other devices) appear together. "Sign out others" still uses
+// supabase.auth.signOut({ scope: 'others' }).
+
+type AuthSessionRow = {
+  id: string
+  created_at: string
+  updated_at: string | null
+  refreshed_at: string | null
+  user_agent: string | null
+  ip: string | null
+  is_current: boolean
+}
+
+type DisplaySession = {
+  id: string
+  device: string
+  deviceType: 'monitor' | 'smartphone'
+  time: string
+  current: boolean
+}
 
 const LEGACY_SESSION_STORAGE_KEY = 'security.active-sessions'
 
-const getCurrentDeviceInfo = () => {
-  if (typeof window === 'undefined') {
-    return { device: 'Current browser', deviceType: 'monitor' as const }
-  }
-
-  const ua = window.navigator.userAgent
+function parseDeviceFromUA(ua: string | null | undefined): {
+  device: string
+  deviceType: 'monitor' | 'smartphone'
+} {
+  const value = ua || ''
   let browser = 'Browser'
-  if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome'
-  else if (ua.includes('Firefox')) browser = 'Firefox'
-  else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari'
-  else if (ua.includes('Edg')) browser = 'Edge'
-  else if (ua.includes('Opera') || ua.includes('OPR')) browser = 'Opera'
+  if (value.includes('Edg')) browser = 'Edge'
+  else if (value.includes('OPR') || value.includes('Opera')) browser = 'Opera'
+  else if (value.includes('Chrome') && !value.includes('Edg')) browser = 'Chrome'
+  else if (value.includes('Firefox')) browser = 'Firefox'
+  else if (value.includes('Safari')) browser = 'Safari'
 
   let os = 'Device'
-  if (ua.includes('Windows')) os = 'Windows'
-  else if (ua.includes('Mac')) os = 'macOS'
-  else if (ua.includes('Linux')) os = 'Linux'
-  else if (ua.includes('Android')) os = 'Android'
-  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS'
+  if (value.includes('Windows')) os = 'Windows'
+  else if (value.includes('Mac')) os = 'macOS'
+  else if (value.includes('Android')) os = 'Android'
+  else if (value.includes('iPhone') || value.includes('iPad')) os = 'iOS'
+  else if (value.includes('Linux')) os = 'Linux'
 
   const deviceType: 'monitor' | 'smartphone' =
-    /Android|iPhone|iPad|Mobile/i.test(ua) ? 'smartphone' : 'monitor'
+    /Android|iPhone|iPad|Mobile/i.test(value) ? 'smartphone' : 'monitor'
 
+  if (!value) return { device: 'Unknown device', deviceType: 'monitor' }
   return { device: `${browser} • ${os}`, deviceType }
 }
 
+function formatSessionTime(iso: string | null | undefined): string {
+  if (!iso) return 'Active'
+  try {
+    const d = new Date(iso)
+    return (
+      'Last active ' +
+      d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    )
+  } catch {
+    return 'Active'
+  }
+}
+
+function getCurrentDeviceFallback(): DisplaySession {
+  const { device, deviceType } = parseDeviceFromUA(
+    typeof navigator !== 'undefined' ? navigator.userAgent : ''
+  )
+  return {
+    id: 'current',
+    device,
+    deviceType,
+    time: 'This device · Current session',
+    current: true,
+  }
+}
+
 const ActiveSessions = () => {
-  const currentDevice = useMemo(() => getCurrentDeviceInfo(), [])
+  const [sessions, setSessions] = useState<DisplaySession[]>([getCurrentDeviceFallback()])
+  const [loading, setLoading] = useState(true)
   const [showConfirm, setShowConfirm] = useState(false)
   const [signingOutAll, setSigningOutAll] = useState(false)
   useBodyScrollLock(showConfirm)
 
-  // Clear the old fake localStorage session list (no longer used)
-  useEffect(() => {
+  const loadSessions = useCallback(async () => {
+    setLoading(true)
     try {
       window.localStorage.removeItem(LEGACY_SESSION_STORAGE_KEY)
     } catch {
       // ignore
     }
+
+    try {
+      const { data, error } = await supabase.rpc('list_my_sessions')
+      if (error) throw error
+
+      const rows = (data || []) as AuthSessionRow[]
+      if (rows.length === 0) {
+        setSessions([getCurrentDeviceFallback()])
+        return
+      }
+
+      const currentUA = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+      const jwtCurrentId = rows.find((r) => r.is_current)?.id
+      const uaFallbackId =
+        !jwtCurrentId && currentUA
+          ? rows.find((r) => r.user_agent === currentUA)?.id
+          : undefined
+      const currentId = jwtCurrentId || uaFallbackId || rows[0]?.id
+
+      const mapped: DisplaySession[] = rows.map((row) => {
+        const parsed = parseDeviceFromUA(row.user_agent)
+        const isCurrent = row.id === currentId
+        return {
+          id: row.id,
+          device: parsed.device,
+          deviceType: parsed.deviceType,
+          time: isCurrent
+            ? 'This device · Current session'
+            : formatSessionTime(row.refreshed_at || row.updated_at || row.created_at),
+          current: isCurrent,
+        }
+      })
+
+      setSessions(mapped)
+    } catch (err) {
+      console.warn('[ActiveSessions] list_my_sessions failed:', err)
+      setSessions([getCurrentDeviceFallback()])
+    } finally {
+      setLoading(false)
+    }
   }, [])
+
+  useEffect(() => {
+    loadSessions()
+  }, [loadSessions])
 
   const handleSignOutAll = async () => {
     setSigningOutAll(true)
     try {
-      // Revokes all other refresh tokens; keeps this device signed in
       const { error } = await supabase.auth.signOut({ scope: 'others' })
       if (error) throw error
       toast({
@@ -230,6 +322,7 @@ const ActiveSessions = () => {
         description: 'Other sessions have been terminated. You remain signed in here.',
       })
       setShowConfirm(false)
+      await loadSessions()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong.'
       toast({ title: 'Could not sign out other devices', description: msg, variant: 'destructive' })
@@ -238,7 +331,7 @@ const ActiveSessions = () => {
     }
   }
 
-  const DeviceIcon = currentDevice.deviceType === 'smartphone' ? Smartphone : Monitor
+  const otherCount = sessions.filter((s) => !s.current).length
 
   return (
     <GlassCard hoverEffect={false}>
@@ -249,39 +342,62 @@ const ActiveSessions = () => {
         <div>
           <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Active Sessions</h2>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Manage where you are signed in. Other devices are revoked server-side.
+            Devices currently signed in to your account.
           </p>
         </div>
       </div>
 
-      <div className="space-y-2.5">
-        <div
-          className="flex items-center justify-between rounded-lg p-3"
-          style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <DeviceIcon className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
-            <div className="min-w-0">
-              <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                {currentDevice.device}
-              </p>
-              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>This device · Current session</p>
-            </div>
-          </div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium shrink-0">
-            Active
-          </span>
+      {loading ? (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--text-muted)' }} />
         </div>
-      </div>
+      ) : (
+        <div className="space-y-2.5">
+          {sessions.map((session) => {
+            const DeviceIcon = session.deviceType === 'smartphone' ? Smartphone : Monitor
+            return (
+              <div
+                key={session.id}
+                className="flex items-center justify-between rounded-lg p-3"
+                style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <DeviceIcon className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                      {session.device}
+                    </p>
+                    <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                      {session.time}
+                    </p>
+                  </div>
+                </div>
+                {session.current ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium shrink-0">
+                    Active
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0"
+                    style={{ background: 'var(--surface-elevated)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                    Other device
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <p className="mt-3 text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-        If you signed in on another computer or phone, use the button below to end those sessions immediately. You will stay signed in on this device.
+        {otherCount > 0
+          ? `${otherCount} other ${otherCount === 1 ? 'session is' : 'sessions are'} signed in. You can end them below without signing out here.`
+          : 'Only this device is signed in right now.'}
       </p>
 
       <button
         type="button"
         onClick={() => setShowConfirm(true)}
-        disabled={signingOutAll}
+        disabled={signingOutAll || loading || otherCount === 0}
         className="mt-3 w-full text-xs font-medium py-2 rounded-lg transition hover:opacity-80 flex items-center justify-center gap-1.5 disabled:opacity-50"
         style={{ background: 'rgba(239,68,68,0.06)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.15)' }}
       >
@@ -317,7 +433,7 @@ const ActiveSessions = () => {
                 </h3>
               </div>
               <p className="text-xs leading-relaxed mb-5" style={{ color: 'var(--text-muted)' }}>
-                This ends every other active session for your account. You will remain signed in on this device only.
+                This ends every other active session for your account ({otherCount} {otherCount === 1 ? 'device' : 'devices'}). You will remain signed in on this device only.
               </p>
               <div className="flex gap-2">
                 <button

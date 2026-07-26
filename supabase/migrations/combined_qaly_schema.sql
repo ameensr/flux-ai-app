@@ -485,7 +485,7 @@ create table if not exists public.ai_provider_configs (
   monthly_budget       numeric(10,2),
   fallback_provider_id uuid references public.ai_provider_configs(id),
   provider_priority    integer not null default 0,
-  created_by           uuid not null references auth.users(id),
+  created_by           uuid not null references auth.users(id) on delete cascade,
   created_at           timestamptz not null default now(),
   updated_at           timestamptz not null default now()
 );
@@ -509,7 +509,7 @@ create policy "admins_all" on public.ai_provider_configs
 
 create table if not exists public.ai_usage_logs (
   id                 uuid primary key default gen_random_uuid(),
-  user_id            uuid not null references auth.users(id),
+  user_id            uuid not null references auth.users(id) on delete cascade,
   provider_id        uuid references public.ai_provider_configs(id) on delete set null, -- 019_fix_usage_logs_fk.sql
   module             text,
   prompt_tokens      integer,
@@ -540,7 +540,7 @@ create table if not exists public.ai_module_prompts (
   version       integer not null default 1,
   temperature   numeric(3,2),
   max_tokens    integer,
-  created_by    uuid not null references auth.users(id),
+  created_by    uuid not null references auth.users(id) on delete cascade,
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
@@ -565,7 +565,7 @@ create table if not exists public.ai_prompt_versions (
   module_key    text not null,
   system_prompt text not null,
   version       integer not null,
-  changed_by    uuid not null references auth.users(id),
+  changed_by    uuid not null references auth.users(id) on delete cascade,
   created_at    timestamptz not null default now()
 );
 
@@ -877,10 +877,17 @@ create policy "project_members_delete" on public.project_members for delete usin
 -- ── Triggers: last-owner protection (039) ─────────────────────────────────────
 
 create or replace function public.prevent_last_owner_role_change()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 declare
   v_owner_count int;
 begin
+  if current_setting('app.admin_deleting_user', true) = 'true' then
+    return new;
+  end if;
+  if coalesce(auth.jwt() ->> 'role', auth.role()) = 'service_role' then
+    return new;
+  end if;
+  if private.is_admin() then return new; end if;
   if private.is_super_admin() then return new; end if;
   if old.project_role = 'owner' and new.project_role != 'owner' then
     select count(*) into v_owner_count from public.project_members
@@ -905,6 +912,16 @@ declare
 begin
   -- Project CASCADE delete: allow removing all members including last owner
   if current_setting('app.cascading_project_delete', true) = 'true' then
+    return old;
+  end if;
+
+  -- Admin hard-delete of a user (068)
+  if current_setting('app.admin_deleting_user', true) = 'true' then
+    return old;
+  end if;
+
+  -- Service role (edge functions)
+  if coalesce(auth.jwt() ->> 'role', auth.role()) = 'service_role' then
     return old;
   end if;
 
@@ -1107,6 +1124,121 @@ create policy "Users can delete own login events" on public.login_events for del
 create policy "Admins can view all login events" on public.login_events for select using (
   exists (select 1 from public.profiles where profiles.id = auth.uid() and profiles.role in ('admin', 'super_admin'))
 );
+
+-- List concurrent auth sessions for Active Sessions UI (067)
+create or replace function public.list_my_sessions()
+returns table (
+  id uuid,
+  created_at timestamptz,
+  updated_at timestamptz,
+  refreshed_at timestamptz,
+  user_agent text,
+  ip text,
+  is_current boolean
+)
+language plpgsql
+stable
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_sid uuid;
+  v_claims jsonb;
+begin
+  if v_uid is null then
+    return;
+  end if;
+
+  begin
+    v_claims := nullif(current_setting('request.jwt.claims', true), '')::jsonb;
+  exception when others then
+    v_claims := null;
+  end;
+
+  if v_claims is not null then
+    begin
+      v_sid := nullif(v_claims ->> 'session_id', '')::uuid;
+    exception when others then
+      v_sid := null;
+    end;
+  end if;
+
+  return query
+  select
+    s.id,
+    s.created_at,
+    s.updated_at,
+    s.refreshed_at,
+    s.user_agent,
+    s.ip::text as ip,
+    (v_sid is not null and s.id = v_sid) as is_current
+  from auth.sessions s
+  where s.user_id = v_uid
+  order by coalesce(s.refreshed_at, s.updated_at, s.created_at) desc;
+end;
+$$;
+
+revoke all on function public.list_my_sessions() from public;
+grant execute on function public.list_my_sessions() to authenticated;
+
+-- Prepare hard-delete of a user (068) — used by admin-permissions edge function
+create or replace function public.admin_prepare_user_deletion(
+  target_user_id uuid,
+  actor_user_id uuid default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_actor uuid := coalesce(actor_user_id, auth.uid());
+  v_actor_role text;
+  v_removed_members int := 0;
+begin
+  if target_user_id is null then
+    raise exception 'target_user_id is required';
+  end if;
+
+  if coalesce(auth.jwt() ->> 'role', auth.role()) <> 'service_role' then
+    if v_actor is null then
+      raise exception 'Forbidden';
+    end if;
+    select role into v_actor_role from public.profiles where id = v_actor;
+    if v_actor_role is null or v_actor_role not in ('admin', 'super_admin') then
+      raise exception 'Forbidden';
+    end if;
+  end if;
+
+  if v_actor is not null and v_actor = target_user_id then
+    raise exception 'You cannot delete your own account from User Management';
+  end if;
+
+  perform set_config('app.admin_deleting_user', 'true', true);
+
+  delete from public.project_members where user_id = target_user_id;
+  get diagnostics v_removed_members = row_count;
+
+  begin
+    update public.project_members set assigned_by = null where assigned_by = target_user_id;
+  exception when undefined_column or undefined_table then
+    null;
+  end;
+
+  begin
+    update public.projects set created_by = null where created_by = target_user_id;
+  exception when undefined_column or undefined_table then
+    null;
+  end;
+
+  return jsonb_build_object('ok', true, 'removed_memberships', v_removed_members);
+end;
+$$;
+
+revoke all on function public.admin_prepare_user_deletion(uuid, uuid) from public;
+grant execute on function public.admin_prepare_user_deletion(uuid, uuid) to service_role;
+grant execute on function public.admin_prepare_user_deletion(uuid, uuid) to authenticated;
 
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -1533,7 +1665,7 @@ create policy "column_mappings_write" on public.daily_report_column_mappings for
 create table if not exists public.team_capacity_reports (
   id UUID primary key default gen_random_uuid(),
   report_id UUID, -- historically referenced a non-existent qa_weekly_reports table; FK intentionally omitted (see note above)
-  uploaded_by UUID references auth.users(id),
+  uploaded_by UUID references auth.users(id) on delete set null,
   file_name TEXT not null,
   upload_date TIMESTAMPTZ not null default now(),
   period_start DATE,
@@ -1623,7 +1755,7 @@ create table if not exists public.announcements (
     attachment_url  TEXT,
     attachment_name TEXT,
     external_link   TEXT,
-    author_id       UUID not null references auth.users(id) on delete set null,
+    author_id       UUID references auth.users(id) on delete set null,
     author_name     TEXT,
     created_at      TIMESTAMPTZ not null default now(),
     updated_at      TIMESTAMPTZ not null default now()
@@ -1754,7 +1886,7 @@ create table if not exists public.maintenance_config (
   show_branding   BOOLEAN not null default true,
   support_email   TEXT default 'support@company.com',
   custom_message  TEXT,
-  updated_by      UUID references auth.users(id),
+  updated_by      UUID references auth.users(id) on delete set null,
   updated_at      TIMESTAMPTZ not null default now(),
   created_at      TIMESTAMPTZ not null default now()
 );
