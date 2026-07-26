@@ -335,7 +335,7 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
               }}
               className="bg-hover border border-border rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-accent/40 w-full"
             >
-              <option value="" className="bg-surface text-text-primary">All Projects</option>
+              <option value="" className="bg-surface text-text-primary">Select Project</option>
               {projects.map(p => (
                 <option key={p.id} value={p.id} className="bg-surface text-text-primary">{p.projectName}</option>
               ))}
