@@ -2,6 +2,7 @@
 // Enhanced deletion modal with type-to-confirm validation
 
 import React, { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertTriangle, Trash2 } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
@@ -49,38 +50,54 @@ export function DeleteProjectModal({
     }
   }
 
-  return (
+  // Portaled to body so parent card transforms (framer-motion hover) can't
+  // trap position:fixed and clip / flicker the overlay.
+  return createPortal(
     <AnimatePresence>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      <motion.div
+        key="delete-project-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
+        className="fixed inset-0 z-[200]"
         style={{
           background: isDark
             ? 'rgba(0, 0, 0, 0.85)'
             : 'rgba(0, 0, 0, 0.6)',
-          backdropFilter: 'blur(8px)'
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)'
         }}
-        onClick={onClose}
-      >
+        onClick={isDeleting ? undefined : onClose}
+        aria-hidden="true"
+      />
+
+      <div className="fixed inset-0 z-[201] flex items-center justify-center p-4 pointer-events-none">
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          key="delete-project-panel"
+          initial={{ opacity: 0, scale: 0.96, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          transition={{ duration: 0.2 }}
+          exit={{ opacity: 0, scale: 0.96, y: 8 }}
+          transition={{ duration: 0.18 }}
           onClick={(e) => e.stopPropagation()}
-          className="relative w-full max-w-xl rounded-2xl shadow-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-project-title"
+          className="pointer-events-auto relative w-full max-w-xl max-h-[min(90vh,720px)] flex flex-col rounded-2xl shadow-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden"
         >
           {/* Header with Warning Stripe */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-orange-500 to-red-500" />
-            
+
             <div className="p-6 pb-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 shrink-0">
                     <AlertTriangle className="w-5 h-5 text-red-500" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <h2
+                      id="delete-project-title"
                       className="text-xl font-bold"
                       style={{ color: 'var(--text-primary)' }}
                     >
@@ -92,10 +109,12 @@ export function DeleteProjectModal({
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={onClose}
                   disabled={isDeleting}
-                  className="p-2 rounded-lg transition-all disabled:opacity-50 hover:bg-[var(--hover)]"
+                  className="p-2 rounded-lg transition-all disabled:opacity-50 hover:bg-[var(--hover)] shrink-0"
                   style={{ color: 'var(--text-muted)' }}
+                  aria-label="Close"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -103,8 +122,8 @@ export function DeleteProjectModal({
             </div>
           </div>
 
-          {/* Content */}
-          <div className="px-6 pb-6 space-y-5">
+          {/* Scrollable content — keeps footer actions visible on short viewports */}
+          <div className="px-6 pb-6 space-y-5 overflow-y-auto min-h-0 flex-1 overscroll-contain">
             {/* Warning Box */}
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
               <div className="flex items-start gap-3">
@@ -215,6 +234,7 @@ export function DeleteProjectModal({
             {/* Actions */}
             <div className="flex items-center gap-3 pt-2">
               <button
+                type="button"
                 onClick={onClose}
                 disabled={isDeleting}
                 className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all disabled:opacity-50 border border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--text-primary)] hover:bg-[var(--hover)]"
@@ -222,6 +242,7 @@ export function DeleteProjectModal({
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleDelete}
                 disabled={!canDelete}
                 className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-red-500 text-white hover:bg-red-600 flex items-center justify-center gap-2"
@@ -261,6 +282,7 @@ export function DeleteProjectModal({
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }
