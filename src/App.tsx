@@ -147,30 +147,81 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     const handleSession = (user: any): Promise<void> => {
+      // Single-flight only while a load is in progress — must clear when done
+      // so role/profile changes (e.g. SQL promote to super_admin) are picked up
+      // on refresh, token refresh, and re-login.
       if (initPromiseRef.current) return initPromiseRef.current
 
       initPromiseRef.current = (async () => {
         try {
-          const [{ data }, _] = await Promise.all([
-            supabase.from('profiles').select('*').eq('id', user.id).single(),
+          // Prefer SECURITY DEFINER RPC so badge/role still load if RLS SELECT is broken
+          const [{ data: rpcRows, error: rpcError }, _] = await Promise.all([
+            supabase.rpc('get_my_profile'),
             useMaintenanceStore.getState().fetchConfig(),
           ])
 
+          if (rpcError) {
+            console.warn('[App] get_my_profile RPC error:', rpcError)
+          }
+
+          let data = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows
+
+          // Fallback: direct table read (works when profiles_read_authenticated exists)
+          if (!data) {
+            const { data: row, error: profileError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', user.id)
+              .maybeSingle()
+            if (profileError) console.warn('[App] profile fetch error:', profileError)
+            data = row
+          }
+
+          // Heal missing profile row (auth user without trigger insert)
+          if (!data) {
+            const { error: createError } = await supabase.from('profiles').upsert(
+              {
+                id: user.id,
+                email: user.email ?? '',
+                full_name:
+                  user.user_metadata?.full_name
+                  ?? user.user_metadata?.name
+                  ?? null,
+                status: 'active',
+              },
+              { onConflict: 'id' },
+            )
+            if (createError) console.warn('[App] profile create error:', createError)
+
+            const { data: rpcRetry } = await supabase.rpc('get_my_profile')
+            data = Array.isArray(rpcRetry) ? rpcRetry[0] : rpcRetry
+            if (!data) {
+              const { data: row } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .maybeSingle()
+              data = row
+            }
+          }
+
           if (data && data.status === 'inactive') {
             await supabase.auth.signOut()
-            initPromiseRef.current = null
             toast({ variant: 'destructive', title: 'Account Disabled', description: 'Your account has been disabled. Please contact support.' })
             return
           }
 
-          const role = data?.role ?? 'free'
+          const role = (data?.role as Profile['role']) ?? 'free'
           if (data) setProfile(data as Profile)
+          else setProfile(null)
 
           const map = await loadPermissionsForRole(role)
           initSession(user, map)
         } catch (e) {
           console.warn('[App] session setup error:', e)
           initSession(user, FALLBACK_MAPS.free)
+        } finally {
+          initPromiseRef.current = null
         }
       })()
 

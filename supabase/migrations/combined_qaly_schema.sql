@@ -195,8 +195,30 @@ $$;
 grant execute on function private.get_my_role() to authenticated;
 
 -- All authenticated users can read all profiles (no sensitive secrets stored here)
+drop policy if exists "profiles_read_authenticated" on public.profiles;
 create policy "profiles_read_authenticated" on public.profiles
-  for select using ( auth.role() = 'authenticated' );
+  for select
+  to authenticated
+  using (true);
+
+drop policy if exists "profiles_select_own" on public.profiles;
+create policy "profiles_select_own" on public.profiles
+  for select
+  to authenticated
+  using (auth.uid() = id);
+
+-- SECURITY DEFINER: load caller's profile even if SELECT policies are wrong
+create or replace function public.get_my_profile()
+returns setof public.profiles
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select * from public.profiles where id = auth.uid();
+$$;
+revoke all on function public.get_my_profile() from public;
+grant execute on function public.get_my_profile() to authenticated;
 
 create policy "profiles_self_insert" on public.profiles
   for insert with check ( auth.uid() = id );
@@ -2276,28 +2298,29 @@ end $$;
 -- Replace your-admin@example.com with the registered Super Admin email.
 -- DO NOT commit a real personal email into this file.
 
-/*
--- ASSIGN Super Admin (safe: updates only the matching profile)
-UPDATE public.profiles AS p
-SET role = 'super_admin',
-    status = 'active'
-FROM auth.users AS u
-WHERE p.id = u.id
-  AND lower(u.email) = lower('your-admin@example.com');
 
--- VERIFY assignment
-SELECT
-  u.id          AS auth_user_id,
-  u.email,
-  p.id          AS profile_id,
-  p.role,
-  p.status,
-  p.full_name,
-  p.created_at
-FROM auth.users u
-JOIN public.profiles p ON p.id = u.id
-WHERE lower(u.email) = lower('your-admin@example.com');
-*/
+
+-- ----------------------------------------------------------------------------
+-- BOOTSTRAP Super Admin (run manually in SQL Editor — do NOT leave real emails
+-- committed). Copy ONE block at a time, replace the email, run, confirm rows.
+-- ----------------------------------------------------------------------------
+
+-- 1) Check auth user + profile
+-- SELECT u.id, u.email, p.id AS profile_id, p.role, p.status
+-- FROM auth.users u
+-- LEFT JOIN public.profiles p ON p.id = u.id
+-- WHERE lower(u.email) = lower('your-admin@example.com');
+
+-- 2) Create profile if missing + set super_admin (must return 1 row)
+-- INSERT INTO public.profiles (id, email, full_name, role, status)
+-- SELECT u.id, u.email,
+--        coalesce(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name'),
+--        'super_admin', 'active'
+-- FROM auth.users u
+-- WHERE lower(u.email) = lower('your-admin@example.com')
+-- ON CONFLICT (id) DO UPDATE
+-- SET role = 'super_admin', status = 'active', email = EXCLUDED.email
+-- RETURNING id, email, role, status;
 
 -- ============================================================================
 -- END OF combined_qaly_schema.sql

@@ -116,9 +116,29 @@ export const ProfileCard: React.FC = () => {
         </div>
         <div
           className="px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest"
-          style={{ background: 'var(--hover)', color: 'var(--accent)', border: '1px solid var(--border)' }}
+          style={{
+            background: profile.role === 'super_admin' || profile.role === 'admin'
+              ? 'rgba(248,113,113,0.12)'
+              : 'var(--hover)',
+            color: profile.role === 'super_admin' || profile.role === 'admin'
+              ? '#f87171'
+              : 'var(--accent)',
+            border: '1px solid var(--border)',
+          }}
         >
-          {profile.role.replace('_', ' ')}
+          {({
+            super_admin: 'Super Admin',
+            admin: 'Administrator',
+            pro: 'Pro',
+            free: 'Free',
+            manager: 'Manager',
+            qa_lead: 'QA Lead',
+            qa_engineer: 'QA Engineer',
+            developer: 'Developer',
+            standard: 'Standard',
+            guest: 'Guest',
+          } as Record<string, string>)[profile.role]
+            || profile.role.replace(/_/g, ' ')}
         </div>
       </div>
 
