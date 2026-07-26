@@ -1,13 +1,50 @@
-// Compact project membership card for Daily Update Report
-import React from 'react'
+// Compact project membership card — shows only projects the user is a member of
+import React, { useEffect, useState } from 'react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { FolderKanban, AlertCircle, CheckCircle } from 'lucide-react'
-import { useDailyReportStore } from '../store'
 import { useAppStore } from '@/store/useAppStore'
+import { fetchMyProjects } from '@/modules/ProjectHub/projectService'
+
+type MembershipProject = {
+  id: string
+  name: string
+  project_code: string
+}
 
 export const ProjectMembershipCard: React.FC = () => {
-  const { projects } = useDailyReportStore()
   const { profile } = useAppStore()
+  const [projects, setProjects] = useState<MembershipProject[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const load = async () => {
+      setLoading(true)
+      try {
+        const mine = await fetchMyProjects()
+        if (cancelled) return
+        setProjects(
+          mine
+            .filter((p) => p.status === 'active' || !p.status)
+            .map((p) => ({
+              id: p.id,
+              name: p.name,
+              project_code: p.project_code,
+            }))
+        )
+      } catch {
+        if (!cancelled) setProjects([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   if (!profile) return null
 
@@ -18,10 +55,10 @@ export const ProjectMembershipCard: React.FC = () => {
       {/* Subtle gradient accent at top */}
       <div
         className="absolute top-0 left-0 right-0 h-1 rounded-t-xl"
-        style={{ 
-          background: hasProjects 
-            ? 'linear-gradient(90deg, rgba(16,185,129,0.6), rgba(34,197,94,0.3))' 
-            : 'linear-gradient(90deg, rgba(251,191,36,0.6), rgba(245,158,11,0.3))'
+        style={{
+          background: hasProjects
+            ? 'linear-gradient(90deg, rgba(16,185,129,0.6), rgba(34,197,94,0.3))'
+            : 'linear-gradient(90deg, rgba(251,191,36,0.6), rgba(245,158,11,0.3))',
         }}
       />
 
@@ -34,31 +71,35 @@ export const ProjectMembershipCard: React.FC = () => {
       </div>
 
       {/* Content */}
-      {hasProjects ? (
+      {loading ? (
+        <p className="text-xs py-2" style={{ color: 'var(--text-muted)' }}>
+          Loading projects…
+        </p>
+      ) : hasProjects ? (
         <div className="space-y-2.5">
-          {projects.map((project, index) => (
+          {projects.map((project) => (
             <div
               key={project.id}
               className="flex items-start gap-2.5 p-2.5 rounded-lg transition-all"
-              style={{ 
-                background: 'var(--hover)', 
-                border: '1px solid var(--border)' 
+              style={{
+                background: 'var(--hover)',
+                border: '1px solid var(--border)',
               }}
             >
-              <CheckCircle 
-                className="w-3.5 h-3.5 shrink-0 mt-0.5" 
-                style={{ color: 'rgba(16,185,129,0.8)' }} 
+              <CheckCircle
+                className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                style={{ color: 'rgba(16,185,129,0.8)' }}
               />
               <div className="flex-1 min-w-0">
-                <p 
-                  className="text-xs font-semibold truncate" 
+                <p
+                  className="text-xs font-semibold truncate"
                   style={{ color: 'var(--text-primary)' }}
-                  title={project.project_name}
+                  title={project.name}
                 >
-                  {project.project_name}
+                  {project.name}
                 </p>
-                <p 
-                  className="text-[10px] font-mono mt-0.5" 
+                <p
+                  className="text-[10px] font-mono mt-0.5"
                   style={{ color: 'var(--text-muted)' }}
                 >
                   {project.project_code}
@@ -70,14 +111,14 @@ export const ProjectMembershipCard: React.FC = () => {
       ) : (
         <div
           className="flex items-start gap-2.5 p-3 rounded-lg"
-          style={{ 
-            background: 'rgba(251,191,36,0.05)', 
-            border: '1px solid rgba(251,191,36,0.2)' 
+          style={{
+            background: 'rgba(251,191,36,0.05)',
+            border: '1px solid rgba(251,191,36,0.2)',
           }}
         >
-          <AlertCircle 
-            className="w-4 h-4 shrink-0 mt-0.5" 
-            style={{ color: 'rgba(251,191,36,0.9)' }} 
+          <AlertCircle
+            className="w-4 h-4 shrink-0 mt-0.5"
+            style={{ color: 'rgba(251,191,36,0.9)' }}
           />
           <div className="flex-1">
             <p className="text-xs font-medium" style={{ color: 'rgba(251,191,36,1)' }}>
@@ -93,7 +134,9 @@ export const ProjectMembershipCard: React.FC = () => {
       {/* Footer count */}
       <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--divider)' }}>
         <p className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>
-          {hasProjects ? (
+          {loading ? (
+            '…'
+          ) : hasProjects ? (
             <>
               <span className="font-bold" style={{ color: 'var(--accent)' }}>
                 {projects.length}

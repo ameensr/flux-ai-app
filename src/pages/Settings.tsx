@@ -8,8 +8,6 @@ import { useTheme } from '@/context/ThemeContext'
 import { cn } from '@/lib/utils'
 import { SecuritySettings } from '@/components/SecuritySettings'
 import { usePandaEnabled } from '@/components/LazyPanda'
-import { useDailyReportStore } from '@/modules/DailyUpdateReport/store'
-import { useEffect } from 'react'
 
 // ── Appearance mode card ──────────────────────────────────────────────────────
 const ModeCard = ({
@@ -119,12 +117,6 @@ const LazyPandaToggle = () => {
 // ── Settings ──────────────────────────────────────────────────────────────────
 export const Settings = () => {
   const { theme, setTheme } = useTheme()
-  const { fetchProjects } = useDailyReportStore()
-
-  // Fetch projects on mount
-  useEffect(() => {
-    fetchProjects()
-  }, [])
 
   return (
     <motion.div
