@@ -60,15 +60,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
         </button>
       </div>
 
-      {/* Main content */}
+      {/* Main column: content grows, branding footer stays at bottom */}
       <main
-        className="min-h-screen px-4 pt-20 pb-8 lg:px-8 lg:pt-8 lg:pb-8 transition-[margin-left] duration-300"
+        className="min-h-screen flex flex-col px-4 pt-20 pb-0 lg:px-8 lg:pt-8 transition-[margin-left] duration-300"
         style={{ marginLeft: isSidebarOpen ? marginLeft : 76 }}
       >
-        <div className="max-w-7xl mx-auto overflow-hidden">
+        <div className="flex-1 w-full max-w-7xl mx-auto overflow-hidden">
           {children}
-          <Footer />
         </div>
+        <Footer />
       </main>
     </div>
   )

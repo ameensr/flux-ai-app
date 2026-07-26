@@ -8,7 +8,7 @@ export const Footer: React.FC = () => {
 
   return (
     <footer
-      className="mt-12 py-4 px-4"
+      className="mt-auto shrink-0 w-full py-4 px-4"
       style={{ borderTop: '1px solid var(--divider)' }}
     >
       <div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
