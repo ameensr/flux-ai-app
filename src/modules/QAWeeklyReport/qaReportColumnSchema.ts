@@ -218,3 +218,24 @@ export function hydrateSchemaFromLegacy(
   }))
   return [...defaults, ...customs].map((c, i) => ({ ...c, order: i }))
 }
+
+/** Ensure Assigned QA / Assignee is present when import filled that field. */
+export function ensureAssigneeColumnInSchema(
+  tableKey: DailyReportTableKey,
+  schema: QAReportTableColumn[],
+  hasAssigneeValues: boolean,
+): QAReportTableColumn[] {
+  if (!hasAssigneeValues) return schema
+  const id = tableKey === 'support' ? 'assignedQA' : 'assignee'
+  if (schema.some(c => c.id === id)) return schema
+  return [
+    ...schema,
+    {
+      id,
+      label: builtinLabel(tableKey, id),
+      kind: 'builtin',
+      visible: true,
+      order: schema.length,
+    },
+  ]
+}

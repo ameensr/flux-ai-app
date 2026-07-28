@@ -63,7 +63,20 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({ open, on
       ; (async () => {
         const saved = await fetchSavedMapping(tableKey, projectId)
         const defaults = buildDefaultMapping(columns, tableKey)
-        const merged = defaults.map(d => saved?.[d.dupColumnId] ? { ...d, ...saved[d.dupColumnId], internalKey: d.internalKey } : d)
+        // Prefer defaults for QA/Assignee/Tester columns when a saved preference
+        // used Create New (which left Assigned QA empty). Explicit Skip is kept.
+        const merged = defaults.map(d => {
+          const s = saved?.[d.dupColumnId]
+          if (!s) return d
+          if (
+            s.action === 'create_new' &&
+            d.action === 'map_existing' &&
+            (d.targetField === 'assignedQA' || d.targetField === 'assignee')
+          ) {
+            return d
+          }
+          return { ...d, ...s, internalKey: d.internalKey }
+        })
         setEntries(merged)
         const initialDest = buildDestinationColumnsFromMapping(tableKey, columns, merged)
         setDestinationOrder(initialDest.map(c => c.id))

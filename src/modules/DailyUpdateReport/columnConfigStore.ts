@@ -313,14 +313,44 @@ export const useColumnConfigStore = create<ColumnConfigState>((set, get) => ({
 
   deleteColumn: async (id) => {
     if (id.startsWith('fallback-')) return
-    const { error } = await supabase
+
+    // Idempotent: if the row is already gone, treat as success so retry /
+    // overlapping pendingDeletes don't fail the whole save.
+    const { data: existing, error: lookupError } = await supabase
+      .from('daily_report_column_configs')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (lookupError) {
+      console.error('[ColumnConfigStore] deleteColumn lookup failed:', lookupError)
+      throw lookupError
+    }
+
+    if (!existing) {
+      set((state) => ({
+        supportColumns: state.supportColumns.filter(c => c.id !== id),
+        releaseColumns: state.releaseColumns.filter(c => c.id !== id),
+      }))
+      return
+    }
+
+    const { data, error } = await supabase
       .from('daily_report_column_configs')
       .delete()
       .eq('id', id)
+      .select('id')
 
     if (error) {
       console.error('[ColumnConfigStore] deleteColumn failed:', error)
       throw error
+    }
+
+    // RLS can silently delete 0 rows (no error) while the row still exists.
+    if (!data || data.length === 0) {
+      const err = new Error('Column could not be deleted (permission denied).')
+      console.error('[ColumnConfigStore] deleteColumn blocked by RLS:', id)
+      throw err
     }
 
     set((state) => ({
@@ -425,24 +455,52 @@ export const useColumnConfigStore = create<ColumnConfigState>((set, get) => ({
   },
 
   saveAsProjectTemplate: async (tableKey, projectId, columns) => {
-    // Persist the given column set as the project's own configuration
-    // (equivalent to "Save as Team/Project Template" in the spec — since
-    // Teams don't exist in this app's data model, this saves at Project scope).
+    // Persist the given column set as this project's own configuration.
     //
-    // ⚠️ Safety: only reuse a row's existing id if it already belongs to this
-    // exact project. If the draft was sourced from the Organization Default
-    // (or another project), reusing that id here would UPSERT-in-place and
-    // silently repoint the *original* row's project_id, corrupting the org
-    // default / other project's configuration. Unmatched rows must be
-    // inserted as brand-new rows instead.
-    const cloned = columns.map(c => {
+    // ⚠️ Must reuse existing project-row ids by internal_key whenever
+    // possible. Minting a new UUID for a key that already exists on this
+    // project collides with uq_column_configs_project (and
+    // uq_column_configs_dashboard_role_project) and fails the *entire*
+    // batch upsert — the intermittent "Save failed" users see.
+    //
+    // Also remove any leftover project rows whose internal_key is no
+    // longer in the draft, so deleted/replaced columns don't linger.
+    const existing = await get().fetchScopedColumns(tableKey, projectId)
+    const existingByKey = new Map(
+      existing
+        .filter(c => !c.id.startsWith('fallback-'))
+        .map(c => [c.internal_key, c.id]),
+    )
+
+    const keepKeys = new Set(columns.map(c => c.internal_key))
+    const leftoverIds = existing
+      .filter(c => !c.id.startsWith('fallback-') && !keepKeys.has(c.internal_key))
+      .map(c => c.id)
+
+    for (const id of leftoverIds) {
+      await get().deleteColumn(id)
+    }
+
+    const cloned = columns.map((c, i) => {
       const alreadyThisProject = c.project_id === projectId && !c.id.startsWith('fallback-')
+      const reusedId = alreadyThisProject
+        ? c.id
+        : (existingByKey.get(c.internal_key) ?? crypto.randomUUID())
       return {
         ...c,
-        id: alreadyThisProject ? c.id : crypto.randomUUID(),
+        id: reusedId,
         project_id: projectId,
+        display_order: i + 1,
       }
     })
+
+    if (cloned.length === 0) {
+      // Explicit empty project template — leftovers already deleted above.
+      if (tableKey === 'support') set({ supportScope: 'project', supportColumns: [] })
+      else set({ releaseScope: 'project', releaseColumns: [] })
+      return
+    }
+
     await get().saveColumns(cloned)
     if (tableKey === 'support') set({ supportScope: 'project' })
     else set({ releaseScope: 'project' })

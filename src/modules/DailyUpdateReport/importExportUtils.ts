@@ -5,7 +5,15 @@ import type { ColumnConfig, DailyReportTableKey } from './types'
 import { isOptionBasedType } from './columnConfigStore'
 
 export function normalizeHeader(raw: string): string {
-  return (raw || '').toString().trim().toLowerCase().replace(/\s+/g, ' ')
+  return (raw || '')
+    .toString()
+    .replace(/^\uFEFF/, '')
+    .replace(/\u00A0/g, ' ')
+    .replace(/\*/g, '')
+    .replace(/[:：]+$/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
 }
 
 /** Match file headers to columns by display_name (and fallbacks). */
@@ -22,6 +30,99 @@ export function buildHeaderColumnMap(columns: ColumnConfig[]): Map<string, Colum
     }
   }
   return map
+}
+
+/** Coerce a SheetJS / CSV cell into a stable import string. */
+export function cellToImportString(c: unknown): string {
+  if (c === undefined || c === null) return ''
+  if (c instanceof Date && !Number.isNaN(c.getTime())) {
+    const y = c.getFullYear()
+    const m = String(c.getMonth() + 1).padStart(2, '0')
+    const d = String(c.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+  if (typeof c === 'boolean') return c ? 'TRUE' : 'FALSE'
+  if (typeof c === 'number') return String(c)
+  return String(c).replace(/^\uFEFF/, '').replace(/\u00A0/g, ' ').trim()
+}
+
+/** CSV line split that preserves empty cells between commas. */
+export function parseCsvLine(line: string): string[] {
+  const result: string[] = []
+  let cur = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          cur += '"'
+          i++
+        } else {
+          inQuotes = false
+        }
+      } else {
+        cur += ch
+      }
+    } else if (ch === '"') {
+      inQuotes = true
+    } else if (ch === ',') {
+      result.push(cur.trim())
+      cur = ''
+    } else {
+      cur += ch
+    }
+  }
+  result.push(cur.trim())
+  return result
+}
+
+function padRowToWidth(row: unknown[], width: number): string[] {
+  const out: string[] = new Array(width)
+  for (let i = 0; i < width; i++) out[i] = cellToImportString(row[i])
+  return out
+}
+
+/**
+ * Pick the data sheet from a workbook (prefer Template; skip Configurations Ref).
+ * Uses defval + padding so blank Excel cells do not shift later columns.
+ */
+export function extractWorkbookImportMatrix(
+  workbook: { SheetNames: string[]; Sheets: Record<string, any> },
+  XLSX: { utils: { sheet_to_json: (ws: any, opts?: any) => any } },
+): { headers: string[]; dataRows: string[][] } {
+  const preferred = ['Template', 'Data', 'Support', 'Release', 'Sheet1']
+  const sheetName =
+    preferred.find(n => workbook.SheetNames.includes(n)) ||
+    workbook.SheetNames.find(n => !/config/i.test(n)) ||
+    workbook.SheetNames[0]
+  if (!sheetName) throw new Error('Excel file does not contain any sheets.')
+
+  const worksheet = workbook.Sheets[sheetName]
+  const rawData = XLSX.utils.sheet_to_json(worksheet, {
+    header: 1,
+    defval: '',
+    blankrows: false,
+    raw: true,
+  }) as unknown[][]
+
+  const jsonData = (rawData || []).filter(row =>
+    Array.isArray(row) && row.some(cell => cell !== null && cell !== undefined && cell !== ''),
+  )
+  if (jsonData.length < 2) {
+    throw new Error('The Excel file must contain a header row and at least one data row.')
+  }
+
+  const headerCells = jsonData[0] || []
+  // Use the wider of header length vs any data row so trailing columns aren't dropped
+  let width = headerCells.length
+  for (let i = 1; i < jsonData.length; i++) {
+    if (jsonData[i]?.length > width) width = jsonData[i].length
+  }
+
+  const headers = padRowToWidth(headerCells, width)
+  const dataRows = jsonData.slice(1).map(row => padRowToWidth(row || [], width))
+  return { headers, dataRows }
 }
 
 export function columnsForExport(columns: ColumnConfig[]): ColumnConfig[] {
@@ -145,6 +246,11 @@ export interface ParsedImportRow {
  * Parse one spreadsheet data row against the active column config.
  * Headers are matched to columns by current display names (renames work).
  */
+function isKnownSystemKey(tableKey: DailyReportTableKey, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(emptySystemFields(tableKey), key)
+}
+
+/** Parse one spreadsheet data row against the active column config. */
 export function parseImportRow(
   tableKey: DailyReportTableKey,
   headers: string[],
@@ -162,9 +268,12 @@ export function parseImportRow(
     const raw = rowData[idx]
     const { value, error } = parseCellRaw(col, raw)
     if (error) errors.push(error)
-    if (col.is_system) {
+    // Project-cloned "system" columns are stored as is_system:false, but still
+    // map to daily_* table columns — dual-write so DB row + custom store stay in sync.
+    if (col.is_system || isKnownSystemKey(tableKey, col.internal_key)) {
       systemFields[col.internal_key] = value
-    } else {
+    }
+    if (!col.is_system) {
       customFields[col.internal_key] = value
     }
   })
@@ -172,7 +281,7 @@ export function parseImportRow(
   // Required columns from active config
   for (const col of columns) {
     if (!col.is_required) continue
-    const val = col.is_system
+    const val = (col.is_system || isKnownSystemKey(tableKey, col.internal_key))
       ? systemFields[col.internal_key]
       : customFields[col.internal_key]
     if (val === undefined || val === null || val === '') {

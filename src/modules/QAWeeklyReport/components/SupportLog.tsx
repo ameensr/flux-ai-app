@@ -14,6 +14,7 @@ import { applySupportMapping, supportImportDedupeKey, type MappingEntry } from '
 import {
   applyVisibilityToSchema,
   buildDestinationColumnsFromMapping,
+  ensureAssigneeColumnInSchema,
   hydrateSchemaFromLegacy,
   mergeColumnSchemas,
   orderedVisibleColumns,
@@ -214,7 +215,11 @@ export const SupportLog: React.FC = () => {
         return
       }
 
-      const incomingSchema = buildDestinationColumnsFromMapping('support', columns, mapping, destinationOrder)
+      const incomingSchema = ensureAssigneeColumnInSchema(
+        'support',
+        buildDestinationColumnsFromMapping('support', columns, mapping, destinationOrder),
+        imported.some(r => !!r.assignedQA),
+      )
       // Empty table → schema is exactly the mapping destinations (no leftover default Task ID, etc.).
       // Appending to existing rows → union so prior columns/data stay available.
       const nextSchema = tickets.length === 0

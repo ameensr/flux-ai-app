@@ -20,7 +20,7 @@
 // observes the same data and re-renders the moment any of them changes it.
 import { useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useColumnConfigStore, type CustomValuesMap } from './columnConfigStore'
+import { useColumnConfigStore, isOptionBasedType, type CustomValuesMap } from './columnConfigStore'
 import type { ColumnConfig, DailyReportTableKey } from './types'
 
 export type { CustomValuesMap }
@@ -128,18 +128,38 @@ export function useDynamicColumns(tableKey: DailyReportTableKey, projectId: stri
 
   const getCellValue = useCallback((row: any, col: ColumnConfig): any => {
     if (col.is_system) return row[col.internal_key]
-    return customValues[row.id]?.[col.internal_key] ?? col.default_value ?? ''
+    const custom = customValues[row.id]?.[col.internal_key]
+    if (custom !== undefined && custom !== null && custom !== '') return custom
+    // Project-cloned former system columns may still live on the row object
+    if (Object.prototype.hasOwnProperty.call(row, col.internal_key)) {
+      const rowVal = row[col.internal_key]
+      if (rowVal !== undefined && rowVal !== null && rowVal !== '') return rowVal
+    }
+    return custom ?? col.default_value ?? ''
   }, [customValues])
 
-  // Required-field validation across both system and custom columns.
-  // Returns human-readable messages, e.g. "Description is required."
+  // Required + option validation against the CURRENT column config.
+  // Recomputes on every render so fixing options in Customize Columns clears
+  // import warnings immediately (no refresh required).
   const validateRow = useCallback((row: any): string[] => {
     const errors: string[] = []
     for (const col of columns) {
-      if (!col.is_required) continue
       const val = getCellValue(row, col)
-      if (val === undefined || val === null || val === '') {
+      const empty = val === undefined || val === null || val === ''
+
+      if (col.is_required && empty) {
         errors.push(`${col.display_name} is required.`)
+        continue
+      }
+
+      if (!empty && isOptionBasedType(col.column_type)) {
+        const options = (col.dropdown_options || []).map(o => o.label)
+        if (options.length > 0) {
+          const match = options.find(o => o.toLowerCase() === String(val).toLowerCase())
+          if (!match) {
+            errors.push(`${col.display_name} '${val}' is not configured.`)
+          }
+        }
       }
     }
     return errors

@@ -67,6 +67,41 @@ export function qaReportEligibleColumns(columns: ColumnConfig[]): ColumnConfig[]
   return columns.filter(c => c.include_in_qa_report !== false)
 }
 
+function normalizeGuessToken(raw: string): string {
+  return (raw || '')
+    .toLowerCase()
+    .replace(/^custom_/, '')
+    .replace(/[_/]+/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
+/** DUP columns that represent the tester / QA person name (any common label). */
+export function isQaPersonColumn(col: ColumnConfig): boolean {
+  const key = normalizeGuessToken(col.internal_key)
+  const name = normalizeGuessToken(col.display_name)
+  const aliases = new Set([
+    'qa',
+    'assigned qa',
+    'assignedqa',
+    'assignee',
+    'tester',
+    'tester name',
+    'qa name',
+    'qa engineer',
+    'quality analyst',
+    'test engineer',
+    'tested by',
+    'tested by qa',
+  ])
+  return aliases.has(key) || aliases.has(name)
+}
+
+function qaPersonTargetField(tableKey: DailyReportTableKey): 'assignedQA' | 'assignee' {
+  return tableKey === 'support' ? 'assignedQA' : 'assignee'
+}
+
 // Heuristic auto-mapping used only to pre-fill the mapping modal the first
 // time a project imports (no saved preference yet). Users can change any of
 // these before confirming — this never silently overrides a saved mapping.
@@ -89,6 +124,13 @@ function guessDefaultAction(col: ColumnConfig, tableKey: DailyReportTableKey): M
   if (guessed && has(guessed)) {
     return { dupColumnId: col.id, internalKey: key, action: 'map_existing', targetField: guessed }
   }
+
+  // Renamed / custom labels: "Assignee", "Tester", "Assigned QA", etc.
+  const personTarget = qaPersonTargetField(tableKey)
+  if (has(personTarget) && isQaPersonColumn(col)) {
+    return { dupColumnId: col.id, internalKey: key, action: 'map_existing', targetField: personTarget }
+  }
+
   if (!col.is_system) {
     return { dupColumnId: col.id, internalKey: key, action: 'create_new', targetField: col.display_name }
   }
@@ -233,6 +275,29 @@ function normalizeStatus(rawStatus: string, options: SupportStatus[] | ReleaseSt
   return options[0]
 }
 
+/**
+ * Resolve a DUP cell for Import from DUP.
+ *
+ * Project templates clone org columns with is_system:false, but values for
+ * keys like qa / support_id / description still live on the daily_* row.
+ * True custom columns live in daily_report_custom_field_values.
+ * Prefer non-empty custom, then row — otherwise mapped columns import blank.
+ */
+function resolveDupImportValue(
+  col: ColumnConfig,
+  row: Record<string, any>,
+  customValuesByRow: Record<string, Record<string, any>>,
+): any {
+  const rowVal = row[col.internal_key]
+  const customVal = customValuesByRow[row.id]?.[col.id]
+
+  if (col.is_system) return rowVal
+
+  if (customVal !== undefined && customVal !== null && customVal !== '') return customVal
+  if (rowVal !== undefined && rowVal !== null && rowVal !== '') return rowVal
+  return customVal ?? rowVal ?? ''
+}
+
 export interface ImportResult<T> {
   items: T[]
   // internal_key -> display label, for any columns mapped to "create_new" so
@@ -259,7 +324,7 @@ export async function applySupportMapping(
       const entry = mapping[col.id]
       if (!entry || entry.action === 'skip') continue
 
-      const value = col.is_system ? (row as any)[col.internal_key] : customValuesByRow[row.id]?.[col.id]
+      const value = resolveDupImportValue(col, row as any, customValuesByRow)
 
       // "Create New" always materializes the column (even with an empty
       // value for rows that don't have data yet) so it shows up in the QA
@@ -289,6 +354,24 @@ export async function applySupportMapping(
     if (remarkParts.length > 0) {
       ticket.remarks = [ticket.remarks, ...remarkParts].filter(Boolean).join(' | ')
     }
+
+    // Safety net: if Assigned QA is still empty, pull the tester name from any
+    // QA/Assignee/Tester DUP column that wasn't explicitly skipped or mapped
+    // elsewhere (covers Create New + renamed columns + stale saved mappings).
+    if (!ticket.assignedQA) {
+      for (const col of qaReportEligibleColumns(columns)) {
+        if (!isQaPersonColumn(col)) continue
+        const entry = mapping[col.id]
+        if (entry?.action === 'skip') continue
+        if (entry?.action === 'map_existing' && entry.targetField && entry.targetField !== 'assignedQA') continue
+        const value = resolveDupImportValue(col, row as any, customValuesByRow)
+        if (value !== undefined && value !== null && String(value).trim() !== '') {
+          ticket.assignedQA = String(value).trim()
+          break
+        }
+      }
+    }
+
     // Do NOT auto-copy support_id → taskId. That silently created a duplicate
     // "Task ID" column whenever the user chose Create New for SUPPORT ID.
     // taskId is only filled when explicitly Map-to-Existing → Task ID.
@@ -317,7 +400,7 @@ export async function applyReleaseMapping(
       const entry = mapping[col.id]
       if (!entry || entry.action === 'skip') continue
 
-      const value = col.is_system ? (row as any)[col.internal_key] : customValuesByRow[row.id]?.[col.id]
+      const value = resolveDupImportValue(col, row as any, customValuesByRow)
 
       // "Create New" always materializes the column (even with an empty
       // value for rows that don't have data yet) so it shows up in the QA
@@ -347,6 +430,22 @@ export async function applyReleaseMapping(
     if (remarkParts.length > 0) {
       item.remarks = [item.remarks, ...remarkParts].filter(Boolean).join(' | ')
     }
+
+    // Same safety net as Support: fill Assignee from QA/Tester/Assignee DUP columns.
+    if (!item.assignee) {
+      for (const col of qaReportEligibleColumns(columns)) {
+        if (!isQaPersonColumn(col)) continue
+        const entry = mapping[col.id]
+        if (entry?.action === 'skip') continue
+        if (entry?.action === 'map_existing' && entry.targetField && entry.targetField !== 'assignee') continue
+        const value = resolveDupImportValue(col, row as any, customValuesByRow)
+        if (value !== undefined && value !== null && String(value).trim() !== '') {
+          item.assignee = String(value).trim()
+          break
+        }
+      }
+    }
+
     // Do NOT auto-copy task_id → taskId (same duplicate-column trap as Support).
     return item
   })

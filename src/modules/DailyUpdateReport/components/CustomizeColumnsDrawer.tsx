@@ -188,11 +188,15 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
     }
     setDraftLoading(true)
     try {
-      // Snapshot the project's currently loaded columns (before draft is
-      // replaced below) so we can reuse their ids and clean up anything
-      // that won't exist anymore after the clone.
-      const existingProjectCols = draft.filter(c => c.project_id === projectId && !c.id.startsWith('fallback-'))
-      const existingIdByInternalKey = new Map(existingProjectCols.map(c => [c.internal_key, c.id]))
+      // Prefer DB rows for id reuse — draft may have already removed columns
+      // queued in pendingDeletes, which would otherwise mint new UUIDs and
+      // collide on save with the still-present DB rows.
+      const existingProjectCols = await fetchScopedColumns(tableKey, projectId)
+      const existingIdByInternalKey = new Map(
+        existingProjectCols
+          .filter(c => !c.id.startsWith('fallback-'))
+          .map(c => [c.internal_key, c.id]),
+      )
 
       const orgCols = await fetchScopedColumns(tableKey, null)
       const orgInternalKeys = new Set(orgCols.map(c => c.internal_key))
@@ -206,18 +210,17 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
         dropdown_options: c.dropdown_options.map(o => ({ ...o, id: generateOptionId() })),
       }))
 
-      // Any existing project column whose internal_key isn't part of the
-      // Organization Default (a fully custom field the project added on its
-      // own) is being dropped from the visible draft by this clone — queue
-      // it for deletion too, so it doesn't silently reappear after Save
-      // Configuration just because it disappeared from view.
+      // Drop project-only custom columns that aren't in org default, AND keep
+      // any previously queued deletes that aren't being reused as cloned ids.
       const orphanedCustomIds = existingProjectCols
-        .filter(c => !orgInternalKeys.has(c.internal_key))
+        .filter(c => !c.id.startsWith('fallback-') && !orgInternalKeys.has(c.internal_key))
         .map(c => c.id)
+      const clonedIds = new Set(cloned.map(c => c.id))
+      const stillPending = pendingDeletes.filter(id => !clonedIds.has(id))
 
       setDraft(cloned)
       setIsEmptyProjectSlate(false)
-      setPendingDeletes(orphanedCustomIds)
+      setPendingDeletes([...new Set([...orphanedCustomIds, ...stillPending])])
       toast({
         variant: 'success',
         title: 'Cloned from Organization Default',
@@ -232,6 +235,9 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
 
   const handleScopeChange = (scope: 'organization' | 'project') => {
     if (scope === applyScope) return
+    // Discard queued deletes when switching scope — they belong to the
+    // previous draft and must not delete rows during the other scope's save.
+    setPendingDeletes([])
     setApplyScope(scope)
     setEditingId(null)
     setShowAddForm(false)
@@ -489,36 +495,55 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
     const targetProjectId = targetScope === 'organization' ? null : projectId
 
     // ⚠️ Deletions MUST be processed BEFORE the upsert below, not after.
-    // pendingDeletes commonly contains a column that's being REPLACED by
-    // one of the rows in `draft` — e.g. "Clone from Organization Default"
-    // queues the project's old custom Testing Status column for deletion
-    // while the cloned system Testing Status column (same dashboard_role,
-    // and potentially the same internal_key) is already sitting in `draft`
-    // ready to be inserted. If the old row is still in the database when
-    // the new row is upserted, both rows briefly coexist and collide on the
-    // uq_column_configs_dashboard_role_project / uq_column_configs_project
-    // unique constraints — the insert fails with a 409, and (because
-    // saveColumns upserts the whole batch in one statement) NONE of the
-    // draft's other changes get saved either, even though the UI already
-    // showed a "Column added" toast.
+    // Fail loudly if a delete is blocked — otherwise a later upsert can
+    // collide on unique indexes and roll back the entire batch.
     for (const id of pendingDeletes) {
-      try { await deleteColumn(id) } catch { /* already logged in store */ }
+      await deleteColumn(id)
     }
 
-    // Only reuse a row's id if it already belongs to the exact target scope —
-    // otherwise generate a fresh id so we INSERT a new row instead of
-    // accidentally repointing (and corrupting) the source scope's row.
+    // For project scope, reuse existing DB ids by internal_key so we UPDATE
+    // instead of INSERT-colliding when the draft was cloned from org.
+    let existingByKey = new Map<string, string>()
+    if (targetProjectId) {
+      const existing = await fetchScopedColumns(tableKey, targetProjectId)
+      existingByKey = new Map(
+        existing
+          .filter(c => !c.id.startsWith('fallback-'))
+          .map(c => [c.internal_key, c.id]),
+      )
+    } else {
+      const existing = await fetchScopedColumns(tableKey, null)
+      existingByKey = new Map(
+        existing
+          .filter(c => !c.id.startsWith('fallback-'))
+          .map(c => [c.internal_key, c.id]),
+      )
+    }
+
     const mapped = draft.map((c, i) => {
       const alreadyInTargetScope = c.project_id === targetProjectId && !c.id.startsWith('fallback-')
+      const reusedId = alreadyInTargetScope
+        ? c.id
+        : (existingByKey.get(c.internal_key) ?? crypto.randomUUID())
       return {
         ...c,
-        id: alreadyInTargetScope ? c.id : crypto.randomUUID(),
+        id: reusedId,
         project_id: targetProjectId,
         display_order: i + 1,
       }
     })
 
-    await saveColumns(mapped)
+    // Remove leftover target-scope rows that are no longer in the draft
+    const keepKeys = new Set(mapped.map(c => c.internal_key))
+    for (const [key, id] of existingByKey) {
+      if (!keepKeys.has(key) && !pendingDeletes.includes(id)) {
+        await deleteColumn(id)
+      }
+    }
+
+    if (mapped.length > 0) {
+      await saveColumns(mapped)
+    }
 
     await fetchColumnConfigs(tableKey, projectId || null)
   }
@@ -573,13 +598,10 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
     }
     setSaving(true)
     try {
-      // Same ordering fix as persistDraft above — deletes must happen
-      // before the upsert, or a replaced column (e.g. after "Clone from
-      // Organization Default") can collide with its still-present
-      // predecessor on the internal_key / dashboard_role unique
-      // constraints and fail the entire batch save.
+      // Deletions must succeed before upsert, or unique-key collisions can
+      // fail the entire batch. Do not swallow delete errors.
       for (const id of pendingDeletes) {
-        try { await deleteColumn(id) } catch { /* noop */ }
+        await deleteColumn(id)
       }
       setPendingDeletes([])
       await saveAsProjectTemplate(tableKey, projectId, draft)
@@ -589,7 +611,8 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
       toast({ variant: 'success', title: 'Saved as project template', description: 'This configuration is now saved specifically for the current project.' })
       onSaved?.()
     } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Save failed', description: e?.message || 'Could not save project template.' })
+      const msg = e?.message || e?.details || 'Could not save project template.'
+      toast({ variant: 'destructive', title: 'Save failed', description: msg })
     } finally {
       setSaving(false)
     }

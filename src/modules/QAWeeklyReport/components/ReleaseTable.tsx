@@ -15,6 +15,7 @@ import { applyReleaseMapping, releaseImportDedupeKey, type MappingEntry } from '
 import {
   applyVisibilityToSchema,
   buildDestinationColumnsFromMapping,
+  ensureAssigneeColumnInSchema,
   hydrateSchemaFromLegacy,
   mergeColumnSchemas,
   orderedVisibleColumns,
@@ -220,7 +221,11 @@ export const ReleaseTable: React.FC = () => {
         return
       }
 
-      const incomingSchema = buildDestinationColumnsFromMapping('release', columns, mapping, destinationOrder)
+      const incomingSchema = ensureAssigneeColumnInSchema(
+        'release',
+        buildDestinationColumnsFromMapping('release', columns, mapping, destinationOrder),
+        imported.some(r => !!r.assignee),
+      )
       const nextSchema = items.length === 0
         ? incomingSchema
         : mergeColumnSchemas(columnSchema, incomingSchema)

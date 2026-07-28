@@ -68,6 +68,8 @@ interface DailyReportState {
   fetchReportRows: () => Promise<void>
   setSupportRows: (rows: SupportLogRecord[], forceSync?: boolean) => Promise<void>
   setReleaseRows: (rows: ReleaseTestingRecord[], forceSync?: boolean) => Promise<void>
+  /** Recompute row.errors from the current Customize Columns option lists. */
+  revalidateRowErrors: () => void
   syncRowsToDatabase: () => Promise<void>
   overdueOnlyFilter: boolean
   setOverdueOnlyFilter: (val: boolean) => void
@@ -114,6 +116,13 @@ const getColumnOptionValues = (tableKey: 'support' | 'release', internalKey: str
 // values are now validated against each system column's own dropdown_options
 // (Customize Columns drawer) instead of the centralized
 // daily_report_dropdown_configs table — see migration 057.
+const applyRowErrors = <T extends object>(row: T, rowErrors: string[]): T => {
+  const next = { ...row } as T & { errors?: string[] }
+  if (rowErrors.length > 0) next.errors = rowErrors
+  else delete next.errors
+  return next
+}
+
 const validateSupportRow = (row: SupportLogRecord): SupportLogRecord => {
   const rowErrors: string[] = []
 
@@ -139,11 +148,7 @@ const validateSupportRow = (row: SupportLogRecord): SupportLogRecord => {
     rowErrors.push(`Issue Source '${row.issue_source}' is not configured.`)
   }
 
-  if (rowErrors.length > 0) {
-    return { ...row, errors: rowErrors } as any
-  }
-
-  return row
+  return applyRowErrors(row, rowErrors)
 }
 
 const validateReleaseRow = (row: ReleaseTestingRecord): ReleaseTestingRecord => {
@@ -163,11 +168,7 @@ const validateReleaseRow = (row: ReleaseTestingRecord): ReleaseTestingRecord => 
     rowErrors.push(`Smoke Status '${row.smoke_testing_status}' is not configured.`)
   }
 
-  if (rowErrors.length > 0) {
-    return { ...row, errors: rowErrors } as any
-  }
-
-  return row
+  return applyRowErrors(row, rowErrors)
 }
 
 export const useDailyReportStore = create<DailyReportState>((set, get) => ({
@@ -757,6 +758,16 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
       syncTimeout = setTimeout(() => {
         get().syncRowsToDatabase()
       }, 3000)
+    }
+  },
+
+  revalidateRowErrors: () => {
+    const supportRows = get().supportRows.map(validateSupportRow)
+    const releaseRows = get().releaseRows.map(validateReleaseRow)
+    set({ supportRows, releaseRows })
+    if (!get().isProjectViewer) {
+      localStorage.setItem('flux-daily-support-rows', JSON.stringify(supportRows))
+      localStorage.setItem('flux-daily-release-rows', JSON.stringify(releaseRows))
     }
   },
 

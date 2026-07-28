@@ -17,8 +17,10 @@ import {
   columnsForPaste,
   columnsForTemplate,
   emptyReleaseSystemFields,
+  extractWorkbookImportMatrix,
   formatExportCell,
   normalizeHeader,
+  parseCsvLine,
   parseImportRow,
   sampleValueForColumn,
 } from '../importExportUtils'
@@ -36,6 +38,7 @@ export const ReleaseTestingStatus: React.FC = () => {
     isProjectViewer,
     selectedProjectId,
     projects,
+    revalidateRowErrors,
   } = useDailyReportStore()
 
   const { can } = usePermissions()
@@ -387,21 +390,11 @@ export const ReleaseTestingStatus: React.FC = () => {
       reader.onload = async (evt) => {
         try {
           const data = evt.target?.result as ArrayBuffer
-if (!data) throw new Error('Could not read file contents.')
+          if (!data) throw new Error('Could not read file contents.')
           const XLSX = await import('xlsx')
 
-          const workbook = XLSX.read(new Uint8Array(data), { type: 'array' })
-          const firstSheetName = workbook.SheetNames[0]
-          if (!firstSheetName) throw new Error('Excel file does not contain any sheets.')
-          const worksheet = workbook.Sheets[firstSheetName]
-          const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
-          const jsonData = rawData.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== ''))
-          if (jsonData.length < 2) {
-            alert('The Excel file must contain a header row and at least one data row.')
-            return
-          }
-          const headers = jsonData[0].map((h: any) => (h ? h.toString().trim() : ''))
-          const dataRows = jsonData.slice(1).map(row => row.map((c: any) => (c !== undefined && c !== null ? c.toString() : '')))
+          const workbook = XLSX.read(new Uint8Array(data), { type: 'array', cellDates: true })
+          const { headers, dataRows } = extractWorkbookImportMatrix(workbook, XLSX)
           await finishWithRows(headers, dataRows)
         } catch (error: any) {
           alert(`Failed to import Excel file: ${error?.message || error || 'Unknown error'}`)
@@ -414,16 +407,17 @@ if (!data) throw new Error('Could not read file contents.')
       reader.onload = async (evt) => {
         try {
           const text = evt.target?.result as string
-          const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+          const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).map(l => l.trim()).filter(Boolean)
           if (lines.length < 2) {
             alert('The CSV file must contain a header row and at least one data row.')
             return
           }
-          const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim())
-          const dataRows = lines.slice(1).map(line =>
-            (line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(','))
-              .map(val => val.replace(/^"|"$/g, '').trim())
-          )
+          const headers = parseCsvLine(lines[0])
+          const dataRows = lines.slice(1).map(line => {
+            const cells = parseCsvLine(line)
+            while (cells.length < headers.length) cells.push('')
+            return cells.slice(0, Math.max(headers.length, cells.length))
+          })
           await finishWithRows(headers, dataRows)
         } catch (error: any) {
           alert(`Failed to import CSV file: ${error?.message || error}`)
@@ -884,9 +878,7 @@ if (format === 'xlsx') {
           <tbody>
             {filteredRows.map((row, idx) => {
               const isSelected = selectedIds.has(row.id)
-              const importErrors: string[] = (row as any).errors || []
-              const requiredErrors = dyn.validateRow(row)
-              const allErrors = [...importErrors, ...requiredErrors]
+              const allErrors = dyn.validateRow(row)
               const hasErrors = allErrors.length > 0
               const isEvenRow = idx % 2 === 0
 
@@ -990,6 +982,7 @@ if (format === 'xlsx') {
         tableKey="release"
         projectId={selectedProjectId}
         projectName={currentProject?.project_name}
+        onSaved={() => revalidateRowErrors()}
       />
 
       {/* Dashboard Metrics Modal */}
