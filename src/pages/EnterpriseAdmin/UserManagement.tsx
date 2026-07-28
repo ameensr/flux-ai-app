@@ -7,15 +7,24 @@ import { useToast } from '@/hooks/use-toast'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { cn } from '@/lib/utils'
 import {
-  Users, Search, RefreshCw, MoreVertical, Eye, Edit2,
+  Users, Search, RefreshCw, MoreVertical, Eye, EyeOff, Edit2,
   KeyRound, UserCog, UserX, Trash2, UserCheck, ChevronUp, ChevronDown, Clock, Save, X,
-  AlertTriangle, FolderKanban, FileText, Loader2, ShieldAlert,
+  AlertTriangle, FolderKanban, FileText, Loader2, ShieldAlert, Check, Mail,
 } from 'lucide-react'
 import type { EnterpriseUser, EnterpriseRole, Department, Plan, UserStatus } from './types'
 import { STATUS_CONFIG, PLAN_CONFIG } from './types'
+import { useAppStore } from '@/store/useAppStore'
 
 type SortKey = 'full_name' | 'email' | 'role' | 'status' | 'created_at' | 'last_login_at'
 type SortDir = 'asc' | 'desc'
+
+const ADMIN_PASSWORD_RULES = [
+  { id: 'length', label: 'At least 8 characters', test: (p: string) => p.length >= 8 },
+  { id: 'upper', label: 'One uppercase letter', test: (p: string) => /[A-Z]/.test(p) },
+  { id: 'lower', label: 'One lowercase letter', test: (p: string) => /[a-z]/.test(p) },
+  { id: 'number', label: 'One number', test: (p: string) => /\d/.test(p) },
+  { id: 'special', label: 'One special character', test: (p: string) => /[!@#$%^&*(),.?":{}|<>_\-+=[\]\\\/~`]/.test(p) },
+]
 
 function Avatar({ user }: { user: EnterpriseUser }) {
   const initials = (user.full_name || user.email).slice(0, 2).toUpperCase()
@@ -36,14 +45,27 @@ function StatusBadge({ status }: { status: UserStatus }) {
   )
 }
 
-function ActionMenu({ user, onAction }: { user: EnterpriseUser; onAction: (action: string, user: EnterpriseUser) => void }) {
+function ActionMenu({
+  user,
+  onAction,
+  canManagePasswords,
+}: {
+  user: EnterpriseUser
+  onAction: (action: string, user: EnterpriseUser) => void
+  canManagePasswords: boolean
+}) {
   const [open, setOpen] = useState(false)
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; dropUp: boolean }>({ top: 0, left: 0, dropUp: false })
   const buttonRef = React.useRef<HTMLButtonElement>(null)
 
   const actions = [
     { id: 'change_role', label: 'Change Role', icon: UserCog },
-    { id: 'reset_password', label: 'Reset Password', icon: KeyRound },
+    ...(canManagePasswords
+      ? [
+          { id: 'change_password', label: 'Change Password', icon: KeyRound },
+          { id: 'reset_password', label: 'Reset Password', icon: Mail },
+        ]
+      : []),
     { id: 'change_status', label: user.status === 'active' ? 'Disable User' : 'Enable User', icon: user.status === 'active' ? UserX : UserCheck },
     { id: 'delete', label: 'Delete User', icon: Trash2, danger: true },
   ]
@@ -52,9 +74,9 @@ function ActionMenu({ user, onAction }: { user: EnterpriseUser; onAction: (actio
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect()
       const spaceBelow = window.innerHeight - rect.bottom
-      const dropUp = spaceBelow < 200
+      const dropUp = spaceBelow < 240
       setMenuPos({
-        top: dropUp ? rect.top - 170 : rect.bottom + 4,
+        top: dropUp ? rect.top - 220 : rect.bottom + 4,
         left: rect.right - 192, // 192 = w-48 (12rem)
         dropUp,
       })
@@ -442,6 +464,340 @@ function DeleteUserModal({
   )
 }
 
+// ── Change Password Modal (admin / super_admin) ───────────────────────────────
+
+function ChangePasswordModal({
+  user,
+  onClose,
+}: {
+  user: EnterpriseUser
+  onClose: () => void
+}) {
+  useBodyScrollLock(true)
+  const { toast } = useToast()
+  const actorRole = useAppStore(s => s.role)
+
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [step, setStep] = useState<'form' | 'confirm'>('form')
+  const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<{ password?: string; confirm?: string }>({})
+
+  const allRulesPassed = useMemo(
+    () => ADMIN_PASSWORD_RULES.every(r => r.test(password)),
+    [password],
+  )
+
+  const canProceed = allRulesPassed && password === confirm && password.length > 0
+
+  const validate = () => {
+    const next: { password?: string; confirm?: string } = {}
+    if (!allRulesPassed) next.password = 'Password does not meet requirements'
+    if (password !== confirm) next.confirm = 'Passwords do not match'
+    setErrors(next)
+    return Object.keys(next).length === 0
+  }
+
+  const handleContinue = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!validate()) return
+    setStep('confirm')
+  }
+
+  const handleConfirmChange = async () => {
+    if (!canProceed || saving) return
+
+    // Client-side privilege mirror of edge rules
+    if (user.role === 'super_admin' && actorRole !== 'super_admin') {
+      toast({
+        variant: 'destructive',
+        title: 'Not allowed',
+        description: 'Only a Super Admin can change a Super Admin password.',
+      })
+      return
+    }
+
+    setSaving(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('Your session has expired. Please refresh the page or sign in again.')
+      }
+      const resp = await fetch(
+        `${SUPABASE_URL}/functions/v1/admin-permissions?action=change_user_password`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ user_id: user.id, password }),
+        },
+      )
+      const result = await resp.json()
+      if (!resp.ok) throw new Error(result.error ?? 'Failed to change password')
+
+      toast({
+        title: 'Password Updated',
+        description: `Password changed for ${user.full_name || user.email}.`,
+      })
+      onClose()
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Failed to change password', description: e.message })
+      setStep('form')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'var(--overlay)' }}
+      onClick={saving ? undefined : onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 16 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 16 }}
+        transition={{ duration: 0.2 }}
+        onClick={e => e.stopPropagation()}
+        className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden"
+        style={{ backgroundColor: 'var(--surface-elevated)', borderColor: 'var(--border)' }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="change-password-title"
+      >
+        <div className="p-6 pb-4">
+          <div className="flex items-start gap-3 mb-4">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: 'color-mix(in srgb, var(--accent) 14%, transparent)' }}
+            >
+              <KeyRound className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3
+                id="change-password-title"
+                className="text-base font-bold"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                {step === 'form' ? 'Change Password' : 'Confirm Password Change'}
+              </h3>
+              <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+                {user.full_name || user.email}
+                {user.full_name ? ` · ${user.email}` : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="p-1.5 rounded-lg transition-all disabled:opacity-50"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {step === 'form' ? (
+            <form onSubmit={handleContinue} className="space-y-4">
+              <div
+                className="rounded-xl px-3 py-2.5 text-xs leading-relaxed"
+                style={{
+                  background: 'color-mix(in srgb, var(--accent) 8%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Set a new password for this user. They can sign in with it immediately. Available to Super Admin and Admin only.
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  New password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => { setPassword(e.target.value); setErrors({}) }}
+                    autoComplete="new-password"
+                    className="w-full rounded-xl px-3 py-2.5 pr-10 text-sm outline-none border"
+                    style={{
+                      background: 'var(--input-bg)',
+                      borderColor: errors.password ? 'rgba(239,68,68,0.45)' : 'var(--border)',
+                      color: 'var(--text-primary)',
+                    }}
+                    placeholder="Enter new password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1"
+                    style={{ color: 'var(--text-muted)' }}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-[11px] text-red-400">{errors.password}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  Confirm password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirm ? 'text' : 'password'}
+                    value={confirm}
+                    onChange={e => { setConfirm(e.target.value); setErrors({}) }}
+                    autoComplete="new-password"
+                    className="w-full rounded-xl px-3 py-2.5 pr-10 text-sm outline-none border"
+                    style={{
+                      background: 'var(--input-bg)',
+                      borderColor: errors.confirm ? 'rgba(239,68,68,0.45)' : 'var(--border)',
+                      color: 'var(--text-primary)',
+                    }}
+                    placeholder="Re-enter new password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1"
+                    style={{ color: 'var(--text-muted)' }}
+                    aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {errors.confirm && (
+                  <p className="text-[11px] text-red-400">{errors.confirm}</p>
+                )}
+              </div>
+
+              {password && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {ADMIN_PASSWORD_RULES.map(rule => {
+                    const passed = rule.test(password)
+                    return (
+                      <div key={rule.id} className="flex items-center gap-2">
+                        {passed
+                          ? <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          : <X className="w-3.5 h-3.5 text-red-400" />}
+                        <span
+                          className="text-[11px]"
+                          style={{ color: passed ? 'var(--text-secondary)' : 'var(--text-muted)' }}
+                        >
+                          {rule.label}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </form>
+          ) : (
+            <div className="space-y-3">
+              <div
+                className="rounded-xl px-3 py-3 text-xs leading-relaxed flex items-start gap-2.5"
+                style={{
+                  background: 'rgba(245,158,11,0.08)',
+                  border: '1px solid rgba(245,158,11,0.25)',
+                  color: '#fbbf24',
+                }}
+              >
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  You are about to permanently change the login password for{' '}
+                  <strong style={{ color: 'var(--text-primary)' }}>
+                    {user.full_name || user.email}
+                  </strong>
+                  . Their current password will stop working immediately.
+                </span>
+              </div>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Share the new password with the user through a secure channel. This action cannot be undone.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div
+          className="flex gap-2 px-6 py-4"
+          style={{ borderTop: '1px solid var(--border)', background: 'var(--hover)' }}
+        >
+          {step === 'form' ? (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-2.5 rounded-xl text-xs font-medium transition hover:opacity-80"
+                style={{
+                  background: 'var(--surface-elevated)',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleContinue}
+                disabled={!canProceed}
+                className="flex-1 py-2.5 rounded-xl text-xs font-semibold transition hover:opacity-90 flex items-center justify-center gap-1.5 disabled:opacity-40"
+                style={{
+                  background: 'var(--accent)',
+                  color: 'var(--accent-fg)',
+                }}
+              >
+                Continue
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setStep('form')}
+                disabled={saving}
+                className="flex-1 py-2.5 rounded-xl text-xs font-medium transition hover:opacity-80 disabled:opacity-50"
+                style={{
+                  background: 'var(--surface-elevated)',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmChange}
+                disabled={saving}
+                className="flex-1 py-2.5 rounded-xl text-xs font-semibold transition hover:opacity-90 flex items-center justify-center gap-1.5 disabled:opacity-60"
+                style={{
+                  background: 'var(--accent)',
+                  color: 'var(--accent-fg)',
+                }}
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                {saving ? 'Updating…' : 'Confirm Change'}
+              </button>
+            </>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // ── Change Role Modal ─────────────────────────────────────────────────────────
 function ChangeRoleModal({
   user,
@@ -584,6 +940,8 @@ function ChangeRoleModal({
 // ── Main Component ────────────────────────────────────────────────────────────
 export function UserManagement() {
   const { toast } = useToast()
+  const actorRole = useAppStore(s => s.role)
+  const canManagePasswords = actorRole === 'admin' || actorRole === 'super_admin'
   const [users, setUsers] = useState<EnterpriseUser[]>([])
   const [roles, setRoles] = useState<EnterpriseRole[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
@@ -600,6 +958,7 @@ export function UserManagement() {
   // Change role modal state
   const [roleModalUser, setRoleModalUser] = useState<EnterpriseUser | null>(null)
   const [deleteModalUser, setDeleteModalUser] = useState<EnterpriseUser | null>(null)
+  const [passwordModalUser, setPasswordModalUser] = useState<EnterpriseUser | null>(null)
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -687,10 +1046,43 @@ export function UserManagement() {
       }
     } else if (action === 'delete') {
       setDeleteModalUser(user)
+    } else if (action === 'change_password') {
+      if (!canManagePasswords) {
+        toast({
+          variant: 'destructive',
+          title: 'Not allowed',
+          description: 'Only Super Admin and Admin can change user passwords.',
+        })
+        return
+      }
+      if (user.role === 'super_admin' && actorRole !== 'super_admin') {
+        toast({
+          variant: 'destructive',
+          title: 'Not allowed',
+          description: 'Only a Super Admin can change a Super Admin password.',
+        })
+        return
+      }
+      setPasswordModalUser(user)
     } else if (action === 'reset_password') {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email)
-      if (error) { toast({ variant: 'destructive', title: 'Failed', description: error.message }); return }
-      toast({ title: 'Password Reset Email Sent', description: user.email })
+      if (!canManagePasswords) {
+        toast({
+          variant: 'destructive',
+          title: 'Not allowed',
+          description: 'Only Super Admin and Admin can send password reset emails.',
+        })
+        return
+      }
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(user.email)
+        if (error) throw error
+        toast({
+          title: 'Password Reset Email Sent',
+          description: `A reset link was sent to ${user.email}.`,
+        })
+      } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Failed to send reset email', description: e.message })
+      }
     }
   }
 
@@ -882,7 +1274,11 @@ export function UserManagement() {
                           : 'Never'}
                       </td>
                       <td className="py-4 text-right">
-                        <ActionMenu user={user} onAction={handleAction} />
+                        <ActionMenu
+                          user={user}
+                          onAction={handleAction}
+                          canManagePasswords={canManagePasswords}
+                        />
                       </td>
                     </motion.tr>
                   ))}
@@ -936,6 +1332,16 @@ export function UserManagement() {
             user={deleteModalUser}
             onClose={() => setDeleteModalUser(null)}
             onDeleted={(userId) => setUsers(prev => prev.filter(u => u.id !== userId))}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Change Password Modal — Super Admin / Admin only */}
+      <AnimatePresence>
+        {passwordModalUser && (
+          <ChangePasswordModal
+            user={passwordModalUser}
+            onClose={() => setPasswordModalUser(null)}
           />
         )}
       </AnimatePresence>

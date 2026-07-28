@@ -10,6 +10,7 @@ import {
   LOGOUT_SIGNAL_KEY,
 } from '@/lib/idleConfig'
 import { bindIdleOperationRegistrar } from '@/lib/idleOperations'
+import { NAME_GATE_SNOOZE_KEY } from '@/lib/nameGateSnooze'
 import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/store/useAppStore'
 
@@ -99,21 +100,27 @@ export function useIdleTimeout(): UseIdleTimeoutReturn {
       await supabase.auth.signOut()
     } catch { /* best effort */ }
 
-    // Clear all session/local storage data (except theme preference)
+    // Clear all session/local storage data (except theme + name-gate snooze)
     try {
       const themeKey = 'qaly-theme'
       const themeValue = localStorage.getItem(themeKey)
+      const snoozeValue = localStorage.getItem(NAME_GATE_SNOOZE_KEY)
       sessionStorage.clear()
-      // Selective localStorage clear: remove session keys, keep theme
       const keysToRemove: string[] = []
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
-        if (key && key !== themeKey && key !== LOGOUT_SIGNAL_KEY) {
+        if (
+          key &&
+          key !== themeKey &&
+          key !== LOGOUT_SIGNAL_KEY &&
+          key !== NAME_GATE_SNOOZE_KEY
+        ) {
           keysToRemove.push(key)
         }
       }
       keysToRemove.forEach((k) => localStorage.removeItem(k))
       if (themeValue) localStorage.setItem(themeKey, themeValue)
+      if (snoozeValue) localStorage.setItem(NAME_GATE_SNOOZE_KEY, snoozeValue)
     } catch { /* best effort */ }
 
     // Flash message survives the hard redirect (storage was just cleared)

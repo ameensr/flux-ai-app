@@ -1125,13 +1125,15 @@ create policy "Admins can view all login events" on public.login_events for sele
   exists (select 1 from public.profiles where profiles.id = auth.uid() and profiles.role in ('admin', 'super_admin'))
 );
 
--- List concurrent auth sessions for Active Sessions UI (067)
+-- List concurrent auth sessions for Active Sessions UI (067 / 069 / 070)
+drop function if exists public.list_my_sessions();
+
 create or replace function public.list_my_sessions()
 returns table (
   id uuid,
-  created_at timestamptz,
-  updated_at timestamptz,
-  refreshed_at timestamptz,
+  created_at text,
+  updated_at text,
+  refreshed_at text,
   user_agent text,
   ip text,
   is_current boolean
@@ -1144,21 +1146,23 @@ as $$
 declare
   v_uid uuid := auth.uid();
   v_sid uuid;
-  v_claims jsonb;
 begin
   if v_uid is null then
     return;
   end if;
 
   begin
-    v_claims := nullif(current_setting('request.jwt.claims', true), '')::jsonb;
+    v_sid := nullif(auth.jwt() ->> 'session_id', '')::uuid;
   exception when others then
-    v_claims := null;
+    v_sid := null;
   end;
 
-  if v_claims is not null then
+  if v_sid is null then
     begin
-      v_sid := nullif(v_claims ->> 'session_id', '')::uuid;
+      v_sid := nullif(
+        (nullif(current_setting('request.jwt.claims', true), '')::jsonb) ->> 'session_id',
+        ''
+      )::uuid;
     exception when others then
       v_sid := null;
     end;
@@ -1167,20 +1171,104 @@ begin
   return query
   select
     s.id,
-    s.created_at,
-    s.updated_at,
-    s.refreshed_at,
-    s.user_agent,
-    s.ip::text as ip,
-    (v_sid is not null and s.id = v_sid) as is_current
-  from auth.sessions s
+    s.created_at::text,
+    s.updated_at::text,
+    s.refreshed_at::text,
+    coalesce(s.user_agent::text, ''),
+    case when s.ip is null then null else s.ip::text end,
+    (v_sid is not null and s.id = v_sid)
+  from auth.sessions as s
   where s.user_id = v_uid
-  order by coalesce(s.refreshed_at, s.updated_at, s.created_at) desc;
+  order by coalesce(s.refreshed_at, s.updated_at, s.created_at) desc nulls last;
 end;
 $$;
 
 revoke all on function public.list_my_sessions() from public;
 grant execute on function public.list_my_sessions() to authenticated;
+
+-- Revoke all other sessions for caller (071) — Sign Out All Other Devices
+create or replace function public.revoke_my_other_sessions(
+  p_current_session_id uuid default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_sid uuid;
+  v_deleted int := 0;
+  v_revoked int := 0;
+begin
+  if v_uid is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  v_sid := p_current_session_id;
+
+  if v_sid is null then
+    begin
+      v_sid := nullif(auth.jwt() ->> 'session_id', '')::uuid;
+    exception when others then
+      v_sid := null;
+    end;
+  end if;
+
+  if v_sid is null then
+    begin
+      v_sid := nullif(
+        (nullif(current_setting('request.jwt.claims', true), '')::jsonb) ->> 'session_id',
+        ''
+      )::uuid;
+    exception when others then
+      v_sid := null;
+    end;
+  end if;
+
+  if v_sid is null then
+    raise exception 'Could not determine current session id';
+  end if;
+
+  if not exists (
+    select 1 from auth.sessions s
+    where s.id = v_sid and s.user_id = v_uid
+  ) then
+    raise exception 'Current session not found for this user';
+  end if;
+
+  begin
+    update auth.refresh_tokens rt
+    set revoked = true, updated_at = now()
+    where rt.session_id is not null
+      and rt.session_id <> v_sid
+      and rt.session_id in (
+        select s.id from auth.sessions s
+        where s.user_id = v_uid and s.id <> v_sid
+      )
+      and coalesce(rt.revoked, false) = false;
+    get diagnostics v_revoked = row_count;
+  exception when others then
+    v_revoked := 0;
+  end;
+
+  delete from auth.sessions s
+  where s.user_id = v_uid
+    and s.id <> v_sid;
+
+  get diagnostics v_deleted = row_count;
+
+  return jsonb_build_object(
+    'success', true,
+    'revoked_sessions', v_deleted,
+    'revoked_refresh_tokens', v_revoked,
+    'kept_session_id', v_sid
+  );
+end;
+$$;
+
+revoke all on function public.revoke_my_other_sessions(uuid) from public;
+grant execute on function public.revoke_my_other_sessions(uuid) to authenticated;
 
 -- Prepare hard-delete of a user (068) — used by admin-permissions edge function
 create or replace function public.admin_prepare_user_deletion(

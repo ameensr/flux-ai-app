@@ -4,7 +4,7 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import {
   Lock, Eye, EyeOff, Check, X, Shield, ShieldCheck, ShieldAlert,
   Smartphone, Monitor, Globe, Clock, LogOut, AlertTriangle, Loader2,
-  KeyRound, Fingerprint, Activity
+  KeyRound, Fingerprint, Activity, RefreshCw
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
@@ -190,6 +190,7 @@ type DisplaySession = {
   device: string
   deviceType: 'monitor' | 'smartphone'
   time: string
+  locationHint: string | null
   current: boolean
 }
 
@@ -203,13 +204,13 @@ function parseDeviceFromUA(ua: string | null | undefined): {
   let browser = 'Browser'
   if (value.includes('Edg')) browser = 'Edge'
   else if (value.includes('OPR') || value.includes('Opera')) browser = 'Opera'
-  else if (value.includes('Chrome') && !value.includes('Edg')) browser = 'Chrome'
+  else if (value.includes('Chrome') && !value.includes('Edg') && !value.includes('OPR')) browser = 'Chrome'
   else if (value.includes('Firefox')) browser = 'Firefox'
-  else if (value.includes('Safari')) browser = 'Safari'
+  else if (value.includes('Safari') && !value.includes('Chrome')) browser = 'Safari'
 
   let os = 'Device'
   if (value.includes('Windows')) os = 'Windows'
-  else if (value.includes('Mac')) os = 'macOS'
+  else if (value.includes('Mac OS') || value.includes('Macintosh')) os = 'macOS'
   else if (value.includes('Android')) os = 'Android'
   else if (value.includes('iPhone') || value.includes('iPad')) os = 'iOS'
   else if (value.includes('Linux')) os = 'Linux'
@@ -217,7 +218,7 @@ function parseDeviceFromUA(ua: string | null | undefined): {
   const deviceType: 'monitor' | 'smartphone' =
     /Android|iPhone|iPad|Mobile/i.test(value) ? 'smartphone' : 'monitor'
 
-  if (!value) return { device: 'Unknown device', deviceType: 'monitor' }
+  if (!value.trim()) return { device: 'Unknown device', deviceType: 'monitor' }
   return { device: `${browser} • ${os}`, deviceType }
 }
 
@@ -239,6 +240,20 @@ function formatSessionTime(iso: string | null | undefined): string {
   }
 }
 
+/** Read session_id claim from the access token (backup when RPC is_current is false). */
+function getJwtSessionId(accessToken: string | undefined | null): string | null {
+  if (!accessToken) return null
+  try {
+    const parts = accessToken.split('.')
+    if (parts.length < 2) return null
+    const json = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
+    const payload = JSON.parse(json) as { session_id?: string }
+    return payload.session_id || null
+  } catch {
+    return null
+  }
+}
+
 function getCurrentDeviceFallback(): DisplaySession {
   const { device, deviceType } = parseDeviceFromUA(
     typeof navigator !== 'undefined' ? navigator.userAgent : ''
@@ -248,6 +263,7 @@ function getCurrentDeviceFallback(): DisplaySession {
     device,
     deviceType,
     time: 'This device · Current session',
+    locationHint: null,
     current: true,
   }
 }
@@ -255,12 +271,14 @@ function getCurrentDeviceFallback(): DisplaySession {
 const ActiveSessions = () => {
   const [sessions, setSessions] = useState<DisplaySession[]>([getCurrentDeviceFallback()])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [signingOutAll, setSigningOutAll] = useState(false)
   useBodyScrollLock(showConfirm)
 
   const loadSessions = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       window.localStorage.removeItem(LEGACY_SESSION_STORAGE_KEY)
     } catch {
@@ -268,8 +286,16 @@ const ActiveSessions = () => {
     }
 
     try {
-      const { data, error } = await supabase.rpc('list_my_sessions')
-      if (error) throw error
+      const [{ data, error }, { data: authData }] = await Promise.all([
+        supabase.rpc('list_my_sessions'),
+        supabase.auth.getSession(),
+      ])
+      if (error) {
+        throw new Error(
+          [error.message, error.details, error.hint, error.code].filter(Boolean).join(' — ') ||
+            'Could not load sessions'
+        )
+      }
 
       const rows = (data || []) as AuthSessionRow[]
       if (rows.length === 0) {
@@ -277,31 +303,51 @@ const ActiveSessions = () => {
         return
       }
 
+      const jwtSid =
+        getJwtSessionId(authData.session?.access_token) ||
+        rows.find((r) => r.is_current)?.id ||
+        null
+
       const currentUA = typeof navigator !== 'undefined' ? navigator.userAgent : ''
-      const jwtCurrentId = rows.find((r) => r.is_current)?.id
       const uaFallbackId =
-        !jwtCurrentId && currentUA
-          ? rows.find((r) => r.user_agent === currentUA)?.id
+        !jwtSid && currentUA
+          ? rows.find((r) => (r.user_agent || '') === currentUA)?.id
           : undefined
-      const currentId = jwtCurrentId || uaFallbackId || rows[0]?.id
+      const currentId = jwtSid || uaFallbackId || rows[0]?.id
+
+      const labelCounts = new Map<string, number>()
+      for (const row of rows) {
+        const label = parseDeviceFromUA(row.user_agent).device
+        labelCounts.set(label, (labelCounts.get(label) || 0) + 1)
+      }
 
       const mapped: DisplaySession[] = rows.map((row) => {
         const parsed = parseDeviceFromUA(row.user_agent)
         const isCurrent = row.id === currentId
+        const needsSuffix = (labelCounts.get(parsed.device) || 0) > 1
+        const shortId = row.id.slice(0, 6)
         return {
           id: row.id,
-          device: parsed.device,
+          device: needsSuffix ? `${parsed.device} · ${shortId}` : parsed.device,
           deviceType: parsed.deviceType,
           time: isCurrent
             ? 'This device · Current session'
             : formatSessionTime(row.refreshed_at || row.updated_at || row.created_at),
+          locationHint: row.ip || null,
           current: isCurrent,
         }
       })
 
+      mapped.sort((a, b) => Number(b.current) - Number(a.current))
       setSessions(mapped)
-    } catch (err) {
+    } catch (err: unknown) {
+      let msg = 'Could not load sessions'
+      if (err instanceof Error && err.message) msg = err.message
+      else if (err && typeof err === 'object' && 'message' in err && (err as { message?: string }).message) {
+        msg = String((err as { message: string }).message)
+      }
       console.warn('[ActiveSessions] list_my_sessions failed:', err)
+      setLoadError(msg)
       setSessions([getCurrentDeviceFallback()])
     } finally {
       setLoading(false)
@@ -312,19 +358,66 @@ const ActiveSessions = () => {
     loadSessions()
   }, [loadSessions])
 
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadSessions()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
+  }, [loadSessions])
+
   const handleSignOutAll = async () => {
     setSigningOutAll(true)
     try {
-      const { error } = await supabase.auth.signOut({ scope: 'others' })
-      if (error) throw error
+      const { data: authData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      const currentSid = getJwtSessionId(authData.session?.access_token)
+      if (!currentSid) {
+        throw new Error('Could not identify this device session. Refresh the page and try again.')
+      }
+
+      // Hard-delete other auth.sessions (+ revoke their refresh tokens)
+      const { data: result, error: rpcError } = await supabase.rpc('revoke_my_other_sessions', {
+        p_current_session_id: currentSid,
+      })
+      if (rpcError) {
+        throw new Error(
+          [rpcError.message, rpcError.details, rpcError.hint, rpcError.code]
+            .filter(Boolean)
+            .join(' — ') || 'Failed to revoke other sessions'
+        )
+      }
+
+      // Also ask GoTrue to drop other sessions (best-effort; RPC is source of truth for UI)
+      const { error: signOutError } = await supabase.auth.signOut({ scope: 'others' })
+      if (signOutError) {
+        console.warn('[ActiveSessions] signOut(others) warning:', signOutError.message)
+      }
+
+      const revoked =
+        result && typeof result === 'object' && 'revoked_sessions' in result
+          ? Number((result as { revoked_sessions?: number }).revoked_sessions) || 0
+          : 0
+
       toast({
         title: 'Signed out all other devices',
-        description: 'Other sessions have been terminated. You remain signed in here.',
+        description:
+          revoked > 0
+            ? `${revoked} other ${revoked === 1 ? 'session was' : 'sessions were'} terminated. You remain signed in here.`
+            : 'Other sessions have been terminated. You remain signed in here.',
       })
       setShowConfirm(false)
       await loadSessions()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Something went wrong.'
+      let msg = 'Something went wrong.'
+      if (err instanceof Error && err.message) msg = err.message
+      else if (err && typeof err === 'object' && 'message' in err) {
+        msg = String((err as { message: string }).message)
+      }
       toast({ title: 'Could not sign out other devices', description: msg, variant: 'destructive' })
     } finally {
       setSigningOutAll(false)
@@ -335,17 +428,39 @@ const ActiveSessions = () => {
 
   return (
     <GlassCard hoverEffect={false}>
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
-          <Globe className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(99,102,241,0.1)' }}>
+            <Globe className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Active Sessions</h2>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Devices currently signed in to your account.
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Active Sessions</h2>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Devices currently signed in to your account.
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={() => loadSessions()}
+          disabled={loading}
+          className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-40"
+          style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+          aria-label="Refresh sessions"
+          title="Refresh"
+        >
+          <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+        </button>
       </div>
+
+      {loadError && (
+        <p
+          className="mb-3 text-[11px] leading-relaxed rounded-lg px-3 py-2"
+          style={{ background: 'rgba(239,68,68,0.06)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.15)' }}
+        >
+          Could not load all sessions ({loadError}). Showing this device only — apply migration 070 if this persists.
+        </p>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-6">
@@ -367,8 +482,9 @@ const ActiveSessions = () => {
                     <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
                       {session.device}
                     </p>
-                    <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
                       {session.time}
+                      {session.locationHint ? ` · ${session.locationHint}` : ''}
                     </p>
                   </div>
                 </div>

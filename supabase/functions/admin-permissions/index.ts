@@ -102,6 +102,55 @@ Deno.serve(async (req) => {
       return json({ success: true })
     }
 
+    // PUT change a user's password (admin / super_admin only — service role)
+    if (req.method === 'PUT' && action === 'change_user_password') {
+      const { user_id, password } = await req.json()
+      if (!user_id || typeof password !== 'string') {
+        return json({ error: 'Missing user_id or password' }, 400)
+      }
+
+      const trimmed = password.trim()
+      if (trimmed.length < 8) {
+        return json({ error: 'Password must be at least 8 characters' }, 400)
+      }
+      if (!/[A-Z]/.test(trimmed) || !/[a-z]/.test(trimmed) || !/\d/.test(trimmed) ||
+          !/[!@#$%^&*(),.?":{}|<>_\-+=[\]\\\/~`]/.test(trimmed)) {
+        return json({
+          error: 'Password must include uppercase, lowercase, number, and special character',
+        }, 400)
+      }
+
+      // Load actor + target roles for privilege checks
+      const [{ data: actorProfile }, { data: targetProfile }] = await Promise.all([
+        supabase.from('profiles').select('role').eq('id', actorId).single(),
+        supabase.from('profiles').select('role, email, full_name').eq('id', user_id).single(),
+      ])
+
+      if (!targetProfile) return json({ error: 'User not found' }, 404)
+
+      // Only super_admin may change another super_admin's password
+      if (
+        targetProfile.role === 'super_admin' &&
+        actorProfile?.role !== 'super_admin'
+      ) {
+        return json({ error: 'Only a Super Admin can change a Super Admin password' }, 403)
+      }
+
+      const { error: updateError } = await supabase.auth.admin.updateUserById(user_id, {
+        password: trimmed,
+      })
+      if (updateError) {
+        console.error('[change_user_password] updateUserById failed:', updateError)
+        throw new Error(updateError.message || 'Failed to update password')
+      }
+
+      return json({
+        success: true,
+        email: targetProfile.email,
+        full_name: targetProfile.full_name,
+      })
+    }
+
     // DELETE a user from auth.users + profiles (hard delete)
     if (req.method === 'DELETE' && action === 'delete_user') {
       let body: { user_id?: string } = {}
