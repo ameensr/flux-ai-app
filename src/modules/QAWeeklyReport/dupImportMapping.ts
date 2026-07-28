@@ -116,7 +116,7 @@ function guessDefaultAction(col: ColumnConfig, tableKey: DailyReportTableKey): M
       testing_status: 'status', comments: 'remarks',
     }
     : {
-      task_id: 'taskId', description: 'description', qa: 'assignee',
+      task_id: 'taskId', description: 'featureName', qa: 'assignee',
       testing_status: 'status', smoke_testing_status: 'status',
     }
 
@@ -290,11 +290,21 @@ function resolveDupImportValue(
 ): any {
   const rowVal = row[col.internal_key]
   const customVal = customValuesByRow[row.id]?.[col.id]
+  const nonEmpty = (v: any) => v !== undefined && v !== null && v !== ''
 
+  // Known daily_* row columns: always prefer the row value when present.
+  // Project-cloned configs mark these is_system:false, but Excel/manual edits
+  // often only land on the row — custom_field_values can be empty or stale.
+  const knownRowKeys = new Set([
+    ...Object.keys(row).filter(k => ![
+      'id', 'user_id', 'project_id', 'team_id', 'sort_order',
+      'created_at', 'updated_at', 'errors',
+    ].includes(k)),
+  ])
+  if (knownRowKeys.has(col.internal_key) && nonEmpty(rowVal)) return rowVal
   if (col.is_system) return rowVal
-
-  if (customVal !== undefined && customVal !== null && customVal !== '') return customVal
-  if (rowVal !== undefined && rowVal !== null && rowVal !== '') return rowVal
+  if (nonEmpty(customVal)) return customVal
+  if (nonEmpty(rowVal)) return rowVal
   return customVal ?? rowVal ?? ''
 }
 
@@ -342,7 +352,10 @@ export async function applySupportMapping(
 
       if (entry.action === 'map_existing' && entry.targetField) {
         if (entry.targetField === 'status') {
-          ticket.status = normalizeStatus(String(value), ['Open', 'In Progress', 'Resolved', 'Closed']) as SupportStatus
+          // Keep the DUP testing-status label as-is so the Support table select
+          // (fed from testing_status configs) can display it. Heuristic remap to
+          // Open/Resolved/Closed made selects look blank while Release looked fine.
+          ticket.status = String(value).trim() as SupportStatus
         } else if (entry.targetField === 'remarks') {
           remarkParts.push(`${col.display_name}: ${value}`)
         } else {
@@ -370,6 +383,10 @@ export async function applySupportMapping(
           break
         }
       }
+    }
+    // Last resort: DUP support rows always have a `qa` column on the DB row.
+    if (!ticket.assignedQA && (row as any).qa) {
+      ticket.assignedQA = String((row as any).qa).trim()
     }
 
     // Do NOT auto-copy support_id → taskId. That silently created a duplicate
@@ -445,6 +462,9 @@ export async function applyReleaseMapping(
         }
       }
     }
+    if (!item.assignee && (row as any).qa) {
+      item.assignee = String((row as any).qa).trim()
+    }
 
     // Do NOT auto-copy task_id → taskId (same duplicate-column trap as Support).
     return item
@@ -468,4 +488,91 @@ export function releaseImportDedupeKey(item: ReleaseItem): string {
   if (cf.task_id) return `task_id:${cf.task_id}`
   if (cf.support_id) return `support_id:${cf.support_id}`
   return `id:${item.id}`
+}
+
+function isStableDedupeKey(key: string): boolean {
+  return !key.startsWith('id:')
+}
+
+/**
+ * Upsert Import-from-DUP results into the existing QA table.
+ * Support rows dedupe on Task ID / support_id — without this, a second import
+ * after fixing mappings only shows "Already imported" and leaves blank cells
+ * from the first broken import (Release often looked fine because it was
+ * imported once after the fix, or used unstable ids).
+ */
+export function mergeSupportImport(
+  existing: SupportTicket[],
+  incoming: SupportTicket[],
+): { rows: SupportTicket[]; added: number; updated: number } {
+  const rows = existing.map(t => ({ ...t, customFields: { ...(t.customFields || {}) } }))
+  const index = new Map<string, number>()
+  rows.forEach((t, i) => {
+    const key = supportImportDedupeKey(t)
+    if (isStableDedupeKey(key)) index.set(key, i)
+  })
+
+  let added = 0
+  let updated = 0
+  for (const item of incoming) {
+    const key = supportImportDedupeKey(item)
+    const idx = isStableDedupeKey(key) ? index.get(key) : undefined
+    if (idx !== undefined) {
+      const prev = rows[idx]
+      rows[idx] = {
+        ...prev,
+        taskId: item.taskId || prev.taskId,
+        description: item.description || prev.description,
+        assignedQA: item.assignedQA || prev.assignedQA,
+        remarks: item.remarks || prev.remarks,
+        status: item.status || prev.status,
+        priority: item.priority || prev.priority,
+        customFields: { ...(prev.customFields || {}), ...(item.customFields || {}) },
+      }
+      updated++
+    } else {
+      rows.push({ ...item, customFields: { ...(item.customFields || {}) } })
+      if (isStableDedupeKey(key)) index.set(key, rows.length - 1)
+      added++
+    }
+  }
+  return { rows, added, updated }
+}
+
+export function mergeReleaseImport(
+  existing: ReleaseItem[],
+  incoming: ReleaseItem[],
+): { rows: ReleaseItem[]; added: number; updated: number } {
+  const rows = existing.map(t => ({ ...t, customFields: { ...(t.customFields || {}) } }))
+  const index = new Map<string, number>()
+  rows.forEach((t, i) => {
+    const key = releaseImportDedupeKey(t)
+    if (isStableDedupeKey(key)) index.set(key, i)
+  })
+
+  let added = 0
+  let updated = 0
+  for (const item of incoming) {
+    const key = releaseImportDedupeKey(item)
+    const idx = isStableDedupeKey(key) ? index.get(key) : undefined
+    if (idx !== undefined) {
+      const prev = rows[idx]
+      rows[idx] = {
+        ...prev,
+        taskId: item.taskId || prev.taskId,
+        featureName: item.featureName || prev.featureName,
+        assignee: item.assignee || prev.assignee,
+        remarks: item.remarks || prev.remarks,
+        status: item.status || prev.status,
+        priority: item.priority || prev.priority,
+        customFields: { ...(prev.customFields || {}), ...(item.customFields || {}) },
+      }
+      updated++
+    } else {
+      rows.push({ ...item, customFields: { ...(item.customFields || {}) } })
+      if (isStableDedupeKey(key)) index.set(key, rows.length - 1)
+      added++
+    }
+  }
+  return { rows, added, updated }
 }

@@ -10,7 +10,7 @@ import { Plus, Trash2, Copy, Download, Upload, Search, Columns, Eye, EyeOff } fr
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import { ColumnMappingModal } from './ColumnMappingModal'
-import { applySupportMapping, supportImportDedupeKey, type MappingEntry } from '../dupImportMapping'
+import { applySupportMapping, mergeSupportImport, type MappingEntry } from '../dupImportMapping'
 import {
   applyVisibilityToSchema,
   buildDestinationColumnsFromMapping,
@@ -177,18 +177,14 @@ export const SupportLog: React.FC = () => {
       if (useDailyReportStore.getState().selectedProjectId !== form.projectId) {
         await useDailyReportStore.getState().setSelectedProjectId(form.projectId)
       }
-      let rows = useDailyReportStore.getState().supportRows
-      // Bug fix 1: store may be empty if user never visited /daily-report — fetch from DB
-      if (!rows.length) {
-        await fetchReportRows()
-        rows = useDailyReportStore.getState().supportRows
-      }
+      // Always refresh from DB — stale in-memory supportRows were a common
+      // cause of blank Support imports while Release looked fine.
+      await fetchReportRows({ force: true })
+      const rows = useDailyReportStore.getState().supportRows
       if (!rows.length) {
         toast({ title: 'No daily report data', description: 'Support & Exception Log in Daily Update Report is empty for this project.' })
         return
       }
-      // Ensure the dynamic column configuration (system + any custom columns)
-      // for the QA report's project is loaded before opening the mapping dialog.
       await fetchColumnConfigs('support', form.projectId)
       setShowMappingModal(true)
     } finally {
@@ -200,38 +196,36 @@ export const SupportLog: React.FC = () => {
     setShowMappingModal(false)
     setImporting(true)
     try {
-      let rows = useDailyReportStore.getState().supportRows
-      if (!rows.length) {
-        await fetchReportRows()
-        rows = useDailyReportStore.getState().supportRows
-      }
+      await fetchReportRows({ force: true })
+      const rows = useDailyReportStore.getState().supportRows
       const columns = getColumns('support')
       const { items } = await applySupportMapping(rows, columns, mapping)
 
-      const existingKeys = new Set(tickets.map(supportImportDedupeKey))
-      const imported = items.filter(r => !existingKeys.has(supportImportDedupeKey(r)))
-      if (!imported.length) {
-        toast({ title: 'Already imported', description: 'All rows from Daily Report are already present.' })
+      const { rows: mergedRows, added, updated } = mergeSupportImport(tickets, items)
+      if (!added && !updated) {
+        toast({ title: 'Nothing to import', description: 'No Support rows were returned from Daily Update Report.' })
         return
       }
 
       const incomingSchema = ensureAssigneeColumnInSchema(
         'support',
         buildDestinationColumnsFromMapping('support', columns, mapping, destinationOrder),
-        imported.some(r => !!r.assignedQA),
+        mergedRows.some(r => !!r.assignedQA),
       )
-      // Empty table → schema is exactly the mapping destinations (no leftover default Task ID, etc.).
-      // Appending to existing rows → union so prior columns/data stay available.
       const nextSchema = tickets.length === 0
         ? incomingSchema
         : mergeColumnSchemas(columnSchema, incomingSchema)
 
       setForm({
-        supportTickets: [...tickets, ...imported],
+        supportTickets: mergedRows,
         supportColumnSchema: nextSchema,
         visibleSupportColumns: visibilityMapFromSchema(nextSchema),
       })
-      toast({ title: 'Imported from Daily Report', description: `${imported.length} row${imported.length === 1 ? '' : 's'} added to Support & Exception Log.` })
+      const parts = [
+        added ? `${added} added` : null,
+        updated ? `${updated} updated` : null,
+      ].filter(Boolean).join(', ')
+      toast({ title: 'Imported from Daily Report', description: `${parts} in Support & Exception Log.` })
     } finally {
       setImporting(false)
     }
@@ -394,14 +388,13 @@ export const SupportLog: React.FC = () => {
                     return <td key={col.id} className={cell}><input className={sel} value={t.assignedQA} onChange={e => update(t.id, { assignedQA: e.target.value })} placeholder="Name" /></td>
                   }
                   if (col.id === 'status') {
+                    const fallbackStatuses = ['Open', 'In Progress', 'Resolved', 'Closed']
+                    const opts = statusOptions.length > 0 ? statusOptions : fallbackStatuses
+                    const statusOpts = t.status && !opts.includes(t.status) ? [t.status, ...opts] : opts
                     return (
                       <td key={col.id} className={cell}>
                         <select className={`${sel} field-input py-0.5 px-1 text-xs`} value={t.status} onChange={e => update(t.id, { status: e.target.value as any })}>
-                          {statusOptions.length > 0 ? (
-                            statusOptions.map(s => <option key={s} value={s}>{s}</option>)
-                          ) : (
-                            ['Open', 'In Progress', 'Resolved', 'Closed'].map(s => <option key={s}>{s}</option>)
-                          )}
+                          {statusOpts.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </td>
                     )

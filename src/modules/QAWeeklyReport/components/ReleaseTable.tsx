@@ -11,7 +11,7 @@ import { Plus, Trash2, Copy, Download, Upload, Search, Columns, Eye, EyeOff } fr
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import { ColumnMappingModal } from './ColumnMappingModal'
-import { applyReleaseMapping, releaseImportDedupeKey, type MappingEntry } from '../dupImportMapping'
+import { applyReleaseMapping, mergeReleaseImport, type MappingEntry } from '../dupImportMapping'
 import {
   applyVisibilityToSchema,
   buildDestinationColumnsFromMapping,
@@ -185,12 +185,8 @@ export const ReleaseTable: React.FC = () => {
       if (useDailyReportStore.getState().selectedProjectId !== form.projectId) {
         await useDailyReportStore.getState().setSelectedProjectId(form.projectId)
       }
-      let rows = useDailyReportStore.getState().releaseRows
-      // Bug fix 1: store may be empty if user never visited /daily-report — fetch from DB
-      if (!rows.length) {
-        await fetchReportRows()
-        rows = useDailyReportStore.getState().releaseRows
-      }
+      await fetchReportRows({ force: true })
+      const rows = useDailyReportStore.getState().releaseRows
       if (!rows.length) {
         toast({ title: 'No daily report data', description: 'Release Testing Log in Daily Update Report is empty for this project.' })
         return
@@ -206,36 +202,36 @@ export const ReleaseTable: React.FC = () => {
     setShowMappingModal(false)
     setImporting(true)
     try {
-      let rows = useDailyReportStore.getState().releaseRows
-      if (!rows.length) {
-        await fetchReportRows()
-        rows = useDailyReportStore.getState().releaseRows
-      }
+      await fetchReportRows({ force: true })
+      const rows = useDailyReportStore.getState().releaseRows
       const columns = getColumns('release')
       const { items: mappedItems } = await applyReleaseMapping(rows, columns, mapping)
 
-      const existingKeys = new Set(items.map(releaseImportDedupeKey))
-      const imported = mappedItems.filter(r => !existingKeys.has(releaseImportDedupeKey(r)))
-      if (!imported.length) {
-        toast({ title: 'Already imported', description: 'All rows from Daily Report are already present.' })
+      const { rows: mergedRows, added, updated } = mergeReleaseImport(items, mappedItems)
+      if (!added && !updated) {
+        toast({ title: 'Nothing to import', description: 'No Release rows were returned from Daily Update Report.' })
         return
       }
 
       const incomingSchema = ensureAssigneeColumnInSchema(
         'release',
         buildDestinationColumnsFromMapping('release', columns, mapping, destinationOrder),
-        imported.some(r => !!r.assignee),
+        mergedRows.some(r => !!r.assignee),
       )
       const nextSchema = items.length === 0
         ? incomingSchema
         : mergeColumnSchemas(columnSchema, incomingSchema)
 
       setForm({
-        releaseItems: [...items, ...imported],
+        releaseItems: mergedRows,
         releaseColumnSchema: nextSchema,
         visibleReleaseColumns: visibilityMapFromSchema(nextSchema),
       })
-      toast({ title: 'Imported from Daily Report', description: `${imported.length} row${imported.length === 1 ? '' : 's'} added to Release Testing Log.` })
+      const parts = [
+        added ? `${added} added` : null,
+        updated ? `${updated} updated` : null,
+      ].filter(Boolean).join(', ')
+      toast({ title: 'Imported from Daily Report', description: `${parts} in Release Testing Log.` })
     } finally {
       setImporting(false)
     }

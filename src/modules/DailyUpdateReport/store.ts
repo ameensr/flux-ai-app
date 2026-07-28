@@ -65,7 +65,7 @@ interface DailyReportState {
   setSelectedProjectId: (projectId: string) => Promise<void>
   fetchProjectMembers: (projectId: string) => Promise<void>
   fetchUserProjectRole: (projectId: string) => Promise<void>
-  fetchReportRows: () => Promise<void>
+  fetchReportRows: (opts?: { force?: boolean }) => Promise<void>
   setSupportRows: (rows: SupportLogRecord[], forceSync?: boolean) => Promise<void>
   setReleaseRows: (rows: ReleaseTestingRecord[], forceSync?: boolean) => Promise<void>
   /** Recompute row.errors from the current Customize Columns option lists. */
@@ -545,7 +545,8 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
     }
   },
 
-  fetchReportRows: async () => {
+  fetchReportRows: async (opts) => {
+    const force = !!opts?.force
     // Captured once at the start of this call — see reportRowsFetchSeq above.
     const seq = ++reportRowsFetchSeq
     set({ loading: true })
@@ -579,7 +580,8 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
     // Only load localStorage if there are unsaved changes
     // This prevents "flash" of stale/unfiltered data from appearing
     // CRITICAL: Include 'error' status to prevent data loss after failed sync (e.g., validation warnings)
-    if (hasUnsavedChanges) {
+    // Import-from-DUP passes force:true and wants DB rows, not a local draft.
+    if (hasUnsavedChanges && !force) {
       const localSupport = localStorage.getItem('flux-daily-support-rows')
       const localRelease = localStorage.getItem('flux-daily-release-rows')
 
@@ -642,7 +644,8 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         if (seq !== reportRowsFetchSeq) return
 
         // Only update from database if there are no unsaved changes
-        if (!hasUnsavedChanges) {
+        // (unless force — used by QA Report Import from DUP)
+        if (!hasUnsavedChanges || force) {
           if (!supportRes.error) {
             const dbSupportRows = (supportRes.data || []) as SupportLogRecord[]
             // Re-validate rows to add errors property for unconfigured values
