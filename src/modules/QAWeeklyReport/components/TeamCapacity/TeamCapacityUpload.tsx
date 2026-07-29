@@ -11,6 +11,7 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
 import { parseTeamCapacityExcel, validateCapacityData } from '../../utils/capacityParser'
 import type { TeamCapacityData } from '../../types/teamCapacity'
+import { calculateCapacityStats } from '../../types/teamCapacity'
 import { cn } from '@/lib/utils'
 
 interface TeamCapacityUploadProps {
@@ -24,6 +25,10 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
   const [isDragging, setIsDragging] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const displayData = capacityData && Array.isArray(capacityData.members)
+    ? { ...capacityData, stats: calculateCapacityStats(capacityData.members) }
+    : capacityData
 
   const ACCEPTED_TYPES = [
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -49,22 +54,26 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
     try {
       const result = await parseTeamCapacityExcel(file)
       const validation = validateCapacityData(result)
-      
+
       if (!validation.valid) {
         throw new Error(validation.errors.join(', '))
       }
-      
+      if (!result.stats || !Array.isArray(result.members)) {
+        throw new Error('Parsed capacity data is incomplete. Please check the Excel format.')
+      }
+
       onChange(result)
-      toast({ 
-        title: 'Team Capacity Loaded', 
-        description: `${result.members.length} team members processed from ${file.name}` 
+      toast({
+        title: 'Team Capacity Loaded',
+        description: `${result.members.length} team members processed from ${file.name}`,
       })
     } catch (err: any) {
-      setError(err.message)
-      toast({ 
-        variant: 'destructive', 
-        title: 'Parse Failed', 
-        description: err.message 
+      const message = err?.message || 'An unexpected error occurred while parsing the file.'
+      setError(message)
+      toast({
+        variant: 'destructive',
+        title: 'Parse Failed',
+        description: message,
       })
     } finally {
       setIsProcessing(false)
@@ -114,7 +123,7 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
       </div>
 
       {/* Upload Area (shown when no data) */}
-      {!capacityData && (
+      {!displayData && (
         <div
           onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
           onDragLeave={() => setIsDragging(false)}
@@ -187,7 +196,7 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
 
       {/* Capacity Data Display (simple summary) */}
       <AnimatePresence>
-        {capacityData && (
+        {displayData && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -198,11 +207,11 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
               <FileSpreadsheet className="w-5 h-5" style={{ color: 'var(--accent)' }} />
               <div className="flex-1 min-w-0">
                 <span className="text-xs font-semibold block truncate" style={{ color: 'var(--text-primary)' }}>
-                  {capacityData.file_name}
+                  {displayData.file_name}
                 </span>
                 <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  {capacityData.members.length} team members
-                  {capacityData.period_start && ` · Period: ${capacityData.period_start}`}
+                  {displayData.members.length} team members
+                  {displayData.period_start && ` · Period: ${displayData.period_start}`}
                 </span>
               </div>
               <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
@@ -212,25 +221,25 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
               <QuickStatCard 
                 label="Total Team" 
-                value={capacityData.stats.total_members} 
+                value={displayData.stats.total_members} 
                 icon={<Users className="w-4 h-4" />}
                 color="text-blue-400"
               />
               <QuickStatCard 
                 label="Available" 
-                value={capacityData.stats.available} 
+                value={displayData.stats.available} 
                 icon={<CheckCircle className="w-4 h-4" />}
                 color="text-green-400"
               />
               <QuickStatCard 
                 label="On Leave" 
-                value={capacityData.stats.on_leave} 
+                value={displayData.stats.on_leave} 
                 icon={<Clock className="w-4 h-4" />}
                 color="text-yellow-400"
               />
               <QuickStatCard 
                 label="No Logs" 
-                value={capacityData.stats.no_logs} 
+                value={displayData.stats.no_logs} 
                 icon={<AlertTriangle className="w-4 h-4" />}
                 color="text-red-400"
               />
@@ -238,14 +247,14 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
 
             {/* Capacity Summary */}
             <div className="mt-4 p-4 rounded-xl border" style={{ 
-              background: capacityData.stats.estimated_capacity_percent >= 80 
+              background: displayData.stats.estimated_capacity_percent >= 80 
                 ? 'rgba(34,197,94,0.05)' 
-                : capacityData.stats.estimated_capacity_percent >= 60 
+                : displayData.stats.estimated_capacity_percent >= 60 
                 ? 'rgba(245,158,11,0.05)' 
                 : 'rgba(239,68,68,0.05)',
-              borderColor: capacityData.stats.estimated_capacity_percent >= 80 
+              borderColor: displayData.stats.estimated_capacity_percent >= 80 
                 ? 'rgba(34,197,94,0.2)' 
-                : capacityData.stats.estimated_capacity_percent >= 60 
+                : displayData.stats.estimated_capacity_percent >= 60 
                 ? 'rgba(245,158,11,0.2)' 
                 : 'rgba(239,68,68,0.2)'
             }}>
@@ -255,19 +264,19 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
                     Testing Capacity
                   </span>
                   <div className="text-2xl font-bold mt-1" style={{ 
-                    color: capacityData.stats.estimated_capacity_percent >= 80 
+                    color: displayData.stats.estimated_capacity_percent >= 80 
                       ? '#22c55e' 
-                      : capacityData.stats.estimated_capacity_percent >= 60 
+                      : displayData.stats.estimated_capacity_percent >= 60 
                       ? '#f59e0b' 
                       : '#ef4444'
                   }}>
-                    {capacityData.stats.estimated_capacity_percent}%
+                    {displayData.stats.estimated_capacity_percent}%
                   </div>
                 </div>
                 <div className="text-right">
                   <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Avg Hours/Member</span>
                   <div className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-                    {capacityData.stats.average_hours}h
+                    {displayData.stats.average_hours}h
                   </div>
                 </div>
               </div>

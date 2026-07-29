@@ -260,7 +260,7 @@ import {
 import { toast } from '@/hooks/use-toast'
 import { AIService } from '@/services/ai/ai-service'
 import { useQAReportStore } from '../store'
-import { ensureFormData, isPassStatus, isFailStatus, isBlockedStatus } from '../types'
+import { ensureFormData, isPassStatus, isFailStatus, isBlockedStatus, isResolvedSupportStatus, isInProgressStatus, isNotStartedStatus } from '../types'
 import { getSectionVisibility } from './DashboardSectionToggles'
 import type { QAReportForm, SupportTicket, ReleaseItem, HistoricalDefect } from '../types'
 import { useTheme } from '@/context/ThemeContext'
@@ -776,8 +776,8 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const passedCases = releasePassed
   const failedCases = releaseFailed
   const blockedCases = releaseBlocked
-  const inProgressCases = data.releaseItems.filter(i => i?.status === 'In Progress').length
-  const notExecutedCases = data.releaseItems.filter(i => i?.status === 'Not Started').length
+  const inProgressCases = data.releaseItems.filter(i => isInProgressStatus(i?.status)).length
+  const notExecutedCases = data.releaseItems.filter(i => isNotStartedStatus(i?.status)).length
   const pendingCases = inProgressCases + blockedCases
 
   const sprintHealthScore = totalCases > 0 ? Math.round((passedCases / totalCases) * 100) : 100
@@ -877,7 +877,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
   }
 
   const comparisons = [
-    getMetricComparison('Support Tickets', data.supportEmails, prevReport?.supportEmails, 'lower-better'),
+    getMetricComparison('Support Tickets', data.supportTickets?.length || 0, prevReport?.supportTickets?.length || 0, 'lower-better'),
     getMetricComparison('Defects', data.defectsLastWeek.reported, prevReport?.defectsLastWeek.reported, 'lower-better'),
     getMetricComparison('Change Requests', data.lastWeek.changeRequest, prevReport?.lastWeek.changeRequest, 'neutral'),
     getMetricComparison('Backend Issues', data.lastWeek.backendUpdation, prevReport?.lastWeek.backendUpdation, 'lower-better'),
@@ -910,8 +910,8 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
   // ── Snapshot Comparison calculations ──
   const getComparisonWinner = (reportA: QAReportForm, reportB: QAReportForm) => {
-    const passRateA = reportA.releaseItems.length ? reportA.releaseItems.filter(i => i?.status === 'Pass').length / reportA.releaseItems.length : 1.0
-    const passRateB = reportB.releaseItems.length ? reportB.releaseItems.filter(i => i?.status === 'Pass').length / reportB.releaseItems.length : 1.0
+    const passRateA = reportA.releaseItems.length ? reportA.releaseItems.filter(i => isPassStatus(i?.status)).length / reportA.releaseItems.length : 1.0
+    const passRateB = reportB.releaseItems.length ? reportB.releaseItems.filter(i => isPassStatus(i?.status)).length / reportB.releaseItems.length : 1.0
 
     if (passRateB > passRateA) return `${reportB.reportTitle || 'Report B'} (Higher Test Pass Rate)`
     if (passRateA > passRateB) return `${reportA.reportTitle || 'Report A'} (Higher Test Pass Rate)`
@@ -1280,9 +1280,9 @@ Do not return markdown wraps, only raw JSON text.
 
   // ── Historical Analytics Charts Data ──
   const historicalChartsData = activeHistory.map(h => {
-    const passCount = h.form.releaseItems.filter((i: any) => i?.status === 'Pass').length
-    const failCount = h.form.releaseItems.filter((i: any) => i?.status === 'Fail').length
-    const blockedCount = h.form.releaseItems.filter((i: any) => i?.status === 'Blocked').length
+    const passCount = h.form.releaseItems.filter((i: any) => isPassStatus(i?.status)).length
+    const failCount = h.form.releaseItems.filter((i: any) => isFailStatus(i?.status)).length
+    const blockedCount = h.form.releaseItems.filter((i: any) => isBlockedStatus(i?.status)).length
 
     return {
       name: h.week?.split('–')[0]?.trim() || h.form.weekStart,
@@ -1729,10 +1729,14 @@ Do not return markdown wraps, only raw JSON text.
             const releaseTestingPassed = data.releaseItems?.filter(i => isPassStatus(i?.status)).length || 0
             const releaseTestingFailed = data.releaseItems?.filter(i => isFailStatus(i?.status)).length || 0
             const releaseTestingBlocked = data.releaseItems?.filter(i => isBlockedStatus(i?.status)).length || 0
+            const releaseTestingInProgress = data.releaseItems?.filter(i => isInProgressStatus(i?.status)).length || 0
             const releaseTestingTotal = data.releaseItems?.length || 0
             const supportTicketsTotal = data.supportTickets?.length || 0
-            const supportHigh = data.supportTickets?.filter(t => t?.priority === 'High').length || 0
-            const supportResolved = data.supportTickets?.filter(t => t?.status === 'Resolved' || t?.status === 'Closed').length || 0
+            const supportHigh = data.supportTickets?.filter(t => {
+              const p = String(t?.priority || '').toLowerCase()
+              return p === 'high' || p === 'critical'
+            }).length || 0
+            const supportResolved = data.supportTickets?.filter(t => isResolvedSupportStatus(t?.status)).length || 0
 
             // Prepare KPI metrics with categories for Executive KPI Section
             const kpiMetrics = [
@@ -1754,12 +1758,12 @@ Do not return markdown wraps, only raw JSON text.
               },
               {
                 label: 'Active Bugs',
-                val: releaseBugMetrics?.activeBugs || data.defectsLastWeek.open,
+                val: releaseBugMetrics?.activeBugs ?? data.defectsLastWeek.open,
                 icon: AlertTriangle,
                 color: 'text-red-400',
                 desc: releaseBugMetrics ? `${releaseBugMetrics.totalBugs} total bugs` : 'Unresolved defects',
-                sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.activeBugs || f.defectsLastWeek.open || 0),
-                pulse: (releaseBugMetrics?.activeBugs || data.defectsLastWeek.open) > 5,
+                sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.activeBugs ?? f.defectsLastWeek.open ?? 0),
+                pulse: (releaseBugMetrics?.activeBugs ?? data.defectsLastWeek.open) > 5,
                 tooltip: 'What unresolved product risk exists?',
                 category: 'primary' as const
               },
@@ -1832,6 +1836,16 @@ Do not return markdown wraps, only raw JSON text.
                 category: 'testingQuality' as const
               },
               {
+                label: 'Testing In Progress',
+                val: releaseTestingInProgress,
+                icon: RefreshCw,
+                color: 'text-blue-400',
+                desc: 'From Release Testing Status · In Progress',
+                sparklineData: getHistoricalValues(f => f.releaseItems?.filter((i: any) => isInProgressStatus(i?.status)).length || 0),
+                tooltip: 'Release items currently being tested',
+                category: 'testingQuality' as const
+              },
+              {
                 label: 'Tests Failed',
                 val: releaseTestingFailed,
                 icon: X,
@@ -1859,9 +1873,12 @@ Do not return markdown wraps, only raw JSON text.
                 val: supportHigh,
                 icon: Zap,
                 color: 'text-orange-400',
-                desc: 'High priority tickets',
-                sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => t?.priority === 'High').length || 0),
-                tooltip: 'Key issues impacting multiple users',
+                desc: 'Critical + High from Support Log',
+                sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => {
+                  const p = String(t?.priority || '').toLowerCase()
+                  return p === 'high' || p === 'critical'
+                }).length || 0),
+                tooltip: 'Critical and High priority support tickets',
                 category: 'supportOps' as const
               },
               {
@@ -1869,9 +1886,9 @@ Do not return markdown wraps, only raw JSON text.
                 val: supportResolved,
                 icon: CheckCheck,
                 color: 'text-green-400',
-                desc: 'Resolved/closed tickets',
-                sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => t?.status === 'Resolved' || t?.status === 'Closed').length || 0),
-                tooltip: 'Successfully resolved & closed',
+                desc: 'From Support & Exception Log · Status',
+                sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => isResolvedSupportStatus(t?.status)).length || 0),
+                tooltip: 'Tickets whose Status is Resolved, Closed, or an equivalent done/pass state',
                 category: 'supportOps' as const
               },
 
@@ -2058,7 +2075,7 @@ Do not return markdown wraps, only raw JSON text.
                   <span className="font-bold">{totalCases > 0 ? Math.round((passedCases / totalCases) * 100) : 100}%</span>
                 </div>
                 <div className="flex items-center justify-between text-xs border-b border-divider pb-1">
-                  <span className="text-text-muted">Open Critical Bugs</span>
+                  <span className="text-text-muted">Open Active Bugs</span>
                   <span className={`font-bold ${openBugsCount > 0 ? 'text-red-400' : ''}`}>{openBugsCount}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
@@ -3128,9 +3145,24 @@ Do not return markdown wraps, only raw JSON text.
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
-              { role: 'New Feature Testing', members: data.newFeatureTeam, barColor: 'bg-blue-500', metrics: '8 items tested' },
-              { role: 'Production Support', members: data.supportTeam, barColor: 'bg-green-500', metrics: '3 log exceptions resolved' },
-              { role: 'Automation Engineering', members: data.automationTeam, barColor: 'bg-purple-500', metrics: '' }
+              {
+                role: 'New Feature Testing',
+                members: data.newFeatureTeam,
+                barColor: 'bg-blue-500',
+                metrics: `${data.releaseItems?.length || 0} release item${(data.releaseItems?.length || 0) === 1 ? '' : 's'}`,
+              },
+              {
+                role: 'Production Support',
+                members: data.supportTeam,
+                barColor: 'bg-green-500',
+                metrics: `${data.supportTickets?.filter(t => isResolvedSupportStatus(t?.status)).length || 0} resolved ticket${(data.supportTickets?.filter(t => isResolvedSupportStatus(t?.status)).length || 0) === 1 ? '' : 's'}`,
+              },
+              {
+                role: 'Automation Engineering',
+                members: data.automationTeam,
+                barColor: 'bg-purple-500',
+                metrics: `${data.automationTeam?.length || 0} engineer${(data.automationTeam?.length || 0) === 1 ? '' : 's'}`,
+              },
             ].map(group => (
               <div
                 key={group.role}
@@ -3157,7 +3189,6 @@ Do not return markdown wraps, only raw JSON text.
                           </div>
                           <span className="text-xs font-semibold">{member}</span>
                         </div>
-                      <span className="text-[10px] font-bold text-text-muted">QA Specialist</span>
                     </div>
                   ))}
                   {group.members.length === 0 && <span className="text-xs text-text-muted">No resources assigned.</span>}

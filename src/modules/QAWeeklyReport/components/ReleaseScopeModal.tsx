@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Layers } from 'lucide-react'
 import { useTheme } from '@/context/ThemeContext'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
-import { useColumnConfigStore } from '@/modules/DailyUpdateReport/columnConfigStore'
 import { QATriageLoader, type LineData } from './QATriageLoader'
 import { ContinuousQATriage } from './ContinuousQATriage'
 
@@ -17,25 +16,31 @@ interface ReleaseScopeModalProps {
   projectName: string
 }
 
-// Unified column interface
 interface ModalColumn {
   id: string
   label: string
-  isCustomField?: boolean
 }
 
 // Base columns — must mirror the ReleaseItem fields used by ReleaseTable.tsx,
 // since that's the actual shape of the data passed in as `releaseData`.
 // (The DailyUpdateReport column-config store uses a different internal_key
 // naming scheme and must NOT be used to derive these base columns.)
-const DEFAULT_RELEASE_COLUMNS: ModalColumn[] = [
+const TRIAGE_CORE_COLUMNS: ModalColumn[] = [
   { id: 'taskId', label: 'Task ID' },
   { id: 'featureName', label: 'Feature Name' },
   { id: 'assignee', label: 'Assignee' },
-  { id: 'status', label: 'Status' },
-  { id: 'priority', label: 'Priority' },
-  { id: 'remarks', label: 'Remarks' },
 ]
+
+const TRIAGE_STATUS_COLUMN: ModalColumn = { id: 'status', label: 'Status' }
+
+/** True when Status is enabled in the Release Testing Log column visibility on /qa-report. */
+function isStatusVisibleOnPage(visibleColumns: Record<string, boolean> | undefined): boolean {
+  if (!visibleColumns || !Object.prototype.hasOwnProperty.call(visibleColumns, 'status')) {
+    // No explicit visibility map → treat Status as shown (legacy / default schema)
+    return true
+  }
+  return visibleColumns.status !== false
+}
 
 // Loading script for the shared "qaly.ai / TRIAGE" terminal loader — mirrors the
 // defect-triage script's rhythm but with release-specific phrasing.
@@ -53,50 +58,26 @@ export function ReleaseScopeModal({
   onClose,
   releaseData = [],
   visibleColumns,
-  projectId,
   projectName
 }: ReleaseScopeModalProps) {
   useBodyScrollLock(isOpen)
   const { isDark } = useTheme()
-  const { getColumns, fetchColumnConfigs } = useColumnConfigStore()
 
   const [isAnalyzing, setIsAnalyzing] = useState(true)
   const [displayedRecordsCount, setDisplayedRecordsCount] = useState(0)
 
-  // Base columns come straight from the ReleaseItem shape (matches ReleaseTable.tsx).
-  // Any dynamic "Create New" custom fields imported from the Daily Update Report are
-  // keyed by that report's column internal_key inside `record.customFields`, so their
-  // display labels are resolved from that column config store — but only for keys that
-  // actually appear on the data, never as the base column list itself.
-  const dupReleaseColumns = getColumns('release')
-
-  const customFieldKeys = Array.from(
-    new Set(releaseData.flatMap(r => r?.customFields ? Object.keys(r.customFields) : []))
-  )
-
-  const availableColumns: ModalColumn[] = [
-    ...DEFAULT_RELEASE_COLUMNS,
-    ...customFieldKeys.map(key => ({
-      id: key,
-      label: dupReleaseColumns.find(c => c.internal_key === key)?.display_name || key,
-      isCustomField: true,
-    })),
-  ]
-
-  // Respect visibility for BOTH builtins and Create-New custom columns.
-  const activeColumns = availableColumns.filter(col =>
-    visibleColumns && Object.prototype.hasOwnProperty.call(visibleColumns, col.id)
-      ? visibleColumns[col.id] !== false
-      : true
-  )
+  // Triage detail cards: Task ID, Feature Name, Assignee — plus Status only when
+  // that column is marked visible on the Release Testing Log (/qa-report).
+  const activeColumns: ModalColumn[] = isStatusVisibleOnPage(visibleColumns)
+    ? [...TRIAGE_CORE_COLUMNS, TRIAGE_STATUS_COLUMN]
+    : TRIAGE_CORE_COLUMNS
 
   useEffect(() => {
     if (isOpen) {
-      fetchColumnConfigs('release', projectId || null)
       setIsAnalyzing(true)
       setDisplayedRecordsCount(0)
     }
-  }, [isOpen, fetchColumnConfigs, projectId])
+  }, [isOpen])
 
   // Progressively reveal records in batches once triage completes (smoother + fewer re-renders)
   useEffect(() => {
@@ -231,14 +212,15 @@ export function ReleaseScopeModal({
                             </div>
                             <div className="flex flex-col gap-2 flex-1">
                               {activeColumns.map(col => {
-                                const value = (col.isCustomField ? record.customFields?.[col.id] : record[col.id]) || '-'
+                                const raw = record[col.id]
+                                const value = raw != null && String(raw).trim() !== '' ? String(raw) : '-'
                                 return (
                                   <div key={col.id} className="grid grid-cols-[140px_1fr] gap-2 items-baseline">
                                     <span className="text-text-muted text-xs font-mono uppercase tracking-wide">
                                       {col.label}
                                     </span>
-                                    <span className={`text-sm font-mono ${getSemanticColor(String(value), col.id)}`}>
-                                      {String(value)}
+                                    <span className={`text-sm font-mono ${getSemanticColor(value, col.id)}`}>
+                                      {value}
                                     </span>
                                   </div>
                                 )

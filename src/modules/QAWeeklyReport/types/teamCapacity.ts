@@ -62,16 +62,17 @@ export function calculateCapacityStats(members: TeamMemberCapacity[]): TeamCapac
   const onLeave = members.filter(m => m.status === 'on-leave').length
   const noLogs = members.filter(m => m.status === 'no-logs').length
 
-  const totalHours = members.reduce((sum, m) => sum + m.logged_hours, 0)
-  const avgHours = total > 0 ? Number((totalHours / total).toFixed(1)) : 0
-
-  // Improved capacity calculation: Based on actual hours worked vs expected hours
-  // This gives a more accurate picture than just counting available members
   const EXPECTED_HOURS_PER_PERSON = 40
-  const maxPossibleHours = total * EXPECTED_HOURS_PER_PERSON
-  const actualWorkHours = members.reduce((sum, m) => sum + m.logged_hours, 0)
-  const capacity = maxPossibleHours > 0
-    ? Math.round((actualWorkHours / maxPossibleHours) * 100)
+  const expectedTotal = total * EXPECTED_HOURS_PER_PERSON
+  const totalLogged = members.reduce((sum, m) => sum + (Number(m.logged_hours) || 0), 0)
+  const totalLeave = members.reduce((sum, m) => sum + (Number(m.leave_hours) || 0), 0)
+  const avgHours = total > 0 ? Number((totalLogged / total).toFixed(1)) : 0
+
+  // Available capacity after leave (not utilization of logged hours).
+  // Capacity % = (Expected Total − Leave Hours) / Expected Total × 100
+  const availableHours = Math.max(0, expectedTotal - totalLeave)
+  const capacity = expectedTotal > 0
+    ? Math.max(0, Math.min(100, Math.round((availableHours / expectedTotal) * 100)))
     : 0
 
   return {
@@ -80,7 +81,7 @@ export function calculateCapacityStats(members: TeamMemberCapacity[]): TeamCapac
     on_leave: onLeave,
     no_logs: noLogs,
     average_hours: avgHours,
-    estimated_capacity_percent: capacity
+    estimated_capacity_percent: capacity,
   }
 }
 

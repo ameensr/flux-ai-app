@@ -6,8 +6,8 @@ import { motion } from 'framer-motion'
 import { Users, CheckCircle, Clock, AlertTriangle, Activity, Sparkles } from 'lucide-react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { AIService } from '@/services/ai/ai-service'
-import type { TeamCapacityData, TeamMemberCapacity } from '../../types/teamCapacity'
-import { getCapacityDistribution } from '../../types/teamCapacity'
+import type { TeamCapacityData } from '../../types/teamCapacity'
+import { calculateCapacityStats, getCapacityDistribution } from '../../types/teamCapacity'
 
 interface TeamCapacityDisplayProps {
   data: TeamCapacityData
@@ -18,31 +18,43 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
   const [aiSummary, setAiSummary] = useState<string>('')
   const [loadingAI, setLoadingAI] = useState(false)
 
+  const liveStats = Array.isArray(data?.members) && data.members.length > 0
+    ? calculateCapacityStats(data.members)
+    : data?.stats
+  const liveData: TeamCapacityData | null =
+    liveStats && Array.isArray(data?.members)
+      ? { ...data, stats: liveStats }
+      : null
+
   useEffect(() => {
-    generateAISummary()
+    if (!liveData) return
+    let cancelled = false
+    ;(async () => {
+      setLoadingAI(true)
+      try {
+        const prompt = buildCapacitySummaryPrompt(liveData)
+        const response = await AIService.callAI({
+          prompt,
+          options: {
+            systemPrompt: 'You are a QA manager summarizing team capacity for an executive report. Be concise and focus on testing impact.',
+            module: 'team-capacity-summary'
+          }
+        })
+        if (!cancelled) setAiSummary(response.trim())
+      } catch {
+        if (!cancelled) setAiSummary(generateFallbackSummary(liveData))
+      } finally {
+        if (!cancelled) setLoadingAI(false)
+      }
+    })()
+    return () => { cancelled = true }
   }, [data])
 
-  const generateAISummary = async () => {
-    setLoadingAI(true)
-    try {
-      const prompt = buildCapacitySummaryPrompt(data)
-      const response = await AIService.callAI({
-        prompt,
-        options: {
-          systemPrompt: 'You are a QA manager summarizing team capacity for an executive report. Be concise and focus on testing impact.',
-          module: 'team-capacity-summary'
-        }
-      })
-      setAiSummary(response.trim())
-    } catch (error) {
-      // Fallback to rule-based summary
-      setAiSummary(generateFallbackSummary(data))
-    } finally {
-      setLoadingAI(false)
-    }
+  if (!liveData) {
+    return null
   }
 
-  const distribution = getCapacityDistribution(data.stats)
+  const distribution = getCapacityDistribution(liveData.stats)
 
   return (
     <div className="space-y-6">
@@ -51,35 +63,35 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
         <KPICard
           icon={<Users className="w-5 h-5" />}
           label="Total Team Members"
-          value={data.stats.total_members}
+          value={liveData.stats.total_members}
           color="rgba(99,102,241,0.1)"
           iconColor="var(--accent)"
         />
         <KPICard
           icon={<CheckCircle className="w-5 h-5" />}
           label="Available This Week"
-          value={data.stats.available}
+          value={liveData.stats.available}
           color="rgba(34,197,94,0.1)"
           iconColor="#22c55e"
         />
         <KPICard
           icon={<Clock className="w-5 h-5" />}
           label="On Leave"
-          value={data.stats.on_leave}
+          value={liveData.stats.on_leave}
           color="rgba(245,158,11,0.1)"
           iconColor="#f59e0b"
         />
         <KPICard
           icon={<AlertTriangle className="w-5 h-5" />}
           label="No Logged Hours"
-          value={data.stats.no_logs}
+          value={liveData.stats.no_logs}
           color="rgba(239,68,68,0.1)"
           iconColor="#ef4444"
         />
         <KPICard
           icon={<Activity className="w-5 h-5" />}
           label="Avg Working Hours"
-          value={`${data.stats.average_hours}h`}
+          value={`${liveData.stats.average_hours}h`}
           color="rgba(168,85,247,0.1)"
           iconColor="#a855f7"
         />
@@ -163,7 +175,7 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
                 {/* Center text */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <div className="text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                    {data.stats.estimated_capacity_percent}%
+                    {liveData.stats.estimated_capacity_percent}%
                   </div>
                   <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                     Capacity

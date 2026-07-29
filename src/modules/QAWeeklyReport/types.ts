@@ -378,3 +378,47 @@ export function isBlockedStatus(status: string | null | undefined): boolean {
   const normalized = status.toLowerCase()
   return normalized.includes('blocked')
 }
+
+/** Release Testing Log — In Progress matcher (case-insensitive). */
+export function isInProgressStatus(status: string | null | undefined): boolean {
+  if (!status) return false
+  const s = status.toLowerCase().trim()
+  if (!s) return false
+  return (
+    s === 'in progress' ||
+    s === 'in-progress' ||
+    s === 'inprogress' ||
+    s === 'wip' ||
+    s.includes('in progress') ||
+    s.includes('in-progress')
+  )
+}
+
+/** Release Testing Log — Not Started matcher (case-insensitive). */
+export function isNotStartedStatus(status: string | null | undefined): boolean {
+  if (!status) return false
+  const s = status.toLowerCase().trim()
+  if (!s) return false
+  return (
+    s === 'not started' ||
+    s === 'not-started' ||
+    s === 'notstarted' ||
+    s === 'todo' ||
+    s === 'to do' ||
+    s.includes('not started') ||
+    s.includes('not-started')
+  )
+}
+
+/**
+ * Support & Exception Log Status → counts toward "Resolved Tickets" KPI.
+ * Case-insensitive; covers Resolved/Closed and shared testing_status aliases
+ * (Pass, Completed, Done, …). Skips Unresolved / Reopened / open states.
+ */
+export function isResolvedSupportStatus(status: string | null | undefined): boolean {
+  if (!status) return false
+  const s = status.toLowerCase().trim()
+  if (!s) return false
+  if (/(unresolved|not\s+resolved|reopened)/.test(s)) return false
+  return /\b(resolved|closed|done|completed|fixed|verified|passed|pass|success)\b/.test(s)
+}
