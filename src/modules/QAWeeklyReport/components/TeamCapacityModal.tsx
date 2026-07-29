@@ -208,12 +208,7 @@ export function TeamCapacityModal({
                                 <Cell key={idx} fill={entry.hex} style={glowStyle(entry.hex, chartTheme)} />
                               ))}
                             </Pie>
-                            <Tooltip
-                              content={<PremiumTooltip theme={chartTheme} />}
-                              formatter={(value: number, name: string) =>
-                                name === 'No hours' ? ['—', name] : [`${value}h`, name]
-                              }
-                            />
+                            <Tooltip content={<PremiumTooltip theme={chartTheme} />} />
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="text-center mt-2">
