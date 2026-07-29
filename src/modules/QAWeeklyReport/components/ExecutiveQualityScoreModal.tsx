@@ -3,7 +3,7 @@
 
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Star, TrendingUp, CheckCircle, Shield, Target } from 'lucide-react'
+import { X, Star, TrendingUp, CheckCircle, Target } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import type { QAReportForm } from '../types'
 import { getQualityScoreComponents } from '../utils/qualityCalculator'
@@ -20,13 +20,11 @@ interface ExecutiveQualityScoreModalProps {
 const COMPONENT_ICONS = {
   passRate: CheckCircle,
   defectClosure: Target,
-  openDefects: Shield,
 } as const
 
 const COMPONENT_COLORS = {
   passRate: '#10b981',
   defectClosure: '#d4af37',
-  openDefects: '#fb923c',
 } as const
 
 export function ExecutiveQualityScoreModal({
@@ -40,8 +38,6 @@ export function ExecutiveQualityScoreModal({
   useBodyScrollLock(isOpen)
 
   const components = getQualityScoreComponents(data)
-  const activeComponents = components.filter(c => c.active)
-  const totalWeight = activeComponents.reduce((sum, c) => sum + c.weight, 0)
 
   const getScoreColorClass = (value: number) => {
     if (value >= 90) return 'text-green-400'
@@ -107,7 +103,7 @@ export function ExecutiveQualityScoreModal({
                         transition={{ delay: 0.2 }}
                         className="text-sm text-text-secondary mt-2"
                       >
-                        {data.projectName} • Pass rate, defect closure & open defects
+                        {data.projectName} • Pass rate & defect closure
                       </motion.p>
                     </div>
                     <motion.button
@@ -154,13 +150,9 @@ export function ExecutiveQualityScoreModal({
                       </h3>
 
                       <div className="space-y-3">
-                        {activeComponents.map((component, idx) => {
+                        {components.map((component, idx) => {
                           const Icon = COMPONENT_ICONS[component.key]
                           const componentColor = COMPONENT_COLORS[component.key]
-                          const weightedContribution =
-                            totalWeight > 0
-                              ? Math.round((component.value * component.weight) / totalWeight)
-                              : 0
 
                           return (
                             <motion.div
@@ -185,9 +177,9 @@ export function ExecutiveQualityScoreModal({
                                 </div>
                                 <div className="text-right">
                                   <div className={`text-2xl font-bold ${getScoreColorClass(component.value)}`}>
-                                    {component.value}
+                                    {component.value}%
                                   </div>
-                                  <div className="text-xs text-text-muted">Weight: {component.weight}</div>
+                                  <div className="text-xs text-text-muted">Max {component.weight} pts</div>
                                 </div>
                               </div>
 
@@ -202,8 +194,10 @@ export function ExecutiveQualityScoreModal({
                               </div>
 
                               <div className="mt-2 text-xs text-text-muted flex justify-between">
-                                <span>Contribution to total:</span>
-                                <span className="font-bold text-accent">+{weightedContribution} points</span>
+                                <span>
+                                  {component.value}% × {component.weight} ÷ 100
+                                </span>
+                                <span className="font-bold text-accent">+{component.points} points</span>
                               </div>
                             </motion.div>
                           )
@@ -221,18 +215,18 @@ export function ExecutiveQualityScoreModal({
                       <div className="bg-surface-elevated/50 backdrop-blur-sm rounded-lg p-4 border border-border/30">
                         <div className="font-mono text-xs text-text-secondary leading-relaxed space-y-2">
                           <div className="text-accent font-bold mb-3">
-                            Score = Σ (Value × Weight) / Σ Weights
+                            Score = (Pass% × 55 + Closure% × 45) ÷ 100
                           </div>
                           <div className="space-y-1.5 text-[11px]">
-                            {activeComponents.map(comp => (
+                            {components.map(comp => (
                               <div key={comp.key} className="flex items-center gap-2 opacity-80">
                                 <span className="text-text-muted">•</span>
                                 <span className="text-text-primary">{comp.name}:</span>
-                                <span className="text-accent">{comp.value}</span>
+                                <span className="text-accent">{comp.value}%</span>
                                 <span className="text-text-muted">×</span>
                                 <span className="text-accent">{comp.weight}</span>
-                                <span className="text-text-muted">=</span>
-                                <span className="text-accent font-semibold">{Math.round(comp.value * comp.weight)}</span>
+                                <span className="text-text-muted">÷ 100 =</span>
+                                <span className="text-accent font-semibold">{comp.points} pts</span>
                               </div>
                             ))}
                             <div className="border-t border-border/20 pt-2 mt-2">
@@ -240,7 +234,7 @@ export function ExecutiveQualityScoreModal({
                                 <span className="text-text-primary">Final Score:</span>
                                 <span className={`${getScoreColorClass(score)} text-lg`}>{score}</span>
                                 <span className="text-text-muted font-normal">
-                                  (÷ {totalWeight} active weight)
+                                  ({components.map(c => c.points).join(' + ')} pts)
                                 </span>
                               </div>
                             </div>

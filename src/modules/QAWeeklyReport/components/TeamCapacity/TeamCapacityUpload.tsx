@@ -1,17 +1,21 @@
 // src/modules/QAWeeklyReport/components/TeamCapacity/TeamCapacityUpload.tsx
 // Simple Team Capacity Upload - QA-focused (not performance evaluation)
 
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Upload, Trash2, AlertTriangle, X, CheckCircle, 
-  FileSpreadsheet, RefreshCw, Users, Clock
+  FileSpreadsheet, RefreshCw, Users, Clock, Gauge
 } from 'lucide-react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
 import { parseTeamCapacityExcel, validateCapacityData } from '../../utils/capacityParser'
 import type { TeamCapacityData } from '../../types/teamCapacity'
-import { calculateCapacityStats } from '../../types/teamCapacity'
+import {
+  calculateCapacityStats,
+  getMembersWithUtilization,
+  getUtilizationColor,
+} from '../../types/teamCapacity'
 import { cn } from '@/lib/utils'
 
 interface TeamCapacityUploadProps {
@@ -26,13 +30,22 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const displayData = capacityData && Array.isArray(capacityData.members)
-    ? { ...capacityData, stats: calculateCapacityStats(capacityData.members) }
-    : capacityData
+  const displayData = useMemo(() => {
+    if (!capacityData || !Array.isArray(capacityData.members)) return null
+    return { ...capacityData, stats: calculateCapacityStats(capacityData.members) }
+  }, [capacityData])
+
+  const membersWithUtil = useMemo(
+    () => (displayData ? getMembersWithUtilization(displayData.members) : []),
+    [displayData],
+  )
+
+  const avgUtil = displayData?.stats.average_utilization_percent ?? displayData?.stats.estimated_capacity_percent ?? 0
+  const utilColor = avgUtil >= 95 ? '#10b981' : avgUtil >= 80 ? '#22c55e' : avgUtil >= 60 ? '#f59e0b' : '#3b82f6'
 
   const ACCEPTED_TYPES = [
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-excel'
+    'application/vnd.ms-excel',
   ]
   const ACCEPTED_EXT = ['.xlsx', '.xls']
 
@@ -170,7 +183,7 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
               </div>
               <div className="mt-3 text-center">
                 <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  Expected columns: Employee Name, Logged Hours, Leave Hours (optional)
+                  Expected columns: Employee Name, Logged Hours, Leave Hours, Effective Work, Available, Utilization Percentage
                 </p>
               </div>
             </>
@@ -217,69 +230,89 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
               <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
             </div>
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-              <QuickStatCard 
-                label="Total Team" 
-                value={displayData.stats.total_members} 
-                icon={<Users className="w-4 h-4" />}
-                color="text-blue-400"
+            {/* Team utilization KPIs */}
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <QuickStatCard
+                label="Avg Utilization"
+                value={`${avgUtil}%`}
+                icon={<Gauge className="w-4 h-4" />}
+                color="text-emerald-400"
+                valueColor={utilColor}
               />
-              <QuickStatCard 
-                label="Available" 
-                value={displayData.stats.available} 
-                icon={<CheckCircle className="w-4 h-4" />}
-                color="text-green-400"
-              />
-              <QuickStatCard 
-                label="On Leave" 
-                value={displayData.stats.on_leave} 
+              <QuickStatCard
+                label="Total Logged"
+                value={`${displayData.stats.total_logged_hours ?? displayData.stats.average_hours * displayData.stats.total_members}h`}
                 icon={<Clock className="w-4 h-4" />}
-                color="text-yellow-400"
-              />
-              <QuickStatCard 
-                label="No Logs" 
-                value={displayData.stats.no_logs} 
-                icon={<AlertTriangle className="w-4 h-4" />}
-                color="text-red-400"
+                color="text-blue-400"
               />
             </div>
 
-            {/* Capacity Summary */}
-            <div className="mt-4 p-4 rounded-xl border" style={{ 
-              background: displayData.stats.estimated_capacity_percent >= 80 
-                ? 'rgba(34,197,94,0.05)' 
-                : displayData.stats.estimated_capacity_percent >= 60 
-                ? 'rgba(245,158,11,0.05)' 
-                : 'rgba(239,68,68,0.05)',
-              borderColor: displayData.stats.estimated_capacity_percent >= 80 
-                ? 'rgba(34,197,94,0.2)' 
-                : displayData.stats.estimated_capacity_percent >= 60 
-                ? 'rgba(245,158,11,0.2)' 
-                : 'rgba(239,68,68,0.2)'
-            }}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-                    Testing Capacity
-                  </span>
-                  <div className="text-2xl font-bold mt-1" style={{ 
-                    color: displayData.stats.estimated_capacity_percent >= 80 
-                      ? '#22c55e' 
-                      : displayData.stats.estimated_capacity_percent >= 60 
-                      ? '#f59e0b' 
-                      : '#ef4444'
-                  }}>
-                    {displayData.stats.estimated_capacity_percent}%
-                  </div>
+            <p className="mt-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              Utilization % from Excel when present, else (Logged ÷ Available) × 100
+            </p>
+
+            {/* Employee utilization table */}
+            {membersWithUtil.length > 0 && (
+              <div
+                className="mt-4 rounded-xl overflow-hidden border"
+                style={{ borderColor: 'var(--border)' }}
+              >
+                <div
+                  className="grid grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr] gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider"
+                  style={{ background: 'var(--hover)', color: 'var(--text-muted)' }}
+                >
+                  <span>Employee</span>
+                  <span className="text-right">Logged</span>
+                  <span className="text-right">Available</span>
+                  <span className="text-right">Util %</span>
                 </div>
-                <div className="text-right">
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Avg Hours/Member</span>
-                  <div className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-                    {displayData.stats.average_hours}h
-                  </div>
+                <div className="max-h-56 overflow-y-auto">
+                  {membersWithUtil.map(m => (
+                    <div
+                      key={m.id}
+                      className="grid grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr] gap-2 px-3 py-2 text-xs border-t"
+                      style={{ borderColor: 'var(--border)' }}
+                    >
+                      <span className="truncate font-medium" style={{ color: 'var(--text-primary)' }}>
+                        {m.name}
+                      </span>
+                      <span className="text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                        {m.logged_hours}h
+                      </span>
+                      <span className="text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                        {m.available_hours}h
+                      </span>
+                      <span
+                        className="text-right tabular-nums font-semibold"
+                        style={{ color: getUtilizationColor(m.utilization_percent) }}
+                      >
+                        {m.utilization_percent}%
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
+            )}
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+              <QuickStatCard
+                label="Total Team"
+                value={displayData.stats.total_members}
+                icon={<Users className="w-4 h-4" />}
+                color="text-blue-400"
+              />
+              <QuickStatCard
+                label="Available"
+                value={displayData.stats.available}
+                icon={<CheckCircle className="w-4 h-4" />}
+                color="text-green-400"
+              />
+              <QuickStatCard
+                label="Total Leave Hours"
+                value={`${displayData.stats.total_leave_hours ?? 0}h`}
+                icon={<Clock className="w-4 h-4" />}
+                color="text-yellow-400"
+              />
             </div>
           </motion.div>
         )}
@@ -288,15 +321,16 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
   )
 }
 
-// Quick Stat Card
 interface QuickStatCardProps {
   label: string
-  value: number
+  value: number | string
   icon: React.ReactNode
   color: string
+  sub?: string
+  valueColor?: string
 }
 
-function QuickStatCard({ label, value, icon, color }: QuickStatCardProps) {
+function QuickStatCard({ label, value, icon, color, sub, valueColor }: QuickStatCardProps) {
   return (
     <div className="p-3 rounded-xl" style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}>
       <div className="flex items-center gap-2 mb-1">
@@ -305,9 +339,15 @@ function QuickStatCard({ label, value, icon, color }: QuickStatCardProps) {
           {label}
         </span>
       </div>
-      <div className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
+      <div className="text-xl font-bold tabular-nums" style={{ color: valueColor ?? 'var(--text-primary)' }}>
         {value}
       </div>
+      {sub && (
+        <div className="text-[10px] truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>
+          {sub}
+        </div>
+      )}
     </div>
   )
 }
+

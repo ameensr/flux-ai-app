@@ -44,7 +44,7 @@ export function ReleaseReadinessModal({
 
   const factorsData = [
     {
-      name: 'Test Pass Rate',
+      name: 'Release Pass Rate',
       weight: '50%',
       score: (passPctFactor * 100).toFixed(1),
       contribution: passContribution,
@@ -541,7 +541,7 @@ export function ReleaseReadinessModal({
                         </h4>
                         <div className="text-xs text-text-muted leading-relaxed space-y-2">
                           <p>
-                            <strong className="text-text-secondary">Test Pass Rate (50%):</strong> The percentage of test cases that passed.
+                            <strong className="text-text-secondary">Release Pass Rate (50%):</strong> The percentage of release testing items that passed.
                             Higher pass rates indicate better quality and readiness.
                           </p>
                           <p>

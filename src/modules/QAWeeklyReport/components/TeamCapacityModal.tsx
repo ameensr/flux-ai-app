@@ -3,10 +3,15 @@
 
 import React, { useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Users, CheckCircle, AlertCircle, Ban, Clock, Activity } from 'lucide-react'
+import { X, Users, CheckCircle, Clock } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import type { TeamCapacityData } from '../types/teamCapacity'
-import { calculateCapacityStats, getCapacityDistribution } from '../types/teamCapacity'
+import {
+  calculateCapacityStats,
+  getMembersWithUtilization,
+  getUtilizationColor,
+  getUtilizationLabel,
+} from '../types/teamCapacity'
 import { useTheme } from '@/context/ThemeContext'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { PremiumTooltip, glowStyle } from './report-preview/chartTheme'
@@ -17,8 +22,6 @@ interface TeamCapacityModalProps {
   data: TeamCapacityData
   projectName: string
 }
-
-const EXPECTED_HOURS = 40
 
 export function TeamCapacityModal({
   isOpen,
@@ -35,34 +38,55 @@ export function TeamCapacityModal({
     [data?.members],
   )
 
+  const membersWithUtil = useMemo(
+    () => (Array.isArray(data?.members) ? getMembersWithUtilization(data.members) : []),
+    [data?.members],
+  )
+
   if (!stats || !Array.isArray(data?.members)) {
     return null
   }
 
-  const distribution = getCapacityDistribution(stats)
   const totalMembers = stats.total_members
-  const totalLeave = data.members.reduce((sum, m) => sum + (Number(m.leave_hours) || 0), 0)
-  const expectedTotal = totalMembers * EXPECTED_HOURS
-  const availableHours = Math.max(0, expectedTotal - totalLeave)
+  const avgUtil = stats.average_utilization_percent ?? stats.estimated_capacity_percent
 
-  const chartData = distribution.map(d => ({
-    name: d.label,
-    value: d.count,
-    hex: d.color,
-  }))
+  const totalAvailableHours = Number(
+    (stats.total_available_hours ?? membersWithUtil.reduce((s, m) => s + m.available_hours, 0)).toFixed(1),
+  )
+  const totalLeaveHours = Number(
+    (stats.total_leave_hours ?? membersWithUtil.reduce((s, m) => s + m.leave_hours, 0)).toFixed(1),
+  )
+  const hoursTotal = Number((totalAvailableHours + totalLeaveHours).toFixed(1))
 
-  const getStatusIcon = (label: string) => {
-    switch (label) {
-      case 'Available':
-        return CheckCircle
-      case 'On Leave':
-        return Clock
-      case 'No Logs':
-        return AlertCircle
-      default:
-        return Ban
-    }
-  }
+  const breakdownRows = [
+    {
+      label: 'Total Available',
+      value: totalAvailableHours,
+      color: '#10b981',
+      icon: CheckCircle,
+      detail: 'Sum of Available hours from Excel',
+    },
+    {
+      label: 'Total Leave',
+      value: totalLeaveHours,
+      color: '#eab308',
+      icon: Clock,
+      detail: 'Sum of Leave hours from Excel',
+    },
+  ]
+
+  const chartData = breakdownRows
+    .filter(row => row.value > 0)
+    .map(row => ({
+      name: row.label,
+      value: row.value,
+      hex: row.color,
+    }))
+
+  const pieData =
+    chartData.length > 0
+      ? chartData
+      : [{ name: 'No hours', value: 1, hex: '#64748b' }]
 
   return (
     <AnimatePresence>
@@ -88,7 +112,7 @@ export function TeamCapacityModal({
                 damping: 22,
                 duration: 0.35,
               }}
-              className="pointer-events-auto w-full max-w-3xl max-h-[85vh] overflow-y-auto"
+              className="pointer-events-auto w-full max-w-4xl max-h-[85vh] overflow-y-auto"
               style={{ perspective: '1000px', transformStyle: 'preserve-3d' }}
             >
               <div
@@ -168,28 +192,36 @@ export function TeamCapacityModal({
                         <ResponsiveContainer width="100%" height={280}>
                           <PieChart>
                             <Pie
-                              data={chartData}
+                              data={pieData}
                               cx="50%"
                               cy="50%"
                               innerRadius={60}
                               outerRadius={90}
-                              paddingAngle={3}
+                              paddingAngle={pieData.length > 1 ? 3 : 0}
                               cornerRadius={6}
                               stroke="none"
                               dataKey="value"
                               animationBegin={100}
                               animationDuration={800}
                             >
-                              {chartData.map((entry, idx) => (
+                              {pieData.map((entry, idx) => (
                                 <Cell key={idx} fill={entry.hex} style={glowStyle(entry.hex, chartTheme)} />
                               ))}
                             </Pie>
-                            <Tooltip content={<PremiumTooltip theme={chartTheme} />} />
+                            <Tooltip
+                              content={<PremiumTooltip theme={chartTheme} />}
+                              formatter={(value: number, name: string) =>
+                                name === 'No hours' ? ['—', name] : [`${value}h`, name]
+                              }
+                            />
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="text-center mt-2">
-                          <div className="text-3xl font-bold text-text-primary">{totalMembers}</div>
-                          <div className="text-sm text-text-muted">Total Team Members</div>
+                          <div className="text-3xl font-bold text-text-primary tabular-nums">
+                            {Number(hoursTotal.toFixed(1))}h
+                          </div>
+                          <div className="text-sm text-text-muted">Available + Leave Hours</div>
+                          <div className="text-xs text-text-muted mt-1">{totalMembers} team members</div>
                         </div>
                       </motion.div>
 
@@ -200,9 +232,12 @@ export function TeamCapacityModal({
                         className="space-y-3"
                       >
                         <h3 className="text-lg font-semibold text-text-primary mb-4">Availability Breakdown</h3>
-                        {distribution.map((item, idx) => {
-                          const Icon = getStatusIcon(item.label)
-                          const percentage = item.percentage.toFixed(1)
+                        {breakdownRows.map((item, idx) => {
+                          const Icon = item.icon
+                          const percentage =
+                            hoursTotal > 0
+                              ? ((item.value / hoursTotal) * 100).toFixed(1)
+                              : '0.0'
                           return (
                             <motion.div
                               key={item.label}
@@ -222,12 +257,14 @@ export function TeamCapacityModal({
                                   </div>
                                   <div className="flex-1">
                                     <div className="text-sm font-medium text-text-primary">{item.label}</div>
-                                    <div className="text-xs text-text-muted">{percentage}% of total</div>
+                                    <div className="text-xs text-text-muted">
+                                      {item.detail} · {percentage}% of hours
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  <div className="text-2xl font-bold" style={{ color: item.color }}>
-                                    {item.count}
+                                  <div className="text-2xl font-bold tabular-nums" style={{ color: item.color }}>
+                                    {item.value}h
                                   </div>
                                 </div>
                               </div>
@@ -244,22 +281,18 @@ export function TeamCapacityModal({
                       className="mt-6 pt-6 border-t border-border/30"
                     >
                       <h3 className="text-lg font-semibold text-text-primary mb-4">Capacity Metrics</h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-2 gap-4">
                         <div className="bg-surface-elevated/50 backdrop-blur-sm rounded-lg p-4 border border-border/30">
-                          <div className="text-xs text-text-muted mb-1">Total Members</div>
-                          <div className="text-2xl font-bold text-text-primary">{stats.total_members}</div>
+                          <div className="text-xs text-text-muted mb-1">Avg Utilization</div>
+                          <div className="text-2xl font-bold" style={{ color: getUtilizationColor(avgUtil) }}>
+                            {avgUtil}%
+                          </div>
                         </div>
                         <div className="bg-surface-elevated/50 backdrop-blur-sm rounded-lg p-4 border border-border/30">
-                          <div className="text-xs text-text-muted mb-1">Available</div>
-                          <div className="text-2xl font-bold text-green-400">{stats.available}</div>
-                        </div>
-                        <div className="bg-surface-elevated/50 backdrop-blur-sm rounded-lg p-4 border border-border/30">
-                          <div className="text-xs text-text-muted mb-1">Avg Hours</div>
-                          <div className="text-2xl font-bold text-text-primary">{stats.average_hours}h</div>
-                        </div>
-                        <div className="bg-surface-elevated/50 backdrop-blur-sm rounded-lg p-4 border border-border/30">
-                          <div className="text-xs text-text-muted mb-1">Capacity</div>
-                          <div className="text-2xl font-bold text-accent-gold">{stats.estimated_capacity_percent}%</div>
+                          <div className="text-xs text-text-muted mb-1">Total Logged</div>
+                          <div className="text-2xl font-bold text-text-primary">
+                            {stats.total_logged_hours ?? 0}h
+                          </div>
                         </div>
                       </div>
                     </motion.div>
@@ -270,47 +303,83 @@ export function TeamCapacityModal({
                       transition={{ delay: 0.6 }}
                       className="mt-6 pt-6 border-t border-border/30"
                     >
-                      <h3 className="text-lg font-semibold text-text-primary mb-4">Team Availability Details</h3>
-                      <div className="bg-surface-elevated/50 backdrop-blur-sm rounded-xl p-4 border border-border/30 overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
+                      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+                        <h3 className="text-lg font-semibold text-text-primary">Employee Utilization</h3>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                          Sorted by utilization · Logged ÷ Available
+                        </span>
+                      </div>
+                      <div className="bg-surface-elevated/50 backdrop-blur-sm rounded-xl p-4 border border-border/30 overflow-x-auto max-h-[360px] overflow-y-auto">
+                        <table className="w-full text-sm min-w-[640px]">
+                          <thead className="sticky top-0 z-10 bg-surface-elevated">
                             <tr className="border-b border-border/30">
                               <th className="text-left py-3 px-3 font-semibold text-text-muted">Employee</th>
-                              <th className="text-right py-3 px-3 font-semibold text-text-muted">Logged Hours</th>
-                              <th className="text-right py-3 px-3 font-semibold text-text-muted">Leave Hours</th>
+                              <th className="text-right py-3 px-3 font-semibold text-text-muted">Logged</th>
+                              <th className="text-right py-3 px-3 font-semibold text-text-muted">Leave</th>
+                              <th className="text-right py-3 px-3 font-semibold text-text-muted">Effective</th>
+                              <th className="text-right py-3 px-3 font-semibold text-text-muted">Available</th>
+                              <th className="text-right py-3 px-3 font-semibold text-text-muted">Utilization</th>
+                              <th className="text-left py-3 px-3 font-semibold text-text-muted">Status</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {data.members.map((member, idx) => (
-                              <motion.tr
-                                key={member.id}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.65 + idx * 0.03 }}
-                                className="border-b border-border/20 hover:bg-white/[0.02] transition-colors"
-                              >
-                                <td className="py-3 px-3 text-text-primary font-medium">{member.name}</td>
-                                <td
-                                  className="py-3 px-3 text-right font-semibold"
-                                  style={{
-                                    color: member.logged_hours > 0 ? 'var(--text-primary)' : '#ef4444',
-                                  }}
+                            {membersWithUtil.map((member, idx) => {
+                              const utilColor = getUtilizationColor(member.utilization_percent)
+                              const utilLabel = getUtilizationLabel(member.utilization_percent)
+                              return (
+                                <motion.tr
+                                  key={member.id}
+                                  initial={{ opacity: 0, x: -10 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: Math.min(0.65 + idx * 0.02, 1.2) }}
+                                  className="border-b border-border/20 hover:bg-white/[0.02] transition-colors"
                                 >
-                                  {member.logged_hours}h
-                                </td>
-                                <td
-                                  className="py-3 px-3 text-right font-semibold"
-                                  style={{
-                                    color: member.leave_hours > 0 ? '#eab308' : 'var(--text-muted)',
-                                  }}
-                                >
-                                  {member.leave_hours}h
-                                </td>
-                              </motion.tr>
-                            ))}
+                                  <td className="py-3 px-3 text-text-primary font-medium">{member.name}</td>
+                                  <td
+                                    className="py-3 px-3 text-right font-semibold"
+                                    style={{ color: member.logged_hours > 0 ? 'var(--text-primary)' : '#ef4444' }}
+                                  >
+                                    {member.logged_hours}h
+                                  </td>
+                                  <td
+                                    className="py-3 px-3 text-right font-semibold"
+                                    style={{ color: member.leave_hours > 0 ? '#eab308' : 'var(--text-muted)' }}
+                                  >
+                                    {member.leave_hours}h
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-semibold text-text-primary">
+                                    {member.effective_work}h
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-semibold text-text-secondary">
+                                    {member.available_hours}h
+                                  </td>
+                                  <td className="py-3 px-3 text-right">
+                                    <span className="font-bold tabular-nums" style={{ color: utilColor }}>
+                                      {member.utilization_percent}%
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <span
+                                      className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full"
+                                      style={{
+                                        color: utilColor,
+                                        background: `${utilColor}18`,
+                                        border: `1px solid ${utilColor}40`,
+                                      }}
+                                    >
+                                      {utilLabel}
+                                    </span>
+                                  </td>
+                                </motion.tr>
+                              )
+                            })}
                           </tbody>
                         </table>
                       </div>
+                      <p className="text-[10px] text-text-muted mt-2">
+                        From Excel: Employee Name, Logged Hours, Leave Hours, Effective Work, Available, Utilization Percentage.
+                        Missing Effective / Util are derived (Logged − Leave; Logged ÷ Available × 100).
+                      </p>
                     </motion.div>
 
                     <motion.div
@@ -322,74 +391,13 @@ export function TeamCapacityModal({
                       <div className="bg-green-500/10 rounded-lg p-4 border border-green-500/20">
                         <h4 className="text-sm font-semibold text-text-primary mb-2">Capacity Insights</h4>
                         <p className="text-xs text-text-muted leading-relaxed">
-                          {stats.estimated_capacity_percent >= 80 ? (
-                            <span className="text-green-400 font-semibold">Your team is operating at strong capacity this week.</span>
-                          ) : stats.estimated_capacity_percent >= 60 ? (
-                            <span className="text-yellow-400 font-semibold">Your team is operating at moderate capacity this week.</span>
+                          {avgUtil >= 95 ? (
+                            <span className="text-green-400 font-semibold">Team average utilization is at or near full capacity.</span>
+                          ) : avgUtil >= 80 ? (
+                            <span className="text-yellow-400 font-semibold">Team average utilization is healthy with some headroom.</span>
                           ) : (
-                            <span className="text-red-400 font-semibold">Team capacity is reduced this week — consider workload adjustments.</span>
+                            <span className="text-blue-400 font-semibold">Team average utilization is below target — capacity may be underused.</span>
                           )}
-                        </p>
-                      </div>
-                    </motion.div>
-
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.75 }}
-                      className="mt-6 pt-6 border-t border-border/30"
-                    >
-                      <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
-                        <Activity className="w-5 h-5 text-accent-gold" />
-                        Team Capacity Calculation
-                      </h3>
-
-                      <div className="bg-surface-elevated/50 backdrop-blur-sm rounded-lg p-4 border border-border/30 space-y-3">
-                        <div className="bg-black/20 rounded-lg p-3 font-mono text-xs overflow-x-auto">
-                          <div className="text-accent-gold mb-2">Formula:</div>
-                          <div className="text-text-secondary whitespace-nowrap">
-                            Capacity % = (Expected Hours − Leave Hours) / Expected Hours × 100
-                          </div>
-                        </div>
-
-                        <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
-                          <div className="text-xs font-semibold text-blue-400 mb-2">This report:</div>
-                          <div className="space-y-1 text-xs text-text-secondary">
-                            <div className="flex justify-between">
-                              <span>Total Team Members:</span>
-                              <span className="font-semibold text-text-primary">{stats.total_members}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Expected Hours per Person:</span>
-                              <span className="font-semibold text-text-primary">{EXPECTED_HOURS}h / week</span>
-                            </div>
-                            <div className="flex justify-between border-t border-blue-500/20 pt-1 mt-1">
-                              <span>Expected Total Hours:</span>
-                              <span className="font-semibold text-text-primary">
-                                {stats.total_members} × {EXPECTED_HOURS} = {expectedTotal}h
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Total Leave Hours:</span>
-                              <span className="font-semibold text-yellow-400">{totalLeave}h</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Available Hours:</span>
-                              <span className="font-semibold text-green-400">
-                                {expectedTotal} − {totalLeave} = {availableHours}h
-                              </span>
-                            </div>
-                            <div className="flex justify-between border-t border-blue-500/20 pt-1 mt-1">
-                              <span className="font-bold">Team Capacity:</span>
-                              <span className="font-bold text-accent-gold">
-                                {stats.estimated_capacity_percent}%
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <p className="text-xs text-text-muted italic">
-                          Leave reduces available testing capacity. Logged hours are shown for reference; capacity % is driven by leave against the expected {EXPECTED_HOURS}h week.
                         </p>
                       </div>
                     </motion.div>

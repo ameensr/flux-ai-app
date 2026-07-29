@@ -142,7 +142,7 @@ export function buildHeroMetricSummaryLines(input: {
 
   if (releaseCount > 0) {
     lines.push(
-      `> ${projectName || 'Project'}: ${releasePassed}/${releaseCount} release items passed · Test Pass Rate ${passRate}%`,
+      `> ${projectName || 'Project'}: ${releasePassed}/${releaseCount} release items passed · Release Pass Rate ${passRate}%`,
     )
   } else {
     lines.push(`> ${projectName || 'Project'}: no release testing items logged this week`)

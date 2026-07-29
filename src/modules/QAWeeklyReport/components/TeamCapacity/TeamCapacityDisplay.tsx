@@ -1,13 +1,18 @@
 // src/modules/QAWeeklyReport/components/TeamCapacity/TeamCapacityDisplay.tsx
 // Compact Team Capacity Display for Report Preview - Executive Summary
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Users, CheckCircle, Clock, AlertTriangle, Activity, Sparkles } from 'lucide-react'
+import { Users, CheckCircle, Clock, Sparkles, Gauge } from 'lucide-react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { AIService } from '@/services/ai/ai-service'
 import type { TeamCapacityData } from '../../types/teamCapacity'
-import { calculateCapacityStats, getCapacityDistribution } from '../../types/teamCapacity'
+import {
+  calculateCapacityStats,
+  getCapacityDistribution,
+  getMembersWithUtilization,
+  getUtilizationColor,
+} from '../../types/teamCapacity'
 
 interface TeamCapacityDisplayProps {
   data: TeamCapacityData
@@ -26,6 +31,13 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
       ? { ...data, stats: liveStats }
       : null
 
+  const membersWithUtil = useMemo(
+    () => (liveData ? getMembersWithUtilization(liveData.members) : []),
+    [liveData],
+  )
+
+  const avgUtil = liveData?.stats.average_utilization_percent ?? liveData?.stats.estimated_capacity_percent ?? 0
+
   useEffect(() => {
     if (!liveData) return
     let cancelled = false
@@ -36,9 +48,10 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
         const response = await AIService.callAI({
           prompt,
           options: {
-            systemPrompt: 'You are a QA manager summarizing team capacity for an executive report. Be concise and focus on testing impact.',
-            module: 'team-capacity-summary'
-          }
+            systemPrompt:
+              'You are a QA manager writing a weekly capacity summary. Use only the facts provided. Never mention leave, absences, time off, or who was on leave. Focus on utilization and logged hours only.',
+            module: 'team-capacity-summary',
+          },
         })
         if (!cancelled) setAiSummary(response.trim())
       } catch {
@@ -59,7 +72,22 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <KPICard
+          icon={<Gauge className="w-5 h-5" />}
+          label="Avg Team Utilization"
+          value={`${avgUtil}%`}
+          color="rgba(16,185,129,0.1)"
+          iconColor={getUtilizationColor(avgUtil)}
+          valueColor={getUtilizationColor(avgUtil)}
+        />
+        <KPICard
+          icon={<Clock className="w-5 h-5" />}
+          label="Total Logged Hours"
+          value={`${liveData.stats.total_logged_hours ?? 0}h`}
+          color="rgba(59,130,246,0.1)"
+          iconColor="#3b82f6"
+        />
         <KPICard
           icon={<Users className="w-5 h-5" />}
           label="Total Team Members"
@@ -76,24 +104,10 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
         />
         <KPICard
           icon={<Clock className="w-5 h-5" />}
-          label="On Leave"
-          value={liveData.stats.on_leave}
+          label="Total Leave Hours"
+          value={`${liveData.stats.total_leave_hours ?? 0}h`}
           color="rgba(245,158,11,0.1)"
           iconColor="#f59e0b"
-        />
-        <KPICard
-          icon={<AlertTriangle className="w-5 h-5" />}
-          label="No Logged Hours"
-          value={liveData.stats.no_logs}
-          color="rgba(239,68,68,0.1)"
-          iconColor="#ef4444"
-        />
-        <KPICard
-          icon={<Activity className="w-5 h-5" />}
-          label="Avg Working Hours"
-          value={`${liveData.stats.average_hours}h`}
-          color="rgba(168,85,247,0.1)"
-          iconColor="#a855f7"
         />
       </div>
 
@@ -174,11 +188,11 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
 
                 {/* Center text */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <div className="text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                    {liveData.stats.estimated_capacity_percent}%
+                  <div className="text-3xl font-bold" style={{ color: getUtilizationColor(avgUtil) }}>
+                    {avgUtil}%
                   </div>
                   <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                    Capacity
+                    Avg Util
                   </div>
                 </div>
               </div>
@@ -204,11 +218,11 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
           </GlassCard>
         </div>
 
-        {/* Team Availability Table */}
+        {/* Team Utilization Table */}
         <div className="lg:col-span-2">
           <GlassCard>
             <h4 className="text-sm font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
-              Team Availability
+              Employee Utilization
             </h4>
 
             <div className="overflow-x-auto">
@@ -219,7 +233,7 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
                       Employee
                     </th>
                     <th className="text-right py-2 px-3 font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                      Logged Hours
+                      Available Hours
                     </th>
                     <th className="text-right py-2 px-3 font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                       Leave Hours
@@ -227,37 +241,28 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
                   </tr>
                 </thead>
                 <tbody>
-                  {data.members.map((member, idx) => {
-                    // Visual indicators based on hours
-                    const isFullyAvailable = member.logged_hours > 0 && member.leave_hours === 0
-                    const hasLeave = member.leave_hours > 0
-                    const noLogs = member.logged_hours === 0 && member.leave_hours === 0
-
-                    return (
-                      <motion.tr
-                        key={member.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.3, delay: idx * 0.03 }}
-                        className="border-b hover:bg-white/[0.02] transition-colors"
-                        style={{ borderColor: 'var(--border)' }}
-                      >
-                        <td className="py-2 px-3" style={{ color: 'var(--text-primary)' }}>
-                          {member.name}
-                        </td>
-                        <td className="py-2 px-3 text-right font-semibold" style={{
-                          color: member.logged_hours > 0 ? 'var(--text-primary)' : '#ef4444'
-                        }}>
-                          {member.logged_hours}h
-                        </td>
-                        <td className="py-2 px-3 text-right font-semibold" style={{
-                          color: member.leave_hours > 0 ? '#eab308' : 'var(--text-muted)'
-                        }}>
-                          {member.leave_hours}h
-                        </td>
-                      </motion.tr>
-                    )
-                  })}
+                  {membersWithUtil.map((member, idx) => (
+                    <motion.tr
+                      key={member.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: idx * 0.03 }}
+                      className="border-b hover:bg-white/[0.02] transition-colors"
+                      style={{ borderColor: 'var(--border)' }}
+                    >
+                      <td className="py-2 px-3" style={{ color: 'var(--text-primary)' }}>
+                        {member.name}
+                      </td>
+                      <td className="py-2 px-3 text-right font-semibold tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                        {member.available_hours}h
+                      </td>
+                      <td className="py-2 px-3 text-right font-semibold tabular-nums" style={{
+                        color: member.leave_hours > 0 ? '#eab308' : 'var(--text-muted)'
+                      }}>
+                        {member.leave_hours}h
+                      </td>
+                    </motion.tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -298,9 +303,11 @@ interface KPICardProps {
   value: string | number
   color: string
   iconColor: string
+  sub?: string
+  valueColor?: string
 }
 
-function KPICard({ icon, label, value, color, iconColor }: KPICardProps) {
+function KPICard({ icon, label, value, color, iconColor, sub, valueColor }: KPICardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -319,13 +326,18 @@ function KPICard({ icon, label, value, color, iconColor }: KPICardProps) {
           </div>
         </div>
 
-        <div className="text-2xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+        <div className="text-2xl font-bold mb-1 tabular-nums" style={{ color: valueColor ?? 'var(--text-primary)' }}>
           {value}
         </div>
 
         <div className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
           {label}
         </div>
+        {sub && (
+          <div className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+            {sub}
+          </div>
+        )}
       </GlassCard>
     </motion.div>
   )
@@ -333,52 +345,37 @@ function KPICard({ icon, label, value, color, iconColor }: KPICardProps) {
 
 // Helper functions
 function buildCapacitySummaryPrompt(data: TeamCapacityData): string {
-  const { stats, members } = data
+  const { stats } = data
+  const avgUtil = stats.average_utilization_percent ?? stats.estimated_capacity_percent
 
-  return `Analyze this QA team capacity data and write a concise one-paragraph executive summary:
+  return `Write a concise 2–3 sentence executive summary of QA team capacity for a weekly report.
 
-**Team Overview:**
+**Facts (use only these — do not invent):**
 - Total Members: ${stats.total_members}
-- Available: ${stats.available}
-- On Leave: ${stats.on_leave}
-- No Logged Hours: ${stats.no_logs}
-- Average Hours: ${stats.average_hours}h
-- Estimated Capacity: ${stats.estimated_capacity_percent}%
+- Total Logged Hours: ${stats.total_logged_hours ?? 'n/a'}h
+- Total Available Hours: ${stats.total_available_hours ?? 'n/a'}h
+- Average Team Utilization: ${avgUtil}% (Logged ÷ Available × 100)
 
-**Context:**
-This is for a QA Weekly Report. Focus on:
-1. Whether testing capacity was sufficient for the week
-2. Impact of leave/absences on testing activities
-3. Any concerns about team availability
-
-Write 2-3 sentences maximum. Be factual and executive-appropriate. Do not include recommendations or action items.`
+**Rules:**
+- Focus only on team size, logged/available hours, and utilization.
+- Do NOT mention leave, absences, time off, or who was on leave.
+- Be factual. No recommendations or action items.`
 }
 
 function generateFallbackSummary(data: TeamCapacityData): string {
   const { stats } = data
   const total = stats.total_members
-  const available = stats.available
-  const onLeave = stats.on_leave
-  const noLogs = stats.no_logs
+  const avgUtil = stats.average_utilization_percent ?? stats.estimated_capacity_percent
+  const logged = stats.total_logged_hours
 
-  let summary = `${available} of ${total} QA team members were available this week`
+  let summary = `The QA team of ${total} member${total === 1 ? '' : 's'} logged ${logged ?? 'n/a'}h this period, with average utilization at ${avgUtil}%. `
 
-  if (onLeave > 0) {
-    summary += `, with ${onLeave} member${onLeave > 1 ? 's' : ''} on leave`
-  }
-
-  if (noLogs > 0) {
-    summary += ` and ${noLogs} member${noLogs > 1 ? 's' : ''} with no logged work hours`
-  }
-
-  summary += `. `
-
-  if (stats.estimated_capacity_percent >= 80) {
-    summary += `Overall testing capacity remained sufficient for planned execution.`
-  } else if (stats.estimated_capacity_percent >= 60) {
-    summary += `Testing capacity was adequate but may have impacted some lower-priority test activities.`
+  if (avgUtil >= 95) {
+    summary += `Overall testing capacity remained near full utilization.`
+  } else if (avgUtil >= 80) {
+    summary += `Testing capacity was healthy with some headroom.`
   } else {
-    summary += `Reduced capacity may have affected testing coverage and execution timelines.`
+    summary += `Utilization was below target and may indicate spare capacity.`
   }
 
   return summary

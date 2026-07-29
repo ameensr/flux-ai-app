@@ -83,7 +83,7 @@ function buildMarkdown(f: QAReportForm): string {
   lines.push(`- New Features tested: **${f.newFeatures}**`)
   lines.push(`- Code Fixes tested: **${f.codeFixes}**`)
   lines.push(`- QA Quality Score: **${calculateQAScore(f).score}% (${calculateQAScore(f).label})**`)
-  if (f.releaseItems.length) lines.push(`- Release test pass rate: **${passRate}%** (${passCount}/${f.releaseItems.length} items passed)`)
+  if (f.releaseItems.length) lines.push(`- Release Pass Rate: **${passRate}%** (${passCount}/${f.releaseItems.length} items passed)`)
 
   // KPI Summary
   lines.push('\n## Weekly KPI Summary')

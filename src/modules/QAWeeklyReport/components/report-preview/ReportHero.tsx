@@ -307,7 +307,7 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
               className="absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 pointer-events-none"
             />
             <div className="flex items-center justify-between mb-4">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white/80">Test Pass Rate</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-white/80">Release Pass Rate</span>
               <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-4 h-4 text-white" />
               </span>

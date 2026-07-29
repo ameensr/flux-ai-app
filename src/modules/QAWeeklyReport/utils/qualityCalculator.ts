@@ -9,19 +9,23 @@ export interface QualityScoreResult {
 }
 
 export interface QualityScoreComponent {
-  key: 'passRate' | 'defectClosure' | 'openDefects'
+  key: 'passRate' | 'defectClosure'
   name: string
+  /** Fixed max points this signal can contribute (weights sum to 100). */
   weight: number
+  /** Raw metric 0–100 (e.g. pass rate %). */
   value: number
+  /** Points contributed toward the final score: value × weight / 100. */
+  points: number
   detail: string
+  /** True when metric is based on real report data (not a neutral default). */
   active: boolean
 }
 
-/** Minimal Executive Quality Score — 3 signals (max weight 100). */
+/** Executive Quality Score — 2 signals totaling 100 points. */
 export const QUALITY_WEIGHTS = {
-  passRate: 45,
-  defectClosure: 35,
-  openDefects: 20,
+  passRate: 55,
+  defectClosure: 45,
 } as const
 
 export const THRESHOLDS = {
@@ -34,7 +38,22 @@ function clampScore(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)))
 }
 
-/** Shared inputs + component breakdown used by the score + modal. */
+function pointsFrom(value: number, weight: number): number {
+  return Math.round((value * weight) / 100)
+}
+
+/**
+ * Shared inputs + component breakdown used by the score + modal.
+ *
+ * Score = Pass Rate points + Defect Closure points
+ *   Pass points     = Pass% × 55 / 100   (max 55)
+ *   Closure points  = Closure% × 45 / 100 (max 45)
+ *
+ * Pass%     = passed release items ÷ total release items
+ * Closure%  = Release Bug Status closure % when uploaded,
+ *             else closed ÷ reported from Defects — Last Week
+ * Missing data defaults to 100% (neutral) so an empty section does not tank the score.
+ */
 export function getQualityScoreComponents(
   data: QAReportForm | null | undefined
 ): QualityScoreComponent[] {
@@ -42,46 +61,53 @@ export function getQualityScoreComponents(
 
   const releaseCount = data.releaseItems?.length || 0
   const releasePassed = data.releaseItems?.filter(i => isPassStatus(i?.status)).length || 0
+  const hasPassData = releaseCount > 0
+  const passValue = hasPassData
+    ? clampScore((releasePassed / releaseCount) * 100)
+    : 100
 
-  // Prefer uploaded Release Bug Status metrics when present (same as preview widgets)
+  // Prefer uploaded Release Bug Status closure % (includes completed + resolved)
   const bugMetrics = data.releaseBugStatus?.metrics
-  const reported =
-    (bugMetrics?.totalBugs && bugMetrics.totalBugs > 0
-      ? bugMetrics.totalBugs
-      : data.defectsLastWeek?.reported) || 0
-  const closed =
-    bugMetrics?.totalBugs && bugMetrics.totalBugs > 0
-      ? bugMetrics.completedBugs || 0
-      : data.defectsLastWeek?.closed || 0
-  const open =
-    bugMetrics?.totalBugs && bugMetrics.totalBugs > 0
-      ? bugMetrics.activeBugs ?? 0
-      : data.defectsLastWeek?.open || 0
+  const hasBugSheet = !!(bugMetrics && bugMetrics.totalBugs > 0)
+  const reported = data.defectsLastWeek?.reported || 0
+  const closed = data.defectsLastWeek?.closed || 0
+  const hasManualDefects = reported > 0
+
+  let closureValue = 100
+  let closureDetail = 'No defect data — counted as 100%'
+  let hasClosureData = false
+
+  if (hasBugSheet) {
+    hasClosureData = true
+    closureValue = clampScore(bugMetrics!.closurePercentage)
+    const done = (bugMetrics!.completedBugs || 0) + (bugMetrics!.resolvedBugs || 0)
+    closureDetail = `${done} of ${bugMetrics!.totalBugs} defects closed/resolved (${closureValue}%)`
+  } else if (hasManualDefects) {
+    hasClosureData = true
+    closureValue = clampScore((closed / reported) * 100)
+    closureDetail = `${closed} of ${reported} defects closed`
+  }
 
   return [
     {
       key: 'passRate',
       name: 'Release Pass Rate',
       weight: QUALITY_WEIGHTS.passRate,
-      value: releaseCount > 0 ? clampScore((releasePassed / releaseCount) * 100) : 100,
-      detail: `${releasePassed} of ${releaseCount} release items passed`,
-      active: releaseCount > 0,
+      value: passValue,
+      points: pointsFrom(passValue, QUALITY_WEIGHTS.passRate),
+      detail: hasPassData
+        ? `${releasePassed} of ${releaseCount} release items passed`
+        : 'No release items — counted as 100%',
+      active: hasPassData,
     },
     {
       key: 'defectClosure',
       name: 'Defect Closure Rate',
       weight: QUALITY_WEIGHTS.defectClosure,
-      value: reported > 0 ? clampScore((closed / reported) * 100) : 100,
-      detail: `${closed} of ${reported} defects closed`,
-      active: reported > 0,
-    },
-    {
-      key: 'openDefects',
-      name: 'Open Defects Penalty',
-      weight: QUALITY_WEIGHTS.openDefects,
-      value: Math.max(100 - open * 10, 0),
-      detail: `${open} defects currently open (−10 each)`,
-      active: true,
+      value: closureValue,
+      points: pointsFrom(closureValue, QUALITY_WEIGHTS.defectClosure),
+      detail: closureDetail,
+      active: hasClosureData,
     },
   ]
 }
@@ -97,16 +123,8 @@ export const calculateQAScore = (data: QAReportForm | null | undefined): Quality
   }
 
   const components = getQualityScoreComponents(data)
-  const active = components.filter(c => c.active)
-
-  let totalWeight = 0
-  let weightedSum = 0
-  for (const c of active) {
-    weightedSum += c.value * c.weight
-    totalWeight += c.weight
-  }
-
-  const score = totalWeight > 0 ? clampScore(weightedSum / totalWeight) : 100
+  // Additive points model — weights always sum to 100
+  const score = clampScore(components.reduce((sum, c) => sum + c.points, 0))
 
   if (score >= THRESHOLDS.EXCELLENT) {
     return {
@@ -129,13 +147,13 @@ export const calculateQAScore = (data: QAReportForm | null | undefined): Quality
       score,
       label: 'Fair',
       color: 'text-orange-400 border-orange-500/20 bg-orange-500/5',
-      desc: 'Open defects or release failures are rising. Plan focused regression work.',
+      desc: 'Release failures or low defect closure need attention. Plan focused regression work.',
     }
   }
   return {
     score,
     label: 'Needs Attention',
     color: 'text-red-400 border-red-500/20 bg-red-500/5',
-    desc: 'Release pass rate or open defects need immediate attention.',
+    desc: 'Release pass rate or defect closure need immediate attention.',
   }
 }

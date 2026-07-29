@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import type { Variants } from 'framer-motion'
@@ -714,7 +714,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
 
   // ── Calculation Utilities ──────────────────────────────────────────────────
-  // Test Pass Rate — same pass matcher as /qa-report Release table & quality score
+  // Release Pass Rate — same pass matcher as /qa-report Release table & quality score
   // (Pass / Passed / Completed / Success, case-insensitive). Exact `=== 'Pass'`
   // missed live DUP statuses and showed 0% incorrectly.
   const releaseCount = data.releaseItems.length
@@ -913,8 +913,8 @@ const ReportPreviewDashboardContent: React.FC = () => {
     const passRateA = reportA.releaseItems.length ? reportA.releaseItems.filter(i => isPassStatus(i?.status)).length / reportA.releaseItems.length : 1.0
     const passRateB = reportB.releaseItems.length ? reportB.releaseItems.filter(i => isPassStatus(i?.status)).length / reportB.releaseItems.length : 1.0
 
-    if (passRateB > passRateA) return `${reportB.reportTitle || 'Report B'} (Higher Test Pass Rate)`
-    if (passRateA > passRateB) return `${reportA.reportTitle || 'Report A'} (Higher Test Pass Rate)`
+    if (passRateB > passRateA) return `${reportB.reportTitle || 'Report B'} (Higher Release Pass Rate)`
+    if (passRateA > passRateB) return `${reportA.reportTitle || 'Report A'} (Higher Release Pass Rate)`
     return 'Tie'
   }
 
@@ -1724,7 +1724,7 @@ Do not return markdown wraps, only raw JSON text.
 
           {(() => {
             // Calculate KPIs from Release Bug Status, Release Testing Status, and Support & Exception Log
-            // Use the same status matchers as hero Test Pass Rate / Release table (Pass/Passed/Completed/Success).
+            // Use the same status matchers as hero Release Pass Rate / Release table (Pass/Passed/Completed/Success).
             const releaseBugMetrics = data.releaseBugStatus?.metrics
             const releaseTestingPassed = data.releaseItems?.filter(i => isPassStatus(i?.status)).length || 0
             const releaseTestingFailed = data.releaseItems?.filter(i => isFailStatus(i?.status)).length || 0
