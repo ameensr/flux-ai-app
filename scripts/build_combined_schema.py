@@ -145,7 +145,6 @@ on conflict (module_key) do update set
 insert into public.permissions (permission_key, permission_name, description) values
   ('can_manage_users',         'Manage Users',         'Create, update, and deactivate users'),
   ('can_manage_permissions',   'Manage Permissions',   'Edit role-module permission matrix'),
-  ('can_manage_ai_providers',  'Manage AI Providers',  'Configure AI provider keys and models'),
   ('can_manage_announcements', 'Manage Announcements', 'Create and manage announcements'),
   ('can_view_audit_logs',      'View Audit Logs',      'View system audit and login history'),
   ('can_manage_templates',     'Manage Templates',     'Manage permission templates'),
@@ -173,7 +172,7 @@ begin
     where permission_key in (
       'can_view', 'can_create', 'can_edit', 'can_delete',
       'can_manage_users', 'can_manage_roles', 'can_manage_permissions',
-      'can_manage_ai_providers', 'can_manage_announcements',
+      'can_manage_announcements',
       'can_view_audit_logs', 'can_manage_templates',
       'can_manage_maintenance', 'can_manage_system'
     )

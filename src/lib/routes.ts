@@ -45,6 +45,8 @@ export const ROUTES = {
   enterpriseTemplates: '/admin/enterprise/templates',
   enterpriseAudit: '/admin/enterprise/audit',
   enterpriseMaintenance: '/admin/enterprise/maintenance',
+  enterpriseAI: '/admin/enterprise/ai',
+  enterprisePanda: '/admin/enterprise/panda',
   enterpriseTeams: '/admin/enterprise/teams',
 
   // Daily Update Report (the centralized Configuration page/route was
@@ -81,6 +83,9 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.enterpriseRoles]: 'admin',
   [ROUTES.enterpriseTemplates]: 'admin',
   [ROUTES.enterpriseAudit]: 'admin',
+  [ROUTES.enterpriseMaintenance]: 'admin',
+  [ROUTES.enterpriseAI]: 'admin',
+  [ROUTES.enterprisePanda]: 'admin',
   [ROUTES.enterpriseTeams]: 'admin',
   [ROUTES.dailyReport]: 'daily-report',
 }

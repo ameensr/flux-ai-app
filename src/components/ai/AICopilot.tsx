@@ -5,8 +5,13 @@ import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Send, Terminal, Code, Cpu, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { callAIGateway } from '@/services/ai/aiProviderService'
+import { AIService } from '@/services/ai/ai-service'
 import { COPILOT_PROMPT } from '@/ai/prompts/copilotPrompt'
+import {
+  ADVANCED_AI_PERMISSION_DENIED,
+  AI_USER_RESTRICTED,
+  useAIAccess,
+} from '@/hooks/useAIAccess'
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -20,6 +25,10 @@ const WELCOME =
   'Hello! I am your Qaly AI Engine Copilot. How can I help you with your QA tasks today?'
 
 export const AICopilot = () => {
+  const { aiEnabled, userAllowed, canUseCopilot, notifyIfRestricted } = useAIAccess()
+  const copilotAllowed = canUseCopilot()
+  // Restricted users stay interactive so the allowlist popup can appear.
+  const inputLocked = !copilotAllowed && userAllowed
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: WELCOME },
@@ -46,6 +55,34 @@ export const AICopilot = () => {
   const send = async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || loading) return
+    if (!aiEnabled) {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', content: trimmed },
+        { role: 'assistant', content: '[FAIL] Centralised AI is disabled by an administrator.' },
+      ])
+      setInput('')
+      return
+    }
+    if (!userAllowed) {
+      notifyIfRestricted()
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', content: trimmed },
+        { role: 'assistant', content: `[FAIL] ${AI_USER_RESTRICTED}` },
+      ])
+      setInput('')
+      return
+    }
+    if (!copilotAllowed) {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', content: trimmed },
+        { role: 'assistant', content: `[FAIL] ${ADVANCED_AI_PERMISSION_DENIED}` },
+      ])
+      setInput('')
+      return
+    }
 
     const updatedMessages: Message[] = [...messages, { role: 'user', content: trimmed }]
     setMessages(updatedMessages)
@@ -58,12 +95,14 @@ export const AICopilot = () => {
         .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
         .join('\n\n')
 
-      const content = await callAIGateway({
+      const content = await AIService.callAI({
         prompt: conversationPrompt,
-        systemPrompt:
-          COPILOT_PROMPT +
-          '\n\nYou are in a multi-turn conversation. The above shows the recent conversation history. Respond only to the latest User message while considering the full context.',
-        module: 'ai-copilot',
+        options: {
+          systemPrompt:
+            COPILOT_PROMPT +
+            '\n\nYou are in a multi-turn conversation. The above shows the recent conversation history. Respond only to the latest User message while considering the full context.',
+          module: 'ai-copilot',
+        },
       })
       setMessages((prev) => [...prev, { role: 'assistant', content }])
     } catch (err: any) {
@@ -157,12 +196,21 @@ export const AICopilot = () => {
                       <span style={{ color: 'var(--text-muted)' }}>QALY COPILOT</span>
                     </span>
                     <div className="flex items-center gap-2 mt-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-600 dark:bg-green-400 animate-pulse" />
+                      <span className={cn(
+                        'w-1.5 h-1.5 rounded-full',
+                        copilotAllowed ? 'bg-green-600 dark:bg-green-400 animate-pulse' : 'bg-red-500',
+                      )} />
                       <span
                         className="text-[10px] font-bold uppercase tracking-[0.14em]"
                         style={{ color: 'var(--text-muted)' }}
                       >
-                        Platform AI Online
+                        {!aiEnabled
+                          ? 'AI Disabled by Admin'
+                          : !userAllowed
+                            ? 'AI Restricted'
+                            : copilotAllowed
+                              ? 'Platform AI Online'
+                              : 'Advanced AI Locked'}
                       </span>
                     </div>
                   </div>
@@ -272,7 +320,7 @@ export const AICopilot = () => {
                       key={qp.label}
                       type="button"
                       onClick={() => send(qp.prompt)}
-                      disabled={loading}
+                      disabled={loading || inputLocked}
                       className="flex-1 py-1.5 rounded-lg border text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1 disabled:opacity-40"
                       style={{
                         borderColor: 'var(--border)',
@@ -315,15 +363,23 @@ export const AICopilot = () => {
                         send(input)
                       }
                     }}
-                    placeholder="ask anything…"
-                    disabled={loading}
+                    placeholder={
+                      !aiEnabled
+                        ? 'AI disabled by admin…'
+                        : !userAllowed
+                          ? 'AI access restricted…'
+                          : !copilotAllowed
+                            ? 'Advanced AI permission required…'
+                            : 'ask anything…'
+                    }
+                    disabled={loading || inputLocked}
                     className="flex-1 min-w-0 bg-transparent outline-none text-sm disabled:opacity-50 placeholder:opacity-60"
                     style={{ color: 'var(--text-primary)' }}
                   />
                   <button
                     type="button"
                     onClick={() => send(input)}
-                    disabled={loading || !input.trim()}
+                    disabled={loading || inputLocked || !input.trim()}
                     className="p-1.5 rounded-lg border transition-all disabled:opacity-40"
                     style={{
                       background: 'color-mix(in srgb, var(--accent) 14%, transparent)',

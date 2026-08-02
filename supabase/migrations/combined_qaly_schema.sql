@@ -11,7 +11,7 @@
 --   VERCEL / ORG PROD  → Qaly-ai  (THIS file once on a fresh Supabase project)
 --
 -- HOW THIS FILE WAS BUILT
---   Reconciled from migrations 000..061 + every supabase.from()/rpc() call in
+--   Reconciled from migrations 000..072 + every supabase.from()/rpc() call in
 --   src/ and supabase/functions/. Application code is ground truth where
 --   migration history drifted (notably projects: use 034 `name`/`tags` shape,
 --   never the obsolete 021 `project_name` shape).
@@ -2010,6 +2010,65 @@ begin
   end if;
 exception when undefined_object then
   -- supabase_realtime publication does not exist in this environment; skip.
+  null;
+end $$;
+
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- SECTION 17B: Centralised AI platform config (kill-switch + allowlist)
+-- (source: 072_ai_platform_config.sql, 073_ai_platform_allowed_users.sql)
+-- Realtime required: src/App.tsx subscribes to postgres_changes UPDATE
+-- events on this table to live-refresh AI availability.
+-- allowed_user_ids: empty = admins only; non-empty = those users (+ admins).
+-- ══════════════════════════════════════════════════════════════════════════════
+
+create table if not exists public.ai_platform_config (
+  id          UUID primary key default gen_random_uuid(),
+  enabled     BOOLEAN not null default true,
+  allowed_user_ids UUID[] not null default '{}',
+  updated_by  UUID references auth.users(id) on delete set null,
+  updated_at  TIMESTAMPTZ not null default now(),
+  created_at  TIMESTAMPTZ not null default now()
+);
+
+-- Forward-compat for DBs that already have the table without the allowlist column
+-- (source: 073_ai_platform_allowed_users.sql)
+alter table public.ai_platform_config
+  add column if not exists allowed_user_ids UUID[] not null default '{}';
+
+comment on column public.ai_platform_config.allowed_user_ids is
+  'User IDs allowed to use AI while Centralised AI is enabled. Empty = admins only. Admin/super_admin always bypass.';
+
+insert into public.ai_platform_config (id, enabled)
+values ('00000000-0000-0000-0000-000000000001', true)
+on conflict (id) do nothing;
+
+alter table public.ai_platform_config enable row level security;
+
+drop policy if exists "Anyone can read ai platform config"   on public.ai_platform_config;
+drop policy if exists "Admins can update ai platform config" on public.ai_platform_config;
+drop policy if exists "Admins can insert ai platform config" on public.ai_platform_config;
+
+create policy "Anyone can read ai platform config" on public.ai_platform_config for select using (true);
+create policy "Admins can update ai platform config" on public.ai_platform_config for update using (
+  exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'super_admin'))
+);
+create policy "Admins can insert ai platform config" on public.ai_platform_config for insert with check (
+  exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'super_admin'))
+);
+
+grant select on table public.ai_platform_config to anon, authenticated;
+grant update, insert on table public.ai_platform_config to authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'ai_platform_config'
+  ) then
+    alter publication supabase_realtime add table public.ai_platform_config;
+  end if;
+exception when undefined_object then
   null;
 end $$;
 

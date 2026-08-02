@@ -1,5 +1,5 @@
 // src/pages/EnterpriseAdmin/index.tsx
-import React from 'react'
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
@@ -9,10 +9,19 @@ import { RoleManagement } from './RoleManagement'
 import { PermissionTemplates } from './PermissionTemplates'
 import { AuditLogs } from './AuditLogs'
 import { MaintenanceSettings } from './MaintenanceSettings'
-import { Users, Shield, Layers, Activity, RefreshCw, ChevronLeft, Wrench } from 'lucide-react'
+import { AIPlatformSettings } from './AIPlatformSettings'
+import {
+  Users, Shield, Layers, Activity, RefreshCw, ChevronLeft, ChevronRight,
+  Wrench, Bot, PawPrint,
+} from 'lucide-react'
 import { ROUTES } from '@/lib/routes'
 import { SilentBoundary } from '@/components/ErrorBoundary'
 import { GlassCard } from '@/components/ui/GlassCard'
+import { useAppStore } from '@/store/useAppStore'
+
+const AdminPandaConfig = lazy(() =>
+  import('@/components/LazyPanda/AdminPandaConfig').then(m => ({ default: m.AdminPandaConfig })),
+)
 
 function TabErrorFallback({ onRetry }: { onRetry: () => void }) {
   return (
@@ -52,19 +61,65 @@ function TabBoundary({ children }: { children: React.ReactNode }) {
   )
 }
 
-const TABS = [
+const BASE_TABS = [
   { path: ROUTES.enterpriseUsers, label: 'User Management', icon: Users, short: 'Users' },
   { path: ROUTES.enterpriseRoles, label: 'Roles & Permissions', icon: Shield, short: 'Roles' },
   { path: ROUTES.enterpriseTemplates, label: 'Permission Templates', icon: Layers, short: 'Templates' },
   { path: ROUTES.enterpriseAudit, label: 'Audit Logs', icon: Activity, short: 'Audit' },
   { path: ROUTES.enterpriseMaintenance, label: 'Maintenance Mode', icon: Wrench, short: 'Maintenance' },
+  { path: ROUTES.enterpriseAI, label: 'AI Platform', icon: Bot, short: 'AI' },
 ] as const
+
+const PANDA_TAB = {
+  path: ROUTES.enterprisePanda,
+  label: 'Lazy Panda',
+  icon: PawPrint,
+  short: 'Panda',
+} as const
 
 export function EnterpriseAdmin() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const { role } = useAppStore()
+  const isSuperAdmin = role === 'super_admin'
+  const tabScrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
 
-  const activeTab = TABS.find(t => pathname === t.path)?.path ?? ROUTES.enterpriseUsers
+  const TABS = isSuperAdmin ? [...BASE_TABS, PANDA_TAB] : [...BASE_TABS]
+
+  const activeTab = TABS.find(t => pathname === t.path)?.path
+    ?? (pathname === ROUTES.enterprisePanda && !isSuperAdmin ? ROUTES.enterpriseUsers : undefined)
+    ?? ROUTES.enterpriseUsers
+
+  const updateTabScroll = useCallback(() => {
+    const el = tabScrollRef.current
+    if (!el) return
+    const { scrollLeft, scrollWidth, clientWidth } = el
+    setCanScrollLeft(scrollLeft > 2)
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 2)
+  }, [])
+
+  useEffect(() => {
+    const el = tabScrollRef.current
+    if (!el) return
+    updateTabScroll()
+    el.addEventListener('scroll', updateTabScroll, { passive: true })
+    const ro = new ResizeObserver(updateTabScroll)
+    ro.observe(el)
+    window.addEventListener('resize', updateTabScroll)
+    return () => {
+      el.removeEventListener('scroll', updateTabScroll)
+      ro.disconnect()
+      window.removeEventListener('resize', updateTabScroll)
+    }
+  }, [updateTabScroll, TABS.length])
+
+  const scrollTabs = (dir: 'left' | 'right') => {
+    const el = tabScrollRef.current
+    if (!el) return
+    el.scrollBy({ left: dir === 'left' ? -180 : 180, behavior: 'smooth' })
+  }
 
   const renderContent = () => {
     switch (activeTab) {
@@ -73,6 +128,21 @@ export function EnterpriseAdmin() {
       case ROUTES.enterpriseTemplates: return <TabBoundary><PermissionTemplates /></TabBoundary>
       case ROUTES.enterpriseAudit: return <TabBoundary><AuditLogs /></TabBoundary>
       case ROUTES.enterpriseMaintenance: return <TabBoundary><MaintenanceSettings /></TabBoundary>
+      case ROUTES.enterpriseAI: return <TabBoundary><AIPlatformSettings /></TabBoundary>
+      case ROUTES.enterprisePanda:
+        return isSuperAdmin ? (
+          <TabBoundary>
+            <Suspense fallback={
+              <div className="flex items-center justify-center py-20">
+                <div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
+              </div>
+            }>
+              <AdminPandaConfig />
+            </Suspense>
+          </TabBoundary>
+        ) : (
+          <TabBoundary><UserManagement /></TabBoundary>
+        )
       default: return <TabBoundary><UserManagement /></TabBoundary>
     }
   }
@@ -85,7 +155,7 @@ export function EnterpriseAdmin() {
       className="py-6 sm:py-12"
     >
       <button
-        onClick={() => navigate(ROUTES.adminAI)}
+        onClick={() => navigate(ROUTES.admin)}
         className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest mb-6 transition-colors"
         style={{ color: 'var(--text-muted)' }}
         onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)' }}
@@ -100,24 +170,66 @@ export function EnterpriseAdmin() {
         align="left"
       />
 
-      {/* Tab bar */}
-      <div className="flex gap-1 sm:gap-2 mb-8 sm:mb-10 p-1 bg-white/5 rounded-2xl w-full overflow-x-auto scrollbar-none">
-        {TABS.map(tab => (
+      {/* Tab bar — arrow controls, no visible scrollbar */}
+      <div className="relative mb-8 sm:mb-10 w-full min-w-0 group/tabs">
+        <div
+          ref={tabScrollRef}
+          className="flex gap-1 sm:gap-2 p-1 bg-white/5 rounded-2xl w-full overflow-x-auto scrollbar-none"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          {TABS.map(tab => (
+            <button
+              key={tab.path}
+              onClick={() => navigate(tab.path)}
+              className={cn(
+                'flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap shrink-0',
+                activeTab === tab.path
+                  ? 'bg-accent-gold text-background'
+                  : 'text-text-muted hover:text-white'
+              )}
+            >
+              <tab.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="sm:hidden">{tab.short}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Left / right scroll arrows — vertically centered */}
+        {canScrollLeft && (
           <button
-            key={tab.path}
-            onClick={() => navigate(tab.path)}
-            className={cn(
-              'flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap shrink-0',
-              activeTab === tab.path
-                ? 'bg-accent-gold text-background'
-                : 'text-text-muted hover:text-white'
-            )}
+            type="button"
+            onClick={() => scrollTabs('left')}
+            aria-label="Scroll tabs left"
+            className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full flex items-center justify-center transition-all"
+            style={{
+              background: 'color-mix(in srgb, var(--card-bg) 88%, transparent)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-secondary)',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+              backdropFilter: 'blur(8px)',
+            }}
           >
-            <tab.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            <span className="hidden sm:inline">{tab.label}</span>
-            <span className="sm:hidden">{tab.short}</span>
+            <ChevronLeft className="w-3.5 h-3.5" />
           </button>
-        ))}
+        )}
+        {canScrollRight && (
+          <button
+            type="button"
+            onClick={() => scrollTabs('right')}
+            aria-label="Scroll tabs right"
+            className="absolute right-1 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full flex items-center justify-center transition-all"
+            style={{
+              background: 'color-mix(in srgb, var(--card-bg) 88%, transparent)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-secondary)',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       {renderContent()}

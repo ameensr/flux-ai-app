@@ -27,7 +27,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     'admin-hub': {
       can_view: true, can_create: true, can_edit: true, can_delete: true,
       can_manage_users: true, can_manage_roles: true, can_manage_permissions: true,
-      can_manage_ai_providers: true, can_manage_announcements: true,
+      can_manage_announcements: true,
       can_view_audit_logs: true, can_manage_templates: true, can_manage_maintenance: true,
       can_manage_system: true,
     },
@@ -35,7 +35,6 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     announcements: { can_view: true, can_create: true, can_edit: true, can_delete: true },
     settings: { can_view: true, can_edit: true },
     history: { can_view: true },
-    'ai-settings': { can_view: true, can_edit: true },
   },
   super_admin: {
     dashboard: { can_view: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
@@ -53,7 +52,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     'admin-hub': {
       can_view: true, can_create: true, can_edit: true, can_delete: true,
       can_manage_users: true, can_manage_roles: true, can_manage_permissions: true,
-      can_manage_ai_providers: true, can_manage_announcements: true,
+      can_manage_announcements: true,
       can_view_audit_logs: true, can_manage_templates: true, can_manage_maintenance: true,
       can_manage_system: true,
     },
@@ -61,7 +60,6 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     announcements: { can_view: true, can_create: true, can_edit: true, can_delete: true },
     settings: { can_view: true, can_edit: true },
     history: { can_view: true },
-    'ai-settings': { can_view: true, can_edit: true },
   },
   pro: {
     dashboard: { can_view: true, can_generate_ai: true },

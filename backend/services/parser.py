@@ -2,29 +2,15 @@
 Context-Aware Parser — two-stage pipeline:
   Stage 1: Extract a Requirement Map (Entities, Actions, Constraints)
   Stage 2: Generate grounded test cases from the Map
-
-RAG / Sliding-Window: documents exceeding CHUNK_TOKEN_LIMIT are split into
-overlapping chunks; each chunk produces its own Map, then Maps are merged
-before Stage 2 runs — keeping the final generation call within token budget.
 """
 import json
 from typing import AsyncIterator
 
-from langchain_openai import ChatOpenAI
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
-from langchain.schema import Document
+from services.llm import chat_complete, chat_stream
+from services.pii import mask_pii
 
-from .pii import mask_pii
-
-# ── Config ────────────────────────────────────────────────────────────────────
-
-CHUNK_SIZE = 1500          # tokens (approx chars / 4)
+CHUNK_SIZE = 1500
 CHUNK_OVERLAP = 200
-RAG_TOP_K = 6              # chunks retrieved per query when doc is huge
-
-# ── Prompts ───────────────────────────────────────────────────────────────────
 
 _EXTRACTION_SYSTEM = """You are a Business Analyst assistant.
 Extract a structured Requirement Map from the provided text.
@@ -57,26 +43,23 @@ Shape of each test case:
 }"""
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _make_llm(api_key: str, streaming: bool = False) -> ChatOpenAI:
-    return ChatOpenAI(
-        model="gpt-4o-mini",
-        api_key=api_key,
-        temperature=0.2,
-        streaming=streaming,
-    )
-
-
-def _splitter() -> RecursiveCharacterTextSplitter:
-    return RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE * 4,   # chars ≈ tokens * 4
-        chunk_overlap=CHUNK_OVERLAP * 4,
-    )
+def _split_text(text: str) -> list[str]:
+    size = CHUNK_SIZE * 4
+    overlap = CHUNK_OVERLAP * 4
+    if len(text) <= size:
+        return [text]
+    chunks: list[str] = []
+    start = 0
+    while start < len(text):
+        end = start + size
+        chunks.append(text[start:end])
+        if end >= len(text):
+            break
+        start = end - overlap
+    return chunks
 
 
 def _merge_maps(maps: list[dict]) -> dict:
-    """Deduplicate and merge multiple Requirement Maps into one."""
     merged: dict[str, set] = {"entities": set(), "actions": set(), "constraints": set()}
     for m in maps:
         for key in merged:
@@ -84,81 +67,47 @@ def _merge_maps(maps: list[dict]) -> dict:
     return {k: sorted(v) for k, v in merged.items()}
 
 
-# ── Stage 1: Extraction ───────────────────────────────────────────────────────
-
-async def extract_requirement_map(text: str, api_key: str) -> dict:
-    """
-    Splits long docs into chunks, extracts a Requirement Map per chunk,
-    then merges. Short docs are processed in a single call.
-    """
+async def extract_requirement_map(text: str, **llm) -> dict:
     masked_text, _ = mask_pii(text)
-    chunks = _splitter().split_text(masked_text)
-
-    llm = _make_llm(api_key)
+    chunks = _split_text(masked_text)
     maps: list[dict] = []
 
     for chunk in chunks:
-        response = await llm.ainvoke([
-            {"role": "system", "content": _EXTRACTION_SYSTEM},
-            {"role": "user", "content": chunk},
-        ])
         try:
-            maps.append(json.loads(response.content))
-        except json.JSONDecodeError:
-            # Best-effort: skip malformed chunk responses
+            content = await chat_complete(
+                **llm,
+                prompt=chunk,
+                system_prompt=_EXTRACTION_SYSTEM,
+                temperature=0.2,
+                max_tokens=1024,
+            )
+            maps.append(json.loads(content))
+        except (json.JSONDecodeError, ValueError):
             pass
 
     return _merge_maps(maps) if maps else {"entities": [], "actions": [], "constraints": []}
 
 
-# ── RAG retrieval (for very large PRDs) ──────────────────────────────────────
-
-async def build_rag_store(text: str, api_key: str) -> FAISS:
-    """Build an in-memory FAISS vector store from document chunks."""
-    chunks = _splitter().split_text(text)
-    docs = [Document(page_content=c) for c in chunks]
-    embeddings = OpenAIEmbeddings(api_key=api_key)
-    return await FAISS.afrom_documents(docs, embeddings)
-
-
-async def rag_extract(query: str, store: FAISS, api_key: str) -> dict:
-    """Retrieve top-K relevant chunks and extract a focused Requirement Map."""
-    relevant = await store.asimilarity_search(query, k=RAG_TOP_K)
-    combined = "\n\n".join(d.page_content for d in relevant)
-    return await extract_requirement_map(combined, api_key)
-
-
-# ── Stage 2: Generation (streaming) ──────────────────────────────────────────
-
-async def generate_test_cases_stream(
-    requirement_map: dict,
-    api_key: str,
-) -> AsyncIterator[str]:
-    """
-    Yields SSE-compatible text chunks.
-    Grounding: the system prompt forbids inventing features not in the map.
-    """
-    llm = _make_llm(api_key, streaming=True)
+async def generate_test_cases_stream(requirement_map: dict, **llm) -> AsyncIterator[str]:
     prompt = f"Requirement Map:\n{json.dumps(requirement_map, indent=2)}"
+    async for chunk in chat_stream(
+        **llm,
+        prompt=prompt,
+        system_prompt=_GENERATION_SYSTEM,
+        temperature=0.2,
+        max_tokens=3072,
+    ):
+        yield chunk
 
-    async for chunk in llm.astream([
-        {"role": "system", "content": _GENERATION_SYSTEM},
-        {"role": "user", "content": prompt},
-    ]):
-        if chunk.content:
-            yield chunk.content
 
-
-# ── Full pipeline (non-streaming, returns parsed list) ────────────────────────
-
-async def run_full_pipeline(text: str, api_key: str) -> tuple[dict, list[dict]]:
-    """Returns (requirement_map, test_cases)."""
-    req_map = await extract_requirement_map(text, api_key)
-
-    llm = _make_llm(api_key)
-    response = await llm.ainvoke([
-        {"role": "system", "content": _GENERATION_SYSTEM},
-        {"role": "user", "content": f"Requirement Map:\n{json.dumps(req_map, indent=2)}"},
-    ])
-    test_cases = json.loads(response.content)
+async def run_full_pipeline(text: str, **llm) -> tuple[dict, list[dict]]:
+    req_map = await extract_requirement_map(text, **llm)
+    content = await chat_complete(
+        **llm,
+        prompt=f"Requirement Map:\n{json.dumps(req_map, indent=2)}",
+        system_prompt=_GENERATION_SYSTEM,
+        temperature=0.2,
+        max_tokens=3072,
+    )
+    test_cases = json.loads(content)
     return req_map, test_cases

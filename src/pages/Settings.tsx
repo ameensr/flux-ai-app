@@ -208,10 +208,10 @@ export const Settings = () => {
               style={{ background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.12)' }}
             >
               {[
-                'AI providers are configured centrally by your administrator',
-                'Your requests are processed through a secure backend gateway',
+                'AI runs on the FastAPI backend (Groq → Gemini → Kimi)',
+                'Your requests are authenticated with your session token',
                 'API keys are never stored in your browser or exposed to clients',
-                'Provider switching and upgrades happen automatically',
+                'Bug Refiner, Test Case Gen, and Writing Assistant share the same provider chain',
               ].map(item => (
                 <div key={item} className="flex items-start gap-2.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />

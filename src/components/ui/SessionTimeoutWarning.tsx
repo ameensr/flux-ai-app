@@ -152,12 +152,24 @@ export function SessionTimeoutWarning({ visible, secondsLeft, onStay, onLogout }
           aria-labelledby="session-timeout-title"
           aria-describedby="session-timeout-desc"
         >
-          {/* Backdrop */}
+          {/* Backdrop — light blur + black & white wash */}
           <motion.div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            style={{
+              background: 'rgba(8, 10, 14, 0.45)',
+              backdropFilter: 'blur(4px) grayscale(1) saturate(0)',
+              WebkitBackdropFilter: 'blur(4px) grayscale(1) saturate(0)',
+            }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                'radial-gradient(ellipse at center, transparent 20%, rgba(0,0,0,0.35) 100%)',
+            }}
           />
 
           {/* Modal card */}

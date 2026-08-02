@@ -258,6 +258,7 @@ import {
   ComposedChart, ReferenceDot
 } from 'recharts'
 import { toast } from '@/hooks/use-toast'
+import { AI_DISABLED_BY_ADMIN, AI_PERMISSION_DENIED, useAIAccess } from '@/hooks/useAIAccess'
 import { AIService } from '@/services/ai/ai-service'
 import { useQAReportStore } from '../store'
 import { ensureFormData, isPassStatus, isFailStatus, isBlockedStatus, isResolvedSupportStatus, isInProgressStatus, isNotStartedStatus } from '../types'
@@ -389,6 +390,8 @@ const sectionVariants: Variants = {
 
 const ReportPreviewDashboardContent: React.FC = () => {
   const { savedReports, saveReport, fetchReports } = useQAReportStore()
+  const { aiEnabled, canGenerate, notifyIfRestricted } = useAIAccess()
+  const canGenerateAI = canGenerate('qa-report')
   const [searchParams] = useSearchParams()
   const reportIdFromUrl = searchParams.get('reportId')
   const launchedFromForm = searchParams.get('launch') === '1'
@@ -1188,6 +1191,15 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
   // ── Generates dynamically refined summaries (Comparing history) ───────────
   const handleAIGenerate = async () => {
+    if (!aiEnabled) {
+      toast({ title: 'AI Disabled', description: AI_DISABLED_BY_ADMIN, variant: 'destructive' })
+      return
+    }
+    if (notifyIfRestricted()) return
+    if (!canGenerateAI) {
+      toast({ title: 'Permission Denied', description: AI_PERMISSION_DENIED, variant: 'destructive' })
+      return
+    }
     setIsGeneratingAI(true)
     try {
       const prevSummaries = activeHistory.slice(-5).map(r => ({

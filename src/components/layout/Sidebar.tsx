@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
@@ -10,6 +10,7 @@ import {
   ClipboardCheck, FolderKanban, UserRound,
 } from 'lucide-react'
 import { Logo } from '../ui/Logo'
+import { SignOutConfirmModal } from './SignOutConfirmModal'
 import { supabase } from '@/lib/supabase'
 import { ROUTES } from '@/lib/routes'
 
@@ -50,6 +51,7 @@ export const Sidebar = () => {
   const { pathname } = useLocation()
   const { isSidebarOpen, setSidebarOpen, profile, setUser, setProfile } = useAppStore()
   const { canView, permissionsLoaded } = usePermissions()
+  const [signOutOpen, setSignOutOpen] = useState(false)
 
   useEffect(() => {
     if (window.innerWidth < 1024) setSidebarOpen(false)
@@ -65,6 +67,7 @@ export const Sidebar = () => {
     await supabase.auth.signOut()
     setUser(null)
     setProfile(null)
+    setSignOutOpen(false)
     navigate(ROUTES.login, { replace: true })
   }
 
@@ -156,6 +159,13 @@ export const Sidebar = () => {
 
   return (
     <>
+      <SignOutConfirmModal
+        open={signOutOpen}
+        onCancel={() => setSignOutOpen(false)}
+        onConfirm={handleSignOut}
+        displayName={hasName ? displayName : undefined}
+      />
+
       {/* Mobile backdrop */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -227,14 +237,12 @@ export const Sidebar = () => {
 
           {bottomItems.map(item => <NavItem key={item.path} item={item} />)}
 
-          {/* User identity — just above Sign Out */}
-          {profile && (
-            <div className={cn('mt-1', !isSidebarOpen && 'flex justify-center')}>
+          {/* Account card — identity + sign out */}
+          {profile ? (
+            <div className={cn('mt-1', !isSidebarOpen && 'flex flex-col items-center gap-1.5')}>
               {isSidebarOpen ? (
-                <Link
-                  to={ROUTES.settings}
-                  title={hasName ? `${displayName} · ${roleLabel}` : 'Add your name in Settings'}
-                  className="mx-1 block rounded-xl overflow-hidden transition-all group"
+                <div
+                  className="mx-1 rounded-xl overflow-hidden transition-all group/card"
                   style={{
                     background: 'var(--surface-secondary)',
                     border: '1px solid var(--border)',
@@ -247,100 +255,163 @@ export const Sidebar = () => {
                     style={{ background: 'var(--divider)' }}
                   >
                     <span
-                      className="absolute inset-y-0 left-0 w-0 group-hover:w-full transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                      className="absolute inset-y-0 left-0 w-0 group-hover/card:w-full transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
                       style={{
                         background:
                           'linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent))',
                       }}
                     />
                     <span
-                      className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 opacity-0 group-hover:opacity-100 group-hover:translate-x-[280%] transition-all duration-700 ease-out"
+                      className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 opacity-0 group-hover/card:opacity-100 group-hover/card:translate-x-[280%] transition-all duration-700 ease-out"
                       style={{
                         background:
                           'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-fg) 55%, transparent), transparent)',
                       }}
                     />
                   </div>
-                  <div className="px-2.5 py-2.5 flex items-center gap-2.5">
-                    <div
-                      className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-[11px] font-bold tracking-wide"
-                      style={{
-                        background: hasName
-                          ? 'color-mix(in srgb, var(--accent) 16%, transparent)'
-                          : 'var(--hover)',
-                        color: hasName ? 'var(--accent)' : 'var(--text-muted)',
-                        border: '1px solid var(--border)',
+
+                  <div className="px-2 py-2 flex items-center gap-1.5">
+                    <Link
+                      to={ROUTES.settings}
+                      title={hasName ? `${displayName} · ${roleLabel}` : 'Add your name in Settings'}
+                      className="flex items-center gap-2.5 min-w-0 flex-1 rounded-lg px-1 py-1 -my-0.5 transition-colors"
+                      onMouseEnter={e => {
+                        e.currentTarget.style.backgroundColor = 'var(--hover)'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.backgroundColor = 'transparent'
                       }}
                     >
-                      {hasName ? initials : <UserRound className="w-3.5 h-3.5" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className="text-[12.5px] font-semibold truncate leading-tight"
-                        style={{ color: hasName ? 'var(--text-primary)' : 'var(--text-muted)' }}
+                      <div
+                        className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-[11px] font-bold tracking-wide"
+                        style={{
+                          background: hasName
+                            ? 'color-mix(in srgb, var(--accent) 16%, transparent)'
+                            : 'var(--hover)',
+                          color: hasName ? 'var(--accent)' : 'var(--text-muted)',
+                          border: '1px solid var(--border)',
+                        }}
                       >
-                        {hasName ? displayName : 'Add your name'}
-                      </p>
-                      <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', roleDot)} />
-                        <span
-                          className="text-[10px] font-medium truncate"
-                          style={{ color: 'var(--text-muted)' }}
-                        >
-                          {roleLabel}
-                          {!hasName && profile.email ? ` · ${profile.email}` : ''}
-                        </span>
+                        {hasName ? initials : <UserRound className="w-3.5 h-3.5" />}
                       </div>
-                    </div>
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className="text-[12.5px] font-semibold truncate leading-tight"
+                          style={{ color: hasName ? 'var(--text-primary)' : 'var(--text-muted)' }}
+                        >
+                          {hasName ? displayName : 'Add your name'}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                          <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', roleDot)} />
+                          <span
+                            className="text-[10px] font-medium truncate"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            {roleLabel}
+                            {!hasName && profile.email ? ` · ${profile.email}` : ''}
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => setSignOutOpen(true)}
+                      aria-label="Sign out"
+                      title="Sign out"
+                      className="shrink-0 p-2 rounded-lg transition-all"
+                      style={{
+                        color: 'var(--text-muted)',
+                        border: '1px solid transparent',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.backgroundColor = 'rgba(248,113,113,0.12)'
+                        e.currentTarget.style.color = '#f87171'
+                        e.currentTarget.style.borderColor = 'rgba(248,113,113,0.25)'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.backgroundColor = 'transparent'
+                        e.currentTarget.style.color = 'var(--text-muted)'
+                        e.currentTarget.style.borderColor = 'transparent'
+                      }}
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                </Link>
+                </div>
               ) : (
-                <Link
-                  to={ROUTES.settings}
-                  title={hasName ? `${displayName} · ${roleLabel}` : `${roleLabel} · Add your name`}
-                  aria-label={hasName ? displayName : 'Add your name'}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-bold transition-all"
-                  style={{
-                    background: hasName
-                      ? 'color-mix(in srgb, var(--accent) 16%, transparent)'
-                      : 'var(--hover)',
-                    color: hasName ? 'var(--accent)' : 'var(--text-muted)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  {hasName ? initials : <UserRound className="w-3.5 h-3.5" />}
-                </Link>
+                <>
+                  <Link
+                    to={ROUTES.settings}
+                    title={hasName ? `${displayName} · ${roleLabel}` : `${roleLabel} · Add your name`}
+                    aria-label={hasName ? displayName : 'Add your name'}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-bold transition-all"
+                    style={{
+                      background: hasName
+                        ? 'color-mix(in srgb, var(--accent) 16%, transparent)'
+                        : 'var(--hover)',
+                      color: hasName ? 'var(--accent)' : 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    {hasName ? initials : <UserRound className="w-3.5 h-3.5" />}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setSignOutOpen(true)}
+                    aria-label="Sign out"
+                    title="Sign out"
+                    className="w-9 h-9 rounded-xl flex items-center justify-center transition-all"
+                    style={{
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface-secondary)',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.backgroundColor = 'rgba(248,113,113,0.12)'
+                      e.currentTarget.style.color = '#f87171'
+                      e.currentTarget.style.borderColor = 'rgba(248,113,113,0.25)'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                      e.currentTarget.style.color = 'var(--text-muted)'
+                      e.currentTarget.style.borderColor = 'var(--border)'
+                    }}
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </>
               )}
             </div>
-          )}
-
-          {/* Sign out */}
-          <button
-            onClick={handleSignOut}
-            aria-label="Sign out"
-            className={cn(
-              'qaly-nav-item group',
-              !isSidebarOpen && 'justify-center px-0',
-            )}
-          >
-            <LogOut className={cn(
-              'shrink-0 transition-colors group-hover:text-red-400',
-              isSidebarOpen ? 'w-4 h-4' : 'w-5 h-5',
-            )} />
-            <AnimatePresence>
-              {isSidebarOpen && (
-                <motion.span
-                  initial={{ opacity: 0, x: -6 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -6 }}
-                  transition={{ duration: 0.18 }}
-                  className="text-[13px] font-medium"
-                >
-                  Sign Out
-                </motion.span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSignOutOpen(true)}
+              aria-label="Sign out"
+              className={cn(
+                'qaly-nav-item group mt-1',
+                !isSidebarOpen && 'justify-center px-0',
               )}
-            </AnimatePresence>
-          </button>
+            >
+              <LogOut className={cn(
+                'shrink-0 transition-colors group-hover:text-red-400',
+                isSidebarOpen ? 'w-4 h-4' : 'w-5 h-5',
+              )} />
+              <AnimatePresence>
+                {isSidebarOpen && (
+                  <motion.span
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -6 }}
+                    transition={{ duration: 0.18 }}
+                    className="text-[13px] font-medium"
+                  >
+                    Sign Out
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+          )}
         </div>
       </motion.aside>
     </>

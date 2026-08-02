@@ -16,7 +16,6 @@ export type PermissionKey =
   | 'can_manage_roles'
   | 'can_manage_users'
   | 'can_manage_permissions'
-  | 'can_manage_ai_providers'
   | 'can_manage_announcements'
   | 'can_view_audit_logs'
   | 'can_manage_templates'
@@ -118,6 +117,7 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
       'can_delete',
       'can_export', // Export reports
       'can_generate_ai', // Generate reports with AI
+      'can_use_advanced_ai', // Copilot / advanced AI assistants
       'can_configure', // Configure report templates
     ],
     description: 'Weekly QA status reports'
@@ -223,17 +223,6 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
     description: 'Role-based access control configuration'
   },
 
-  'ai-settings': {
-    moduleKey: 'ai-settings',
-    moduleName: 'AI Provider Configuration',
-    supportedPermissions: [
-      'can_view',
-      'can_edit', // Edit AI provider settings
-      'can_configure', // Configure AI models
-    ],
-    description: 'AI provider and model configuration'
-  },
-
   // ── Other Modules ─────────────────────────────────────────────────────────
 
   'history': {
@@ -273,7 +262,6 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
       'can_manage_users',
       'can_manage_roles',
       'can_manage_permissions',
-      'can_manage_ai_providers',
       'can_manage_announcements',
       'can_view_audit_logs',
       'can_manage_templates',
@@ -330,7 +318,6 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   can_manage_roles: 'Manage Roles',
   can_manage_users: 'Manage Users',
   can_manage_permissions: 'Manage Permissions',
-  can_manage_ai_providers: 'Manage AI Providers',
   can_manage_announcements: 'Manage Announcements',
   can_view_audit_logs: 'View Audit Logs',
   can_manage_templates: 'Manage Templates',
@@ -355,15 +342,14 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   can_edit: 'Can edit existing items',
   can_delete: 'Can delete items',
   can_export: 'Can export data (Jira, Slack, CSV, etc.)',
-  can_generate_ai: 'Can use AI generation features',
-  can_use_advanced_ai: 'Can use advanced/premium AI models',
+  can_generate_ai: 'Can run AI features in this module (also requires Centralised AI to be ON)',
+  can_use_advanced_ai: 'Can use Copilot and advanced AI assistants (also requires Centralised AI to be ON)',
   can_share: 'Can share items with external stakeholders',
   can_configure: 'Can modify module settings and configurations',
   can_assign_members: 'Can add and remove project members',
   can_manage_roles: 'Can change member roles within projects',
   can_manage_users: 'Can create, edit, and delete user accounts',
   can_manage_permissions: 'Can assign module permissions to roles',
-  can_manage_ai_providers: 'Can configure AI provider settings and API keys',
   can_manage_announcements: 'Can create, publish, and delete announcements',
   can_view_audit_logs: 'Can view system audit logs and security events',
   can_manage_templates: 'Can create and edit permission templates',

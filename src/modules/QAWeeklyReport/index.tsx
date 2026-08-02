@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useAIAccess } from '@/hooks/useAIAccess'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
 import { FloatingButton } from '@/components/ui/FloatingButton'
@@ -488,7 +489,8 @@ export const QAWeeklyReport: React.FC = () => {
   const canCreate = can('qa-report', 'can_create')
   const canDelete = can('qa-report', 'can_delete')
   const canExport = can('qa-report', 'can_export')
-  const canGenerateAI = can('qa-report', 'can_generate_ai')
+  const { canGenerate } = useAIAccess()
+  const canGenerateAI = canGenerate('qa-report')
   const [errors, setErrors] = useState<string[]>([])
   const [isLaunching, setIsLaunching] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)

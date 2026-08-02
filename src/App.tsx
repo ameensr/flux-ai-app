@@ -7,6 +7,7 @@ import { LandingPage } from '@/pages/LandingPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { supabase } from '@/lib/supabase'
 import { Toaster } from '@/components/ui/toaster'
+import { AIRestrictedModal } from '@/components/ai/AIRestrictedModal'
 import { loadPermissionsForRole, FALLBACK_MAPS } from '@/lib/rbac'
 import { ProtectedRoute } from '@/components/router/ProtectedRoute'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
@@ -15,6 +16,7 @@ import { useIdleTimeout } from '@/hooks/useIdleTimeout'
 import { SessionTimeoutWarning } from '@/components/ui/SessionTimeoutWarning'
 import { logLoginEvent } from '@/services/loginActivity'
 import { useMaintenanceStore } from '@/store/useMaintenanceStore'
+import { useAIPlatformStore } from '@/store/useAIPlatformStore'
 import { useToast } from '@/hooks/use-toast'
 
 // ── Idle timeout context ──────────────────────────────────────────────────────
@@ -162,9 +164,10 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       initPromiseRef.current = (async () => {
         try {
           // Prefer SECURITY DEFINER RPC so badge/role still load if RLS SELECT is broken
-          const [{ data: rpcRows, error: rpcError }, _] = await Promise.all([
+          const [{ data: rpcRows, error: rpcError }] = await Promise.all([
             supabase.rpc('get_my_profile'),
             useMaintenanceStore.getState().fetchConfig(),
+            useAIPlatformStore.getState().fetchConfig(),
           ])
 
           if (rpcError) {
@@ -249,11 +252,18 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
     }
     checkInitialSession()
 
-    // Realtime: re-fetch maintenance config whenever admin changes it
+    // Realtime: re-fetch maintenance / AI platform config whenever admin changes it
     const maintenanceChannel = supabase
       .channel('maintenance_config_changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'maintenance_config' }, () => {
         useMaintenanceStore.getState().fetchConfig()
+      })
+      .subscribe()
+
+    const aiPlatformChannel = supabase
+      .channel('ai_platform_config_changes')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ai_platform_config' }, () => {
+        useAIPlatformStore.getState().fetchConfig()
       })
       .subscribe()
 
@@ -277,6 +287,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe()
       supabase.removeChannel(maintenanceChannel)
+      supabase.removeChannel(aiPlatformChannel)
     }
   }, [])
 
@@ -288,6 +299,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       </Suspense>
       {children}
       <Toaster />
+      <AIRestrictedModal />
       <SessionExpiredToast />
     </>
   )

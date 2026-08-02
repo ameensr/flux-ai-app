@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { Users, CheckCircle, Clock, Sparkles, Gauge } from 'lucide-react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { AIService } from '@/services/ai/ai-service'
+import { useAIAccess } from '@/hooks/useAIAccess'
 import type { TeamCapacityData } from '../../types/teamCapacity'
 import {
   calculateCapacityStats,
@@ -20,6 +21,8 @@ interface TeamCapacityDisplayProps {
 }
 
 export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayProps) {
+  const { canGenerate } = useAIAccess()
+  const canGenerateAI = canGenerate('qa-report')
   const [aiSummary, setAiSummary] = useState<string>('')
   const [loadingAI, setLoadingAI] = useState(false)
 
@@ -42,6 +45,11 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
     if (!liveData) return
     let cancelled = false
     ;(async () => {
+      if (!canGenerateAI) {
+        setAiSummary(generateFallbackSummary(liveData))
+        setLoadingAI(false)
+        return
+      }
       setLoadingAI(true)
       try {
         const prompt = buildCapacitySummaryPrompt(liveData)
@@ -50,7 +58,7 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
           options: {
             systemPrompt:
               'You are a QA manager writing a weekly capacity summary. Use only the facts provided. Never mention leave, absences, time off, or who was on leave. Focus on utilization and logged hours only.',
-            module: 'team-capacity-summary',
+            module: 'qa-report',
           },
         })
         if (!cancelled) setAiSummary(response.trim())
@@ -61,7 +69,7 @@ export function TeamCapacityDisplay({ data, onOpenModal }: TeamCapacityDisplayPr
       }
     })()
     return () => { cancelled = true }
-  }, [data])
+  }, [data, canGenerateAI])
 
   if (!liveData) {
     return null
