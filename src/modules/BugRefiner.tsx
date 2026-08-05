@@ -26,6 +26,8 @@ import {
   Lock,
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
+import { AiProviderBadge } from "@/components/ui/AiProviderBadge"
+import type { AIProviderInfo } from "@/services/ai/types"
 
 export const BugRefiner = () => {
   const [input, setInput] = useState('')
@@ -33,6 +35,7 @@ export const BugRefiner = () => {
   const [isGenerating, setIsGenerating] = useState(false)
   const [confidence, setConfidence] = useState(0)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [aiProvider, setAiProvider] = useState<AIProviderInfo | null>(null)
   const { can } = usePermissions()
   const { aiEnabled, userAllowed, canGenerate, notifyIfRestricted } = useAIAccess()
   const canGenerateAI = canGenerate('bug-refiner')
@@ -66,6 +69,7 @@ export const BugRefiner = () => {
     setResult('')
     setConfidence(0)
     setCopiedKey(null)
+    setAiProvider(null)
 
     try {
       let full = ''
@@ -78,12 +82,14 @@ export const BugRefiner = () => {
           full += chunk
           setResult(full)
         },
+        (info) => setAiProvider(info),
       )
 
       if (!full.trim()) {
         throw new Error('AI returned an empty report. Please try again.')
       }
       if (full.includes('[Error:')) {
+        setAiProvider(null)
         throw new Error(full.replace(/^[\s\S]*\[Error:\s*/, '').replace(/\]\s*$/, '') || 'AI request failed')
       }
 
@@ -93,6 +99,7 @@ export const BugRefiner = () => {
         description: "Your professional bug report is ready."
       })
     } catch (error: any) {
+      setAiProvider(null)
       toast({
         title: "Generation Failed",
         description: error.message,
@@ -228,6 +235,7 @@ export const BugRefiner = () => {
                       <div className="px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-[10px] font-bold text-green-500 uppercase tracking-widest">
                         Refined Result
                       </div>
+                      <AiProviderBadge info={aiProvider} />
                       {confidence > 0 && (
                         <div className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
                           Confidence: <span className="text-accent-gold">{confidence}%</span>

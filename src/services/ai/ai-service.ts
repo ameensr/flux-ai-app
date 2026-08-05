@@ -7,7 +7,7 @@ import { beginIdleOperation, withIdleOperation } from '@/lib/idleOperations'
 import { useAIPlatformStore } from '@/store/useAIPlatformStore'
 import { useAppStore } from '@/store/useAppStore'
 import { AI_USER_RESTRICTED_MESSAGE } from '@/store/useAIRestrictionStore'
-import type { AICallConfig } from './types'
+import type { AICallConfig, AIProviderInfo } from './types'
 
 const AI_DISABLED_MESSAGE = 'Centralised AI is disabled by an administrator.'
 
@@ -71,6 +71,43 @@ async function fetchWithTimeout(
   }
 }
 
+/**
+ * Streaming fetch: abort only on idle (no bytes) or hard wall-clock limit.
+ * Does NOT abort while chunks are still arriving.
+ */
+async function fetchStreamWithIdleTimeout(
+  url: string,
+  init: RequestInit,
+  opts: { idleMs: number; hardMs: number },
+): Promise<{ res: Response; touch: () => void; cancel: () => void }> {
+  const controller = new AbortController()
+  const started = Date.now()
+  let lastActivity = Date.now()
+  const touch = () => { lastActivity = Date.now() }
+
+  const watchId = window.setInterval(() => {
+    const now = Date.now()
+    if (now - started > opts.hardMs || now - lastActivity > opts.idleMs) {
+      controller.abort()
+    }
+  }, 1500)
+
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal })
+    touch()
+    return {
+      res,
+      touch,
+      cancel: () => {
+        window.clearInterval(watchId)
+      },
+    }
+  } catch (e) {
+    window.clearInterval(watchId)
+    throw e
+  }
+}
+
 export class AIService {
   private static validateInput(prompt: string): void {
     if (!prompt || prompt.trim().length < MIN_PROMPT_LENGTH) {
@@ -92,9 +129,11 @@ export class AIService {
     // Streaming endpoints (bug-refine, test-cases): accumulate SSE into a string.
     if (options.module === 'bug-refiner' || options.module === 'test-case-generator' || options.module === 'test-generator') {
       let full = ''
-      await AIService.streamAI({ prompt: trimmed, options }, (chunk) => {
-        full += chunk
-      })
+      await AIService.streamAI(
+        { prompt: trimmed, options },
+        (chunk) => { full += chunk },
+        options.onProvider,
+      )
       if (!full.trim()) throw new Error('AI returned empty response. Please try again.')
       return full
     }
@@ -110,6 +149,7 @@ export class AIService {
           body: JSON.stringify({
             prompt: trimmed,
             systemPrompt: options.systemPrompt,
+            maxTokens: options.maxTokens,
           }),
         }, options.timeout ?? REQUEST_TIMEOUT_MS)
 
@@ -124,6 +164,12 @@ export class AIService {
         }
         const content = body.content
         if (!content) throw new Error('AI returned empty response. Please try again.')
+        if (body.provider && options.onProvider) {
+          options.onProvider({
+            provider: String(body.provider),
+            model: String(body.model || ''),
+          })
+        }
         return content as string
       } catch (e: any) {
         if (e.name === 'AbortError') {
@@ -137,24 +183,36 @@ export class AIService {
   static async streamAI(
     { prompt, options = {} }: AICallConfig,
     onChunk: (text: string) => void,
+    onProvider?: (info: AIProviderInfo) => void,
   ): Promise<void> {
     assertAIEnabled()
     const trimmed = prompt.trim()
     AIService.validateInput(trimmed)
 
     const release = beginIdleOperation(`ai-stream:${options.module || 'default'}`)
+    const hardMs = options.timeout ?? REQUEST_TIMEOUT_MS
+    // Allow long streams; only bail if the connection goes silent
+    const idleMs = Math.min(Math.max(hardMs, 120_000), 180_000)
+
+    let cancelWatch: (() => void) | undefined
     try {
       const headers = await authHeaders()
       const url = resolveEndpoint(options.module)
 
-      const res = await fetchWithTimeout(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          prompt: trimmed,
-          systemPrompt: options.systemPrompt,
-        }),
-      }, options.timeout ?? REQUEST_TIMEOUT_MS)
+      const { res, touch, cancel } = await fetchStreamWithIdleTimeout(
+        url,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            prompt: trimmed,
+            systemPrompt: options.systemPrompt,
+            maxTokens: options.maxTokens,
+          }),
+        },
+        { idleMs, hardMs: Math.max(hardMs, 600_000) },
+      )
+      cancelWatch = cancel
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'AI stream request failed' }))
@@ -166,6 +224,7 @@ export class AIService {
       let buffer = ''
       while (true) {
         const { done, value } = await reader.read()
+        touch()
         if (done) break
         buffer += value
         const lines = buffer.split('\n')
@@ -176,6 +235,13 @@ export class AIService {
           if (payload === '[DONE]') return
           try {
             const json = JSON.parse(payload)
+            if (json?.type === 'provider' && json.provider) {
+              onProvider?.({
+                provider: String(json.provider),
+                model: String(json.model || ''),
+              })
+              continue
+            }
             const delta = json.choices?.[0]?.delta?.content
             if (delta) {
               onChunk(delta)
@@ -191,10 +257,13 @@ export class AIService {
       }
     } catch (e: any) {
       if (e.name === 'AbortError') {
-        throw new Error('AI stream timed out. Please try again.')
+        throw new Error(
+          'AI stream timed out (no response from providers). Gemini may be rate-limited — wait a minute and try 20+ again.',
+        )
       }
       throw e
     } finally {
+      cancelWatch?.()
       release()
     }
   }

@@ -13,6 +13,8 @@ interface PandaSVGProps {
   headRotation: number
   isBlinking: boolean
   size?: number
+  /** Show a smartphone held in the panda's paws (e.g. 404 page) */
+  holdingPhone?: boolean
 }
 
 // ── Breathing animation (continuous, subtle) ──────────────────────────────────
@@ -38,6 +40,7 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
   headRotation,
   isBlinking,
   size = 160,
+  holdingPhone = false,
 }) => {
   const isHandsUp = state === 'PASSWORD_HIDE'
   const isOneEyeOpen = state === 'PASSWORD_SHOW'
@@ -123,8 +126,9 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
         {/* ── Arms / Paws ── with better contrast */}
         <motion.g
           animate={{
-            y: isHandsUp || isOneEyeOpen ? -30 : 0,
-            rotate: isHandsUp || isOneEyeOpen ? -10 : 0,
+            y: holdingPhone ? 4 : isHandsUp || isOneEyeOpen ? -30 : 0,
+            rotate: holdingPhone ? 18 : isHandsUp || isOneEyeOpen ? -10 : 0,
+            x: holdingPhone ? 6 : 0,
           }}
           transition={{ duration: DURATIONS.handRaise, ease: EASING.smooth }}
           style={{ originX: '60px', originY: '110px' }}
@@ -136,8 +140,9 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
 
         <motion.g
           animate={{
-            y: isHandsUp ? -30 : isOneEyeOpen ? 0 : 0,
-            rotate: isHandsUp ? 10 : 0,
+            y: holdingPhone ? 4 : isHandsUp ? -30 : 0,
+            rotate: holdingPhone ? -18 : isHandsUp ? 10 : 0,
+            x: holdingPhone ? -6 : 0,
           }}
           transition={{ duration: DURATIONS.handRaise, ease: EASING.smooth }}
           style={{ originX: '100px', originY: '110px' }}
@@ -147,9 +152,56 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
           <ellipse cx="105" cy="104" rx="6" ry="5" fill="#374151" />
         </motion.g>
 
+        {/* ── Smartphone (held in paws) ── */}
+        {holdingPhone && !isHandsUp && (
+          <motion.g
+            initial={{ opacity: 0, y: 6, scale: 0.9 }}
+            animate={{
+              opacity: 1,
+              y: isSuccess ? -6 : isSleeping ? 4 : 0,
+              rotate: isSleeping ? -8 : [-3, 3, -3],
+              scale: 1,
+            }}
+            transition={{
+              opacity: { duration: 0.35 },
+              rotate: { duration: 3.5, repeat: Infinity, ease: 'easeInOut' },
+              y: { type: 'spring', stiffness: 200, damping: 15 },
+            }}
+            style={{ originX: '80px', originY: '118px' }}
+          >
+            <rect
+              x="71"
+              y="102"
+              width="18"
+              height="30"
+              rx="3.5"
+              fill="#111827"
+              stroke="#374151"
+              strokeWidth="1"
+            />
+            <rect x="73" y="105" width="14" height="22" rx="1.5" fill="#1e1b4b" />
+            <motion.rect
+              x="73"
+              y="105"
+              width="14"
+              height="22"
+              rx="1.5"
+              fill="#6366F1"
+              animate={{ opacity: [0.25, 0.45, 0.25] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <rect x="75" y="108" width="10" height="1.5" rx="0.5" fill="white" opacity="0.55" />
+            <rect x="75" y="112" width="7" height="1.2" rx="0.5" fill="white" opacity="0.35" />
+            <rect x="75" y="115.5" width="8" height="1.2" rx="0.5" fill="white" opacity="0.28" />
+            <rect x="77.5" y="103.2" width="5" height="1.2" rx="0.6" fill="#0f172a" />
+            <rect x="76.5" y="128.5" width="7" height="1.2" rx="0.6" fill="white" opacity="0.4" />
+            <rect x="88.5" y="110" width="1" height="4" rx="0.4" fill="#4B5563" />
+          </motion.g>
+        )}
+
         {/* ── Head ── */}
         <motion.g
-          animate={{ rotate: headRotation * 0.3 }}
+          animate={{ rotate: holdingPhone ? headRotation * 0.3 + 6 : headRotation * 0.3 }}
           transition={{ duration: DURATIONS.headRotate, ease: EASING.smooth }}
           style={{ originX: '80px', originY: '80px' }}
         >

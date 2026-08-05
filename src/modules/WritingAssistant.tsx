@@ -23,6 +23,8 @@ import {
   ArrowUpRight,
 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
+import { AiProviderBadge } from '@/components/ui/AiProviderBadge'
+import type { AIProviderInfo } from '@/services/ai/types'
 
 export const WritingAssistant = () => {
   const [input, setInput] = useState('')
@@ -32,6 +34,7 @@ export const WritingAssistant = () => {
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [aiProvider, setAiProvider] = useState<AIProviderInfo | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { aiEnabled, userAllowed, canGenerate, notifyIfRestricted } = useAIAccess()
   const canGenerateAI = canGenerate('writing-assistant')
@@ -78,6 +81,7 @@ export const WritingAssistant = () => {
     setIsGenerating(true)
     setError(null)
     setCopied(false)
+    setAiProvider(null)
 
     try {
       const text = await AIService.callAI({
@@ -86,6 +90,7 @@ export const WritingAssistant = () => {
           systemPrompt: TONE_PROMPTS[tone],
           module: 'writing-assistant',
           timeout: 180_000,
+          onProvider: (info) => setAiProvider(info),
         },
       })
       const cleaned = text.trim()
@@ -98,6 +103,7 @@ export const WritingAssistant = () => {
         description: `${getToneLabel(tone)} version is ready.`,
       })
     } catch (err: any) {
+      setAiProvider(null)
       const message = err?.message ?? 'Something went wrong.'
       setError(message)
       toast({
@@ -142,6 +148,7 @@ export const WritingAssistant = () => {
     setInput(result)
     setResult('')
     setResultTone(null)
+    setAiProvider(null)
     setError(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
     toast({ title: 'Moved to editor', description: 'Refine again or pick another tone.' })
@@ -152,6 +159,7 @@ export const WritingAssistant = () => {
     setResultTone(null)
     setInput('')
     setError(null)
+    setAiProvider(null)
     setSelectedTone(DEFAULT_TONE_ID)
     setCopied(false)
   }
@@ -314,6 +322,7 @@ export const WritingAssistant = () => {
                     <div className="px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-[10px] font-bold text-green-500 uppercase tracking-widest">
                       Refined
                     </div>
+                    <AiProviderBadge info={aiProvider} />
                     {resultTone && (
                       <span className="text-[10px] font-bold uppercase tracking-widest text-accent-gold">
                         {getToneLabel(resultTone)}

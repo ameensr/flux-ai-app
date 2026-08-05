@@ -47,6 +47,7 @@ const RequireFullNameGate = lazy(() =>
 const DailyUpdateReport = lazy(() => import('@/modules/DailyUpdateReport').then(m => ({ default: m.DailyUpdateReport })))
 const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINews })))
 const MaintenancePage = lazy(() => import('@/pages/MaintenancePage').then(m => ({ default: m.MaintenancePage })))
+const TinyTrails404 = lazy(() => import('@/pages/TinyTrails404/App'))
 
 // ── Loaders ───────────────────────────────────────────────────────────────────
 function PageLoader() {
@@ -333,6 +334,7 @@ export default function App() {
           <Route path={ROUTES.landing} element={<RedirectIfAuth><LandingPage /></RedirectIfAuth>} />
           <Route path={ROUTES.login} element={<RedirectIfAuth><AuthPage /></RedirectIfAuth>} />
           <Route path={ROUTES.signup} element={<RedirectIfAuth><AuthPage /></RedirectIfAuth>} />
+          <Route path={ROUTES.qalyAiEngine404} element={<Suspense fallback={<FullPageLoader />}><TinyTrails404 /></Suspense>} />
 
           {/* Report Preview — standalone page, no sidebar */}
           <Route path={ROUTES.reportPreview} element={<RequireAuth><ProtectedRoute moduleKey="qa-report"><MaintenanceGuard><ReportPreviewWrapper /></MaintenanceGuard></ProtectedRoute></RequireAuth>} />

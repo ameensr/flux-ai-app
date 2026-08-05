@@ -6,25 +6,23 @@ AI via Groq → Gemini → Kimi (TokenRouter) fallback chain. Endpoints:
   POST /ai/writing
   POST /ai/complete    (generic: copilot, QA report, etc.)
 
-Also: document parsing, Gherkin, PII, feedback.
+Also: Gherkin, tone refine, PII, feedback.
 Auth: Supabase JWT validated on every request via verify_token().
 """
-import io
 import json
 import time
 from typing import Annotated, AsyncIterator, Literal
 
 import asyncpg
 import httpx
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import BaseSettings
 
 from services.feedback import get_corrections_for_session, log_correction
-from services.llm import ProviderConfig, chat_complete, chat_stream
-from services.parser import extract_requirement_map, generate_test_cases_stream
+from services.llm import ProviderConfig, chat_complete, chat_complete_with_provider, chat_stream, chat_stream_events
 from services.pii import mask_pii
 
 # ── Settings ──────────────────────────────────────────────────────────────────
@@ -80,7 +78,8 @@ TEST_CASE_SYSTEM = (
     '{"testCases":[{"title":"Verify that...","priority":"High|Medium|Low",'
     '"status":"Draft|Ready|Automated","steps":["..."]}],'
     '"notes":{"gaps":[],"clarificationQuestions":[],"assumptions":[],"risks":[]}}. '
-    'Return 5-8 concise test cases. Keep steps short (3-6 each). Notes: max 3 items per list.'
+    'Generate a comprehensive suite with High/Medium/Low priority mix. '
+    'Include all edge cases. List all gaps, clarification questions, assumptions, and risks — do not limit list length.'
 )
 
 WRITING_SYSTEM = (
@@ -91,9 +90,16 @@ WRITING_SYSTEM = (
 # ── App ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="Flux AI Backend", version="2.0.0")
+
+_cors_origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+# Local Vite often hits either localhost or 127.0.0.1 — allow both in dev.
+for _origin in ("http://localhost:5173", "http://127.0.0.1:5173"):
+    if _origin not in _cors_origins:
+        _cors_origins.append(_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins.split(","),
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -323,22 +329,31 @@ class AIRequest(BaseModel):
 
     prompt: str
     system_prompt: str | None = Field(default=None, alias="systemPrompt")
+    max_tokens: int | None = Field(default=None, alias="maxTokens", ge=256, le=65536)
 
 
-TaskHint = Literal["default", "fast", "heavy"]
+TaskHint = Literal["default", "fast", "heavy", "test"]
 
 
 def _llm_kwargs(task: TaskHint = "default") -> dict:
     """
     Build provider chain: Groq → Gemini → Kimi.
     task=fast  → Groq 8B instant (writing / short rewrites)
-    task=heavy → Groq 70B (test cases, bug reports, parsing)
+    task=test  → Groq 8B instant (never 70B — often org-blocked / slow failover)
+    task=heavy → Groq 70B (bug reports)
     """
     effort = (settings.tokenrouter_reasoning_effort or "low").strip().lower()
     if effort not in ("low", "high", "max"):
         effort = "low"
 
-    groq_model = settings.groq_model_fast if task == "fast" else settings.groq_model
+    if task in ("fast", "test"):
+        groq_model = (settings.groq_model_fast or "llama-3.1-8b-instant").strip()
+        # Never use blocked/slow 70B for latency-sensitive test generation
+        if "70b" in groq_model.lower():
+            groq_model = "llama-3.1-8b-instant"
+    else:
+        groq_model = settings.groq_model
+
     providers: list[ProviderConfig] = []
 
     if settings.groq_api_key:
@@ -381,6 +396,20 @@ async def _sse(generator: AsyncIterator[str]) -> AsyncIterator[str]:
     yield "data: [DONE]\n\n"
 
 
+async def _sse_llm(**kwargs) -> AsyncIterator[str]:
+    """SSE with provider metadata event, then OpenAI-style content deltas."""
+    try:
+        async for event in chat_stream_events(**kwargs):
+            if event.get("type") == "provider":
+                yield f"data: {json.dumps({'type': 'provider', 'provider': event.get('name'), 'model': event.get('model')})}\n\n"
+            elif event.get("type") == "content" and event.get("text"):
+                payload = {"choices": [{"delta": {"content": event["text"]}}]}
+                yield f"data: {json.dumps(payload)}\n\n"
+    except Exception as e:
+        yield f"data: {json.dumps({'choices': [{'delta': {'content': f'\\n\\n[Error: {e}]'}}]})}\n\n"
+    yield "data: [DONE]\n\n"
+
+
 # ── AI routes (Groq → Gemini → Kimi) ──────────────────────────────────────────
 
 @app.post("/ai/bug-refine")
@@ -389,21 +418,16 @@ async def ai_bug_refine(body: AIRequest, user: User, _ai: AIEnabled):
     if not body.prompt.strip():
         raise HTTPException(400, "prompt is required")
 
-    async def _gen() -> AsyncIterator[str]:
-        try:
-            async for chunk in chat_stream(
-                **_llm_kwargs("heavy"),
-                prompt=body.prompt.strip(),
-                system_prompt=body.system_prompt or BUG_SYSTEM,
-                temperature=0.4,
-                max_tokens=1536,
-            ):
-                yield chunk
-        except Exception as e:
-            # Surface provider errors into the SSE so the client can show them
-            yield f"\n\n[Error: {e}]"
-
-    return StreamingResponse(_sse(_gen()), media_type="text/event-stream")
+    return StreamingResponse(
+        _sse_llm(
+            **_llm_kwargs("heavy"),
+            prompt=body.prompt.strip(),
+            system_prompt=body.system_prompt or BUG_SYSTEM,
+            temperature=0.4,
+            max_tokens=1536,
+        ),
+        media_type="text/event-stream",
+    )
 
 
 @app.post("/ai/test-cases")
@@ -411,34 +435,38 @@ async def ai_test_cases(body: AIRequest, user: User, _ai: AIEnabled):
     if not body.prompt.strip():
         raise HTTPException(400, "prompt is required")
 
-    async def _gen() -> AsyncIterator[str]:
-        try:
-            async for chunk in chat_stream(
-                **_llm_kwargs("heavy"),
-                prompt=body.prompt.strip(),
-                system_prompt=body.system_prompt or TEST_CASE_SYSTEM,
-                temperature=0.3,
-                max_tokens=3072,
-            ):
-                yield chunk
-        except Exception as e:
-            yield f"\n\n[Error: {e}]"
+    tokens = body.max_tokens if body.max_tokens is not None else 4096
+    # Cap per-request output to keep latency predictable
+    tokens = min(tokens, 6144)
 
-    return StreamingResponse(_sse(_gen()), media_type="text/event-stream")
+    return StreamingResponse(
+        _sse_llm(
+            **_llm_kwargs("test"),
+            prompt=body.prompt.strip(),
+            system_prompt=body.system_prompt or TEST_CASE_SYSTEM,
+            temperature=0.2,
+            max_tokens=tokens,
+            timeout=min(300.0, max(120.0, 40.0 + tokens * 0.05)),
+            # Groq 8B first; Kimi before Gemini when Gemini free-tier quota is exhausted
+            prefer=("groq", "kimi", "gemini"),
+            json_mode=True,
+        ),
+        media_type="text/event-stream",
+    )
 
 
 @app.post("/ai/writing")
 async def ai_writing(body: AIRequest, user: User, _ai: AIEnabled):
     if not body.prompt.strip():
         raise HTTPException(400, "prompt is required")
-    content = await chat_complete(
+    content, provider, model = await chat_complete_with_provider(
         **_llm_kwargs("fast"),
         prompt=body.prompt.strip(),
         system_prompt=body.system_prompt or WRITING_SYSTEM,
         temperature=0.7,
         max_tokens=1024,
     )
-    return {"content": content}
+    return {"content": content, "provider": provider, "model": model}
 
 
 @app.post("/ai/complete")
@@ -473,62 +501,7 @@ async def health():
     }
 
 
-# ── Document text extraction ──────────────────────────────────────────────────
-
-async def _extract_text(file: UploadFile) -> str:
-    data = await file.read()
-    ext = (file.filename or "").rsplit(".", 1)[-1].lower()
-
-    if ext == "pdf":
-        from pypdf import PdfReader
-        reader = PdfReader(io.BytesIO(data))
-        return "\n".join(p.extract_text() or "" for p in reader.pages)
-
-    if ext == "docx":
-        from docx import Document as DocxDocument
-        doc = DocxDocument(io.BytesIO(data))
-        return "\n".join(p.text for p in doc.paragraphs)
-
-    return data.decode("utf-8", errors="replace")
-
-
-# ── Legacy parse / tone / jira routes ─────────────────────────────────────────
-
-@app.post("/parse/map")
-async def parse_map(user: User, _ai: AIEnabled, file: UploadFile = File(...)):
-    text = await _extract_text(file)
-    req_map = await extract_requirement_map(text, **_llm_kwargs("heavy"))
-    return {"requirement_map": req_map}
-
-
-@app.post("/parse/generate-stream")
-async def parse_and_generate_stream(user: User, _ai: AIEnabled, file: UploadFile = File(...)):
-    text = await _extract_text(file)
-    req_map = await extract_requirement_map(text, **_llm_kwargs("heavy"))
-
-    async def _gen():
-        async for chunk in _sse(generate_test_cases_stream(req_map, **_llm_kwargs("heavy"))):
-            yield chunk
-
-    return StreamingResponse(
-        _gen(),
-        media_type="text/event-stream",
-        headers={"X-Requirement-Map": json.dumps(req_map)},
-    )
-
-
-class GenerateRequest(BaseModel):
-    text: str
-
-
-@app.post("/parse/generate-text-stream")
-async def generate_from_text_stream(body: GenerateRequest, user: User, _ai: AIEnabled):
-    req_map = await extract_requirement_map(body.text, **_llm_kwargs("heavy"))
-    return StreamingResponse(
-        _sse(generate_test_cases_stream(req_map, **_llm_kwargs("heavy"))),
-        media_type="text/event-stream",
-    )
-
+# ── Tone / jira routes ────────────────────────────────────────────────────────
 
 _TONE_PROMPTS = {
     "professional": "Rewrite in a formal, professional tone suitable for stakeholder communication.",
