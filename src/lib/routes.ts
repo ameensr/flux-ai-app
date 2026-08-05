@@ -9,6 +9,7 @@ export const ROUTES = {
   signup: '/signup',
   maintenance: '/maintenance',
   qalyAiEngine404: '/qalyaiengine-404',
+  qalyAiEngine401: '/qalyaiengine-401',
 
   // Authenticated — app shell
   dashboard: '/dashboard',
