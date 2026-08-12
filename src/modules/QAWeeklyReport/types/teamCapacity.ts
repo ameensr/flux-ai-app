@@ -9,6 +9,13 @@ export type MemberStatus =
 export interface TeamMemberCapacity {
   id: string
   name: string
+  /**
+   * Stable employee identifier when the uploaded sheet provides an
+   * "Employee ID" style column. Optional, and never used in any capacity
+   * calculation - it only lets Auto Fetch Employees de-duplicate rows across
+   * re-uploads instead of relying on the display name alone.
+   */
+  employee_id?: string
   logged_hours: number
   leave_hours: number
   /** Planned/available hours for the period from Excel when present; else derived. */
@@ -53,6 +60,9 @@ export interface TeamCapacityData {
  * - no-logs: Logged = 0 and Leave = 0
  * - on-leave: Leave ≥ 50% of Available (or only leave, no logs)
  * - available: everyone else with activity
+ *
+ * Callers must pass the resolved Available hours (see resolveAvailableHours);
+ * the internal 40h fallback only applies when availability is entirely unknown.
  */
 export function getMemberStatus(
   logged: number,
@@ -74,11 +84,13 @@ export function getMemberStatus(
 export function calculateCapacityStats(members: TeamMemberCapacity[]): TeamCapacityStats {
   const list = Array.isArray(members) ? members : []
   const total = list.length
-  const available = list.filter(m => m.status === 'available').length
-  const onLeave = list.filter(m => m.status === 'on-leave').length
-  const noLogs = list.filter(m => m.status === 'no-logs').length
 
+  // Bucket from the resolved rows so the distribution and the per-employee
+  // utilization table always measure against the same planned hours.
   const withUtil = getMembersWithUtilization(list)
+  const available = withUtil.filter(m => m.status === 'available').length
+  const onLeave = withUtil.filter(m => m.status === 'on-leave').length
+  const noLogs = withUtil.filter(m => m.status === 'no-logs').length
   const totalLogged = withUtil.reduce((sum, m) => sum + m.logged_hours, 0)
   const totalAvailable = withUtil.reduce((sum, m) => sum + m.available_hours, 0)
   const totalLeave = withUtil.reduce((sum, m) => sum + m.leave_hours, 0)
@@ -197,6 +209,22 @@ export interface MemberUtilization {
 }
 
 /**
+ * The planned hours a member is measured against - Excel "Available" when the
+ * sheet provides it, else the sheet-level inferred default (40 weekly / 176
+ * monthly). Single source of truth for both the status buckets and the
+ * utilization table so the two can never disagree.
+ */
+export function resolveAvailableHours(
+  member: TeamMemberCapacity,
+  defaultAvailableHours: number = EXPECTED_WEEKLY_HOURS,
+): number {
+  const fromExcel = Number(member?.available_hours)
+  return Number.isFinite(fromExcel) && fromExcel > 0
+    ? Number(fromExcel.toFixed(1))
+    : defaultAvailableHours
+}
+
+/**
  * Per-employee row for Capacity Distribution tables.
  *
  * Priority for each field:
@@ -211,11 +239,7 @@ export function getMemberUtilization(
   const logged = Number(member.logged_hours) || 0
   const leave = Number(member.leave_hours) || 0
 
-  const fromExcelAvailable = Number(member.available_hours)
-  const available =
-    Number.isFinite(fromExcelAvailable) && fromExcelAvailable > 0
-      ? Number(fromExcelAvailable.toFixed(1))
-      : defaultAvailableHours
+  const available = resolveAvailableHours(member, defaultAvailableHours)
 
   const fromExcelEffective = Number(member.effective_work)
   const effective =
@@ -238,7 +262,7 @@ export function getMemberUtilization(
     name: member.name,
     logged_hours: logged,
     leave_hours: leave,
-    status: member.status,
+    status: getMemberStatus(logged, leave, available),
     effective_work: effective,
     available_hours: available,
     utilization_percent: utilization,

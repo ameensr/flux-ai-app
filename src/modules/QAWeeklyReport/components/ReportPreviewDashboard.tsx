@@ -130,6 +130,52 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
     animation: pulse-glow 8s ease-in-out infinite;
   }
 
+  /* ── Team Resource Allocation — living gradient layers ─────────────────── */
+  @keyframes team-aurora {
+    0%   { transform: translate3d(-8%, -6%, 0) scale(1);   opacity: 0.45; }
+    33%  { transform: translate3d(7%, 5%, 0) scale(1.18);  opacity: 0.85; }
+    66%  { transform: translate3d(-5%, 8%, 0) scale(1.04); opacity: 0.6; }
+    100% { transform: translate3d(-8%, -6%, 0) scale(1);   opacity: 0.45; }
+  }
+  @keyframes team-rail-pan {
+    0%   { background-position: 50% 0%; }
+    50%  { background-position: 50% 100%; }
+    100% { background-position: 50% 0%; }
+  }
+  @keyframes team-sheen {
+    0%       { transform: translateX(-150%) skewX(-16deg); opacity: 0; }
+    6%       { opacity: 1; }
+    38%      { opacity: 0.5; }
+    45%,100% { transform: translateX(250%) skewX(-16deg); opacity: 0; }
+  }
+  .team-card-aurora {
+    animation: team-aurora 17s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+  .team-card-rail {
+    background-size: 100% 250%;
+    animation: team-rail-pan 9s ease-in-out infinite;
+  }
+  .team-card-sheen {
+    animation: team-sheen 12s ease-in-out infinite;
+    animation-delay: var(--sheen-delay, 0s);
+    will-change: transform, opacity;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .team-card-aurora,
+    .team-card-rail,
+    .team-card-sheen {
+      animation: none !important;
+    }
+    .team-card-sheen { opacity: 0 !important; }
+  }
+  @media print {
+    .team-card-aurora,
+    .team-card-sheen {
+      display: none !important;
+    }
+  }
+
   /* Premium Glassmorphic Card System */
   .glass-card {
     background: ${theme === 'dark' 
@@ -3171,59 +3217,141 @@ Do not return markdown wraps, only raw JSON text.
             <h2 className="text-2xl font-extrabold font-clash">Team Resource Allocation</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              {
-                role: 'New Feature Testing',
-                members: data.newFeatureTeam,
-                barColor: 'bg-blue-500',
-                metrics: `${data.releaseItems?.length || 0} release item${(data.releaseItems?.length || 0) === 1 ? '' : 's'}`,
-              },
-              {
-                role: 'Production Support',
-                members: data.supportTeam,
-                barColor: 'bg-green-500',
-                metrics: `${data.supportTickets?.filter(t => isResolvedSupportStatus(t?.status)).length || 0} resolved ticket${(data.supportTickets?.filter(t => isResolvedSupportStatus(t?.status)).length || 0) === 1 ? '' : 's'}`,
-              },
-              {
-                role: 'Automation Engineering',
-                members: data.automationTeam,
-                barColor: 'bg-purple-500',
-                metrics: `${data.automationTeam?.length || 0} engineer${(data.automationTeam?.length || 0) === 1 ? '' : 's'}`,
-              },
-            ].map(group => (
-              <div
-                key={group.role}
-                className={`p-6 rounded-[28px] border relative overflow-hidden transition-all duration-300 group ${theme === 'dark' ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)] hover:border-white/[0.12] hover:shadow-[0_8px_32px_rgba(0,0,0,0.3)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/60 shadow-md hover:shadow-lg'}`}
-              >
-                {/* Premium Gradient Border Glow */}
-                <div className="absolute inset-0 border border-transparent bg-gradient-to-tr from-accent-gold/25 via-blue-500/25 to-transparent rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0" style={{ mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }} />
-                
-                {/* Soft animated inner gradient */}
-                <div className={`absolute -top-20 -right-20 w-40 h-40 rounded-full blur-3xl opacity-20 pointer-events-none animate-pulse ${group.barColor}`} />
-                <div className={`absolute -bottom-20 -left-20 w-40 h-40 rounded-full blur-3xl opacity-20 pointer-events-none animate-pulse ${group.barColor}`} style={{ animationDelay: '1.5s' }} />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {(() => {
+              const releaseCount = data.releaseItems?.length || 0
+              const resolvedCount =
+                data.supportTickets?.filter(t => isResolvedSupportStatus(t?.status)).length || 0
 
-                <div className="relative z-10">
-                  <div className={`h-1.5 w-16 rounded-full mb-4 ${group.barColor}`} />
-                  <h3 className={`text-base font-extrabold mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{group.role}</h3>
-                  <span className="text-[10px] uppercase font-bold text-accent-gold tracking-widest">{group.metrics}</span>
+              const palette = theme === 'dark'
+                ? {
+                    sky: { railGrad: 'bg-gradient-to-b from-sky-300/60 via-sky-400 to-sky-300/60', text: 'text-sky-300', soft: 'bg-sky-400/10', ring: 'border-sky-400/30', aurora: 'from-sky-400/30', sheen: 'via-white/10' },
+                    emerald: { railGrad: 'bg-gradient-to-b from-emerald-300/60 via-emerald-400 to-emerald-300/60', text: 'text-emerald-300', soft: 'bg-emerald-400/10', ring: 'border-emerald-400/30', aurora: 'from-emerald-400/30', sheen: 'via-white/10' },
+                    violet: { railGrad: 'bg-gradient-to-b from-violet-300/60 via-violet-400 to-violet-300/60', text: 'text-violet-300', soft: 'bg-violet-400/10', ring: 'border-violet-400/30', aurora: 'from-violet-400/30', sheen: 'via-white/10' },
+                  }
+                : {
+                    sky: { railGrad: 'bg-gradient-to-b from-sky-400 via-sky-600 to-sky-400', text: 'text-sky-700', soft: 'bg-sky-50', ring: 'border-sky-200', aurora: 'from-sky-400/25', sheen: 'via-slate-900/[0.05]' },
+                    emerald: { railGrad: 'bg-gradient-to-b from-emerald-400 via-emerald-600 to-emerald-400', text: 'text-emerald-700', soft: 'bg-emerald-50', ring: 'border-emerald-200', aurora: 'from-emerald-400/25', sheen: 'via-slate-900/[0.05]' },
+                    violet: { railGrad: 'bg-gradient-to-b from-violet-400 via-violet-600 to-violet-400', text: 'text-violet-700', soft: 'bg-violet-50', ring: 'border-violet-200', aurora: 'from-violet-400/25', sheen: 'via-slate-900/[0.05]' },
+                  }
 
-                  <div className="flex flex-col gap-3 mt-6">
-                    {group.members.map(member => (
-                      <div key={member} className="flex items-center justify-between border-t border-divider pt-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-text-muted ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-100'}`}>
-                            {member.charAt(0)}
-                          </div>
-                          <span className="text-xs font-semibold">{member}</span>
+              const groups = [
+                {
+                  role: 'New Feature Testing',
+                  icon: Zap,
+                  members: data.newFeatureTeam || [],
+                  accent: palette.sky,
+                  metrics: `${releaseCount} release item${releaseCount === 1 ? '' : 's'}`,
+                },
+                {
+                  role: 'Production Support',
+                  icon: Wrench,
+                  members: data.supportTeam || [],
+                  accent: palette.emerald,
+                  metrics: `${resolvedCount} resolved ticket${resolvedCount === 1 ? '' : 's'}`,
+                },
+                {
+                  role: 'Automation Engineering',
+                  icon: Code2,
+                  members: data.automationTeam || [],
+                  accent: palette.violet,
+                  metrics: `${data.automationTeam?.length || 0} engineer${(data.automationTeam?.length || 0) === 1 ? '' : 's'}`,
+                },
+              ]
+
+              return groups.map((group, idx) => {
+                const Icon = group.icon
+                const count = group.members.length
+
+                return (
+                  <motion.div
+                    key={group.role}
+                    initial={{ opacity: 0, y: 18 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-40px' }}
+                    transition={{ duration: 0.45, delay: Math.min(idx * 0.08, 0.24) }}
+                    className={`group relative overflow-hidden rounded-[26px] border p-5 flex flex-col min-h-[210px] transition-all duration-300 ${
+                      theme === 'dark'
+                        ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)] hover:border-white/[0.14] hover:shadow-[0_10px_36px_rgba(0,0,0,0.35)]'
+                        : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/70 shadow-md hover:shadow-xl hover:border-slate-300/80'
+                    }`}
+                  >
+                    {/* Accent rail — gradient pans vertically */}
+                    <div className={`team-card-rail absolute left-0 top-0 bottom-0 w-1 ${group.accent.railGrad} opacity-80 group-hover:opacity-100 transition-opacity`} />
+
+                    {/* Drifting aurora gradients (two desynchronised phases) */}
+                    <div className={`team-card-aurora absolute -top-16 -right-12 w-44 h-44 rounded-full blur-3xl pointer-events-none bg-gradient-to-br ${group.accent.aurora} to-transparent`} />
+                    <div
+                      className={`team-card-aurora absolute -bottom-20 -left-14 w-44 h-44 rounded-full blur-3xl pointer-events-none bg-gradient-to-tr ${group.accent.aurora} to-transparent`}
+                      style={{ animationDelay: '-8.5s', animationDuration: '21s' }}
+                    />
+
+                    {/* Slow gradient sheen sweep */}
+                    <div
+                      className={`team-card-sheen absolute top-0 left-0 h-full w-1/2 pointer-events-none bg-gradient-to-r from-transparent ${group.accent.sheen} to-transparent`}
+                      style={{ ['--sheen-delay' as string]: `${idx * 2.4}s` } as React.CSSProperties}
+                    />
+
+                    {/* Headcount watermark */}
+                    {count > 0 && (
+                      <span
+                        aria-hidden
+                        className={`absolute -right-1 -bottom-3 text-[88px] leading-none font-clash font-black select-none pointer-events-none transition-transform duration-500 group-hover:scale-105 ${
+                          theme === 'dark' ? 'text-white/[0.04]' : 'text-slate-900/[0.04]'
+                        }`}
+                      >
+                        {String(count).padStart(2, '0')}
+                      </span>
+                    )}
+
+                    <div className="relative z-10 flex flex-col gap-4">
+                      {/* Role header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${group.accent.soft} ${group.accent.ring}`}>
+                          <Icon className={`w-4 h-4 ${group.accent.text}`} />
                         </div>
+                        <div className={`inline-flex items-center px-2 py-1 rounded-lg border text-[10px] font-black tracking-[0.14em] uppercase ${group.accent.soft} ${group.accent.ring} ${group.accent.text}`}>
+                          {group.metrics}
+                        </div>
+                      </div>
+
+                      <h3 className={`text-[15px] font-extrabold leading-snug ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                        {group.role}
+                      </h3>
+
+                      {/* Members */}
+                      {count > 0 ? (
+                        <ul className="flex flex-col gap-1.5 list-none m-0 p-0">
+                          {group.members.map(member => (
+                            <li
+                              key={member}
+                              className={`flex items-center gap-2.5 px-2 py-1.5 rounded-xl border transition-colors ${
+                                theme === 'dark'
+                                  ? 'bg-white/[0.03] border-white/[0.05] hover:bg-white/[0.07]'
+                                  : 'bg-slate-50 border-slate-200/70 hover:bg-slate-100'
+                              }`}
+                            >
+                              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black border shrink-0 ${group.accent.soft} ${group.accent.ring} ${group.accent.text}`}>
+                                {String(member || '?').trim().charAt(0).toUpperCase() || '?'}
+                              </span>
+                              <span className={`text-xs font-semibold truncate ${theme === 'dark' ? 'text-white/85' : 'text-slate-700'}`}>
+                                {member}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className={`rounded-xl border border-dashed px-3 py-5 text-center ${theme === 'dark' ? 'border-white/10' : 'border-slate-200'}`}>
+                          <span className={`text-[11px] font-semibold ${theme === 'dark' ? 'text-white/30' : 'text-slate-400'}`}>
+                            No resources assigned
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                  {group.members.length === 0 && <span className="text-xs text-text-muted">No resources assigned.</span>}
-                </div>
-                </div>
-              </div>
-            ))}
+                  </motion.div>
+                )
+              })
+            })()}
           </div>
         </motion.section>
 

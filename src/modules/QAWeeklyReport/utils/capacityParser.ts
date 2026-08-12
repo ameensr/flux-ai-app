@@ -3,7 +3,11 @@
 // Effective Work, Available, Utilization Percentage
 
 import type { TeamMemberCapacity, TeamCapacityData } from '../types/teamCapacity'
-import { getMemberStatus, calculateCapacityStats } from '../types/teamCapacity'
+import {
+  getMemberStatus,
+  calculateCapacityStats,
+  inferDefaultAvailableHours,
+} from '../types/teamCapacity'
 
 const NAME_ALIASES = [
   'employee name',
@@ -77,6 +81,23 @@ const UTILIZATION_ALIASES = [
   'util',
 ]
 
+// Optional stable identifier column. Never required — when absent, employees
+// are matched by name (the app has no central employee registry).
+const ID_ALIASES = [
+  'employee id',
+  'employee code',
+  'employee number',
+  'emp id',
+  'emp code',
+  'emp no',
+  'emp number',
+  'staff id',
+  'resource id',
+  'member id',
+  'user id',
+  'id',
+]
+
 const SUMMARY_NAME_RE = /^(total|grand total|sum|average|avg|subtotal|overall)$/i
 
 function normalizeHeader(value: unknown): string {
@@ -101,6 +122,26 @@ function findColumn(headers: string[], aliases: string[]): number {
   for (const alias of aliases) {
     const includes = headers.findIndex(h => h.includes(alias))
     if (includes !== -1) return includes
+  }
+  return -1
+}
+
+/**
+ * Stricter lookup for the optional ID column: exact match, then "starts with".
+ * The loose "includes" pass is deliberately skipped so a header such as
+ * "Valid Hours" can never be mistaken for an "id" column.
+ */
+function findIdColumn(headers: string[], excluded: number[]): number {
+  const isUsable = (idx: number) => idx !== -1 && !excluded.includes(idx)
+
+  for (const alias of ID_ALIASES) {
+    const exact = headers.findIndex((h, idx) => h === alias && !excluded.includes(idx))
+    if (isUsable(exact)) return exact
+  }
+  for (const alias of ID_ALIASES) {
+    if (alias === 'id') continue // bare "id" only ever matches exactly
+    const starts = headers.findIndex((h, idx) => h.startsWith(alias) && !excluded.includes(idx))
+    if (isUsable(starts)) return starts
   }
   return -1
 }
@@ -174,6 +215,7 @@ export async function parseTeamCapacityExcel(file: File): Promise<TeamCapacityDa
 
         let headerRowIndex = -1
         let nameColIndex = -1
+        let idColIndex = -1
         let loggedColIndex = -1
         let leaveColIndex = -1
         let availableColIndex = -1
@@ -209,6 +251,15 @@ export async function parseTeamCapacityExcel(file: File): Promise<TeamCapacityDa
             availableColIndex = availableIdx
             effectiveColIndex = effectiveIdx
             utilizationColIndex = utilIdx
+            // Optional — resolved last so it can never steal a required column.
+            idColIndex = findIdColumn(headers, [
+              nameIdx,
+              loggedIdx,
+              leaveIdx,
+              availableIdx,
+              effectiveIdx,
+              utilIdx,
+            ])
             break
           }
         }
@@ -248,9 +299,13 @@ export async function parseTeamCapacityExcel(file: File): Promise<TeamCapacityDa
 
           const status = getMemberStatus(logged, leave, available)
 
+          const employeeId =
+            idColIndex >= 0 ? String(row[idColIndex] ?? '').replace(/\s+/g, ' ').trim() : ''
+
           members.push({
             id: newMemberId(),
             name,
+            ...(employeeId ? { employee_id: employeeId } : {}),
             logged_hours: logged,
             leave_hours: leave,
             ...(available !== undefined ? { available_hours: available } : {}),
@@ -262,6 +317,18 @@ export async function parseTeamCapacityExcel(file: File): Promise<TeamCapacityDa
 
         if (members.length === 0) {
           throw new Error('No valid employee data found in Excel file')
+        }
+
+        // Sheets with no "Available" column: re-bucket every row against the
+        // sheet-level planned hours (40 for weekly sheets, 176 for monthly)
+        // now that all rows are known, instead of the per-row 40h fallback.
+        const inferredAvailable = inferDefaultAvailableHours(members)
+        for (const member of members) {
+          member.status = getMemberStatus(
+            member.logged_hours,
+            member.leave_hours,
+            member.available_hours ?? inferredAvailable,
+          )
         }
 
         const stats = calculateCapacityStats(members)

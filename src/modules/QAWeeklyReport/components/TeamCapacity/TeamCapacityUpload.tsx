@@ -1,15 +1,20 @@
 // src/modules/QAWeeklyReport/components/TeamCapacity/TeamCapacityUpload.tsx
 // Simple Team Capacity Upload - QA-focused (not performance evaluation)
 
-import React, { useState, useCallback, useRef, useMemo } from 'react'
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  Upload, Trash2, AlertTriangle, X, CheckCircle, 
+import {
+  Upload, Trash2, AlertTriangle, X, CheckCircle,
   FileSpreadsheet, RefreshCw, Users, Clock, Gauge
 } from 'lucide-react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
 import { parseTeamCapacityExcel, validateCapacityData } from '../../utils/capacityParser'
+import {
+  classifyCapacityFailure,
+  emitCapacityFetchSignal,
+  subscribeCapacityFetchSignal,
+} from '../../utils/capacityFetchBus'
 import type { TeamCapacityData } from '../../types/teamCapacity'
 import {
   calculateCapacityStats,
@@ -26,9 +31,13 @@ interface TeamCapacityUploadProps {
 export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploadProps) {
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const dropZoneRef = useRef<HTMLDivElement>(null)
+  const replaceBtnRef = useRef<HTMLButtonElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [highlight, setHighlight] = useState(false)
 
   const displayData = useMemo(() => {
     if (!capacityData || !Array.isArray(capacityData.members)) return null
@@ -54,15 +63,19 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
     const ext = '.' + file.name.split('.').pop()?.toLowerCase()
     if (!ACCEPTED_EXT.includes(ext)) {
       setError('Unsupported file type. Please upload .xlsx or .xls')
+      emitCapacityFetchSignal({ kind: 'fetch-error', reason: 'parse', detail: 'Unsupported file type' })
       return
     }
     if (file.size > 50 * 1024 * 1024) {
       setError('File too large. Maximum 50MB.')
+      emitCapacityFetchSignal({ kind: 'fetch-error', reason: 'parse', detail: 'File too large' })
       return
     }
 
     setError(null)
     setIsProcessing(true)
+    // Tells Team Resource Allocation to show "Fetching employees…".
+    emitCapacityFetchSignal({ kind: 'fetch-start', fileName: file.name })
 
     try {
       const result = await parseTeamCapacityExcel(file)
@@ -76,6 +89,11 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
       }
 
       onChange(result)
+      emitCapacityFetchSignal({
+        kind: 'fetch-success',
+        fileName: file.name,
+        count: result.members.length,
+      })
       toast({
         title: 'Team Capacity Loaded',
         description: `${result.members.length} team members processed from ${file.name}`,
@@ -83,6 +101,11 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
     } catch (err: any) {
       const message = err?.message || 'An unexpected error occurred while parsing the file.'
       setError(message)
+      emitCapacityFetchSignal({
+        kind: 'fetch-error',
+        reason: classifyCapacityFailure(message),
+        detail: message,
+      })
       toast({
         variant: 'destructive',
         title: 'Parse Failed',
@@ -111,10 +134,56 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
     setError(null)
   }
 
+  const openFilePicker = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+
+  // "Go to Upload" from Team Resource Allocation → reveal + highlight this card.
+  useEffect(() => {
+    return subscribeCapacityFetchSignal(signal => {
+      if (signal.kind !== 'focus-upload') return
+
+      try {
+        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } catch {
+        cardRef.current?.scrollIntoView()
+      }
+
+      setHighlight(true)
+      window.setTimeout(() => {
+        const target = dropZoneRef.current ?? replaceBtnRef.current
+        target?.focus({ preventScroll: true })
+      }, 420)
+      window.setTimeout(() => setHighlight(false), 2800)
+    })
+  }, [])
+
   return (
-    <GlassCard hoverEffect={false}>
+    <GlassCard
+      ref={cardRef}
+      hoverEffect={false}
+      id="team-capacity-overview"
+      style={
+        highlight
+          ? {
+            borderColor: 'var(--accent)',
+            boxShadow: '0 0 0 3px rgba(99,102,241,0.22)',
+            transition: 'box-shadow 0.3s ease, border-color 0.3s ease',
+          }
+          : { transition: 'box-shadow 0.3s ease, border-color 0.3s ease' }
+      }
+    >
+      {/* Always-mounted file input so "Replace File" works once data is loaded */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        className="hidden"
+        onChange={handleFileSelect}
+      />
+
       {/* Section Header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
         <div>
           <h3 className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
             <Users className="w-5 h-5" style={{ color: 'var(--accent)' }} />
@@ -125,37 +194,55 @@ export function TeamCapacityUpload({ capacityData, onChange }: TeamCapacityUploa
           </p>
         </div>
         {capacityData && (
-          <button
-            onClick={handleRemove}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
-            style={{ background: 'var(--hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
-          >
-            <Trash2 className="w-3 h-3" /> Remove
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              ref={replaceBtnRef}
+              type="button"
+              onClick={openFilePicker}
+              disabled={isProcessing}
+              title="Upload a new Team Capacity Overview file"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-gold"
+              style={{ background: 'rgba(99,102,241,0.12)', color: 'var(--accent)', border: '1px solid rgba(99,102,241,0.30)' }}
+            >
+              {isProcessing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+              Replace File
+            </button>
+            <button
+              type="button"
+              onClick={handleRemove}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-gold"
+              style={{ background: 'var(--hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+            >
+              <Trash2 className="w-3 h-3" /> Remove
+            </button>
+          </div>
         )}
       </div>
 
       {/* Upload Area (shown when no data) */}
       {!displayData && (
         <div
+          ref={dropZoneRef}
+          role="button"
+          tabIndex={0}
+          aria-label="Upload Team Capacity Overview Excel file"
+          aria-busy={isProcessing}
           onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={openFilePicker}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              openFilePicker()
+            }
+          }}
           className={cn(
-            'relative border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-300',
+            'relative border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-gold',
             isDragging ? 'border-accent bg-accent/5 scale-[1.01]' : 'border-border hover:border-accent/40 hover:bg-hover',
             isProcessing && 'pointer-events-none opacity-60'
           )}
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls"
-            className="hidden"
-            onChange={handleFileSelect}
-          />
-
           {isProcessing ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center gap-3">
               <RefreshCw className="w-8 h-8 animate-spin" style={{ color: 'var(--accent)' }} />
