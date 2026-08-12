@@ -575,6 +575,14 @@
     visibility: hidden !important;
   }
 
+  /* backdrop-filter does not rasterize reliably in print engines, but the
+     elements carrying it are real content (report table shells, table headers,
+     KPI cards) — drop the filter, never the element. */
+  [class*="backdrop-blur"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
   /* === FIX LAYOUT === */
   /* Remove min-h-screen causing blank pages */
   [class*="min-h-screen"] {

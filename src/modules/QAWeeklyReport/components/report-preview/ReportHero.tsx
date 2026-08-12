@@ -88,32 +88,77 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
 }) => {
   const generatedLabel = formatGeneratedDate(reportMeta.generatedDate)
 
+  // Colour is carried by a soft tinted wash plus the icon tile, top hairline
+  // and numeral — a shade of the metric's hue, not a saturated fill, so the
+  // three cards stay quiet next to the Executive Quality Score card.
+  const kpiPalette = theme === 'dark'
+    ? {
+        blue: {
+          icon: 'text-blue-300', value: 'text-blue-200',
+          tile: 'bg-blue-400/15', ring: 'border-blue-400/25',
+          rail: 'from-blue-400/80 via-cyan-300/50 to-transparent',
+          glow: 'rgba(59,130,246,0.20)',
+          tint: 'linear-gradient(135deg, rgba(59,130,246,0.16) 0%, rgba(6,182,212,0.07) 55%, rgba(6,182,212,0) 100%)',
+        },
+        amber: {
+          icon: 'text-amber-300', value: 'text-amber-200',
+          tile: 'bg-amber-400/15', ring: 'border-amber-400/25',
+          rail: 'from-amber-400/80 via-yellow-300/50 to-transparent',
+          glow: 'rgba(245,158,11,0.20)',
+          tint: 'linear-gradient(135deg, rgba(245,158,11,0.16) 0%, rgba(234,179,8,0.07) 55%, rgba(234,179,8,0) 100%)',
+        },
+        violet: {
+          icon: 'text-violet-300', value: 'text-violet-200',
+          tile: 'bg-violet-400/15', ring: 'border-violet-400/25',
+          rail: 'from-violet-400/80 via-pink-300/50 to-transparent',
+          glow: 'rgba(168,85,247,0.20)',
+          tint: 'linear-gradient(135deg, rgba(168,85,247,0.16) 0%, rgba(236,72,153,0.07) 55%, rgba(236,72,153,0) 100%)',
+        },
+      }
+    : {
+        blue: {
+          icon: 'text-blue-600', value: 'text-blue-700',
+          tile: 'bg-blue-50', ring: 'border-blue-200',
+          rail: 'from-blue-500/70 via-cyan-400/40 to-transparent',
+          glow: 'rgba(59,130,246,0.13)',
+          tint: 'linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(6,182,212,0.06) 55%, rgba(6,182,212,0) 100%)',
+        },
+        amber: {
+          icon: 'text-amber-600', value: 'text-amber-700',
+          tile: 'bg-amber-50', ring: 'border-amber-200',
+          rail: 'from-amber-500/70 via-yellow-400/40 to-transparent',
+          glow: 'rgba(245,158,11,0.13)',
+          tint: 'linear-gradient(135deg, rgba(245,158,11,0.13) 0%, rgba(234,179,8,0.06) 55%, rgba(234,179,8,0) 100%)',
+        },
+        violet: {
+          icon: 'text-violet-600', value: 'text-violet-700',
+          tile: 'bg-violet-50', ring: 'border-violet-200',
+          rail: 'from-violet-500/70 via-pink-400/40 to-transparent',
+          glow: 'rgba(168,85,247,0.13)',
+          tint: 'linear-gradient(135deg, rgba(168,85,247,0.12) 0%, rgba(236,72,153,0.06) 55%, rgba(236,72,153,0) 100%)',
+        },
+      }
+
   const kpiCards = [
     {
       label: 'Support Emails',
       value: supportEmails,
       icon: Mail,
-      gradient: 'from-blue-500/90 to-cyan-500/90',
-      glowColor: 'rgba(59,130,246,0.4)',
-      iconBg: 'bg-white/20',
+      accent: kpiPalette.blue,
       onClick: () => onOpenProductionIssuesModal?.(),
     },
     {
       label: 'New Release Features',
       value: newFeatures,
       icon: Sparkles,
-      gradient: 'from-amber-500/90 to-yellow-500/90',
-      glowColor: 'rgba(245,158,11,0.4)',
-      iconBg: 'bg-white/20',
+      accent: kpiPalette.amber,
       onClick: () => onNavigateToSection?.('releaseTesting'),
     },
     {
       label: 'Code Fixes Testing',
       value: codeFixes,
       icon: Wrench,
-      gradient: 'from-purple-500/90 to-pink-500/90',
-      glowColor: 'rgba(168,85,247,0.4)',
-      iconBg: 'bg-white/20',
+      accent: kpiPalette.violet,
       onClick: () => onNavigateToSection?.('supportLog'),
     },
   ]
@@ -249,40 +294,55 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 + idx * 0.1, duration: 0.5, ease: 'easeOut' }}
               onClick={kpi.onClick}
-              className={`relative overflow-hidden rounded-[28px] p-6 text-white group cursor-pointer`}
-              style={{
-                background: `linear-gradient(135deg, ${kpi.gradient.includes('blue') ? 'rgba(59,130,246,0.9)' : kpi.gradient.includes('amber') ? 'rgba(245,158,11,0.9)' : 'rgba(168,85,247,0.9)'} 0%, ${kpi.gradient.includes('cyan') ? 'rgba(6,182,212,0.85)' : kpi.gradient.includes('yellow') ? 'rgba(234,179,8,0.85)' : 'rgba(236,72,153,0.85)'} 100%)`,
-                boxShadow: `0 8px 32px ${kpi.glowColor}, 0 4px 16px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)`,
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  kpi.onClick?.()
+                }
               }}
+              role="button"
+              tabIndex={0}
+              aria-label={`${kpi.label}: ${kpi.value}`}
+              className={`relative overflow-hidden rounded-[28px] p-6 group cursor-pointer transition-all duration-500 ${glassCard} ${glassCardHover}`}
             >
-              {/* Glass overlay */}
-              <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/10 pointer-events-none" />
-              
-              {/* Shimmer effect */}
+              {/* Tinted wash — a light shade of the metric's hue over the glass */}
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{ background: kpi.accent.tint }}
+              />
+
+              {/* Accent hairline */}
+              <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${kpi.accent.rail} pointer-events-none`} />
+
+              {/* Soft accent glow, lifts on hover */}
+              <div
+                className="absolute -top-16 -right-12 w-40 h-40 rounded-full blur-3xl pointer-events-none opacity-70 group-hover:opacity-100 transition-opacity duration-500"
+                style={{ background: `radial-gradient(circle, ${kpi.accent.glow}, transparent 70%)` }}
+              />
+
+              {/* Slow sheen — a whisper rather than a flash */}
               <motion.div
                 animate={{ x: ['-100%', '200%'] }}
                 transition={{ duration: 3, repeat: Infinity, repeatDelay: 4 + idx * 2, ease: 'easeInOut' }}
-                className="absolute inset-y-0 w-32 bg-gradient-to-r from-transparent via-white/30 to-transparent transform -skew-x-12 pointer-events-none"
+                className={`absolute inset-y-0 w-32 bg-gradient-to-r from-transparent ${theme === 'dark' ? 'via-white/[0.06]' : 'via-slate-900/[0.03]'} to-transparent transform -skew-x-12 pointer-events-none`}
               />
 
-              {/* Hover glow */}
-              <div 
-                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-                style={{ background: `radial-gradient(circle at 50% 0%, rgba(255,255,255,0.2), transparent 60%)` }}
-              />
-              
-              <div className="relative z-10 flex items-center justify-between mb-5">
-                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/90">{kpi.label}</span>
-                <span className={`w-11 h-11 rounded-2xl ${kpi.iconBg} backdrop-blur-sm flex items-center justify-center shrink-0 border border-white/20`}>
-                  <kpi.icon className="w-5 h-5 text-white" />
+              <div className="relative z-10 flex items-center justify-between gap-3 mb-5">
+                <span className={`text-[10px] font-bold uppercase tracking-[0.15em] ${theme === 'dark' ? 'text-white/55' : 'text-slate-500'}`}>
+                  {kpi.label}
+                </span>
+                <span className={`w-11 h-11 rounded-2xl border ${kpi.accent.tile} ${kpi.accent.ring} backdrop-blur-sm flex items-center justify-center shrink-0`}>
+                  <kpi.icon className={`w-5 h-5 ${kpi.accent.icon}`} />
                 </span>
               </div>
-              
-              <span className="relative z-10 text-5xl sm:text-6xl font-black block leading-none tracking-tight">
+
+              <span className={`relative z-10 text-5xl sm:text-6xl font-black block leading-none tracking-tight ${kpi.accent.value}`}>
                 <CountUpNumber end={kpi.value} />
               </span>
-              
-              <span className="relative z-10 text-xs font-medium text-white/70 mt-3 block">This week's count</span>
+
+              <span className={`relative z-10 text-xs font-medium mt-3 block ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>
+                This week's count
+              </span>
             </motion.div>
           ))}
         </div>

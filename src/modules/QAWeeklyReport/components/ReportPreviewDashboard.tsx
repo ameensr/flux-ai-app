@@ -15,6 +15,7 @@ import { Logo } from '@/components/ui/Logo'
 import { BRAND } from '@/lib/brand'
 import { ROUTES } from '@/lib/routes'
 import { calculateQAScore } from '../utils/qualityCalculator'
+import { buildReportMarkdown, buildReportHTML, downloadTextFile, slugifyName } from '../utils/reportExport'
 import { ExecutiveKPISection } from './ExecutiveKPISection'
 import { ReportHero } from './report-preview/ReportHero'
 import { ReportNavigator, type ReportNavItem } from './report-preview/ReportNavigator'
@@ -279,8 +280,10 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
     body, html, #root, .min-h-screen {
       overflow: visible !important;
       height: auto !important;
-      background: ${theme === 'dark' ? '#070a13' : '#f8fafc'} !important;
-      color: ${theme === 'dark' ? '#f8fafc' : '#0f172a'} !important;
+      /* Always ink-on-paper: the global print reset in index.css forces a white
+         page, so honouring a dark live theme here would print white-on-white. */
+      background: #ffffff !important;
+      color: #0f172a !important;
     }
 
     * {
@@ -304,20 +307,11 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
       -webkit-backdrop-filter: none !important;
     }
 
-    /* A static replica of the live ambient gradient backdrop — the animated
-       ImmersiveBackground canvas/aurora layer is hidden for print (animations
-       and canvas don't reliably rasterize), so this keeps the same colorful
-       depth behind the translucent cards instead of a flat page background. */
+    /* The animated ambient backdrop cannot rasterize, and a dark full-bleed
+       replica would both fight the forced white page and flood the printer.
+       Print on clean paper instead. */
     .qaly-report-root::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-      background: ${theme === 'dark'
-        ? 'radial-gradient(circle at 30% 22%, rgba(212,175,55,0.16), transparent 42%), radial-gradient(circle at 88% 78%, rgba(59,130,246,0.13), transparent 48%), radial-gradient(circle at 8% 78%, rgba(168,85,247,0.10), transparent 42%), #070a13'
-        : 'radial-gradient(circle at 30% 22%, rgba(250,204,21,0.12), transparent 42%), radial-gradient(circle at 88% 78%, rgba(96,165,250,0.10), transparent 48%), radial-gradient(circle at 8% 78%, rgba(196,181,253,0.08), transparent 42%), #f8fafc'
-      } !important;
+      display: none !important;
     }
 
     /* Prevent cards and charts from splitting across pages */
@@ -329,7 +323,18 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
     h1, h2, h3, h4, h5, h6 {
       page-break-after: avoid !important;
       break-after: avoid !important;
-      color: ${theme === 'dark' ? '#ffffff' : '#0f172a'} !important;
+      color: #0f172a !important;
+    }
+
+    /* Cards keep a hairline edge so sections stay legible on paper. */
+    .qaly-report-root section,
+    .qaly-report-root .rounded-2xl,
+    .qaly-report-root .rounded-3xl,
+    .qaly-report-root .rounded-\\[24px\\],
+    .qaly-report-root .rounded-\\[26px\\],
+    .qaly-report-root .rounded-\\[28px\\],
+    .qaly-report-root .rounded-\\[32px\\] {
+      box-shadow: none !important;
     }
 
     /* ── Print Friendly Report mode — a deliberately low-ink, high-contrast
@@ -360,6 +365,7 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
     html.print-friendly-mode .qaly-report-root .rounded-2xl,
     html.print-friendly-mode .qaly-report-root .rounded-3xl,
     html.print-friendly-mode .qaly-report-root .rounded-\\[24px\\],
+    html.print-friendly-mode .qaly-report-root .rounded-\\[26px\\],
     html.print-friendly-mode .qaly-report-root .rounded-\\[28px\\],
     html.print-friendly-mode .qaly-report-root .rounded-\\[32px\\] {
       background: #ffffff !important;
@@ -1495,66 +1501,90 @@ Do not return markdown wraps, only raw JSON text.
   ]
 
   // ── Exports ──
-  const downloadMarkdown = () => {
-    let md = `# Weekly QA Dashboard Report - ${data.projectName}\n`
-    md += `Report Week: ${data.weekStart} to ${data.weekEnd}\n\n`
-    md += `## Metrics Summary\n`
-    md += `- Support Emails: ${data.supportEmails}\n`
-    md += `- New Features: ${data.newFeatures}\n`
-    md += `- Code Fixes: ${data.codeFixes}\n\n`
-    md += `## Next Week Priorities\n`
-    data.nextPriorities.forEach(p => {
-      md += `- **${p.title}** (Owner: ${p.owner}, Due: ${p.dueDate})\n  ${p.description}\n`
-    })
+  const exportFileBase = `${slugifyName(data.projectName || 'qa-report')}-${data.weekStart || 'report'}`
 
-    const blob = new Blob([md], { type: 'text/markdown' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${data.projectName.toLowerCase().replace(/\s+/g, '-')}-qa-report.md`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast({ title: 'Markdown Exported!', description: 'Report downloaded as Markdown file.' })
+  const downloadMarkdown = () => {
+    try {
+      const md = buildReportMarkdown(data, reportMeta)
+      downloadTextFile(`${exportFileBase}.md`, 'text/markdown', md)
+      toast({ title: 'Markdown Exported', description: 'Full report downloaded as a Markdown file.' })
+    } catch (err) {
+      console.error('Markdown export failed:', err)
+      toast({
+        variant: 'destructive',
+        title: 'Export Failed',
+        description: 'Could not build the Markdown file. Please try again.',
+      })
+    }
   }
 
   const downloadHTML = () => {
-    const safeProjectName = data.projectName.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c] ?? c))
-    const htmlString = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>QA Dashboard - ${safeProjectName}</title></head><body><h1>${safeProjectName}</h1></body></html>`
-    const blob = new Blob([htmlString], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${data.projectName.toLowerCase().replace(/\s+/g, '-')}-qa-dashboard.html`
-    a.click()
-    URL.revokeObjectURL(url)
+    try {
+      const html = buildReportHTML(data, reportMeta)
+      downloadTextFile(`${exportFileBase}.html`, 'text/html', html)
+      toast({ title: 'HTML Exported', description: 'Standalone report page downloaded — open it in any browser.' })
+    } catch (err) {
+      console.error('HTML export failed:', err)
+      toast({
+        variant: 'destructive',
+        title: 'Export Failed',
+        description: 'Could not build the HTML page. Please try again.',
+      })
+    }
   }
 
-  const handlePrint = () => {
+  /**
+   * Shared print runner. Closes the export menu and any open modal (a modal
+   * overlay would otherwise be captured in the output), waits for the DOM to
+   * settle, then prints. `bodyClass` is applied for the duration so the print
+   * stylesheet can switch variants.
+   */
+  const runPrint = (bodyClass?: string) => {
     setShowExportMenu(false)
-    // Allow React to close the export dropdown before triggering print
-    setTimeout(() => window.print(), 300)
-  }
+    setShowDefectModal(false)
+    setShowWorkDistributionModal(false)
+    setShowProductionIssuesModal(false)
+    setShowReleaseReadinessModal(false)
+    setShowTeamCapacityModal(false)
+    setShowQualityScoreModal(false)
+    setShowReleaseScopeModal(false)
 
-  // "Print Friendly Report" � a low-ink, high-contrast variant for actual paper
-  // printing: flattens the premium gradients/glass cards to plain white cards
-  // with light borders and dark ink text, independent of whatever theme (dark
-  // or light) the user currently has the live dashboard in.
-  const handlePrintFriendly = () => {
-    setShowExportMenu(false)
-    document.documentElement.classList.add('print-friendly-mode')
+    if (bodyClass) document.documentElement.classList.add(bodyClass)
+
     let cleaned = false
     const cleanup = () => {
       if (cleaned) return
       cleaned = true
-      document.documentElement.classList.remove('print-friendly-mode')
+      if (bodyClass) document.documentElement.classList.remove(bodyClass)
       window.removeEventListener('afterprint', cleanup)
     }
     window.addEventListener('afterprint', cleanup)
-    // Safety net in case the browser doesn't fire `afterprint` (some older/embedded webviews).
-    setTimeout(cleanup, 15000)
-    // Allow React to close the export dropdown and the class to apply before printing
-    setTimeout(() => window.print(), 300)
+    // Safety net for engines that never fire `afterprint` (some embedded webviews).
+    window.setTimeout(cleanup, 60000)
+
+    // Let React commit the closed menu/modals and the class before printing.
+    window.setTimeout(() => {
+      try {
+        window.print()
+      } catch (err) {
+        console.error('Print failed:', err)
+        cleanup()
+        toast({
+          variant: 'destructive',
+          title: 'Print Unavailable',
+          description: 'Your browser blocked printing. Use the browser menu → Print instead.',
+        })
+      }
+    }, 350)
   }
+
+  // Keeps the on-screen colour treatment, on a white page with dark ink.
+  const handlePrint = () => runPrint()
+
+  // "Print Friendly Report" — a low-ink, high-contrast variant: flattens the
+  // premium gradients/glass cards to plain white cards with light borders and
+  // dark ink text, independent of whatever theme the dashboard is in.
+  const handlePrintFriendly = () => runPrint('print-friendly-mode')
 
   if (!isLoaded && !showLaunchTriage) {
     return <ReportSkeleton theme={theme} />
@@ -1852,17 +1882,6 @@ Do not return markdown wraps, only raw JSON text.
                 desc: `${supportResolved} resolved`,
                 sparklineData: getHistoricalValues(f => f.supportTickets?.length || 0),
                 tooltip: 'Is production/customer support under control?',
-                category: 'primary' as const
-              },
-              {
-                label: 'QA Health Score',
-                val: qualityStats.score,
-                suffix: '%',
-                icon: Star,
-                color: 'text-purple-400',
-                desc: qualityStats.label,
-                sparklineData: getHistoricalValues(f => calculateQAScore(f).score),
-                tooltip: 'Overall QA confidence',
                 category: 'primary' as const
               },
 
