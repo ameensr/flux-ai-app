@@ -517,6 +517,14 @@
 }
 
 /* ── Print / PDF Export ────────────────────────────────────────────────────── */
+/*
+ * The colour-forcing rules below flatten the app to white paper with dark ink,
+ * which is right for ordinary in-app pages. /report-preview is different: it is
+ * an isolated theme system with its own print stylesheet, and its "Print to PDF"
+ * action is meant to be WYSIWYG. That dashboard sets `qaly-print-live` on <html>
+ * for the duration of the print, which switches these rules off so its own
+ * styling survives. Layout, visibility and animation fixes stay universal.
+ */
 @media print {
 
   /* Page setup */
@@ -542,17 +550,22 @@
     filter: none !important;
   }
 
-  /* Base print colors */
+  /* Base print sizing — always applied */
   html,
   body {
-    background: #ffffff !important;
-    color: #1a1a1a !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     overflow: visible !important;
     height: auto !important;
     min-height: 0 !important;
     width: auto !important;
+  }
+
+  /* Base print colors */
+  html:not(.qaly-print-live),
+  html:not(.qaly-print-live) body {
+    background: #ffffff !important;
+    color: #1a1a1a !important;
   }
 
   /* === HIDE NON-PRINT ELEMENTS === */
@@ -564,7 +577,6 @@
   [class*="fixed"][class*="inset-0"][class*="pointer-events-none"],
   [class*="fixed"][class*="z-0"],
   [class*="blur-\["],
-  [class*="backdrop-blur"],
   [class*="animate-float"],
   [class*="animate-spin-slow"],
   [class*="animate-pulse-glow"] {
@@ -589,9 +601,12 @@
     min-height: 0 !important;
     height: auto !important;
     overflow: visible !important;
+    padding-bottom: 0 !important;
+  }
+
+  html:not(.qaly-print-live) [class*="min-h-screen"] {
     background: #ffffff !important;
     color: #1a1a1a !important;
-    padding-bottom: 0 !important;
   }
 
   /* Remove overflow-hidden causing content clipping */
@@ -624,13 +639,19 @@
   [class*="rounded-3xl"],
   .glass-panel,
   .qaly-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  html:not(.qaly-print-live) [class*="rounded-2xl"],
+  html:not(.qaly-print-live) [class*="rounded-3xl"],
+  html:not(.qaly-print-live) .glass-panel,
+  html:not(.qaly-print-live) .qaly-card {
     background: #ffffff !important;
     border: 1px solid #e2e8f0 !important;
     box-shadow: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
   }
 
   /* === TEXT COLORS — HIGH CONTRAST === */
@@ -640,41 +661,49 @@
   h4,
   h5,
   h6 {
-    color: #111111 !important;
     page-break-after: avoid;
   }
 
-  [class*="text-white"],
-  [class*="text-foreground"],
-  [class*="text-\[#F5F5F5\]"],
-  [class*="text-\[#e5e5e5\]"],
-  [class*="text-\[#eceff4\]"],
-  [class*="text-\[#f6f9fc\]"],
-  [class*="text-\[#c9d1d9\]"],
-  [class*="text-\[#00f0ff\]"],
-  [class*="text-\[#ff9900\]"],
-  span[class*="font-black"],
-  span[class*="font-extrabold"],
-  span[class*="font-bold"] {
+  html:not(.qaly-print-live) h1,
+  html:not(.qaly-print-live) h2,
+  html:not(.qaly-print-live) h3,
+  html:not(.qaly-print-live) h4,
+  html:not(.qaly-print-live) h5,
+  html:not(.qaly-print-live) h6 {
+    color: #111111 !important;
+  }
+
+  html:not(.qaly-print-live) [class*="text-white"],
+  html:not(.qaly-print-live) [class*="text-foreground"],
+  html:not(.qaly-print-live) [class*="text-\[#F5F5F5\]"],
+  html:not(.qaly-print-live) [class*="text-\[#e5e5e5\]"],
+  html:not(.qaly-print-live) [class*="text-\[#eceff4\]"],
+  html:not(.qaly-print-live) [class*="text-\[#f6f9fc\]"],
+  html:not(.qaly-print-live) [class*="text-\[#c9d1d9\]"],
+  html:not(.qaly-print-live) [class*="text-\[#00f0ff\]"],
+  html:not(.qaly-print-live) [class*="text-\[#ff9900\]"],
+  html:not(.qaly-print-live) span[class*="font-black"],
+  html:not(.qaly-print-live) span[class*="font-extrabold"],
+  html:not(.qaly-print-live) span[class*="font-bold"] {
     color: #1a1a1a !important;
   }
 
-  [class*="text-white\/80"],
-  [class*="text-white\/60"],
-  [class*="text-text-secondary"] {
+  html:not(.qaly-print-live) [class*="text-white\/80"],
+  html:not(.qaly-print-live) [class*="text-white\/60"],
+  html:not(.qaly-print-live) [class*="text-text-secondary"] {
     color: #4a5568 !important;
   }
 
-  [class*="text-white\/40"],
-  [class*="text-white\/35"],
-  [class*="text-white\/50"],
-  [class*="text-white\/45"],
-  [class*="text-text-muted"] {
+  html:not(.qaly-print-live) [class*="text-white\/40"],
+  html:not(.qaly-print-live) [class*="text-white\/35"],
+  html:not(.qaly-print-live) [class*="text-white\/50"],
+  html:not(.qaly-print-live) [class*="text-white\/45"],
+  html:not(.qaly-print-live) [class*="text-text-muted"] {
     color: #718096 !important;
   }
 
-  [class*="text-accent-gold"],
-  [class*="text-\[#d4af37\]"] {
+  html:not(.qaly-print-live) [class*="text-accent-gold"],
+  html:not(.qaly-print-live) [class*="text-\[#d4af37\]"] {
     color: #7c6400 !important;
   }
 
@@ -693,7 +722,7 @@
     page-break-inside: avoid;
   }
 
-  th {
+  html:not(.qaly-print-live) th {
     background: #f7fafc !important;
     border: 1px solid #e2e8f0 !important;
     padding: 6px 10px !important;
@@ -702,7 +731,7 @@
     font-size: 9px !important;
   }
 
-  td {
+  html:not(.qaly-print-live) td {
     border: 1px solid #e2e8f0 !important;
     padding: 6px 10px !important;
     color: #1a202c !important;
@@ -724,6 +753,9 @@
   span[class*="rounded-full"] {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+
+  html:not(.qaly-print-live) span[class*="rounded-full"] {
     border: 1px solid currentColor !important;
   }
 
@@ -759,17 +791,20 @@
   /* === FOOTER === */
   footer {
     position: static !important;
-    background: #ffffff !important;
-    border-top: 1px solid #e2e8f0 !important;
-    color: #718096 !important;
     margin-top: 20px !important;
   }
 
+  html:not(.qaly-print-live) footer {
+    background: #ffffff !important;
+    border-top: 1px solid #e2e8f0 !important;
+    color: #718096 !important;
+  }
+
   /* === KILL DECORATIVE GRADIENTS === */
-  [class*="bg-gradient-to"],
-  [style*="background: linear-gradient"],
-  [style*="background: radial-gradient"],
-  [style*="background: conic-gradient"] {
+  html:not(.qaly-print-live) [class*="bg-gradient-to"],
+  html:not(.qaly-print-live) [style*="background: linear-gradient"],
+  html:not(.qaly-print-live) [style*="background: radial-gradient"],
+  html:not(.qaly-print-live) [style*="background: conic-gradient"] {
     background: transparent !important;
   }
 
@@ -779,7 +814,7 @@
     -webkit-backdrop-filter: none !important;
   }
 
-  [style*="box-shadow"] {
+  html:not(.qaly-print-live) [style*="box-shadow"] {
     box-shadow: none !important;
   }
 }

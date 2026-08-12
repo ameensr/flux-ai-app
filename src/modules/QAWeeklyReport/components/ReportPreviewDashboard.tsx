@@ -280,10 +280,11 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
     body, html, #root, .min-h-screen {
       overflow: visible !important;
       height: auto !important;
-      /* Always ink-on-paper: the global print reset in index.css forces a white
-         page, so honouring a dark live theme here would print white-on-white. */
-      background: #ffffff !important;
-      color: #0f172a !important;
+      /* WYSIWYG: "Print to PDF" reproduces the live dashboard. The global print
+         reset in index.css stands down while .qaly-print-live is set on <html>
+         (see runPrint), so the live palette survives into the PDF. */
+      background: ${theme === 'dark' ? '#070a13' : '#f8fafc'} !important;
+      color: ${theme === 'dark' ? '#f8fafc' : '#0f172a'} !important;
     }
 
     * {
@@ -307,11 +308,19 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
       -webkit-backdrop-filter: none !important;
     }
 
-    /* The animated ambient backdrop cannot rasterize, and a dark full-bleed
-       replica would both fight the forced white page and flood the printer.
-       Print on clean paper instead. */
+    /* The animated ImmersiveBackground canvas cannot rasterize, so paint a
+       static replica of the same ambient gradient — otherwise the translucent
+       cards would sit on blank paper instead of the live backdrop. */
     .qaly-report-root::before {
-      display: none !important;
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background: ${theme === 'dark'
+        ? 'radial-gradient(circle at 30% 22%, rgba(212,175,55,0.16), transparent 42%), radial-gradient(circle at 88% 78%, rgba(59,130,246,0.13), transparent 48%), radial-gradient(circle at 8% 78%, rgba(168,85,247,0.10), transparent 42%), #070a13'
+        : 'radial-gradient(circle at 30% 22%, rgba(250,204,21,0.12), transparent 42%), radial-gradient(circle at 88% 78%, rgba(96,165,250,0.10), transparent 48%), radial-gradient(circle at 8% 78%, rgba(196,181,253,0.08), transparent 42%), #f8fafc'
+      } !important;
     }
 
     /* Prevent cards and charts from splitting across pages */
@@ -323,70 +332,7 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
     h1, h2, h3, h4, h5, h6 {
       page-break-after: avoid !important;
       break-after: avoid !important;
-      color: #0f172a !important;
-    }
-
-    /* Cards keep a hairline edge so sections stay legible on paper. */
-    .qaly-report-root section,
-    .qaly-report-root .rounded-2xl,
-    .qaly-report-root .rounded-3xl,
-    .qaly-report-root .rounded-\\[24px\\],
-    .qaly-report-root .rounded-\\[26px\\],
-    .qaly-report-root .rounded-\\[28px\\],
-    .qaly-report-root .rounded-\\[32px\\] {
-      box-shadow: none !important;
-    }
-
-    /* ── Print Friendly Report mode — a deliberately low-ink, high-contrast
-       variant (independent of the current theme) for actual paper printing.
-       Flattens every card to a plain white surface with a light border and
-       dark ink text; drops the ambient gradient, blur, shadows and motion. ── */
-    html.print-friendly-mode body,
-    html.print-friendly-mode html,
-    html.print-friendly-mode #root,
-    html.print-friendly-mode .min-h-screen,
-    html.print-friendly-mode .qaly-report-root {
-      background: #ffffff !important;
-      color: #0f172a !important;
-    }
-
-    html.print-friendly-mode .qaly-report-root::before {
-      display: none !important;
-    }
-
-    html.print-friendly-mode .qaly-report-root * {
-      box-shadow: none !important;
-      text-shadow: none !important;
-      filter: none !important;
-      animation: none !important;
-      background-image: none !important;
-    }
-
-    html.print-friendly-mode .qaly-report-root .rounded-2xl,
-    html.print-friendly-mode .qaly-report-root .rounded-3xl,
-    html.print-friendly-mode .qaly-report-root .rounded-\\[24px\\],
-    html.print-friendly-mode .qaly-report-root .rounded-\\[26px\\],
-    html.print-friendly-mode .qaly-report-root .rounded-\\[28px\\],
-    html.print-friendly-mode .qaly-report-root .rounded-\\[32px\\] {
-      background: #ffffff !important;
-      border: 1px solid #d8dee8 !important;
-    }
-
-    /* Utility classes designed for a dark backdrop (white text/borders) would be
-       invisible against the forced white page — repoint them to readable ink. */
-    html.print-friendly-mode .qaly-report-root [class*="text-white"] {
-      color: #0f172a !important;
-    }
-    html.print-friendly-mode .qaly-report-root [class*="border-white"] {
-      border-color: #d8dee8 !important;
-    }
-    html.print-friendly-mode .qaly-report-root h1,
-    html.print-friendly-mode .qaly-report-root h2,
-    html.print-friendly-mode .qaly-report-root h3,
-    html.print-friendly-mode .qaly-report-root h4,
-    html.print-friendly-mode .qaly-report-root h5,
-    html.print-friendly-mode .qaly-report-root h6 {
-      color: #0f172a !important;
+      color: ${theme === 'dark' ? '#ffffff' : '#0f172a'} !important;
     }
   }
 `
@@ -1534,12 +1480,17 @@ Do not return markdown wraps, only raw JSON text.
   }
 
   /**
-   * Shared print runner. Closes the export menu and any open modal (a modal
-   * overlay would otherwise be captured in the output), waits for the DOM to
-   * settle, then prints. `bodyClass` is applied for the duration so the print
-   * stylesheet can switch variants.
+   * "Print to PDF" — a WYSIWYG print of the live dashboard.
+   *
+   * `qaly-print-live` on <html> switches off the global print reset in
+   * index.css (which flattens the app to white paper with dark ink for ordinary
+   * pages), so this dashboard's own print stylesheet governs and the PDF matches
+   * what is on screen. The low-ink alternative is "Print Friendly Report".
+   *
+   * Also closes the export menu and any open modal first, since a modal overlay
+   * would otherwise be captured in the output.
    */
-  const runPrint = (bodyClass?: string) => {
+  const runPrint = () => {
     setShowExportMenu(false)
     setShowDefectModal(false)
     setShowWorkDistributionModal(false)
@@ -1549,20 +1500,22 @@ Do not return markdown wraps, only raw JSON text.
     setShowQualityScoreModal(false)
     setShowReleaseScopeModal(false)
 
-    if (bodyClass) document.documentElement.classList.add(bodyClass)
+    const PRINT_LIVE_CLASS = 'qaly-print-live'
+    document.documentElement.classList.add(PRINT_LIVE_CLASS)
 
     let cleaned = false
     const cleanup = () => {
       if (cleaned) return
       cleaned = true
-      if (bodyClass) document.documentElement.classList.remove(bodyClass)
+      document.documentElement.classList.remove(PRINT_LIVE_CLASS)
       window.removeEventListener('afterprint', cleanup)
     }
     window.addEventListener('afterprint', cleanup)
-    // Safety net for engines that never fire `afterprint` (some embedded webviews).
-    window.setTimeout(cleanup, 60000)
+    // Safety net for engines that never fire `afterprint`. Generous, because the
+    // user may sit in the print dialog picking a destination for a while.
+    window.setTimeout(cleanup, 120000)
 
-    // Let React commit the closed menu/modals and the class before printing.
+    // Let React commit the closed menu/modals and the class land before printing.
     window.setTimeout(() => {
       try {
         window.print()
@@ -1581,10 +1534,49 @@ Do not return markdown wraps, only raw JSON text.
   // Keeps the on-screen colour treatment, on a white page with dark ink.
   const handlePrint = () => runPrint()
 
-  // "Print Friendly Report" — a low-ink, high-contrast variant: flattens the
-  // premium gradients/glass cards to plain white cards with light borders and
-  // dark ink text, independent of whatever theme the dashboard is in.
-  const handlePrintFriendly = () => runPrint('print-friendly-mode')
+  /**
+   * "Print Friendly Report" — opens the report as a clean, self-contained
+   * light-ink document in a new tab, matching the "Print-Friendly View" pattern
+   * used by /daily-report. The user can read it, print it, or save it as PDF
+   * from there; nothing about the live dashboard is altered.
+   */
+  const handlePrintFriendly = () => {
+    setShowExportMenu(false)
+
+    let printWindow: Window | null = null
+    try {
+      printWindow = window.open('', '_blank')
+    } catch (err) {
+      console.error('Print-friendly window blocked:', err)
+    }
+
+    if (!printWindow) {
+      toast({
+        variant: 'destructive',
+        title: 'Popup Blocked',
+        description: 'Allow popups for this site to open the print-friendly report, or use Export → HTML Page.',
+      })
+      return
+    }
+
+    try {
+      printWindow.document.write(buildReportHTML(data, reportMeta))
+      printWindow.document.close()
+      printWindow.focus()
+      toast({
+        title: 'Print-Friendly Report Ready',
+        description: 'Opened in a new tab — use the Print button there to print or save as PDF.',
+      })
+    } catch (err) {
+      console.error('Print-friendly render failed:', err)
+      try { printWindow.close() } catch { /* already gone */ }
+      toast({
+        variant: 'destructive',
+        title: 'Could Not Open Report',
+        description: 'Building the print-friendly view failed. Try Export → HTML Page instead.',
+      })
+    }
+  }
 
   if (!isLoaded && !showLaunchTriage) {
     return <ReportSkeleton theme={theme} />
