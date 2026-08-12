@@ -55,8 +55,8 @@ export const HeaderSection: React.FC = () => {
         </div>
       </div>
       <div>
-        <label className={lbl}>Subtitle / Notes</label>
-        <textarea rows={2} className={`${inp} resize-none`} value={form.subtitle} onChange={e => setForm({ subtitle: e.target.value })} placeholder="Optional context for this week..." />
+        <label className={lbl}>Description</label>
+        <textarea rows={2} className={`${inp} resize-none`} value={form.subtitle} onChange={e => setForm({ subtitle: e.target.value })} placeholder="Optional description for this report..." />
       </div>
     </GlassCard>
   )

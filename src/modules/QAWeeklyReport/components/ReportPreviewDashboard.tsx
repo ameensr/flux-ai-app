@@ -24,7 +24,6 @@ import { ReportTableShell, reportTableHeadClass, reportTableRowClass } from './r
 import { ReportSkeleton } from './report-preview/ReportSkeleton'
 import { ReportRail } from './report-preview/ReportRail'
 import { RankedProgressList } from './report-preview/RankedProgressList'
-import { buildHeroMetricSummaryLines } from './report-preview/HeroMetricSummary'
 import { ContinuousQATriage } from './ContinuousQATriage'
 import { ChartCallout } from './report-preview/ChartCallout'
 import { ImmersiveBackground } from './report-preview/ImmersiveBackground'
@@ -93,6 +92,14 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
     66% { transform: translate(-20px, 20px) scale(0.9); opacity: 0.25; }
     100% { transform: translate(0px, 0px) scale(1); opacity: 0.35; }
   }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes border-glow {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
   .animate-float-glow {
     animation: float-glow 20s ease-in-out infinite;
   }
@@ -123,6 +130,86 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
     animation: pulse-glow 8s ease-in-out infinite;
   }
 
+  /* Premium Glassmorphic Card System */
+  .glass-card {
+    background: ${theme === 'dark' 
+      ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)'
+      : 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)'};
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)'};
+    box-shadow: ${theme === 'dark'
+      ? '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)'
+      : '0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8)'};
+  }
+
+  .glass-card-elevated {
+    background: ${theme === 'dark'
+      ? 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)'
+      : 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)'};
+    backdrop-filter: blur(24px) saturate(200%);
+    -webkit-backdrop-filter: blur(24px) saturate(200%);
+    border: 1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)'};
+    box-shadow: ${theme === 'dark'
+      ? '0 12px 48px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08)'
+      : '0 12px 48px rgba(0,0,0,0.1), 0 4px 16px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,1)'};
+  }
+
+  .glass-card-subtle {
+    background: ${theme === 'dark'
+      ? 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)'
+      : 'linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.5) 100%)'};
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    border: 1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.4)'};
+    box-shadow: ${theme === 'dark'
+      ? '0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03)'
+      : '0 4px 24px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.6)'};
+  }
+
+  /* Glassmorphic hover effects */
+  .glass-card:hover, .glass-card-elevated:hover, .glass-card-subtle:hover {
+    border-color: ${theme === 'dark' ? 'rgba(212,175,55,0.2)' : 'rgba(212,175,55,0.3)'};
+    box-shadow: ${theme === 'dark'
+      ? '0 12px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(212,175,55,0.1), inset 0 1px 0 rgba(255,255,255,0.08)'
+      : '0 12px 48px rgba(0,0,0,0.12), 0 0 0 1px rgba(212,175,55,0.15), inset 0 1px 0 rgba(255,255,255,1)'};
+  }
+
+  /* Premium inner glow for interactive elements */
+  .glass-glow {
+    position: relative;
+  }
+  .glass-glow::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(212,175,55,0.3), transparent 50%, rgba(59,130,246,0.2));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+  .glass-glow:hover::before {
+    opacity: 1;
+  }
+
+  /* Noise texture overlay for premium feel */
+  .glass-noise::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: ${theme === 'dark' ? '0.03' : '0.02'};
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+
   /* Card language pass — matching the reference dashboard's "cards float on soft shadow rather than hard borders" pattern. */
   .qaly-report-root .rounded-2xl, 
   .qaly-report-root .rounded-3xl, 
@@ -131,12 +218,11 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
     box-shadow: ${theme === 'light'
       ? '0 4px 20px rgba(15,23,42,0.04), 0 16px 40px rgba(15,23,42,0.04)'
       : '0 4px 20px rgba(0,0,0,0.2), 0 16px 40px rgba(0,0,0,0.15)'} !important;
-    border-color: transparent !important;
   }
 
   .glassmorphic-card {
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
   }
   @media print {
     @page {
@@ -744,28 +830,28 @@ const ReportPreviewDashboardContent: React.FC = () => {
     if (theme === 'light') {
       return {
         bg: 'bg-[#f8fafc] text-slate-900',
-        card: 'bg-gradient-to-br from-white/95 to-slate-50/95 backdrop-blur-xl border-slate-200/80 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.06)] hover:border-slate-300/80 transition-all duration-300',
+        card: 'glass-card glass-glow rounded-2xl transition-all duration-300',
         accent: 'text-[#b5942b]',
         accentBg: 'bg-accent-gold text-black hover:bg-[#b5942b] font-bold rounded-xl transition-all',
-        border: 'border-slate-200/80',
+        border: 'border-white/40',
         glow: 'shadow-[0_4px_20px_rgba(0,0,0,0.02)]',
         font: 'font-inter',
         chartColors: ['#d4af37', '#3b82f6', '#10b981', '#a855f7', '#fb923c'],
-        softCard: 'bg-gradient-to-br from-white via-white to-slate-50 border border-slate-200/60 rounded-[32px] shadow-[0_4px_20px_rgba(15,23,42,0.03),0_12px_40px_rgba(15,23,42,0.05)] hover:shadow-[0_8px_30px_rgba(15,23,42,0.05),0_20px_60px_rgba(15,23,42,0.08)] transition-shadow duration-300',
+        softCard: 'glass-card-elevated glass-glow glass-noise rounded-[32px] transition-all duration-300',
         gradientWarm: 'bg-gradient-to-br from-[#FB7185] to-[#FB923C]',
         gradientCool: 'bg-gradient-to-br from-[#22D3EE] to-[#3B82F6]'
       }
     } else {
       return {
         bg: 'bg-[#070a13] text-[#f8fafc]',
-        card: 'bg-gradient-to-br from-[#151b2b]/80 to-[#0e1322]/80 border-white/[0.05] backdrop-blur-xl rounded-2xl shadow-[0_4px_30px_rgba(0,0,0,0.2)] hover:border-white/[0.1] hover:shadow-[0_8px_40px_rgba(212,175,55,0.03)] transition-all duration-300',
+        card: 'glass-card glass-glow rounded-2xl transition-all duration-300',
         accent: 'text-accent-gold',
         accentBg: 'bg-accent-gold text-black hover:bg-[#b5942b] font-bold rounded-xl transition-all',
-        border: 'border-white/[0.05]',
+        border: 'border-white/[0.08]',
         glow: 'shadow-[0_0_50px_rgba(212,175,55,0.02)]',
         font: 'font-inter',
         chartColors: ['#d4af37', '#3b82f6', '#10b981', '#a855f7', '#fb923c'],
-        softCard: 'bg-gradient-to-br from-[#1a2133]/80 to-[#0b0f1a]/80 border border-white/[0.06] backdrop-blur-xl rounded-[32px] shadow-[0_4px_24px_rgba(0,0,0,0.25),0_20px_48px_rgba(0,0,0,0.4)] hover:border-white/[0.12] hover:shadow-[0_8px_32px_rgba(0,0,0,0.3),0_24px_60px_rgba(0,0,0,0.5)] transition-all duration-300',
+        softCard: 'glass-card-elevated glass-glow glass-noise rounded-[32px] transition-all duration-300',
         gradientWarm: 'bg-gradient-to-br from-[#BE123C] to-[#C2410C]',
         gradientCool: 'bg-gradient-to-br from-[#0E7490] to-[#1D4ED8]'
       }
@@ -793,13 +879,12 @@ const ReportPreviewDashboardContent: React.FC = () => {
     (data.defectsLastWeek.reported > 0 ? (data.defectsLastWeek.closed / data.defectsLastWeek.reported) * 100 : 100)
 
   const passPctFactor = totalCases > 0 ? passedCases / totalCases : 1.0
-  const openBugsFactor = 1 - openBugsCount / (openBugsCount + 5)
-  const blockersFactor = 1 - blockedCases / (blockedCases + 3)
-  const closureFactor = closureRate / 100  // 0-1 scale
+  // Open Bugs Factor: logarithmic scale for better distribution
+  const openBugsFactor = openBugsCount === 0 ? 1.0 : Math.max(0, (100 - (Math.log10(openBugsCount + 1) * 40)) / 100)
 
-  // Enhanced formula: Pass Rate (50%) + Bugs (20%) + Blockers (15%) + Closure (15%)
+  // Simplified formula: Pass Rate (60%) + Open Bugs Factor (40%)
   const releaseReadinessScore = Math.max(0, Math.min(100, Math.round(
-    (passPctFactor * 50) + (openBugsFactor * 20) + (blockersFactor * 15) + (closureFactor * 15)
+    (passPctFactor * 60) + (openBugsFactor * 40)
   )))
 
   // ── WoW Comparison Calculations ──
@@ -1330,33 +1415,6 @@ Do not return markdown wraps, only raw JSON text.
   const showDefectClosureTrend =
     vis.show_defectClosureTrend !== false && historicalChartsData.length >= 2
 
-  const heroMetricSummaryLines = useMemo(() => {
-    if (showDefectClosureTrend) return []
-    return buildHeroMetricSummaryLines({
-      projectName: data.projectName,
-      releaseCount,
-      releasePassed,
-      passRate,
-      defectClosureRate,
-      qualityScore: qualityStats.score,
-      qualityLabel: qualityStats.label,
-      totalBugs: bugMetrics?.totalBugs,
-      activeBugs: bugMetrics?.activeBugs,
-      supportTickets: data.supportTickets?.length || 0,
-    })
-  }, [
-    showDefectClosureTrend,
-    data.projectName,
-    data.supportTickets?.length,
-    releaseCount,
-    releasePassed,
-    passRate,
-    defectClosureRate,
-    qualityStats.score,
-    qualityStats.label,
-    bugMetrics?.totalBugs,
-    bugMetrics?.activeBugs,
-  ])
 
   // ── Table Adapters ──
   const prodIssuesData = [
@@ -1627,7 +1685,7 @@ Do not return markdown wraps, only raw JSON text.
             EXECUTIVE SUMMARY
         ══════════════════════════════════════════════════════════ */}
 
-        {/* ── SECTION 1: HERO, QUALITY SCORE & RIGHT RAIL ── */}
+        {/* ── SECTION 1: HERO & KPI CARDS ── */}
         <div className="w-full" style={{ display: vis.show_hero === false ? 'none' : undefined }}>
           <ReportHero
             sectionRef={sectionsRef.overview}
@@ -1640,55 +1698,16 @@ Do not return markdown wraps, only raw JSON text.
             weekStart={data.weekStart}
             weekEnd={data.weekEnd}
             reportMeta={reportMeta}
-            releaseCount={releaseCount}
-            passRate={passRate}
-            defectClosureRate={defectClosureRate}
+            supportEmails={data.supportEmails}
+            newFeatures={data.newFeatures}
+            codeFixes={data.codeFixes}
             qualityStats={qualityStats}
-            gradientWarm={tS.gradientWarm}
-            gradientCool={tS.gradientCool}
             CountUpNumber={CountUpNumber}
             onOpenQualityModal={() => setShowQualityScoreModal(true)}
-            onOpenReleaseScopeModal={() => setShowReleaseScopeModal(true)}
             onScrollNext={() => scrollToSection('kpis')}
-            rightRailContent={
-              <div className="flex flex-col gap-6 h-full">
-                {/* Bug Status — list capped so bottom whitespace lets ContinuousQATriage show */}
-                <div
-                  className={`p-5 rounded-3xl ${tS.softCard} flex-1 flex flex-col relative overflow-hidden`}
-                >
-                  <ContinuousQATriage
-                    position="bottom"
-                    opacity={theme === 'dark' ? 'opacity-[0.28]' : 'opacity-[0.32]'}
-                    paused={particlesPaused}
-                  />
-                  <div className="relative z-10 flex flex-col">
-                    <h3 className={`text-base font-bold mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Bug Status</h3>
-                    <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3 block">Current Release</span>
-                    {data.releaseBugStatus && data.releaseBugStatus.statusDistribution ? (
-                      <RankedProgressList
-                        theme={theme}
-                        hasPlayed={hasPlayed}
-                        compact
-                        items={data.releaseBugStatus.statusDistribution.map((row: any, idx: number) => ({
-                          label: row.status,
-                          count: row.count,
-                          percent: data.releaseBugStatus.metrics.totalBugs > 0 ? (row.count / data.releaseBugStatus.metrics.totalBugs) * 100 : 0,
-                          colorClass: bugStatusColorClass(row.status, idx)
-                        }))}
-                      />
-                    ) : (
-                      <span className="text-xs text-text-muted">No bug data available.</span>
-                    )}
-                    {/* Open band — triage typing lives here; fades before reaching status rows */}
-                    <div
-                      className="mt-3 shrink-0 h-[72px] sm:h-[84px] pointer-events-none"
-                      aria-hidden
-                    />
-                  </div>
-                </div>
-              </div>
-            }
-            metricSummaryLines={heroMetricSummaryLines}
+            onNavigateToSection={scrollToSection}
+            onOpenProductionIssuesModal={() => setShowProductionIssuesModal(true)}
+            showQualityScore={vis.show_qualityScore !== false}
             bottomContent={
               showDefectClosureTrend ? (
                 <div className={`p-6 rounded-[32px] ${tS.softCard} h-[340px] w-full flex flex-col gap-4 relative overflow-hidden group border ${theme === 'dark' ? 'border-white/[0.05]' : 'border-transparent'}`}>
@@ -1945,10 +1964,10 @@ Do not return markdown wraps, only raw JSON text.
           whileInView="show"
           viewport={{ once: true, margin: "-80px" }}
           className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-          style={{ display: vis.show_sprintHealth === false ? 'none' : undefined }}
+          style={{ display: vis.show_sprintHealth === false && vis.show_releaseReadiness === false ? 'none' : undefined }}
         >
           {/* ── Sprint Health Dashboard ── */}
-          <div ref={sectionsRef.sprintHealth} className={`p-6 rounded-[28px] border flex flex-col gap-4 relative overflow-hidden transition-all duration-300 ${theme === 'dark' ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/60 shadow-md'}`}>
+          <div ref={sectionsRef.sprintHealth} style={{ display: vis.show_sprintHealth === false ? 'none' : undefined }} className={`p-6 rounded-[28px] border flex flex-col gap-4 relative overflow-hidden transition-all duration-300 ${theme === 'dark' ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/60 shadow-md'} ${vis.show_releaseReadiness === false ? 'lg:col-span-2' : ''}`}>
             <div className="absolute inset-0 border border-transparent bg-gradient-to-tr from-accent-gold/25 via-blue-500/25 to-transparent rounded-[inherit] opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }} />
             <div className="flex items-center justify-between relative z-10">
               <div>
@@ -2019,7 +2038,8 @@ Do not return markdown wraps, only raw JSON text.
           {/* Release Readiness Meter (Radial Gauge) - Interactive Modal */}
           <div
             onClick={() => setShowReleaseReadinessModal(true)}
-            className={`p-6 rounded-3xl border flex flex-col justify-between gap-4 cursor-pointer group relative overflow-hidden ${tS.card} ${tS.border} ${tS.glow} transition-all duration-300 hover:border-green-500/30`}>
+            style={{ display: vis.show_releaseReadiness === false ? 'none' : undefined }}
+            className={`p-6 rounded-3xl border flex flex-col justify-between gap-4 cursor-pointer group relative overflow-hidden ${tS.card} ${tS.border} ${tS.glow} transition-all duration-300 hover:border-green-500/30 ${vis.show_sprintHealth === false ? 'lg:col-span-2' : ''}`}>
             {/* Hover Glow Effect */}
             <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
@@ -2056,7 +2076,7 @@ Do not return markdown wraps, only raw JSON text.
                     cy="72"
                     r="60"
                     stroke={
-                      releaseReadinessScore >= 90 ? '#10b981' :
+                      releaseReadinessScore >= 85 ? '#10b981' :
                         releaseReadinessScore >= 70 ? '#f59e0b' :
                           '#ef4444'
                     }
@@ -2068,7 +2088,7 @@ Do not return markdown wraps, only raw JSON text.
                     transition={{ duration: 1.2, ease: 'easeOut' }}
                     strokeLinecap="round"
                     style={{
-                      filter: `drop-shadow(0 0 ${theme === 'dark' ? 5 : 3}px ${releaseReadinessScore >= 90 ? 'rgba(16,185,129,' : releaseReadinessScore >= 70 ? 'rgba(245,158,11,' : 'rgba(239,68,68,'}${theme === 'dark' ? 0.5 : 0.25})`
+                      filter: `drop-shadow(0 0 ${theme === 'dark' ? 5 : 3}px ${releaseReadinessScore >= 85 ? 'rgba(16,185,129,' : releaseReadinessScore >= 70 ? 'rgba(245,158,11,' : 'rgba(239,68,68,'}${theme === 'dark' ? 0.5 : 0.25})`
                     }}
                   />
                 </svg>
@@ -2083,23 +2103,19 @@ Do not return markdown wraps, only raw JSON text.
               {/* Score breakdown metrics list */}
               <div className="flex-1 flex flex-col gap-2.5 min-w-[150px]">
                 <div className="flex items-center justify-between text-xs border-b border-divider pb-1">
-                  <span className="text-text-muted">Regression Pass %</span>
+                  <span className="text-text-muted">Release Pass Rate</span>
                   <span className="font-bold">{totalCases > 0 ? Math.round((passedCases / totalCases) * 100) : 100}%</span>
                 </div>
-                <div className="flex items-center justify-between text-xs border-b border-divider pb-1">
-                  <span className="text-text-muted">Open Active Bugs</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-text-muted">Open Bugs</span>
                   <span className={`font-bold ${openBugsCount > 0 ? 'text-red-400' : ''}`}>{openBugsCount}</span>
                 </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-text-muted">Blocked Test Cases</span>
-                  <span className={`font-bold ${blockedCases > 0 ? 'text-orange-400' : ''}`}>{blockedCases}</span>
-                </div>
 
-                <div className={`mt-3 p-2.5 rounded-xl text-center text-[10px] font-black uppercase tracking-widest border ${releaseReadinessScore >= 90 ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                <div className={`mt-3 p-2.5 rounded-xl text-center text-[10px] font-black uppercase tracking-widest border ${releaseReadinessScore >= 85 ? 'bg-green-500/10 text-green-400 border-green-500/20' :
                   releaseReadinessScore >= 70 ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
                     'bg-red-500/10 text-red-400 border-red-500/20'
                   }`}>
-                  {releaseReadinessScore >= 90 ? '🟢 Ready for Production' : releaseReadinessScore >= 70 ? '🟡 Needs Attention' : '🔴 Not Ready'}
+                  {releaseReadinessScore >= 85 ? '🟢 Ready for Production' : releaseReadinessScore >= 70 ? '🟡 Needs Attention' : '🔴 Not Ready'}
                 </div>
               </div>
             </div>

@@ -59,19 +59,17 @@ export function ExecutiveQualityScoreModal({
             onClick={onClose}
           />
 
-          <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+          <div className="fixed inset-y-0 right-0 z-[101] flex items-center justify-end p-6 pointer-events-none">
             <motion.div
-              initial={{ opacity: 0, scale: 0.85, y: 50, rotateX: -12 }}
-              animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
-              exit={{ opacity: 0, scale: 0.85, y: 50, rotateX: 12 }}
+              initial={{ opacity: 0, x: 80 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 80 }}
               transition={{
                 type: 'spring',
-                stiffness: 280,
-                damping: 22,
-                duration: 0.35,
+                stiffness: 300,
+                damping: 28,
               }}
-              className="pointer-events-auto w-full max-w-4xl max-h-[90vh] overflow-y-auto"
-              style={{ perspective: '1000px', transformStyle: 'preserve-3d' }}
+              className="pointer-events-auto w-[420px] max-h-[90vh] overflow-y-auto"
             >
               <div
                 className="relative bg-gradient-to-br from-surface via-surface-secondary to-surface-elevated border border-border/50 rounded-2xl shadow-2xl overflow-hidden"
@@ -84,16 +82,16 @@ export function ExecutiveQualityScoreModal({
                 <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-green-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
 
                 <div className="relative z-10">
-                  <div className="flex items-start justify-between p-6 pb-4 border-b border-border/30">
+                  <div className="flex items-start justify-between p-5 pb-3 border-b border-border/30">
                     <div className="flex-1">
                       <motion.h2
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="text-2xl font-bold text-text-primary flex items-center gap-3"
+                        className="text-xl font-bold text-text-primary flex items-center gap-2.5"
                       >
-                        <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
-                          <Star className="w-5 h-5 text-accent" />
+                        <div className="w-9 h-9 rounded-lg bg-accent/20 flex items-center justify-center">
+                          <Star className="w-4 h-4 text-accent" />
                         </div>
                         Executive Quality Score
                       </motion.h2>
@@ -101,7 +99,7 @@ export function ExecutiveQualityScoreModal({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.2 }}
-                        className="text-sm text-text-secondary mt-2"
+                        className="text-xs text-text-secondary mt-1.5 ml-11"
                       >
                         {data.projectName} • Pass rate & defect closure
                       </motion.p>
@@ -119,19 +117,19 @@ export function ExecutiveQualityScoreModal({
                     </motion.button>
                   </div>
 
-                  <div className="p-6">
+                  <div className="p-5">
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.25 }}
-                      className="mb-8"
+                      className="mb-5"
                     >
-                      <div className="bg-gradient-to-br from-accent/10 via-green-500/10 to-accent/5 rounded-xl p-8 border border-accent/20 text-center">
-                        <div className="text-sm text-text-muted mb-2 uppercase tracking-widest font-bold">Overall Quality Score</div>
-                        <div className={`text-7xl font-black mb-3 ${getScoreColorClass(score)}`}>
+                      <div className="bg-gradient-to-br from-accent/10 via-green-500/10 to-accent/5 rounded-xl p-6 border border-accent/20 text-center">
+                        <div className="text-xs text-text-muted mb-1 uppercase tracking-widest font-bold">Overall Quality Score</div>
+                        <div className={`text-6xl font-black mb-2 ${getScoreColorClass(score)}`}>
                           {score}
                         </div>
-                        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold ${color}`}>
+                        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold ${color}`}>
                           <Star className="w-4 h-4" />
                           {label}
                         </div>
@@ -142,9 +140,9 @@ export function ExecutiveQualityScoreModal({
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.3 }}
-                      className="mb-8"
+                      className="mb-5"
                     >
-                      <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
+                      <h3 className="text-base font-semibold text-text-primary mb-3 flex items-center gap-2">
                         <TrendingUp className="w-5 h-5 text-accent" />
                         Score Components
                       </h3>
@@ -209,9 +207,9 @@ export function ExecutiveQualityScoreModal({
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.6 }}
-                      className="mt-6 pt-6 border-t border-border/30"
+                      className="mt-4 pt-4 border-t border-border/30"
                     >
-                      <h3 className="text-sm font-semibold text-text-muted mb-3 uppercase tracking-wider">Calculation Formula</h3>
+                      <h3 className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wider">Calculation Formula</h3>
                       <div className="bg-surface-elevated/50 backdrop-blur-sm rounded-lg p-4 border border-border/30">
                         <div className="font-mono text-xs text-text-secondary leading-relaxed space-y-2">
                           <div className="text-accent font-bold mb-3">
@@ -247,25 +245,25 @@ export function ExecutiveQualityScoreModal({
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.7 }}
-                      className="mt-6"
+                      className="mt-4"
                     >
-                      <h3 className="text-sm font-semibold text-text-muted mb-3 uppercase tracking-wider">Score Ranges</h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 text-center">
-                          <div className="text-xs text-green-400 font-bold mb-1">Excellent</div>
-                          <div className="text-lg font-black text-green-400">90-100</div>
+                      <h3 className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wider">Score Ranges</h3>
+                      <div className="grid grid-cols-4 gap-2">
+                        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2 text-center">
+                          <div className="text-[10px] text-green-400 font-bold mb-0.5">Excellent</div>
+                          <div className="text-sm font-black text-green-400">90-100</div>
                         </div>
-                        <div className="bg-accent/10 border border-accent/20 rounded-lg p-3 text-center">
-                          <div className="text-xs text-accent font-bold mb-1">Good</div>
-                          <div className="text-lg font-black text-accent">75-89</div>
+                        <div className="bg-accent/10 border border-accent/20 rounded-lg p-2 text-center">
+                          <div className="text-[10px] text-accent font-bold mb-0.5">Good</div>
+                          <div className="text-sm font-black text-accent">75-89</div>
                         </div>
-                        <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 text-center">
-                          <div className="text-xs text-orange-400 font-bold mb-1">Fair</div>
-                          <div className="text-lg font-black text-orange-400">60-74</div>
+                        <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-2 text-center">
+                          <div className="text-[10px] text-orange-400 font-bold mb-0.5">Fair</div>
+                          <div className="text-sm font-black text-orange-400">60-74</div>
                         </div>
-                        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-center">
-                          <div className="text-xs text-red-400 font-bold mb-1">Needs Attention</div>
-                          <div className="text-lg font-black text-red-400">0-59</div>
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-center">
+                          <div className="text-[10px] text-red-400 font-bold mb-0.5">Attention</div>
+                          <div className="text-sm font-black text-red-400">0-59</div>
                         </div>
                       </div>
                     </motion.div>
