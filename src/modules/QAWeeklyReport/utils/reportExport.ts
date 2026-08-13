@@ -170,7 +170,7 @@ export function buildReportMarkdown(data: QAReportForm, meta: ReportExportMeta =
   L.push('|---|---|')
   L.push(`| Support Emails | ${data.supportEmails ?? 0} |`)
   L.push(`| New Release Features | ${data.newFeatures ?? 0} |`)
-  L.push(`| Code Fixes Testing | ${data.codeFixes ?? 0} |`)
+  L.push(`| Support Fix Testing | ${data.codeFixes ?? 0} |`)
   L.push(`| Release Pass Rate | ${release.passRate}% (${release.passed}/${release.total}) |`)
   L.push(`| Executive Quality Score | ${quality.score}% (${quality.label}) |`)
 
@@ -239,7 +239,7 @@ export function buildReportMarkdown(data: QAReportForm, meta: ReportExportMeta =
     L.push(`| Total Bugs | ${bugMetrics.totalBugs ?? 0} |`)
     L.push(`| Open | ${bugMetrics.openBugs ?? 0} |`)
     L.push(`| Resolved (Ready for QA) | ${bugMetrics.resolvedBugs ?? 0} |`)
-    L.push(`| Completed | ${bugMetrics.completedBugs ?? 0} |`)
+    L.push(`| Closed | ${bugMetrics.completedBugs ?? 0} |`)
     if (bugMetrics.deferredBugs) L.push(`| Deferred | ${bugMetrics.deferredBugs} |`)
     if (bugMetrics.invalidBugs) L.push(`| Invalid / Won't Fix | ${bugMetrics.invalidBugs} |`)
     if (bugMetrics.closurePercentage !== undefined) {
@@ -350,7 +350,7 @@ export function buildReportHTML(data: QAReportForm, meta: ReportExportMeta = {})
   const kpis = [
     { label: 'Support Emails', value: data.supportEmails ?? 0 },
     { label: 'New Release Features', value: data.newFeatures ?? 0 },
-    { label: 'Code Fixes Testing', value: data.codeFixes ?? 0 },
+    { label: 'Support Fix Testing', value: data.codeFixes ?? 0 },
     { label: 'Release Pass Rate', value: `${release.passRate}%` },
     { label: 'Quality Score', value: `${quality.score}%` },
   ]
@@ -408,7 +408,7 @@ export function buildReportHTML(data: QAReportForm, meta: ReportExportMeta = {})
         ['Total Bugs', bugMetrics.totalBugs ?? 0],
         ['Open', bugMetrics.openBugs ?? 0],
         ['Resolved (Ready for QA)', bugMetrics.resolvedBugs ?? 0],
-        ['Completed', bugMetrics.completedBugs ?? 0],
+        ['Closed', bugMetrics.completedBugs ?? 0],
         ...(bugMetrics.deferredBugs ? [['Deferred', bugMetrics.deferredBugs]] : []),
         ...(bugMetrics.invalidBugs ? [["Invalid / Won't Fix", bugMetrics.invalidBugs]] : []),
         ...(bugMetrics.closurePercentage !== undefined

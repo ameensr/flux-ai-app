@@ -47,7 +47,7 @@ export const ExecutiveKPISection: React.FC<ExecutiveKPISectionProps> = ({
     },
     {
       id: 'testingQuality',
-      title: 'Testing Quality',
+      title: 'Release Feature Testing Quality',
       icon: CheckCheck,
       color: 'text-green-400',
       bgColor: theme === 'dark' ? 'bg-green-500/5' : 'bg-green-50',

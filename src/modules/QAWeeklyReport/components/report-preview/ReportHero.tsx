@@ -92,54 +92,54 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
 }) => {
   const generatedLabel = formatGeneratedDate(reportMeta.generatedDate)
 
-  // Colour is carried by a soft tinted wash plus the icon tile, top hairline
-  // and numeral — a shade of the metric's hue, not a saturated fill, so the
-  // three cards stay quiet next to the Executive Quality Score card.
+  // Colour is carried by a tinted wash plus the icon tile, top hairline and
+  // numeral — a shade of the metric's hue rather than a saturated fill, so the
+  // cards read as coloured without shouting over the Quality Score card.
   const kpiPalette = theme === 'dark'
     ? {
         blue: {
           icon: 'text-blue-300', value: 'text-blue-200',
-          tile: 'bg-blue-400/15', ring: 'border-blue-400/25',
-          rail: 'from-blue-400/80 via-cyan-300/50 to-transparent',
-          glow: 'rgba(59,130,246,0.20)',
-          tint: 'linear-gradient(135deg, rgba(59,130,246,0.16) 0%, rgba(6,182,212,0.07) 55%, rgba(6,182,212,0) 100%)',
+          tile: 'bg-blue-400/25', ring: 'border-blue-400/40',
+          rail: 'from-blue-400 via-cyan-300/70 to-transparent',
+          glow: 'rgba(59,130,246,0.30)',
+          tint: 'linear-gradient(135deg, rgba(59,130,246,0.28) 0%, rgba(6,182,212,0.14) 55%, rgba(6,182,212,0.03) 100%)',
         },
         amber: {
           icon: 'text-amber-300', value: 'text-amber-200',
-          tile: 'bg-amber-400/15', ring: 'border-amber-400/25',
-          rail: 'from-amber-400/80 via-yellow-300/50 to-transparent',
-          glow: 'rgba(245,158,11,0.20)',
-          tint: 'linear-gradient(135deg, rgba(245,158,11,0.16) 0%, rgba(234,179,8,0.07) 55%, rgba(234,179,8,0) 100%)',
+          tile: 'bg-amber-400/25', ring: 'border-amber-400/40',
+          rail: 'from-amber-400 via-yellow-300/70 to-transparent',
+          glow: 'rgba(245,158,11,0.30)',
+          tint: 'linear-gradient(135deg, rgba(245,158,11,0.28) 0%, rgba(234,179,8,0.14) 55%, rgba(234,179,8,0.03) 100%)',
         },
         violet: {
           icon: 'text-violet-300', value: 'text-violet-200',
-          tile: 'bg-violet-400/15', ring: 'border-violet-400/25',
-          rail: 'from-violet-400/80 via-pink-300/50 to-transparent',
-          glow: 'rgba(168,85,247,0.20)',
-          tint: 'linear-gradient(135deg, rgba(168,85,247,0.16) 0%, rgba(236,72,153,0.07) 55%, rgba(236,72,153,0) 100%)',
+          tile: 'bg-violet-400/25', ring: 'border-violet-400/40',
+          rail: 'from-violet-400 via-pink-300/70 to-transparent',
+          glow: 'rgba(168,85,247,0.30)',
+          tint: 'linear-gradient(135deg, rgba(168,85,247,0.28) 0%, rgba(236,72,153,0.14) 55%, rgba(236,72,153,0.03) 100%)',
         },
       }
     : {
         blue: {
           icon: 'text-blue-600', value: 'text-blue-700',
-          tile: 'bg-blue-50', ring: 'border-blue-200',
-          rail: 'from-blue-500/70 via-cyan-400/40 to-transparent',
-          glow: 'rgba(59,130,246,0.13)',
-          tint: 'linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(6,182,212,0.06) 55%, rgba(6,182,212,0) 100%)',
+          tile: 'bg-blue-100', ring: 'border-blue-300',
+          rail: 'from-blue-500 via-cyan-400/60 to-transparent',
+          glow: 'rgba(59,130,246,0.20)',
+          tint: 'linear-gradient(135deg, rgba(59,130,246,0.20) 0%, rgba(6,182,212,0.10) 55%, rgba(6,182,212,0.02) 100%)',
         },
         amber: {
           icon: 'text-amber-600', value: 'text-amber-700',
-          tile: 'bg-amber-50', ring: 'border-amber-200',
-          rail: 'from-amber-500/70 via-yellow-400/40 to-transparent',
-          glow: 'rgba(245,158,11,0.13)',
-          tint: 'linear-gradient(135deg, rgba(245,158,11,0.13) 0%, rgba(234,179,8,0.06) 55%, rgba(234,179,8,0) 100%)',
+          tile: 'bg-amber-100', ring: 'border-amber-300',
+          rail: 'from-amber-500 via-yellow-400/60 to-transparent',
+          glow: 'rgba(245,158,11,0.20)',
+          tint: 'linear-gradient(135deg, rgba(245,158,11,0.22) 0%, rgba(234,179,8,0.10) 55%, rgba(234,179,8,0.02) 100%)',
         },
         violet: {
           icon: 'text-violet-600', value: 'text-violet-700',
-          tile: 'bg-violet-50', ring: 'border-violet-200',
-          rail: 'from-violet-500/70 via-pink-400/40 to-transparent',
-          glow: 'rgba(168,85,247,0.13)',
-          tint: 'linear-gradient(135deg, rgba(168,85,247,0.12) 0%, rgba(236,72,153,0.06) 55%, rgba(236,72,153,0) 100%)',
+          tile: 'bg-violet-100', ring: 'border-violet-300',
+          rail: 'from-violet-500 via-pink-400/60 to-transparent',
+          glow: 'rgba(168,85,247,0.20)',
+          tint: 'linear-gradient(135deg, rgba(168,85,247,0.20) 0%, rgba(236,72,153,0.10) 55%, rgba(236,72,153,0.02) 100%)',
         },
       }
 
@@ -159,7 +159,7 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
       onClick: () => onOpenReleaseFeaturesModal?.(),
     },
     {
-      label: 'Code Fixes Testing',
+      label: 'Support Fix Testing',
       value: codeFixes,
       icon: Wrench,
       accent: kpiPalette.violet,

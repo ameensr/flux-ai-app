@@ -49,7 +49,6 @@ const SECTIONS: DashboardSectionConfig[] = [
   // Analytics
   { key: 'show_wowComparison', label: 'Week-over-Week Comparison', description: 'KPI cards comparing this vs last week', icon: TrendingUp, category: 'Analytics', defaultEnabled: true },
   { key: 'showHistoricalAnalytics', label: 'Historical Analytics', description: 'Trend charts across saved reports', icon: BarChart3, category: 'Analytics', defaultEnabled: true },
-  { key: 'show_defectClosureTrend', label: 'Defect Closure Trend', description: 'Historical closure trend area chart in Hero', icon: TrendingUp, category: 'Analytics', defaultEnabled: true },
 
   // Planning
   { key: 'show_nextPriorities', label: 'Next Priorities', description: 'Upcoming week priority cards', icon: Briefcase, category: 'Planning', defaultEnabled: true },
@@ -80,13 +79,13 @@ const PRESETS: Preset[] = [
     id: 'executive',
     label: 'Executive View',
     description: 'High-level metrics for management',
-    enabled: ['show_hero', 'show_qualityScore', 'show_kpiCards', 'show_releaseReadiness', 'show_releaseBugStatus', 'show_weeklyCharts', 'show_wowComparison', 'show_defectClosureTrend'],
+    enabled: ['show_hero', 'show_qualityScore', 'show_kpiCards', 'show_releaseReadiness', 'show_releaseBugStatus', 'show_weeklyCharts', 'show_wowComparison'],
   },
   {
     id: 'client',
     label: 'Client View',
     description: 'Safe for external stakeholders',
-    enabled: ['show_hero', 'show_qualityScore', 'show_kpiCards', 'show_sprintHealth', 'show_releaseReadiness', 'show_releaseTable', 'show_releaseBugStatus', 'show_defectAnalysis', 'show_weeklyCharts', 'show_nextPriorities', 'show_defectClosureTrend'],
+    enabled: ['show_hero', 'show_qualityScore', 'show_kpiCards', 'show_sprintHealth', 'show_releaseReadiness', 'show_releaseTable', 'show_releaseBugStatus', 'show_defectAnalysis', 'show_weeklyCharts', 'show_nextPriorities'],
   },
   {
     id: 'internal',

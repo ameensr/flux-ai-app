@@ -252,7 +252,7 @@ export function ReleaseBugStatus({ analytics, onChange }: ReleaseBugStatusProps)
             {/* KPI Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               <KPICard label="Total Bugs" value={analytics.metrics.totalBugs} icon={Bug} color="text-blue-400" />
-              <KPICard label="Completed" value={analytics.metrics.completedBugs} icon={CheckCircle} color="text-green-400" />
+              <KPICard label="Closed" value={analytics.metrics.completedBugs} icon={CheckCircle} color="text-green-400" />
               <KPICard label="Open" value={analytics.metrics.openBugs} icon={AlertTriangle} color="text-red-400" />
               <KPICard label="Closure %" value={analytics.metrics.closurePercentage.toFixed(1)} suffix="%" icon={TrendingUp} color="text-accent-gold" />
               <KPICard label="Deferred" value={analytics.metrics.deferredBugs} icon={Shield} color="text-amber-400" />

@@ -66,7 +66,10 @@ export function getQualityScoreComponents(
     ? clampScore((releasePassed / releaseCount) * 100)
     : 100
 
-  // Prefer uploaded Release Bug Status closure % (includes completed + resolved)
+  // Uses the uploaded Release Bug Status closure %, which counts verified
+  // closures only (Closed / Verified / UAT Passed / Done). Bugs sitting in
+  // Resolved / Ready-for-QA are fixed but not yet verified, so they
+  // deliberately do not count toward closure.
   const bugMetrics = data.releaseBugStatus?.metrics
   const hasBugSheet = !!(bugMetrics && bugMetrics.totalBugs > 0)
   const reported = data.defectsLastWeek?.reported || 0
@@ -80,8 +83,7 @@ export function getQualityScoreComponents(
   if (hasBugSheet) {
     hasClosureData = true
     closureValue = clampScore(bugMetrics!.closurePercentage)
-    const done = (bugMetrics!.completedBugs || 0) + (bugMetrics!.resolvedBugs || 0)
-    closureDetail = `${done} of ${bugMetrics!.totalBugs} defects closed/resolved (${closureValue}%)`
+    closureDetail = `${bugMetrics!.completedBugs || 0} of ${bugMetrics!.totalBugs} defects closed (${closureValue}%)`
   } else if (hasManualDefects) {
     hasClosureData = true
     closureValue = clampScore((closed / reported) * 100)

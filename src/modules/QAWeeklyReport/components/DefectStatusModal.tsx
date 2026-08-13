@@ -42,22 +42,31 @@ export function DefectStatusModal({
     }
   }, [isOpen])
 
-  // Prepare data based on source
-  const chartData = hasReleaseBugData && releaseBugStatus?.metrics ? [
-    { name: 'Open Defects', value: releaseBugStatus.metrics.openBugs, hex: '#f87171', icon: AlertCircle },
-    { name: 'Resolved (Ready for QA)', value: releaseBugStatus.metrics.resolvedBugs, hex: '#fb923c', icon: Clock },
-    { name: 'Completed', value: releaseBugStatus.metrics.completedBugs, hex: '#10b981', icon: CheckCircle },
-    ...(releaseBugStatus.metrics.deferredBugs > 0 ? [{ name: 'Deferred', value: releaseBugStatus.metrics.deferredBugs, hex: '#eab308', icon: PauseCircle }] : []),
-    ...(releaseBugStatus.metrics.invalidBugs > 0 ? [{ name: 'Invalid/Won\'t Fix', value: releaseBugStatus.metrics.invalidBugs, hex: '#64748b', icon: Ban }] : [])
+  const metrics = hasReleaseBugData && releaseBugStatus?.metrics ? releaseBugStatus.metrics : null
+
+  /**
+   * Slices must be mutually exclusive, so this uses the parser's five disjoint
+   * status groups (completed + resolved + active + deferred + invalid ===
+   * totalBugs). It deliberately does NOT use `openBugs`, which is
+   * `total - completed` and therefore already contains resolved, deferred and
+   * invalid — charting it alongside those groups double-counted them, inflating
+   * the "Total Defects" figure and skewing every percentage.
+   */
+  const chartData = metrics ? [
+    { name: 'Active (New / In Progress)', value: metrics.activeBugs, hex: '#f87171', icon: AlertCircle },
+    { name: 'Resolved (Ready for QA)', value: metrics.resolvedBugs, hex: '#fb923c', icon: Clock },
+    { name: 'Closed', value: metrics.completedBugs, hex: '#10b981', icon: CheckCircle },
+    ...(metrics.deferredBugs > 0 ? [{ name: 'Deferred', value: metrics.deferredBugs, hex: '#eab308', icon: PauseCircle }] : []),
+    ...(metrics.invalidBugs > 0 ? [{ name: 'Invalid/Won\'t Fix', value: metrics.invalidBugs, hex: '#64748b', icon: Ban }] : [])
   ] : [
     { name: 'Open Defects', value: fallbackData?.open || 0, hex: '#f87171', icon: AlertCircle },
     { name: 'Fixed Defects', value: fallbackData?.fixed || 0, hex: '#fb923c', icon: Clock },
     { name: 'Closed Defects', value: fallbackData?.closed || 0, hex: '#10b981', icon: CheckCircle }
   ]
 
-  const totalDefects = chartData.reduce((sum, item) => sum + item.value, 0)
-
-  const metrics = hasReleaseBugData && releaseBugStatus?.metrics ? releaseBugStatus.metrics : null
+  // Prefer the parser's authoritative count so the centre figure always matches
+  // "Total Bugs" elsewhere in the app; manual entry has no such total.
+  const totalDefects = metrics ? metrics.totalBugs : chartData.reduce((sum, item) => sum + item.value, 0)
   const chartTheme = isDark ? 'dark' as const : 'light' as const
 
   return (

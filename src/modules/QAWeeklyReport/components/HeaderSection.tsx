@@ -95,7 +95,7 @@ export const KPICards: React.FC = () => {
   const kpis = [
     { key: 'supportEmails' as const, label: 'Support Emails', icon: Mail, color: 'text-blue-400', hasAuto: false },
     { key: 'newFeatures' as const, label: 'New Features', icon: Zap, color: 'text-accent-gold', hasAuto: true, autoFn: autoPopulateNewFeatures, autoTooltip: 'Auto-populate from Release Testing Status' },
-    { key: 'codeFixes' as const, label: 'Code Fixes Testing', icon: Wrench, color: 'text-green-400', hasAuto: true, autoFn: autoPopulateCodeFixes, autoTooltip: 'Auto-populate from Support & Exception Log' },
+    { key: 'codeFixes' as const, label: 'Support Fix Testing', icon: Wrench, color: 'text-green-400', hasAuto: true, autoFn: autoPopulateCodeFixes, autoTooltip: 'Auto-populate from Support & Exception Log' },
   ]
 
   return (

@@ -92,7 +92,7 @@ function buildMarkdown(f: QAReportForm): string {
   lines.push('|---|---|')
   lines.push(`| Support Emails | **${f.supportEmails}** |`)
   lines.push(`| New Features | **${f.newFeatures}** |`)
-  lines.push(`| Code Fixes Testing | **${f.codeFixes}** |`)
+  lines.push(`| Support Fix Testing | **${f.codeFixes}** |`)
   lines.push(`| QA Quality Score | **${calculateQAScore(f).score}% (${calculateQAScore(f).label})** |`)
 
   // Production Issues
@@ -188,7 +188,7 @@ function buildMarkdown(f: QAReportForm): string {
       lines.push('\n| Metric | Value |')
       lines.push('|---|---|')
       lines.push(`| Total Bugs | **${m.totalBugs}** |`)
-      lines.push(`| Completed (Closed/Verified) | ${m.completedBugs} (${m.closurePercentage}%) |`)
+      lines.push(`| Closed | ${m.completedBugs} (${m.closurePercentage}%) |`)
       lines.push(`| Resolved (Ready for QA) | ${m.resolvedBugs} |`)
       lines.push(`| Active (Open/In Progress) | ${m.activeBugs} (${m.activePercentage}%) |`)
       lines.push(`| Deferred | ${m.deferredBugs} (${m.deferredPercentage}%) |`)

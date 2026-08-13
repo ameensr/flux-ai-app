@@ -1,5 +1,5 @@
 // src/modules/QAWeeklyReport/components/CodeFixesModal.tsx
-// Interactive 3D Card Modal for Code Fixes Testing breakdown
+// Interactive 3D Card Modal for Support Fix Testing breakdown
 
 import React, { useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -152,7 +152,7 @@ export function CodeFixesModal({
                         <div className="w-10 h-10 rounded-lg bg-violet-500/20 flex items-center justify-center">
                           <Wrench className="w-5 h-5 text-violet-400" />
                         </div>
-                        Code Fixes Testing
+                        Support Fix Testing
                       </motion.h2>
                       <motion.p
                         initial={{ opacity: 0 }}

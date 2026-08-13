@@ -26,7 +26,6 @@ import { ReportSkeleton } from './report-preview/ReportSkeleton'
 import { ReportRail } from './report-preview/ReportRail'
 import { RankedProgressList } from './report-preview/RankedProgressList'
 import { ContinuousQATriage } from './ContinuousQATriage'
-import { ChartCallout } from './report-preview/ChartCallout'
 import { ImmersiveBackground } from './report-preview/ImmersiveBackground'
 import { DashboardLaunchOverlay } from './DashboardLaunchOverlay'
 import { hydrateSchemaFromLegacy, orderedVisibleColumns, type QAReportTableColumn } from '../qaReportColumnSchema'
@@ -308,12 +307,19 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
       -webkit-backdrop-filter: none !important;
     }
 
+    /* Anchor for the absolutely-positioned ambient backdrop below. */
+    .qaly-report-root {
+      position: relative !important;
+    }
+
     /* The animated ImmersiveBackground canvas cannot rasterize, so paint a
        static replica of the same ambient gradient — otherwise the translucent
-       cards would sit on blank paper instead of the live backdrop. */
+       cards would sit on blank paper instead of the live backdrop. Absolute,
+       not fixed: a fixed backdrop is painted on the first sheet only, leaving
+       every later page without one. */
     .qaly-report-root::before {
       content: '';
-      position: fixed;
+      position: absolute;
       inset: 0;
       z-index: 0;
       pointer-events: none;
@@ -321,6 +327,17 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
         ? 'radial-gradient(circle at 30% 22%, rgba(212,175,55,0.16), transparent 42%), radial-gradient(circle at 88% 78%, rgba(59,130,246,0.13), transparent 48%), radial-gradient(circle at 8% 78%, rgba(168,85,247,0.10), transparent 42%), #070a13'
         : 'radial-gradient(circle at 30% 22%, rgba(250,204,21,0.12), transparent 42%), radial-gradient(circle at 88% 78%, rgba(96,165,250,0.10), transparent 48%), radial-gradient(circle at 8% 78%, rgba(196,181,253,0.08), transparent 42%), #f8fafc'
       } !important;
+    }
+
+    /* Team Capacity Overview is the only section built on GlassCard, whose
+       surface is var(--card-bg) — 4% white in dark theme. It reads as a card
+       only because of the backdrop behind it, and print engines paint a
+       backdrop on the first sheet far more reliably than on later ones. Give
+       these surfaces an opaque colour so the card never disappears and take
+       its near-white text with it, leaving only the blue accents visible. */
+    .qaly-report-root .glass-panel {
+      background: ${theme === 'dark' ? '#151c2b' : '#ffffff'} !important;
+      border-color: ${theme === 'dark' ? 'rgba(148,163,184,0.20)' : 'rgba(15,23,42,0.12)'} !important;
     }
 
     /* Prevent cards and charts from splitting across pages */
@@ -339,7 +356,7 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
 import {
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
   XAxis, YAxis, Tooltip, Legend, LineChart, Line, AreaChart, Area,
-  ComposedChart, ReferenceDot
+  ComposedChart
 } from 'recharts'
 import { toast } from '@/hooks/use-toast'
 import { AI_DISABLED_BY_ADMIN, AI_PERMISSION_DENIED, useAIAccess } from '@/hooks/useAIAccess'
@@ -581,6 +598,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
   // WoW comparison only uses Final reports (excludes drafts)
   const finalReportsOnly = activeHistory.filter(r => r.status === 'Final')
+  const draftReportCount = activeHistory.length - finalReportsOnly.length
 
   const [data, setData] = useState<QAReportForm>(() => {
     const raw = localStorage.getItem('current-qa-report-data')
@@ -881,7 +899,30 @@ const ReportPreviewDashboardContent: React.FC = () => {
   // ── Release Readiness Meter calculations ──
   // Use Release Bug Status data if available, otherwise fall back to manual defects
   const releaseBugData = data.releaseBugStatus?.metrics
-  const openBugsCount = releaseBugData?.activeBugs ?? data.defectsLastWeek.open
+  /**
+   * Open bugs = every bug that is not Closed (total - completed), i.e. the
+   * `openBugs` the parser already derives, and the same number shown by the
+   * "Open" KPI card and the Defect Status modal.
+   *
+   * Deferred and invalid bugs are included: this is deliberately the strict
+   * "anything not closed" reading, so a large rejected/duplicate pile will
+   * lower readiness. Subtract `invalidBugs` here if that is ever unwanted.
+   *
+   * Previously this used `activeBugs`, which silently excluded "resolved /
+   * ready for QA" work that is fixed but not yet verified, flattering the
+   * readiness score.
+   */
+  const openBugsCount = releaseBugData
+    ? (releaseBugData.openBugs ?? Math.max(0, (releaseBugData.totalBugs ?? 0) - (releaseBugData.completedBugs ?? 0)))
+    : data.defectsLastWeek.open
+
+  /** Same rule applied to a historical report, for sparklines. */
+  const openBugsOf = (f: QAReportForm): number => {
+    const m = f.releaseBugStatus?.metrics
+    return m
+      ? (m.openBugs ?? Math.max(0, (m.totalBugs ?? 0) - (m.completedBugs ?? 0)))
+      : f.defectsLastWeek?.open ?? 0
+  }
   const closureRate = releaseBugData?.closurePercentage ??
     (data.defectsLastWeek.reported > 0 ? (data.defectsLastWeek.closed / data.defectsLastWeek.reported) * 100 : 100)
 
@@ -1384,7 +1425,9 @@ Do not return markdown wraps, only raw JSON text.
     })
 
   // ── Historical Analytics Charts Data ──
-  const historicalChartsData = activeHistory.map(h => {
+  // Mirrors Week-over-Week: Final reports only, so unsaved drafts never distort
+  // the trend lines. A draft therefore does not appear in its own charts.
+  const historicalChartsData = finalReportsOnly.map(h => {
     const passCount = h.form.releaseItems.filter((i: any) => isPassStatus(i?.status)).length
     const failCount = h.form.releaseItems.filter((i: any) => isFailStatus(i?.status)).length
     const blockedCount = h.form.releaseItems.filter((i: any) => isBlockedStatus(i?.status)).length
@@ -1410,19 +1453,6 @@ Do not return markdown wraps, only raw JSON text.
     }
   })
 
-  // Most notable point on the Defect Closure Trend chart — the week with the highest
-  // closed/reported ratio — annotated with a floating callout (real data, no invention).
-  const bestClosureWeek = (() => {
-    const candidates = historicalChartsData.filter(d => d.reportedDefects > 0)
-    if (candidates.length === 0) return null
-    return candidates.reduce((best, cur) => (cur.closedDefects / cur.reportedDefects) > (best.closedDefects / best.reportedDefects) ? cur : best, candidates[0])
-  })()
-
-  // Defect Closure Trend occupies the space under the hero metrics when enabled + enough history.
-  // When that chart is absent, show a low-opacity typed data summary under the 3 metric cards.
-  const showDefectClosureTrend =
-    vis.show_defectClosureTrend !== false && historicalChartsData.length >= 2
-
 
   // ── Table Adapters ──
   const prodIssuesData = [
@@ -1447,7 +1477,7 @@ Do not return markdown wraps, only raw JSON text.
   const defectStatusData = releaseBugMetrics ? [
     { name: 'Active Defects', value: releaseBugMetrics.activeBugs, hex: '#f87171' },
     { name: 'Resolved (Ready for QA)', value: releaseBugMetrics.resolvedBugs, hex: '#fb923c' },
-    { name: 'Completed', value: releaseBugMetrics.completedBugs, hex: '#10b981' },
+    { name: 'Closed', value: releaseBugMetrics.completedBugs, hex: '#10b981' },
     ...(releaseBugMetrics.deferredBugs > 0 ? [{ name: 'Deferred', value: releaseBugMetrics.deferredBugs, hex: '#eab308' }] : []),
     ...(releaseBugMetrics.invalidBugs > 0 ? [{ name: 'Invalid/Won\'t Fix', value: releaseBugMetrics.invalidBugs, hex: '#64748b' }] : [])
   ] : [
@@ -1790,32 +1820,6 @@ Do not return markdown wraps, only raw JSON text.
             onOpenReleaseFeaturesModal={() => setShowReleaseFeaturesModal(true)}
             onOpenCodeFixesModal={() => setShowCodeFixesModal(true)}
             showQualityScore={vis.show_qualityScore !== false}
-            bottomContent={
-              showDefectClosureTrend ? (
-                <div className={`p-6 rounded-[32px] ${tS.softCard} h-[340px] w-full flex flex-col gap-4 relative overflow-hidden group border ${theme === 'dark' ? 'border-white/[0.05]' : 'border-transparent'}`}>
-                  <div className="flex items-center justify-between">
-                    <h3 className={`text-lg font-bold font-clash ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Defect Closure Trend</h3>
-                    <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Historical Analytics</span>
-                  </div>
-                  <div className="flex-1 w-full relative z-10 -ml-4">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                        <defs>
-                          <GlowAreaGradient id="heroReportedGrad" color="#f87171" theme={theme} />
-                          <GlowAreaGradient id="heroClosedGrad" color="#10b981" theme={theme} />
-                        </defs>
-                        <XAxis dataKey="name" {...axisPreset({ dy: 6 })} />
-                        <YAxis {...axisPreset({ dx: -6 })} />
-                        <Tooltip content={<PremiumTooltip theme={theme} />} />
-                        <Legend {...legendPreset} />
-                        <Area type="monotone" dataKey="reportedDefects" name="Reported Defects" stroke="#f87171" fill="url(#heroReportedGrad)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#f87171', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                        <Area type="monotone" dataKey="closedDefects" name="Closed Defects" stroke="#10b981" fill="url(#heroClosedGrad)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#10b981', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              ) : null
-            }
           />
         </div>
 
@@ -1871,12 +1875,12 @@ Do not return markdown wraps, only raw JSON text.
               },
               {
                 label: 'Open Bugs',
-                val: releaseBugMetrics ? (releaseBugMetrics.totalBugs - releaseBugMetrics.completedBugs) : data.defectsLastWeek.open,
+                val: openBugsCount,
                 icon: AlertTriangle,
                 color: 'text-red-400',
                 desc: releaseBugMetrics ? `${releaseBugMetrics.totalBugs} total bugs` : 'Unresolved defects',
-                sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics ? (f.releaseBugStatus.metrics.totalBugs - f.releaseBugStatus.metrics.completedBugs) : f.defectsLastWeek.open ?? 0),
-                pulse: (releaseBugMetrics ? (releaseBugMetrics.totalBugs - releaseBugMetrics.completedBugs) : data.defectsLastWeek.open) > 5,
+                sparklineData: getHistoricalValues(openBugsOf),
+                pulse: openBugsCount > 5,
                 tooltip: 'What unresolved product risk exists?',
                 category: 'primary' as const
               },
@@ -1904,13 +1908,13 @@ Do not return markdown wraps, only raw JSON text.
                   category: 'releaseHealth' as const
                 },
                 {
-                  label: 'Completed Bugs',
+                  label: 'Closed Bugs',
                   val: releaseBugMetrics.completedBugs,
                   icon: CheckCheck,
                   color: 'text-green-400',
                   desc: 'Bugs verified and closed',
                   sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.completedBugs || 0),
-                  tooltip: 'Fixed, tested & fully resolved',
+                  tooltip: 'Completed bugs means the bugs are tested and closed',
                   category: 'releaseHealth' as const
                 },
                 {
@@ -2891,18 +2895,32 @@ Do not return markdown wraps, only raw JSON text.
             ref={sectionsRef.historyDashboard}
             className="flex flex-col gap-6"
           >
-            <div className="flex items-center gap-2">
-              <LayoutGrid className="w-5 h-5 text-accent-gold" />
-              <h2 className="text-2xl font-extrabold font-clash">Historical Analytics</h2>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <LayoutGrid className="w-5 h-5 text-accent-gold" />
+                <h2 className="text-2xl font-extrabold font-clash">Historical Analytics</h2>
+              </div>
+              <span
+                title="Draft reports are excluded, so trends reflect finalised weeks only."
+                className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white/60' : 'bg-black/[0.03] border-slate-200 text-slate-500'}`}
+              >
+                Final reports only
+                {draftReportCount > 0 && ` · ${draftReportCount} draft${draftReportCount === 1 ? '' : 's'} excluded`}
+              </span>
             </div>
 
             {historicalChartsData.length < 2 ? (
               <div className={`p-8 rounded-2xl border text-center text-sm ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 text-white/50' : 'bg-white border-slate-200 text-slate-500'}`}>
                 <p className="font-semibold text-accent-gold mb-1">Insufficient Historical Data</p>
-                <p className="text-xs">At least 2 saved reports are required to calculate trend performance charts.</p>
+                <p className="text-xs">At least 2 Final reports are required to calculate trend performance charts. Draft reports are excluded.</p>
+                {draftReportCount > 0 && (
+                  <p className="text-xs mt-1 text-accent-gold/70">
+                    {draftReportCount} draft report{draftReportCount === 1 ? '' : 's'} not counted — mark them Final to include them.
+                  </p>
+                )}
               </div>
             ) : (
-              <div className={`grid grid-cols-1 ${vis.show_defectClosureTrend !== false ? 'lg:grid-cols-2' : ''} gap-6`}>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 {/* 1. Monthly KPI Trend (Line) */}
                 <motion.div
@@ -2927,46 +2945,6 @@ Do not return markdown wraps, only raw JSON text.
                     </ResponsiveContainer>
                   </div>
                 </motion.div>
-
-                {/* 2. Defect Closure Trend (Area) */}
-                {vis.show_defectClosureTrend !== false && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                    viewport={{ once: true, margin: "-45px" }}
-                    transition={{ duration: 0.5, delay: 0.05 }}
-                    className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
-                  >
-                    <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Defect Closure Trend</span>
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                          <defs>
-                            <GlowAreaGradient id="reportedGrad" color="#f87171" theme={theme} />
-                            <GlowAreaGradient id="closedGrad" color="#10b981" theme={theme} />
-                          </defs>
-                          <XAxis dataKey="name" {...axisPreset()} />
-                          <YAxis {...axisPreset()} />
-                          <Tooltip content={<PremiumTooltip theme={theme} />} />
-                          <Legend {...legendPreset} />
-                          <Area type="monotone" dataKey="reportedDefects" name="Reported Defects" stroke="#f87171" fill="url(#reportedGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#f87171', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                          <Area type="monotone" dataKey="closedDefects" name="Closed Defects" stroke="#10b981" fill="url(#closedGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#10b981', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                          {bestClosureWeek && (
-                            <ReferenceDot
-                              x={bestClosureWeek.name}
-                              y={bestClosureWeek.closedDefects}
-                              r={5}
-                              fill="#10b981"
-                              stroke={theme === 'dark' ? '#0e1322' : '#ffffff'}
-                              strokeWidth={2}
-                              label={<ChartCallout theme={theme} title={`${bestClosureWeek.name} · Best`} value={`${Math.round((bestClosureWeek.closedDefects / bestClosureWeek.reportedDefects) * 100)}% Closed`} />}
-                            />
-                          )}
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </motion.div>
-                )}
 
                 {/* 3. Production Issue Trend (Stacked Area) */}
                 <motion.div
