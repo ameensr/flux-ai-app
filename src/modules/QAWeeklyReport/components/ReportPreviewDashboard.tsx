@@ -577,6 +577,9 @@ const ReportPreviewDashboardContent: React.FC = () => {
     form: ensureFormData(r.form)
   }))
 
+  // WoW comparison only uses Final reports (excludes drafts)
+  const finalReportsOnly = activeHistory.filter(r => r.status === 'Final')
+
   const [data, setData] = useState<QAReportForm>(() => {
     const raw = localStorage.getItem('current-qa-report-data')
     if (raw) {
@@ -886,13 +889,14 @@ const ReportPreviewDashboardContent: React.FC = () => {
   )))
 
   // ── WoW Comparison Calculations ──
+  // Only compare against Final reports (excludes drafts)
   const getPreviousReport = (): QAReportForm | null => {
-    const curIndex = activeHistory.findIndex(r => r.form.weekStart === data.weekStart)
-    if (curIndex !== -1 && curIndex + 1 < activeHistory.length) {
-      return activeHistory[curIndex + 1].form
+    const curIndex = finalReportsOnly.findIndex(r => r.form.weekStart === data.weekStart)
+    if (curIndex !== -1 && curIndex + 1 < finalReportsOnly.length) {
+      return finalReportsOnly[curIndex + 1].form
     }
-    if (curIndex === -1 && activeHistory.length > 0) {
-      return activeHistory[0].form
+    if (curIndex === -1 && finalReportsOnly.length > 0) {
+      return finalReportsOnly[0].form
     }
     return null
   }
@@ -2630,9 +2634,11 @@ Do not return markdown wraps, only raw JSON text.
               <button
                 onClick={() => setCompareMode(v => !v)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${compareMode ? 'bg-accent-gold text-black border-accent-gold' : theme === 'dark' ? 'bg-white/5 border-white/10 text-text-secondary hover:text-white' : 'bg-black/[0.03] border-slate-200 text-text-secondary hover:text-slate-900'}`}
+                disabled={finalReportsOnly.length < 2}
+                title={finalReportsOnly.length < 2 ? 'Need at least 2 Final reports to compare' : undefined}
               >
                 <GitCompare className="w-4 h-4" />
-                {compareMode ? 'Show WoW Cards' : 'Compare Saved Reports'}
+                {compareMode ? 'Show WoW Cards' : 'Compare Final Reports'}
               </button>
             )}
           </div>
@@ -2645,7 +2651,7 @@ Do not return markdown wraps, only raw JSON text.
                   <p className="text-xs text-text-muted">Select any two saved reports to see differences side-by-side.</p>
                 </div>
 
-                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex flex-col gap-1">
                     <span className="text-[9px] uppercase font-bold text-text-muted">Report A (Baseline)</span>
                     <select
@@ -2654,7 +2660,7 @@ Do not return markdown wraps, only raw JSON text.
                       className={`rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none border ${theme === 'dark' ? 'bg-[#1a1a1a] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                     >
                       <option value="">Choose Report A...</option>
-                      {activeHistory.map(r => (
+                      {finalReportsOnly.map(r => (
                         <option key={r.id} value={r.id}>{(r.name || r.week || r.form.weekStart)} - {r.form.projectName}</option>
                       ))}
                     </select>
@@ -2670,7 +2676,7 @@ Do not return markdown wraps, only raw JSON text.
                       className={`rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none border ${theme === 'dark' ? 'bg-[#1a1a1a] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                     >
                       <option value="">Choose Report B...</option>
-                      {activeHistory.map(r => (
+                      {finalReportsOnly.map(r => (
                         <option key={r.id} value={r.id}>{(r.name || r.week || r.form.weekStart)} - {r.form.projectName}</option>
                       ))}
                     </select>
@@ -2680,8 +2686,8 @@ Do not return markdown wraps, only raw JSON text.
 
               {/* Compare Results Display */}
               {(() => {
-                const repA = activeHistory.find(r => r.id === compareReportA)?.form
-                const repB = activeHistory.find(r => r.id === compareReportB)?.form
+                const repA = finalReportsOnly.find(r => r.id === compareReportA)?.form
+                const repB = finalReportsOnly.find(r => r.id === compareReportB)?.form
 
                 if (!repA || !repB) {
                   return (
@@ -2771,8 +2777,8 @@ Do not return markdown wraps, only raw JSON text.
             </div>
           ) : !prevReport ? (
             <div className={`p-8 rounded-2xl border text-center text-sm ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 text-white/50' : 'bg-white border-slate-200 text-slate-500'}`}>
-              <p className="font-semibold text-accent-gold mb-1">No previous report available for comparison</p>
-              <p className="text-xs">Save your first report to start tracking week-over-week performance changes.</p>
+              <p className="font-semibold text-accent-gold mb-1">No previous Final report available for comparison</p>
+              <p className="text-xs">Save and finalize your reports to start tracking week-over-week performance changes. Draft reports are excluded from WoW comparisons.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-6">
