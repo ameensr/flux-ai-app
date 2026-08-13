@@ -44,7 +44,7 @@ export function DefectStatusModal({
 
   // Prepare data based on source
   const chartData = hasReleaseBugData && releaseBugStatus?.metrics ? [
-    { name: 'Active Defects', value: releaseBugStatus.metrics.activeBugs, hex: '#f87171', icon: AlertCircle },
+    { name: 'Open Defects', value: releaseBugStatus.metrics.openBugs, hex: '#f87171', icon: AlertCircle },
     { name: 'Resolved (Ready for QA)', value: releaseBugStatus.metrics.resolvedBugs, hex: '#fb923c', icon: Clock },
     { name: 'Completed', value: releaseBugStatus.metrics.completedBugs, hex: '#10b981', icon: CheckCircle },
     ...(releaseBugStatus.metrics.deferredBugs > 0 ? [{ name: 'Deferred', value: releaseBugStatus.metrics.deferredBugs, hex: '#eab308', icon: PauseCircle }] : []),

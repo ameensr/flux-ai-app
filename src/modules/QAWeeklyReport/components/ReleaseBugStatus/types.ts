@@ -31,6 +31,7 @@ export interface ReleaseBugMetrics {
   completedBugs: number
   resolvedBugs: number
   activeBugs: number
+  openBugs: number // Total - Closed (all statuses except completed)
   deferredBugs: number
   invalidBugs: number
   closurePercentage: number

@@ -306,22 +306,64 @@ const KPICard: React.FC<KPICardProps> = ({
   MiniSparkline,
   compact = false
 }) => {
+  const [isHovered, setIsHovered] = React.useState(false)
+  const [mousePosition, setMousePosition] = React.useState({ x: 0, y: 0 })
+  const cardRef = React.useRef<HTMLDivElement>(null)
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return
+    const rect = cardRef.current.getBoundingClientRect()
+    const x = (e.clientX - rect.left) / rect.width - 0.5
+    const y = (e.clientY - rect.top) / rect.height - 0.5
+    setMousePosition({ x, y })
+  }
+
+  const handleMouseEnter = () => {
+    setIsHovered(true)
+    if (kpi.tooltip) onHoverKPI(kpi.label)
+  }
+
+  const handleMouseLeave = () => {
+    setIsHovered(false)
+    setMousePosition({ x: 0, y: 0 })
+    onHoverKPI(null)
+  }
+
   return (
     <motion.div
-      initial="initial"
-      whileInView="show"
-      whileHover="hover"
-      variants={{
-        initial: { opacity: 0, y: 30, scale: 0.95 },
-        show: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', damping: 20, stiffness: 100 } },
-        hover: { y: -8, scale: 1.02, transition: { duration: 0.2 } }
-      }}
+      ref={cardRef}
+      initial={{ opacity: 0, y: 30, scale: 0.95 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, margin: "-40px" }}
-      transition={{ delay: idx * 0.08 }}
-      className={`p-5 rounded-[28px] border flex items-center justify-between group relative overflow-visible transition-all duration-300 ${compact ? 'min-h-[120px]' : 'min-h-[140px]'} ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme === 'dark' ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.25)] hover:border-white/[0.12] hover:shadow-[0_8px_32px_rgba(0,0,0,0.3)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/60 shadow-[0_4px_20px_rgba(15,23,42,0.03)] hover:shadow-[0_8px_30px_rgba(15,23,42,0.05)]'}`}
-      onMouseEnter={() => kpi.tooltip && onHoverKPI(kpi.label)}
-      onMouseLeave={() => onHoverKPI(null)}
+      transition={{ delay: idx * 0.08, type: 'spring', damping: 20, stiffness: 100 }}
+      className={`p-5 rounded-[28px] border flex items-center justify-between group relative overflow-visible ${compact ? 'min-h-[120px]' : 'min-h-[140px]'} ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme === 'dark' ? 'bg-gradient-to-br from-[#1a2133]/90 to-[#0b0f1a]/90 border-white/[0.06] shadow-[0_4px_24px_rgba(0,0,0,0.25)]' : 'bg-gradient-to-br from-white via-white to-slate-50 border-slate-200/60 shadow-[0_4px_20px_rgba(15,23,42,0.03)]'}`}
+      style={{
+        willChange: 'transform',
+        transformStyle: 'preserve-3d',
+        transform: isHovered
+          ? `perspective(1000px) rotateX(${mousePosition.y * -10}deg) rotateY(${mousePosition.x * 10}deg) translateY(-16px) translateZ(20px) scale(1.04)`
+          : 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0px) translateZ(0px) scale(1)',
+        transition: isHovered ? 'transform 0.1s ease-out' : 'transform 0.4s ease-out',
+        boxShadow: isHovered
+          ? theme === 'dark'
+            ? `0 30px 60px rgba(0,0,0,0.5), 0 15px 30px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.1), ${mousePosition.x * 25}px ${mousePosition.y * 25}px 40px rgba(212,175,55,0.12)`
+            : `0 30px 60px rgba(15,23,42,0.15), 0 15px 30px rgba(15,23,42,0.08), 0 0 0 1px rgba(212,175,55,0.25), ${mousePosition.x * 20}px ${mousePosition.y * 20}px 35px rgba(212,175,55,0.1)`
+          : undefined
+      }}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
+      {/* 3D Lighting Effect */}
+      <div
+        className="absolute inset-0 rounded-[28px] pointer-events-none transition-opacity duration-300"
+        style={{
+          background: isHovered
+            ? `radial-gradient(circle at ${(mousePosition.x + 0.5) * 100}% ${(mousePosition.y + 0.5) * 100}%, ${theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.5)'} 0%, transparent 50%)`
+            : 'none',
+          opacity: isHovered ? 1 : 0
+        }}
+      />
       {/* Premium Tooltip */}
       <AnimatePresence>
         {kpi.tooltip && hoveredKPI === kpi.label && (
@@ -381,9 +423,9 @@ const KPICard: React.FC<KPICardProps> = ({
       {/* Left side content */}
       <div className="flex flex-col justify-between h-full w-[60%] z-20 relative py-1">
         <div className="flex items-center gap-2 mb-2">
-          <motion.div variants={{ hover: { rotate: [0, -8, 8, 0], scale: 1.15 } }} transition={{ duration: 0.4 }}>
+          <div className="transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
             <kpi.icon className={`w-4 h-4 ${kpi.color} ${kpi.pulse ? 'animate-pulse' : ''}`} />
-          </motion.div>
+          </div>
           <span className={`text-[11px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis ${theme === 'dark' ? 'text-white/60' : 'text-slate-500'}`}>{kpi.label}</span>
         </div>
 

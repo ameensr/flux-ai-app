@@ -237,7 +237,7 @@ export function buildReportMarkdown(data: QAReportForm, meta: ReportExportMeta =
     L.push('| Metric | Count |')
     L.push('|---|---|')
     L.push(`| Total Bugs | ${bugMetrics.totalBugs ?? 0} |`)
-    L.push(`| Active | ${bugMetrics.activeBugs ?? 0} |`)
+    L.push(`| Open | ${bugMetrics.openBugs ?? 0} |`)
     L.push(`| Resolved (Ready for QA) | ${bugMetrics.resolvedBugs ?? 0} |`)
     L.push(`| Completed | ${bugMetrics.completedBugs ?? 0} |`)
     if (bugMetrics.deferredBugs) L.push(`| Deferred | ${bugMetrics.deferredBugs} |`)
@@ -406,7 +406,7 @@ export function buildReportHTML(data: QAReportForm, meta: ReportExportMeta = {})
       ['Metric', 'Count'],
       [
         ['Total Bugs', bugMetrics.totalBugs ?? 0],
-        ['Active', bugMetrics.activeBugs ?? 0],
+        ['Open', bugMetrics.openBugs ?? 0],
         ['Resolved (Ready for QA)', bugMetrics.resolvedBugs ?? 0],
         ['Completed', bugMetrics.completedBugs ?? 0],
         ...(bugMetrics.deferredBugs ? [['Deferred', bugMetrics.deferredBugs]] : []),

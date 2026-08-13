@@ -35,6 +35,8 @@ interface ReportHeroProps {
   onScrollNext: () => void
   onNavigateToSection?: (section: string) => void
   onOpenProductionIssuesModal?: () => void
+  onOpenReleaseFeaturesModal?: () => void
+  onOpenCodeFixesModal?: () => void
   bottomContent?: React.ReactNode
   showQualityScore?: boolean
 }
@@ -83,6 +85,8 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
   onScrollNext,
   onNavigateToSection,
   onOpenProductionIssuesModal,
+  onOpenReleaseFeaturesModal,
+  onOpenCodeFixesModal,
   bottomContent,
   showQualityScore = true,
 }) => {
@@ -152,14 +156,14 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
       value: newFeatures,
       icon: Sparkles,
       accent: kpiPalette.amber,
-      onClick: () => onNavigateToSection?.('releaseTesting'),
+      onClick: () => onOpenReleaseFeaturesModal?.(),
     },
     {
       label: 'Code Fixes Testing',
       value: codeFixes,
       icon: Wrench,
       accent: kpiPalette.violet,
-      onClick: () => onNavigateToSection?.('supportLog'),
+      onClick: () => onOpenCodeFixesModal?.(),
     },
   ]
 
@@ -303,7 +307,8 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
               role="button"
               tabIndex={0}
               aria-label={`${kpi.label}: ${kpi.value}`}
-              className={`relative overflow-hidden rounded-[28px] p-6 group cursor-pointer transition-all duration-500 ${glassCard} ${glassCardHover}`}
+              className={`relative overflow-hidden rounded-[28px] p-6 group cursor-pointer transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl active:scale-[0.98] ${glassCard} ${glassCardHover}`}
+              style={{ willChange: 'transform' }}
             >
               {/* Tinted wash — a light shade of the metric's hue over the glass */}
               <div
@@ -316,15 +321,16 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
 
               {/* Soft accent glow, lifts on hover */}
               <div
-                className="absolute -top-16 -right-12 w-40 h-40 rounded-full blur-3xl pointer-events-none opacity-70 group-hover:opacity-100 transition-opacity duration-500"
+                className="absolute -top-16 -right-12 w-40 h-40 rounded-full blur-3xl pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity duration-500"
                 style={{ background: `radial-gradient(circle, ${kpi.accent.glow}, transparent 70%)` }}
               />
 
-              {/* Slow sheen — a whisper rather than a flash */}
-              <motion.div
-                animate={{ x: ['-100%', '200%'] }}
-                transition={{ duration: 3, repeat: Infinity, repeatDelay: 4 + idx * 2, ease: 'easeInOut' }}
-                className={`absolute inset-y-0 w-32 bg-gradient-to-r from-transparent ${theme === 'dark' ? 'via-white/[0.06]' : 'via-slate-900/[0.03]'} to-transparent transform -skew-x-12 pointer-events-none`}
+              {/* Premium border glow on hover */}
+              <div
+                className="absolute inset-0 rounded-[28px] pointer-events-none opacity-0 group-hover:opacity-60 transition-opacity duration-300"
+                style={{
+                  background: `linear-gradient(135deg, ${kpi.accent.glow}, transparent 40%, transparent 60%, ${kpi.accent.glow})`,
+                }}
               />
 
               <div className="relative z-10 flex items-center justify-between gap-3 mb-5">
@@ -343,6 +349,13 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
               <span className={`relative z-10 text-xs font-medium mt-3 block ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>
                 This week's count
               </span>
+
+              {/* Click indicator */}
+              <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-lg ${theme === 'dark' ? 'bg-white/10' : 'bg-slate-100'}`}>
+                  <span className={`text-[8px] font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-white/60' : 'text-slate-500'}`}>View</span>
+                </div>
+              </div>
             </motion.div>
           ))}
         </div>

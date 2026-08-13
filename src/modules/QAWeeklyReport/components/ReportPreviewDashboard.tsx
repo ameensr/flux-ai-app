@@ -357,6 +357,8 @@ import { ReleaseReadinessModal } from './ReleaseReadinessModal'
 import { TeamCapacityModal } from './TeamCapacityModal'
 import { ExecutiveQualityScoreModal } from './ExecutiveQualityScoreModal'
 import { ReleaseScopeModal } from './ReleaseScopeModal'
+import { ReleaseFeaturesModal } from './ReleaseFeaturesModal'
+import { CodeFixesModal } from './CodeFixesModal'
 import { resolveChartAnimation, glowStyle, GlowAreaGradient, StackedAreaGradient, BarFillGradient, axisPreset, legendPreset, PremiumTooltip, BAR_RADIUS } from './report-preview/chartTheme'
 
 // Report preview has its own isolated theme system — independent of the global dark/light toggle.
@@ -665,6 +667,8 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const [showTeamCapacityModal, setShowTeamCapacityModal] = useState(false)
   const [showQualityScoreModal, setShowQualityScoreModal] = useState(false)
   const [showReleaseScopeModal, setShowReleaseScopeModal] = useState(false)
+  const [showReleaseFeaturesModal, setShowReleaseFeaturesModal] = useState(false)
+  const [showCodeFixesModal, setShowCodeFixesModal] = useState(false)
 
   // Pause expensive ambient canvas while any modal / launch overlay is open
   const particlesPaused =
@@ -675,7 +679,9 @@ const ReportPreviewDashboardContent: React.FC = () => {
     showReleaseReadinessModal ||
     showTeamCapacityModal ||
     showQualityScoreModal ||
-    showReleaseScopeModal
+    showReleaseScopeModal ||
+    showReleaseFeaturesModal ||
+    showCodeFixesModal
 
   const releasePreviewColumns = useMemo(
     () =>
@@ -1503,6 +1509,8 @@ Do not return markdown wraps, only raw JSON text.
     setShowTeamCapacityModal(false)
     setShowQualityScoreModal(false)
     setShowReleaseScopeModal(false)
+    setShowReleaseFeaturesModal(false)
+    setShowCodeFixesModal(false)
 
     const PRINT_LIVE_CLASS = 'qaly-print-live'
     document.documentElement.classList.add(PRINT_LIVE_CLASS)
@@ -1779,6 +1787,8 @@ Do not return markdown wraps, only raw JSON text.
             onScrollNext={() => scrollToSection('kpis')}
             onNavigateToSection={scrollToSection}
             onOpenProductionIssuesModal={() => setShowProductionIssuesModal(true)}
+            onOpenReleaseFeaturesModal={() => setShowReleaseFeaturesModal(true)}
+            onOpenCodeFixesModal={() => setShowCodeFixesModal(true)}
             showQualityScore={vis.show_qualityScore !== false}
             bottomContent={
               showDefectClosureTrend ? (
@@ -1860,13 +1870,13 @@ Do not return markdown wraps, only raw JSON text.
                 category: 'primary' as const
               },
               {
-                label: 'Active Bugs',
-                val: releaseBugMetrics?.activeBugs ?? data.defectsLastWeek.open,
+                label: 'Open Bugs',
+                val: releaseBugMetrics ? (releaseBugMetrics.totalBugs - releaseBugMetrics.completedBugs) : data.defectsLastWeek.open,
                 icon: AlertTriangle,
                 color: 'text-red-400',
                 desc: releaseBugMetrics ? `${releaseBugMetrics.totalBugs} total bugs` : 'Unresolved defects',
-                sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics?.activeBugs ?? f.defectsLastWeek.open ?? 0),
-                pulse: (releaseBugMetrics?.activeBugs ?? data.defectsLastWeek.open) > 5,
+                sparklineData: getHistoricalValues(f => f.releaseBugStatus?.metrics ? (f.releaseBugStatus.metrics.totalBugs - f.releaseBugStatus.metrics.completedBugs) : f.defectsLastWeek.open ?? 0),
+                pulse: (releaseBugMetrics ? (releaseBugMetrics.totalBugs - releaseBugMetrics.completedBugs) : data.defectsLastWeek.open) > 5,
                 tooltip: 'What unresolved product risk exists?',
                 category: 'primary' as const
               },
@@ -1961,16 +1971,13 @@ Do not return markdown wraps, only raw JSON text.
 
               // SUPPORT OPERATIONS CATEGORY
               {
-                label: 'High Priority',
-                val: supportHigh,
-                icon: Zap,
-                color: 'text-orange-400',
-                desc: 'Critical + High from Support Log',
-                sparklineData: getHistoricalValues(f => f.supportTickets?.filter((t: any) => {
-                  const p = String(t?.priority || '').toLowerCase()
-                  return p === 'high' || p === 'critical'
-                }).length || 0),
-                tooltip: 'Critical and High priority support tickets',
+                label: 'Total Support Tickets',
+                val: supportTicketsTotal,
+                icon: Mail,
+                color: 'text-blue-400',
+                desc: 'All tickets from Support Log',
+                sparklineData: getHistoricalValues(f => f.supportTickets?.length || 0),
+                tooltip: 'Total support tickets logged',
                 category: 'supportOps' as const
               },
               {
@@ -2296,9 +2303,9 @@ Do not return markdown wraps, only raw JSON text.
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
               {[
                 { label: 'Total Bugs', val: data.releaseBugStatus.metrics.totalBugs, color: 'text-blue-400' },
-                { label: 'Completed', val: data.releaseBugStatus.metrics.completedBugs, color: 'text-green-400' },
-                { label: 'Resolved', val: data.releaseBugStatus.metrics.resolvedBugs, color: 'text-emerald-400' },
-                { label: 'Active', val: data.releaseBugStatus.metrics.activeBugs, color: 'text-red-400' },
+                { label: 'Closed', val: data.releaseBugStatus.metrics.completedBugs, color: 'text-green-400' },
+                { label: 'Fixed', val: data.releaseBugStatus.metrics.resolvedBugs, color: 'text-emerald-400' },
+                { label: 'Open', val: data.releaseBugStatus.metrics.totalBugs - data.releaseBugStatus.metrics.completedBugs, color: 'text-red-400' },
                 { label: 'Closure %', val: `${data.releaseBugStatus.metrics.closurePercentage.toFixed(1)}%`, color: 'text-accent-gold' },
               ].map(kpi => (
                 <div key={kpi.label} className={`p-4 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.02] border-white/5' : 'bg-white border-slate-200'}`}>
@@ -3254,25 +3261,22 @@ Do not return markdown wraps, only raw JSON text.
 
               const groups = [
                 {
-                  role: 'New Feature Testing',
+                  role: 'Feature Testing Team',
                   icon: Zap,
                   members: data.newFeatureTeam || [],
                   accent: palette.sky,
-                  metrics: `${releaseCount} release item${releaseCount === 1 ? '' : 's'}`,
                 },
                 {
-                  role: 'Production Support',
+                  role: 'Production Support Team',
                   icon: Wrench,
                   members: data.supportTeam || [],
                   accent: palette.emerald,
-                  metrics: `${resolvedCount} resolved ticket${resolvedCount === 1 ? '' : 's'}`,
                 },
                 {
-                  role: 'Automation Engineering',
+                  role: 'Automation Testing Team',
                   icon: Code2,
                   members: data.automationTeam || [],
                   accent: palette.violet,
-                  metrics: `${data.automationTeam?.length || 0} engineer${(data.automationTeam?.length || 0) === 1 ? '' : 's'}`,
                 },
               ]
 
@@ -3322,19 +3326,20 @@ Do not return markdown wraps, only raw JSON text.
                     )}
 
                     <div className="relative z-10 flex flex-col gap-4">
-                      {/* Role header */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${group.accent.soft} ${group.accent.ring}`}>
-                          <Icon className={`w-4 h-4 ${group.accent.text}`} />
+                      {/* Role header - Premium layout with icon and title inline */}
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 ${group.accent.soft} ${group.accent.ring}`}>
+                          <Icon className={`w-5 h-5 ${group.accent.text}`} />
                         </div>
-                        <div className={`inline-flex items-center px-2 py-1 rounded-lg border text-[10px] font-black tracking-[0.14em] uppercase ${group.accent.soft} ${group.accent.ring} ${group.accent.text}`}>
-                          {group.metrics}
+                        <div className="flex flex-col">
+                          <h3 className={`text-[15px] font-extrabold leading-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                            {group.role}
+                          </h3>
+                          <span className={`text-[10px] font-semibold uppercase tracking-wider ${group.accent.text}`}>
+                            {count} {count === 1 ? 'Member' : 'Members'}
+                          </span>
                         </div>
                       </div>
-
-                      <h3 className={`text-[15px] font-extrabold leading-snug ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
-                        {group.role}
-                      </h3>
 
                       {/* Members */}
                       {count > 0 ? (
@@ -3581,6 +3586,20 @@ Do not return markdown wraps, only raw JSON text.
         releaseData={data.releaseItems || []}
         visibleColumns={releaseScopeVisibleColumns}
         projectId={data.projectId}
+        projectName={data.projectName}
+      />
+
+      <ReleaseFeaturesModal
+        isOpen={showReleaseFeaturesModal}
+        onClose={() => setShowReleaseFeaturesModal(false)}
+        releaseItems={data.releaseItems || []}
+        projectName={data.projectName}
+      />
+
+      <CodeFixesModal
+        isOpen={showCodeFixesModal}
+        onClose={() => setShowCodeFixesModal(false)}
+        supportTickets={data.supportTickets || []}
         projectName={data.projectName}
       />
     </>

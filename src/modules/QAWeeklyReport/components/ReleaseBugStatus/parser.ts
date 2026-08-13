@@ -221,16 +221,19 @@ export async function parseReleaseBugFile(file: File): Promise<ReleaseBugAnalyti
           }
         }
 
-        const closurePercentage = totalBugs > 0 ? ((completedBugs + resolvedBugs) / totalBugs) * 100 : 0
+        const closurePercentage = totalBugs > 0 ? (completedBugs / totalBugs) * 100 : 0
         const activePercentage = totalBugs > 0 ? (activeBugs / totalBugs) * 100 : 0
         const deferredPercentage = totalBugs > 0 ? (deferredBugs / totalBugs) * 100 : 0
         const invalidPercentage = totalBugs > 0 ? (invalidBugs / totalBugs) * 100 : 0
+        // Open = Total - Closed (all statuses except completed)
+        const openBugs = totalBugs - completedBugs
 
         const metrics: ReleaseBugMetrics = {
           totalBugs,
           completedBugs,
           resolvedBugs,
           activeBugs,
+          openBugs,
           deferredBugs,
           invalidBugs,
           closurePercentage,
