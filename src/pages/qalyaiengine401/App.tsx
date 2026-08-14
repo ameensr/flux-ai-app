@@ -321,7 +321,6 @@ export default function App() {
         </h1>
         <a
           href="/"
-          onClick={(e) => e.preventDefault()}
           className="tt-btn-accent inline-flex items-center gap-2 px-6 py-3 sm:px-8 sm:py-4 rounded-full font-semibold text-sm sm:text-base hover:scale-105 hover:shadow-lg transition-all"
         >
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />

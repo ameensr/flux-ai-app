@@ -361,7 +361,7 @@ export default function App() {
             <Route path={ROUTES.admin} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
             <Route path={`${ROUTES.admin}/*`} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
             <Route path={`${ROUTES.enterprise}/*`} element={<ProtectedRoute adminOnly><EnterpriseAdmin /></ProtectedRoute>} />
-            <Route path="*" element={<Navigate to={ROUTES.dashboard} replace />} />
+            <Route path="*" element={<Navigate to={ROUTES.qalyAiEngine404} replace />} />
           </Route>
         </Routes>
       </AuthInitializer>

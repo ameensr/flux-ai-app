@@ -5,8 +5,6 @@ import { useAppStore } from '@/store/useAppStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useMaintenanceStore } from '@/store/useMaintenanceStore'
 import { ROUTES, ROUTE_MODULE_KEY, type AppRoute } from '@/lib/routes'
-import { GlassCard } from '@/components/ui/GlassCard'
-import { Lock } from 'lucide-react'
 
 interface Props {
   children: React.ReactNode
@@ -44,40 +42,19 @@ export function ProtectedRoute({ children, adminOnly = false, moduleKey }: Props
 
   // Module-level RBAC check (works for any role with permission)
   if (moduleKey && !canView(moduleKey)) {
-    return <AccessDenied />
+    return <Navigate to={ROUTES.qalyAiEngine401} replace />
   }
 
   // Admin-only routes (legacy support)
   if (adminOnly && role !== 'admin' && role !== 'super_admin') {
-    return <AccessDenied />
+    return <Navigate to={ROUTES.qalyAiEngine401} replace />
   }
 
   // Module-level RBAC check from route path
   const routeModuleKey = ROUTE_MODULE_KEY[location.pathname as AppRoute]
   if (routeModuleKey && role !== 'admin' && role !== 'super_admin' && !canView(routeModuleKey)) {
-    return <AccessDenied />
+    return <Navigate to={ROUTES.qalyAiEngine401} replace />
   }
 
   return <>{children}</>
-}
-
-function AccessDenied() {
-  return (
-    <GlassCard hoverEffect={false} className="flex flex-col items-center justify-center py-32 text-center">
-      <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
-        <Lock className="w-8 h-8 text-accent-gold" />
-      </div>
-      <h3 className="text-2xl font-bold text-white mb-2">🔒 Access Restricted</h3>
-      <p className="text-text-secondary max-w-sm mb-6">
-        You don't have permission to access this module.<br />
-        Contact your administrator if you believe this is a mistake.
-      </p>
-      <button
-        onClick={() => window.history.back()}
-        className="px-6 py-2.5 rounded-xl border border-white/10 text-sm font-bold text-text-muted hover:text-white hover:border-white/20 transition-all"
-      >
-        Request Access
-      </button>
-    </GlassCard>
-  )
 }
