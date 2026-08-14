@@ -394,7 +394,7 @@ export function isInProgressStatus(status: string | null | undefined): boolean {
   )
 }
 
-/** Release Testing Log — Not Started matcher (case-insensitive). */
+/** Release Testing Log — Not Started / Not Executed matcher (case-insensitive). */
 export function isNotStartedStatus(status: string | null | undefined): boolean {
   if (!status) return false
   const s = status.toLowerCase().trim()
@@ -403,10 +403,16 @@ export function isNotStartedStatus(status: string | null | undefined): boolean {
     s === 'not started' ||
     s === 'not-started' ||
     s === 'notstarted' ||
+    s === 'not executed' ||
+    s === 'not-executed' ||
+    s === 'notexecuted' ||
     s === 'todo' ||
     s === 'to do' ||
+    s === 'pending' ||
     s.includes('not started') ||
-    s.includes('not-started')
+    s.includes('not-started') ||
+    s.includes('not executed') ||
+    s.includes('not-executed')
   )
 }
 

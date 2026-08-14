@@ -885,14 +885,13 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
   const tS = getThemeStyles()
 
-  // ── Sprint Health calculations ──
+  // ── Sprint Health calculations (from Release Testing Status only) ──
   const totalCases = data.releaseItems.length
   const passedCases = releasePassed
   const failedCases = releaseFailed
   const blockedCases = releaseBlocked
   const inProgressCases = data.releaseItems.filter(i => isInProgressStatus(i?.status)).length
-  const notExecutedCases = data.releaseItems.filter(i => isNotStartedStatus(i?.status)).length
-  const pendingCases = inProgressCases + blockedCases
+  const notStartedCases = data.releaseItems.filter(i => isNotStartedStatus(i?.status)).length
 
   const sprintHealthScore = totalCases > 0 ? Math.round((passedCases / totalCases) * 100) : 100
 
@@ -2088,14 +2087,13 @@ Do not return markdown wraps, only raw JSON text.
             </div>
 
             {/* Sprint Status Cards Grid */}
-            <div className="grid grid-cols-3 gap-3 mt-2">
+            <div className="grid grid-cols-5 gap-3 mt-2">
               {[
                 { label: 'Passed', val: passedCases, color: theme === 'dark' ? 'text-green-400 bg-green-500/5' : 'text-green-600 bg-green-50' },
                 { label: 'Failed', val: failedCases, color: theme === 'dark' ? 'text-red-400 bg-red-500/5' : 'text-red-600 bg-red-50' },
                 { label: 'Blocked', val: blockedCases, color: theme === 'dark' ? 'text-orange-400 bg-orange-500/5' : 'text-orange-600 bg-orange-50' },
-                { label: 'Pending', val: pendingCases, color: theme === 'dark' ? 'text-yellow-400 bg-yellow-500/5' : 'text-amber-600 bg-amber-50' },
-                { label: 'Not Executed', val: notExecutedCases, color: theme === 'dark' ? 'text-white/45 bg-white/5' : 'text-slate-500 bg-slate-100' },
-                { label: 'In Progress', val: inProgressCases, color: theme === 'dark' ? 'text-blue-400 bg-blue-500/5' : 'text-blue-600 bg-blue-50' }
+                { label: 'In Progress', val: inProgressCases, color: theme === 'dark' ? 'text-blue-400 bg-blue-500/5' : 'text-blue-600 bg-blue-50' },
+                { label: 'Not Started', val: notStartedCases, color: theme === 'dark' ? 'text-white/45 bg-white/5' : 'text-slate-500 bg-slate-100' }
               ].map(item => (
                 <div key={item.label} className={`p-3 rounded-2xl border ${tS.border} ${item.color} flex flex-col justify-between`}>
                   <span className="text-[9px] uppercase font-bold tracking-wider text-text-muted">{item.label}</span>
