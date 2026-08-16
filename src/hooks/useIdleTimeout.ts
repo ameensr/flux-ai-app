@@ -8,6 +8,7 @@ import {
   IDLE_CHANNEL_NAME,
   IDLE_STORAGE_KEY,
   LOGOUT_SIGNAL_KEY,
+  SESSION_START_KEY,
 } from '@/lib/idleConfig'
 import { bindIdleOperationRegistrar } from '@/lib/idleOperations'
 import { NAME_GATE_SNOOZE_KEY } from '@/lib/nameGateSnooze'
@@ -119,6 +120,8 @@ export function useIdleTimeout(): UseIdleTimeoutReturn {
         }
       }
       keysToRemove.forEach((k) => localStorage.removeItem(k))
+      // Also explicitly clear session start timestamp
+      localStorage.removeItem(SESSION_START_KEY)
       if (themeValue) localStorage.setItem(themeKey, themeValue)
       if (snoozeValue) localStorage.setItem(NAME_GATE_SNOOZE_KEY, snoozeValue)
     } catch { /* best effort */ }

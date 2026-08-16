@@ -5,7 +5,7 @@ import type { Profile } from '@/store/useAppStore'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { LandingPage } from '@/pages/LandingPage'
 import { AuthPage } from '@/pages/AuthPage'
-import { supabase } from '@/lib/supabase'
+import { supabase, isSessionExpired, markSessionStart, clearSessionStart } from '@/lib/supabase'
 import { Toaster } from '@/components/ui/toaster'
 import { AIRestrictedModal } from '@/components/ai/AIRestrictedModal'
 import { loadPermissionsForRole, FALLBACK_MAPS } from '@/lib/rbac'
@@ -157,7 +157,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
   const initPromiseRef = React.useRef<Promise<void> | null>(null)
 
   React.useEffect(() => {
-    const handleSession = (user: any): Promise<void> => {
+    const handleSession = (user: any, isNewLogin = false): Promise<void> => {
       // Single-flight only while a load is in progress — must clear when done
       // so role/profile changes (e.g. SQL promote to super_admin) are picked up
       // on refresh, token refresh, and re-login.
@@ -165,6 +165,24 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 
       initPromiseRef.current = (async () => {
         try {
+          // ── Absolute Session Timeout Check ─────────────────────────────────
+          // If this is NOT a fresh login, check if the session has exceeded max age
+          if (!isNewLogin && isSessionExpired()) {
+            console.log('[App] Session expired (absolute timeout) - forcing logout')
+            clearSessionStart()
+            await supabase.auth.signOut()
+            toast({
+              title: 'Session expired',
+              description: 'Your session has expired. Please sign in again.',
+            })
+            return
+          }
+
+          // Mark session start for new logins
+          if (isNewLogin) {
+            markSessionStart()
+          }
+
           // Prefer SECURITY DEFINER RPC so badge/role still load if RLS SELECT is broken
           const [{ data: rpcRows, error: rpcError }] = await Promise.all([
             supabase.rpc('get_my_profile'),
@@ -244,7 +262,15 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
-          await handleSession(session.user)
+          // Check absolute session timeout before restoring session
+          if (isSessionExpired()) {
+            console.log('[App] Session expired on page load - signing out')
+            clearSessionStart()
+            await supabase.auth.signOut()
+            setReady(true)
+            return
+          }
+          await handleSession(session.user, false)
         }
       } catch (e) {
         console.warn('[App] getSession error:', e)
@@ -272,12 +298,21 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION') return
       if (event === 'SIGNED_IN' && session?.user) {
-        handleSession(session.user).then(() => setReady(true))
+        // Fresh login - mark session start and handle
+        handleSession(session.user, true).then(() => setReady(true))
         logLoginEvent(session.user.id, 'sign_in')
       } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        handleSession(session.user)
+        // Token refresh - check absolute timeout
+        if (isSessionExpired()) {
+          console.log('[App] Session expired during token refresh - signing out')
+          clearSessionStart()
+          supabase.auth.signOut()
+          return
+        }
+        handleSession(session.user, false)
       } else if (event === 'SIGNED_OUT') {
         initPromiseRef.current = null
+        clearSessionStart()
         setUser(null)
         setProfile(null)
         setPermissionMap({})
