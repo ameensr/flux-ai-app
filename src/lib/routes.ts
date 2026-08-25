@@ -92,3 +92,15 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.dailyReport]: 'daily-report',
 }
 
+/** Resolve RBAC module for a pathname (exact or nested, e.g. `/project-hub/:id`). */
+export function resolveModuleKey(pathname: string): string | undefined {
+  const exact = ROUTE_MODULE_KEY[pathname as AppRoute]
+  if (exact) return exact
+
+  const matches = (Object.entries(ROUTE_MODULE_KEY) as [AppRoute, string][])
+    .filter(([route]) => pathname === route || pathname.startsWith(`${route}/`))
+    .sort((a, b) => b[0].length - a[0].length)
+
+  return matches[0]?.[1]
+}
+

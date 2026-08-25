@@ -1,9 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ArrowLeft, ShieldOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Logo } from '@/components/ui/Logo';
 import { PandaSVG } from '@/components/LazyPanda/PandaSVG';
 import { useLazyPanda } from '@/components/LazyPanda/useLazyPanda';
+import { useAppStore } from '@/store/useAppStore';
+import { ROUTES } from '@/lib/routes';
 
 const ACCENT = '#6366F1';
 const ACCENT_HOVER = '#4F46E5';
@@ -154,6 +157,8 @@ function CenterLazyPanda() {
 export default function App() {
   const [scaleY, setScaleY] = useState(1);
   const zeroRef = useRef<HTMLSpanElement>(null);
+  const isAuthenticated = useAppStore((s) => s.isAuthenticated);
+  const homeTo = isAuthenticated ? ROUTES.dashboard : ROUTES.landing;
 
   useEffect(() => {
     const id = 'qaly-401-inter-font';
@@ -319,13 +324,13 @@ export default function App() {
         <h1 className="tt-white text-lg sm:text-xl md:text-2xl font-medium mb-3 sm:mb-4">
           You Are Unauthorized
         </h1>
-        <a
-          href="/"
+        <Link
+          to={homeTo}
           className="tt-btn-accent inline-flex items-center gap-2 px-6 py-3 sm:px-8 sm:py-4 rounded-full font-semibold text-sm sm:text-base hover:scale-105 hover:shadow-lg transition-all"
         >
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           Back to Home
-        </a>
+        </Link>
       </div>
     </div>
   );

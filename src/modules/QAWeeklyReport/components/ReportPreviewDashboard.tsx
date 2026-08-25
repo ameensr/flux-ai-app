@@ -370,6 +370,7 @@ import { TeamCapacityDisplay } from './TeamCapacity'
 import { DefectStatusModal } from './DefectStatusModal'
 import { WorkDistributionModal } from './WorkDistributionModal'
 import { ProductionIssuesModal } from './ProductionIssuesModal'
+import { SupportEmailsModal } from './SupportEmailsModal'
 import { ReleaseReadinessModal } from './ReleaseReadinessModal'
 import { TeamCapacityModal } from './TeamCapacityModal'
 import { ExecutiveQualityScoreModal } from './ExecutiveQualityScoreModal'
@@ -681,6 +682,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const [showDefectModal, setShowDefectModal] = useState(false)
   const [showWorkDistributionModal, setShowWorkDistributionModal] = useState(false)
   const [showProductionIssuesModal, setShowProductionIssuesModal] = useState(false)
+  const [showSupportEmailsModal, setShowSupportEmailsModal] = useState(false)
   const [showReleaseReadinessModal, setShowReleaseReadinessModal] = useState(false)
   const [showTeamCapacityModal, setShowTeamCapacityModal] = useState(false)
   const [showQualityScoreModal, setShowQualityScoreModal] = useState(false)
@@ -694,6 +696,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
     showDefectModal ||
     showWorkDistributionModal ||
     showProductionIssuesModal ||
+    showSupportEmailsModal ||
     showReleaseReadinessModal ||
     showTeamCapacityModal ||
     showQualityScoreModal ||
@@ -1534,6 +1537,7 @@ Do not return markdown wraps, only raw JSON text.
     setShowDefectModal(false)
     setShowWorkDistributionModal(false)
     setShowProductionIssuesModal(false)
+    setShowSupportEmailsModal(false)
     setShowReleaseReadinessModal(false)
     setShowTeamCapacityModal(false)
     setShowQualityScoreModal(false)
@@ -1815,7 +1819,7 @@ Do not return markdown wraps, only raw JSON text.
             onOpenQualityModal={() => setShowQualityScoreModal(true)}
             onScrollNext={() => scrollToSection('kpis')}
             onNavigateToSection={scrollToSection}
-            onOpenProductionIssuesModal={() => setShowProductionIssuesModal(true)}
+            onOpenSupportEmailsModal={() => setShowSupportEmailsModal(true)}
             onOpenReleaseFeaturesModal={() => setShowReleaseFeaturesModal(true)}
             onOpenCodeFixesModal={() => setShowCodeFixesModal(true)}
             showQualityScore={vis.show_qualityScore !== false}
@@ -3524,6 +3528,16 @@ Do not return markdown wraps, only raw JSON text.
         onClose={() => setShowProductionIssuesModal(false)}
         prodIssuesData={prodIssuesData}
         projectName={data.projectName}
+      />
+
+      <SupportEmailsModal
+        isOpen={showSupportEmailsModal}
+        onClose={() => setShowSupportEmailsModal(false)}
+        supportEmails={data.supportEmails}
+        prodIssuesData={prodIssuesData}
+        projectName={data.projectName}
+        weekStart={data.weekStart}
+        weekEnd={data.weekEnd}
       />
 
       <ReleaseReadinessModal

@@ -34,7 +34,7 @@ interface ReportHeroProps {
   onOpenQualityModal: () => void
   onScrollNext: () => void
   onNavigateToSection?: (section: string) => void
-  onOpenProductionIssuesModal?: () => void
+  onOpenSupportEmailsModal?: () => void
   onOpenReleaseFeaturesModal?: () => void
   onOpenCodeFixesModal?: () => void
   bottomContent?: React.ReactNode
@@ -84,7 +84,7 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
   onOpenQualityModal,
   onScrollNext,
   onNavigateToSection,
-  onOpenProductionIssuesModal,
+  onOpenSupportEmailsModal,
   onOpenReleaseFeaturesModal,
   onOpenCodeFixesModal,
   bottomContent,
@@ -149,7 +149,7 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
       value: supportEmails,
       icon: Mail,
       accent: kpiPalette.blue,
-      onClick: () => onOpenProductionIssuesModal?.(),
+      onClick: () => onOpenSupportEmailsModal?.(),
     },
     {
       label: 'New Release Features',

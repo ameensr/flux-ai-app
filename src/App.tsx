@@ -380,7 +380,7 @@ export default function App() {
           <Route path={ROUTES.maintenance} element={<RequireAuth><MaintenancePage /></RequireAuth>} />
 
           {/* Protected dashboard routes — uses layout with sidebar */}
-          <Route element={<RequireAuth><DashboardWrapper /></RequireAuth>}>
+          <Route element={<RequireAuth><ProtectedRoute><DashboardWrapper /></ProtectedRoute></RequireAuth>}>
             <Route path={ROUTES.dashboard} element={<Dashboard />} />
             <Route path={ROUTES.projectHub} element={<ProjectHub />} />
             <Route path={`${ROUTES.projectHub}/:projectId`} element={<ProjectDetail />} />
@@ -396,8 +396,10 @@ export default function App() {
             <Route path={ROUTES.admin} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
             <Route path={`${ROUTES.admin}/*`} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
             <Route path={`${ROUTES.enterprise}/*`} element={<ProtectedRoute adminOnly><EnterpriseAdmin /></ProtectedRoute>} />
-            <Route path="*" element={<Navigate to={ROUTES.qalyAiEngine404} replace />} />
           </Route>
+
+          {/* Unknown URLs — public 404 (no auth required) */}
+          <Route path="*" element={<Suspense fallback={<FullPageLoader />}><QalyAiEngine404 /></Suspense>} />
         </Routes>
       </AuthInitializer>
     </BrowserRouter>

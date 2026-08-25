@@ -347,7 +347,7 @@ const KPICard: React.FC<KPICardProps> = ({
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: "-40px" }}
         transition={{ delay: idx * 0.08, type: 'spring', damping: 20, stiffness: 100 }}
-        className={`p-5 rounded-[24px] border flex items-center justify-between group relative overflow-hidden cursor-pointer ${compact ? 'min-h-[120px]' : 'min-h-[140px]'} ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme === 'dark' ? 'bg-gradient-to-br from-[#1a2133] to-[#0d1117] border-white/[0.08]' : 'bg-gradient-to-br from-white to-slate-50 border-slate-200/80'}`}
+        className={`p-5 rounded-[24px] border flex items-center justify-between group relative overflow-hidden cursor-pointer ${compact ? 'min-h-[120px]' : 'min-h-[140px]'} ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme === 'dark' ? 'bg-[#131826] border-white/[0.08]' : 'bg-white border-slate-200/80'}`}
         style={{
           transformStyle: 'preserve-3d',
           transform: isHovered
@@ -432,8 +432,8 @@ const KPICard: React.FC<KPICardProps> = ({
           </span>
         )}
 
-        {/* Left side content */}
-        <div className="flex flex-col justify-between h-full w-[60%] z-10 relative py-1">
+        {/* Metric content */}
+        <div className="flex flex-col justify-between h-full w-[58%] z-10 relative py-1">
           <div className="flex items-center gap-2 mb-2">
             <div className={`transition-transform duration-200 ${isHovered ? 'scale-110' : 'scale-100'}`}>
               <kpi.icon className={`w-4 h-4 ${kpi.color} ${kpi.pulse ? 'animate-pulse' : ''}`} />
@@ -456,20 +456,24 @@ const KPICard: React.FC<KPICardProps> = ({
           )}
         </div>
 
-        {/* Right side sparkline */}
-        <div className="absolute right-0 bottom-0 top-0 w-[55%] pointer-events-none overflow-hidden rounded-r-[24px]">
-          <div className={`absolute inset-y-0 left-0 w-12 z-10 ${theme === 'dark' ? 'bg-gradient-to-r from-[#131826] to-transparent' : 'bg-gradient-to-r from-white to-transparent'}`} />
-          
-          {kpi.sparklineData && kpi.sparklineData.length > 1 && (
-            <div className={`absolute right-0 bottom-0 w-full h-[75%] pb-3 pr-4 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-50'}`}>
-              <MiniSparkline 
-                data={kpi.sparklineData} 
-                color={kpi.color.includes('gold') ? '#d4af37' : kpi.color.includes('blue') ? '#60a5fa' : kpi.color.includes('green') ? '#4ade80' : kpi.color.includes('red') ? '#f87171' : kpi.color.includes('orange') ? '#fb923c' : '#a855f7'} 
+        {/* Sparkline as soft background accent — no hard fade wall */}
+        {kpi.sparklineData && kpi.sparklineData.length > 1 && (
+          <div className="absolute inset-y-0 right-0 w-[48%] pointer-events-none overflow-hidden rounded-r-[24px]">
+            <div
+              className={`absolute right-0 bottom-0 w-full h-[70%] pb-3 pr-3 transition-opacity duration-200 ${isHovered ? 'opacity-70' : 'opacity-35'}`}
+              style={{
+                maskImage: 'linear-gradient(to right, transparent 0%, black 35%)',
+                WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 35%)',
+              }}
+            >
+              <MiniSparkline
+                data={kpi.sparklineData}
+                color={kpi.color.includes('gold') ? '#d4af37' : kpi.color.includes('blue') ? '#60a5fa' : kpi.color.includes('green') ? '#4ade80' : kpi.color.includes('red') ? '#f87171' : kpi.color.includes('orange') ? '#fb923c' : '#a855f7'}
                 className="w-full h-full"
               />
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </motion.div>
     </div>
   )

@@ -4,7 +4,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAppStore } from '@/store/useAppStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useMaintenanceStore } from '@/store/useMaintenanceStore'
-import { ROUTES, ROUTE_MODULE_KEY, type AppRoute } from '@/lib/routes'
+import { ROUTES, resolveModuleKey } from '@/lib/routes'
 
 interface Props {
   children: React.ReactNode
@@ -50,8 +50,8 @@ export function ProtectedRoute({ children, adminOnly = false, moduleKey }: Props
     return <Navigate to={ROUTES.qalyAiEngine401} replace />
   }
 
-  // Module-level RBAC check from route path
-  const routeModuleKey = ROUTE_MODULE_KEY[location.pathname as AppRoute]
+  // Module-level RBAC check from route path (incl. nested e.g. /project-hub/:id)
+  const routeModuleKey = resolveModuleKey(location.pathname)
   if (routeModuleKey && role !== 'admin' && role !== 'super_admin' && !canView(routeModuleKey)) {
     return <Navigate to={ROUTES.qalyAiEngine401} replace />
   }
