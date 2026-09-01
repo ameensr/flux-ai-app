@@ -1,13 +1,11 @@
 import React, { useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { motion, AnimatePresence } from 'framer-motion'
 import DOMPurify from 'dompurify'
 import { useQAReportStore } from '../store'
 import { useAppStore } from '@/store/useAppStore'
 import { toast } from '@/hooks/use-toast'
-import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { X, Save, CheckCircle2, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { GestureSheet } from '@/components/ui/GestureSheet'
 import { defaultReportName, findMatchingWeekReport, getReportDisplayName } from '../types'
 import { SaveReportNameModal, type SaveReportConfirmPayload } from './SaveReportNameModal'
 
@@ -171,7 +169,6 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
   markdown,
   onSaved,
 }) => {
-  useBodyScrollLock(open)
   const { form, saveReport, savedReports } = useQAReportStore()
   const { profile } = useAppStore()
   const [saving, setSaving] = useState(false)
@@ -273,31 +270,17 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
   }
 
   const drawerContent = (
-    <AnimatePresence>
-      {open && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={handleClose}
-            className="fixed inset-0 z-[80] bg-black/50 dark:bg-black/60 backdrop-blur-sm"
-          />
-
-          {/* Drawer Panel */}
-          <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed top-0 right-0 bottom-0 z-[81] w-full max-w-[580px] flex flex-col shadow-2xl"
-            style={{ background: 'var(--surface)', borderLeft: '1px solid var(--border)' }}
-          >
+    <GestureSheet
+      open={open}
+      onClose={handleClose}
+      width={580}
+      labelledBy="report-preview-title"
+      className="flex flex-col shadow-2xl"
+      style={{ background: 'var(--surface)', borderLeft: '1px solid var(--border)' }}
+    >
             {/* Header */}
             <div
-              className="flex items-center justify-between px-6 py-4 shrink-0"
+              className="flex items-center justify-between px-6 py-4 shrink-0 pl-7"
               style={{ borderBottom: '1px solid var(--border)' }}
             >
               <div className="flex items-center gap-3">
@@ -308,13 +291,13 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
                   <Eye className="w-4 h-4" style={{ color: 'var(--accent)' }} />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Report Preview</h2>
+                  <h2 id="report-preview-title" className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Report Preview</h2>
                   <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Review and save before launching</p>
                 </div>
               </div>
               <button
                 onClick={handleClose}
-                className="p-2 rounded-xl transition-all hover:scale-105"
+                className="p-2 rounded-xl pressable"
                 style={{
                   background: 'var(--hover)',
                   border: '1px solid var(--border)',
@@ -384,15 +367,12 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
                 </button>
               </div>
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+    </GestureSheet>
   )
 
   return (
     <>
-      {createPortal(drawerContent, document.body)}
+      {drawerContent}
       <SaveReportNameModal
         open={nameModalOpen}
         mode="save"

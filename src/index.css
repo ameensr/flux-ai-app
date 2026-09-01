@@ -71,10 +71,17 @@
     overflow-x: hidden;
   }
 
+  html {
+    font-optical-sizing: auto;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
   body {
     background-color: var(--bg);
     color: var(--text-primary);
-    font-family: 'Inter', 'Geist', system-ui, -apple-system, sans-serif;
+    font-family: system-ui, -apple-system, 'Segoe UI', 'Inter', 'Geist', sans-serif;
+    line-height: 1.5;
+    letter-spacing: 0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     transition: background-color 0.2s ease, color 0.2s ease;
@@ -100,15 +107,6 @@
     background: var(--text-muted);
   }
 
-  /* Smooth theme transitions on structural properties only */
-  *,
-  *::before,
-  *::after {
-    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
-    transition-duration: 0.2s;
-    transition-timing-function: ease;
-  }
-
   .animate-spin,
   .animate-pulse,
   canvas,
@@ -126,28 +124,28 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
-    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   }
 
   .qaly-card-hover:hover {
     box-shadow: var(--shadow);
     border-color: rgba(99, 102, 241, 0.2);
-    transform: translateY(-1px);
   }
 
-  /* Legacy alias — keeps existing GlassCard working */
+  /* Translucent material — content can scroll underneath */
   .glass-panel {
-    background: var(--card-bg);
+    background: color-mix(in srgb, var(--surface) 72%, transparent);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
-    transition: background 0.2s ease, border-color 0.2s ease;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
   }
 
-  /* Sidebar */
   .qaly-sidebar {
-    background: var(--sidebar-bg);
+    background: color-mix(in srgb, var(--sidebar-bg) 78%, transparent);
     border-right: 1px solid var(--border);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
   }
 
   /* Nav item */
@@ -160,7 +158,8 @@
     font-size: 0.8125rem;
     font-weight: 500;
     color: var(--text-secondary);
-    transition: background 0.15s ease, color 0.15s ease;
+    min-height: 2.25rem;
+    transition: background 100ms ease-out, color 100ms ease-out, transform 100ms ease-out;
     cursor: pointer;
     width: 100%;
     text-align: left;
@@ -172,6 +171,10 @@
   .qaly-nav-item:hover {
     background: var(--hover);
     color: var(--text-primary);
+  }
+
+  .qaly-nav-item:active {
+    transform: scale(0.97);
   }
 
   .qaly-nav-item.active {
@@ -227,7 +230,7 @@
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
     color: var(--text-muted);
   }
 
@@ -243,7 +246,7 @@
     font-weight: 600;
     background: var(--accent);
     color: var(--accent-fg);
-    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+    transition: background 100ms ease-out, transform 100ms ease-out, box-shadow 150ms ease;
     cursor: pointer;
     border: none;
   }
@@ -254,7 +257,7 @@
   }
 
   .btn-accent:active {
-    transform: scale(0.98);
+    transform: scale(0.97);
   }
 
   /* Ghost button */
@@ -270,7 +273,7 @@
     color: var(--text-secondary);
     background: transparent;
     border: 1px solid var(--border);
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    transition: background 100ms ease-out, color 100ms ease-out, border-color 100ms ease-out, transform 100ms ease-out;
     cursor: pointer;
   }
 
@@ -278,6 +281,69 @@
     background: var(--hover);
     color: var(--text-primary);
     border-color: rgba(99, 102, 241, 0.3);
+  }
+
+  .btn-ghost:active {
+    transform: scale(0.97);
+  }
+
+  .pressable {
+    transition: transform 100ms ease-out, background-color 100ms ease-out, color 100ms ease-out;
+  }
+
+  .pressable:active {
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .cinematic-reveal,
+  .skeleton,
+  .animate-float,
+  .animate-float-reverse,
+  .animate-float-glow,
+  .animate-spin-slow,
+  .animate-pulse-glow,
+  .animate-glow-pulse {
+    animation: none !important;
+  }
+
+  .pressable,
+  .btn-accent,
+  .btn-ghost,
+  .qaly-nav-item {
+    transition: none !important;
+  }
+
+  .pressable:active,
+  .btn-accent:active,
+  .btn-ghost:active,
+  .qaly-nav-item:active {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-panel,
+  .qaly-sidebar {
+    background: var(--surface) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .glass-panel,
+  .qaly-sidebar,
+  .qaly-card {
+    background: var(--surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 1px solid var(--text-muted);
   }
 }
 

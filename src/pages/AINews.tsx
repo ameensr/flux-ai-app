@@ -51,8 +51,8 @@ const ALL_NEWS: NewsArticle[] = [
   {
     id: '1',
     featured: true,
-    title: 'OpenAI Releases GPT-5 with Unprecedented Reasoning Capabilities',
-    summary: 'OpenAI has unveiled GPT-5, featuring a new chain-of-thought architecture that dramatically improves multi-step reasoning, coding accuracy, and scientific problem-solving — setting a new benchmark across all major AI evaluations.',
+    title: 'OpenAI — research and product updates',
+    summary: 'Official posts from OpenAI on models, safety, and product releases. Opens their news page — not a live headline feed.',
     source: 'OpenAI Blog',
     sourceLogo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/OpenAI_Logo.svg/1024px-OpenAI_Logo.svg.png',
     image: 'https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=900&q=80',
@@ -75,8 +75,8 @@ const ALL_NEWS: NewsArticle[] = [
   },
   {
     id: '3',
-    title: 'Anthropic\'s Claude 4 Introduces Extended Context Window of 2M Tokens',
-    summary: 'Claude 4 can now process entire codebases, legal documents, and research libraries in a single prompt, making it the most context-capable model available.',
+    title: 'Anthropic news and announcements',
+    summary: 'Company news, model updates, and research notes published by Anthropic.',
     source: 'Anthropic',
     sourceLogo: '',
     image: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=600&q=80',
@@ -87,8 +87,8 @@ const ALL_NEWS: NewsArticle[] = [
   },
   {
     id: '4',
-    title: 'Microsoft Copilot Now Embedded Across All Azure DevOps Pipelines',
-    summary: 'Microsoft expands its AI Copilot integration to cover CI/CD pipelines, automated test generation, and intelligent code review directly within Azure DevOps.',
+    title: 'Microsoft AI — company blog',
+    summary: 'Microsoft’s AI category on the company blog: Copilot, Azure, and research notes.',
     source: 'Microsoft AI',
     sourceLogo: '',
     image: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&q=80',
@@ -99,8 +99,8 @@ const ALL_NEWS: NewsArticle[] = [
   },
   {
     id: '5',
-    title: 'Meta Releases Llama 4 as Fully Open-Source Multimodal Model',
-    summary: 'Meta\'s Llama 4 supports text, image, audio, and video inputs, and is released under a permissive open-source license — challenging proprietary AI providers.',
+    title: 'Meta AI — research blog',
+    summary: 'Meta’s AI research blog, including Llama and related open-source work.',
     source: 'Meta AI',
     sourceLogo: '',
     image: 'https://images.unsplash.com/photo-1655720828018-edd2daec9349?w=600&q=80',
@@ -111,8 +111,8 @@ const ALL_NEWS: NewsArticle[] = [
   },
   {
     id: '6',
-    title: 'DeepSeek-V3 Achieves State-of-the-Art Performance with Open Weights',
-    summary: 'DeepSeek releases V3, a mixture-of-experts model that matches GPT-4 class performance while being fully open-weight, disrupting the closed-model ecosystem.',
+    title: 'DeepSeek — open-weight models',
+    summary: 'Official DeepSeek announcements and research notes on open-weight models.',
     source: 'DeepSeek',
     sourceLogo: '',
     image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&q=80',
@@ -123,7 +123,7 @@ const ALL_NEWS: NewsArticle[] = [
   },
   {
     id: '7',
-    title: 'Google Gemini 2.0 Flash Brings Real-Time Multimodal Reasoning',
+    title: 'Google Gemini — product updates',
     summary: 'Gemini 2.0 Flash processes video, audio, and code simultaneously with sub-second latency — enabling real-time AI assistants for developers and creators.',
     source: 'Google AI',
     sourceLogo: '',

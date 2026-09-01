@@ -13,6 +13,7 @@ import type { ProjectWithMembers } from '../types'
 import { PROJECT_STATUS_LABELS, PROJECT_STATUS_COLORS } from '../types'
 import { ROUTES } from '@/lib/routes'
 import { DeleteProjectModal } from './DeleteProjectModal'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface ProjectCardProps {
   project: ProjectWithMembers
@@ -27,6 +28,7 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
   const [showMenu, setShowMenu] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
   const [showDeleteModal, setShowDeleteModal] = React.useState(false)
+  const confirm = useConfirm()
 
   const canEdit = can('project-hub', 'can_edit')
   const canDelete = can('project-hub', 'can_delete')
@@ -36,7 +38,11 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
   }
 
   const handleArchive = async () => {
-    if (!confirm('Archive this project? It will be hidden from active projects.')) return
+    if (!await confirm({
+      title: 'Archive this project?',
+      description: 'It will be hidden from active projects.',
+      confirmLabel: 'Archive',
+    })) return
 
     try {
       setLoading(true)

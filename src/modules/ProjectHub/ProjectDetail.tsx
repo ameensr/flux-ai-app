@@ -13,6 +13,7 @@ import { fetchProjectById, archiveProject, deleteProject } from './projectServic
 import type { ProjectWithMembers } from './types'
 import { PROJECT_STATUS_LABELS } from './types'
 import { ROUTES } from '@/lib/routes'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { ProjectMembersList } from './components/ProjectMembersList'
 import { AddMemberModal } from './components/AddMemberModal'
 import { EditProjectModal } from './components/EditProjectModal'
@@ -24,6 +25,7 @@ export function ProjectDetail() {
   const { toast } = useToast()
   const { can } = usePermissions()
   const { isDark } = useTheme()
+  const confirm = useConfirm()
 
   const [project, setProject] = useState<ProjectWithMembers | null>(null)
   const [loading, setLoading] = useState(true)
@@ -62,7 +64,11 @@ export function ProjectDetail() {
 
   const handleArchive = async () => {
     if (!project) return
-    if (!confirm('Archive this project? It will be hidden from active projects.')) return
+    if (!await confirm({
+      title: 'Archive this project?',
+      description: 'It will be hidden from active projects.',
+      confirmLabel: 'Archive',
+    })) return
 
     try {
       await archiveProject(project.id)

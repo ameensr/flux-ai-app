@@ -18,7 +18,7 @@ const ALL_MENU_ITEMS = [
   { path: ROUTES.dashboard, label: 'Dashboard', icon: LayoutDashboard, moduleKey: 'dashboard' },
   { path: ROUTES.dailyReport, label: 'Daily Update Report', icon: ClipboardCheck, moduleKey: 'daily-report' },
   { path: ROUTES.bugRefiner, label: 'AI Bug Refiner', icon: Bug, moduleKey: 'bug-refiner' },
-  { path: ROUTES.testGenerator, label: 'Test Case Gen', icon: FileText, moduleKey: 'test-generator' },
+  { path: ROUTES.testGenerator, label: 'Test Cases', icon: FileText, moduleKey: 'test-generator' },
   { path: ROUTES.writingAssistant, label: 'Writing Assistant', icon: PenTool, moduleKey: 'writing-assistant' },
   { path: ROUTES.qaReport, label: 'QA Weekly Report', icon: ClipboardList, moduleKey: 'qa-report' },
   { path: ROUTES.settings, label: 'Settings', icon: Settings, moduleKey: 'settings' },
@@ -136,7 +136,7 @@ export const Sidebar = () => {
             layoutId="sidebar-active"
             className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full"
             style={{ background: 'var(--accent)' }}
-            transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
           />
         )}
         <item.icon className={cn('shrink-0', isSidebarOpen ? 'w-4 h-4' : 'w-5 h-5')} />
@@ -183,17 +183,12 @@ export const Sidebar = () => {
       <motion.aside
         initial={false}
         animate={{ width: isSidebarOpen ? 240 : 64 }}
-        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
         className={cn(
-          'fixed top-0 bottom-0 z-40 flex flex-col overflow-hidden',
+          'qaly-sidebar fixed top-0 bottom-0 z-40 flex flex-col overflow-hidden',
           'left-0 lg:left-3 lg:top-3 lg:bottom-3 lg:rounded-2xl',
           !isSidebarOpen && 'max-lg:-translate-x-full',
         )}
-        style={{
-          backgroundColor: 'var(--sidebar-bg)',
-          borderRight: '1px solid var(--border)',
-          // On desktop, use a card-style sidebar
-        }}
       >
         {/* ── Header ── */}
         <div className={cn(
@@ -203,7 +198,7 @@ export const Sidebar = () => {
           <Logo size="sm" animate={false} collapsed={!isSidebarOpen} />
           <button
             onClick={() => setSidebarOpen(!isSidebarOpen)}
-            className="p-1.5 rounded-lg transition-all"
+            className="p-1.5 rounded-lg pressable"
             style={{ color: 'var(--text-muted)' }}
             onMouseEnter={e => {
               e.currentTarget.style.backgroundColor = 'var(--hover)'

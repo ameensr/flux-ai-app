@@ -13,11 +13,13 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { CinematicHeading } from '@/components/ui/CinematicHeading'
 import type { ProjectConfig } from './types'
 import { supabase } from '@/lib/supabase'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 export const QAReportConfig: React.FC = () => {
   const navigate = useNavigate()
   const { role } = useAppStore()
   const { can } = usePermissions()
+  const confirm = useConfirm()
   const {
     projects,
     fetchProjects,
@@ -151,7 +153,11 @@ export const QAReportConfig: React.FC = () => {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this project? Existing reports will still reference it, but it will be removed from all configurations.')) return
+    if (!await confirm({
+      title: 'Delete this project?',
+      description: 'Existing reports will still reference it, but it will be removed from all configurations.',
+      confirmLabel: 'Delete project',
+    })) return
     try {
       setLoading(true)
       await deleteProject(id)

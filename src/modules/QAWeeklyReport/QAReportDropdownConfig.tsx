@@ -24,6 +24,7 @@ import { CinematicHeading } from '@/components/ui/CinematicHeading'
 import type { DropdownConfig, ConfigCategory } from '@/modules/DailyUpdateReport/types'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/hooks/use-toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 const CATEGORIES: { key: ConfigCategory; label: string; desc: string }[] = [
   { key: 'testing_status', label: 'Testing Statuses', desc: 'Status values used by the Support Log and Release Testing status/priority dropdowns on this report.' },
@@ -34,6 +35,7 @@ export const QAReportDropdownConfig: React.FC = () => {
   const navigate = useNavigate()
   const { can } = usePermissions()
   const { toast } = useToast()
+  const confirm = useConfirm()
   const {
     dropdownConfigs,
     fetchDropdownConfigs,
@@ -135,7 +137,11 @@ export const QAReportDropdownConfig: React.FC = () => {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this dropdown value? This may result in empty values in existing rows.')) return
+    if (!await confirm({
+      title: 'Delete this dropdown value?',
+      description: 'This may result in empty values in existing rows.',
+      confirmLabel: 'Delete',
+    })) return
     try {
       await deleteDropdownConfig(id)
       const categoryLabel = CATEGORIES.find(c => c.key === activeTab)?.label.slice(0, -1) || 'Configuration'

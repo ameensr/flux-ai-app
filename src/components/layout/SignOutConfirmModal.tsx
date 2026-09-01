@@ -116,7 +116,7 @@ export function SignOutConfirmModal({
             initial={{ opacity: 0, scale: 0.92, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 10 }}
-            transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
             className="relative w-full max-w-[360px] overflow-hidden rounded-3xl"
             style={{
               background: 'color-mix(in srgb, var(--card-bg) 92%, transparent)',

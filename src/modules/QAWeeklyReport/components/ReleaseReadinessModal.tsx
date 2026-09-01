@@ -85,10 +85,10 @@ export function ReleaseReadinessModal({
           {/* Modal - Centered */}
           <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 sm:p-6 pointer-events-none">
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
               role="dialog"
               aria-modal="true"
               aria-labelledby="release-readiness-title"
@@ -135,8 +135,7 @@ export function ReleaseReadinessModal({
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.15 }}
-                      whileHover={{ scale: 1.1, rotate: 90 }}
-                      whileTap={{ scale: 0.9 }}
+                      whileTap={{ scale: 0.97 }}
                       onClick={onClose}
                       aria-label="Close Release Readiness"
                       className="shrink-0 w-8 h-8 rounded-lg bg-surface-elevated hover:bg-hover border border-border/30 flex items-center justify-center text-text-secondary hover:text-text-primary transition-all"

@@ -1,6 +1,7 @@
 import React from 'react'
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
+import { springMove } from '@/lib/motion'
 
 interface CinematicHeadingProps {
   title: string
@@ -24,8 +25,8 @@ export const CinematicHeading: React.FC<CinematicHeadingProps> = ({
       <motion.h1
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-        className="text-[clamp(2rem,7vw,4.5rem)] font-clash font-bold tracking-tight text-white leading-tight"
+        transition={springMove}
+        className="text-[clamp(2rem,7vw,4.5rem)] font-clash font-bold tracking-tight text-white leading-[1.05]"
       >
         {title}
       </motion.h1>
@@ -33,7 +34,7 @@ export const CinematicHeading: React.FC<CinematicHeadingProps> = ({
         <motion.p
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ ...springMove, delay: 0.05 }}
           className="text-base sm:text-xl text-text-secondary max-w-2xl font-montreal"
         >
           {subtitle}
@@ -42,7 +43,7 @@ export const CinematicHeading: React.FC<CinematicHeadingProps> = ({
       <motion.div
         initial={{ scaleX: 0 }}
         animate={{ scaleX: 1 }}
-        transition={{ duration: 1, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ ...springMove, delay: 0.08 }}
         className="h-px w-24 bg-gradient-to-r from-transparent via-accent-gold to-transparent"
       />
     </div>

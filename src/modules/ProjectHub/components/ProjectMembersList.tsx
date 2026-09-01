@@ -9,6 +9,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { removeMember, updateMemberRole } from '../projectService'
 import type { ProjectMemberWithProfile, ProjectRole } from '../types'
 import { PROJECT_ROLE_LABELS, PROJECT_ROLE_DESCRIPTIONS } from '../types'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface ProjectMembersListProps {
   members: ProjectMemberWithProfile[]
@@ -22,6 +23,7 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
   const { can } = usePermissions()
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const confirm = useConfirm()
 
   const canManageRoles = can('project-hub', 'can_manage_roles')
   const canAssignMembers = can('project-hub', 'can_assign_members')
@@ -129,7 +131,11 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
       }
     }
 
-    if (!confirm(`Remove ${memberName} from this project? This action cannot be undone.`)) {
+    if (!await confirm({
+      title: `Remove ${memberName}?`,
+      description: 'They will lose access to this project. This cannot be undone.',
+      confirmLabel: 'Remove',
+    })) {
       return
     }
 

@@ -2,9 +2,10 @@
 // Main wrapper component that orchestrates the Lazy Panda mascot.
 // Provides the send() dispatcher to the parent (AuthPage) via a callback ref.
 
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PandaSVG } from './PandaSVG'
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useLazyPanda, usePandaEnabled } from './useLazyPanda'
 import { usePandaConfigStore } from './pandaConfig'
 import type { PandaEvent } from './types'
@@ -34,11 +35,7 @@ export const LazyPanda: React.FC<LazyPandaProps> = ({ isSignUp = false, onReady 
     onReady?.(send)
   }, [onReady, send])
 
-  // Check prefers-reduced-motion
-  const prefersReducedMotion = useMemo(() => {
-    if (typeof window === 'undefined') return false
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  }, [])
+  const prefersReducedMotion = usePrefersReducedMotion()
 
   // Easter egg: click panda multiple times for fun reaction
   const handleClick = () => {
@@ -67,11 +64,11 @@ export const LazyPanda: React.FC<LazyPandaProps> = ({ isSignUp = false, onReady 
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, x: -30, scale: 0.9 }}
-        animate={{ opacity: 1, x: 0, scale: 1 }}
-        exit={{ opacity: 0, x: 30, scale: 0.9 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="flex items-end justify-center select-none relative"
+        initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: -30, scale: 0.9 }}
+        animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, x: 0, scale: 1 }}
+        exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: -30, scale: 0.9 }}
+        transition={prefersReducedMotion ? { duration: 0.2 } : { type: 'spring', bounce: 0, duration: 0.4 }}
+        className="flex items-center justify-center select-none relative"
         aria-hidden="true"
         style={{
           willChange: 'transform, opacity',
@@ -87,21 +84,25 @@ export const LazyPanda: React.FC<LazyPandaProps> = ({ isSignUp = false, onReady 
             background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(99, 102, 241, 0.1) 50%, transparent 70%)',
             zIndex: -1,
           }}
-          animate={{
+          animate={prefersReducedMotion ? undefined : {
             scale: [1, 1.1, 1],
             opacity: [0.2, 0.35, 0.2],
           }}
-          transition={{
+          transition={prefersReducedMotion ? undefined : {
             duration: 4,
             repeat: Infinity,
             ease: 'easeInOut',
           }}
         />
 
-        {/* Responsive sizing via CSS with enhanced container */}
+        {/* Fluid size: grows a bit vs the old 170px cap, shrinks on zoom / short viewports */}
         <div
-          className="w-[110px] h-[110px] sm:w-[140px] sm:h-[140px] lg:w-[170px] lg:h-[170px] flex items-end justify-center relative"
+          className="relative flex items-end justify-center"
           style={{
+            width: 'clamp(10.5rem, 22vmin, 17.5rem)',
+            height: 'clamp(10.5rem, 22vmin, 17.5rem)',
+            maxWidth: '100%',
+            maxHeight: 'min(17.5rem, 42vh)',
             filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1)) drop-shadow(0 0 20px rgba(139, 92, 246, 0.1))',
           }}
         >
@@ -110,7 +111,7 @@ export const LazyPanda: React.FC<LazyPandaProps> = ({ isSignUp = false, onReady 
             eyeOffset={prefersReducedMotion ? { x: 0, y: 0 } : eyeOffset}
             headRotation={prefersReducedMotion ? 0 : headRotation}
             isBlinking={isBlinking}
-            size={170}
+            reducedMotion={prefersReducedMotion}
           />
         </div>
       </motion.div>

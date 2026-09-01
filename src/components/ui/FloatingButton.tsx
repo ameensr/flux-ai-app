@@ -12,8 +12,8 @@ export const FloatingButton = React.forwardRef<HTMLButtonElement, FloatingButton
   ({ className, glow = true, children, ...props }, ref) => {
     return (
       <motion.div
-        whileHover={{ scale: 1.05, y: -2 }}
-        whileTap={{ scale: 0.95 }}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.97 }}
         className="relative group"
       >
         {glow && (

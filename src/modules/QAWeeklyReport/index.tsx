@@ -19,6 +19,7 @@ import { DisabledSectionWrapper } from './components/DisabledSectionWrapper'
 import { DefectAnalysis, HistoricalProgress, NextPriorities, HistoricalDefectOptimization } from './components/Metrics'
 import { DashboardWidgets, DefectChart, ReportHistory } from './components/Widgets'
 import { toast } from '@/hooks/use-toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { FileText, RefreshCw, RotateCcw, AlertCircle, Plus, Trash, History as HistoryIcon, Settings, Eye, Lock } from 'lucide-react'
 import type { QAReportForm, TimelineNode } from './types'
 import { createFormSnapshot, isPassStatus } from './types'
@@ -482,6 +483,7 @@ function TimelineBuilder() {
 }
 
 export const QAWeeklyReport: React.FC = () => {
+  const confirm = useConfirm()
   const { form, setForm, setGeneratedReport, generatedReport, resetForm, fetchReports, fetchProjects, savedReports } = useQAReportStore()
   const { can } = usePermissions()
   const navigate = useNavigate()
@@ -699,8 +701,12 @@ export const QAWeeklyReport: React.FC = () => {
     }
   }
 
-  const handleReset = () => {
-    if (!confirm('Reset all form data?')) return
+  const handleReset = async () => {
+    if (!await confirm({
+      title: 'Reset all form data?',
+      description: 'All fields will be cleared. The selected project is preserved.',
+      confirmLabel: 'Reset form',
+    })) return
     resetForm(form.projectId, form.projectName)
     setErrors([])
     setIsPreviewed(false)
@@ -726,7 +732,7 @@ export const QAWeeklyReport: React.FC = () => {
         <div className="flex items-center gap-2 text-xs shrink-0 self-start sm:self-center mt-2 sm:mt-0">
           {/* New Report Button */}
           <button
-            onClick={() => {
+            onClick={async () => {
               const isFormEmpty =
                 !form.weekStart &&
                 !form.weekEnd &&
@@ -751,7 +757,11 @@ export const QAWeeklyReport: React.FC = () => {
 
               if (isFormEmpty) {
                 executeReset()
-              } else if (confirm('Create a new report? This will clear current fields.')) {
+              } else if (await confirm({
+                title: 'Create a new report?',
+                description: 'This will clear the current fields. The selected project is preserved.',
+                confirmLabel: 'Create new report',
+              })) {
                 executeReset()
               }
             }}

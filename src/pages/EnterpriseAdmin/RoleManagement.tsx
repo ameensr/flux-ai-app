@@ -10,6 +10,7 @@ import { getModulePermissions, PERMISSION_LABELS } from '@/lib/modulePermissions
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import {
   Shield, Plus, Copy, Edit2, Trash2, ChevronDown, ChevronRight,
   Check, X, RefreshCw, Save, Users, ArrowDown, Search, UserCircle,
@@ -444,6 +445,7 @@ export function RoleManagement() {
   const { toast } = useToast()
   const { role: currentUserRole } = useAppStore()
   const { can } = usePermissions()
+  const confirm = useConfirm()
   const isAdminUser = currentUserRole === 'admin' || currentUserRole === 'super_admin'
   // "Manage Roles" = create/duplicate/delete roles. "Manage Permissions" =
   // toggle/save the permission matrix for a role. These are separate
@@ -632,9 +634,14 @@ export function RoleManagement() {
     setPendingChanges({})
   }
 
-  const selectRole = (roleId: string) => {
+  const selectRole = async (roleId: string) => {
     if (roleId === selectedRoleId) return
-    if (hasUnsavedChanges && !confirm('You have unsaved permission changes for this role. Switch roles and discard them?')) {
+    if (hasUnsavedChanges && !await confirm({
+      title: 'Discard permission changes?',
+      description: 'You have unsaved permission changes for this role. Switch roles and lose them?',
+      confirmLabel: 'Discard and switch',
+      tone: 'default',
+    })) {
       return
     }
     setPendingChanges({})
@@ -705,7 +712,11 @@ export function RoleManagement() {
     if ((userCounts[role.id] ?? 0) > 0) {
       toast({ variant: 'destructive', title: 'Role has users', description: 'Reassign users before deleting.' }); return
     }
-    if (!confirm(`Delete role "${role.role_name}"?`)) return
+    if (!await confirm({
+      title: `Delete role “${role.role_name}”?`,
+      description: 'This cannot be undone.',
+      confirmLabel: 'Delete role',
+    })) return
     const { error } = await supabase.from('roles').delete().eq('id', role.id)
     if (error) { toast({ variant: 'destructive', title: 'Failed', description: error.message }); return }
     logAuditEvent({
@@ -768,8 +779,13 @@ export function RoleManagement() {
               <h3 className="text-sm font-bold text-white uppercase tracking-widest">Roles</h3>
               <div className="flex gap-2">
                 <button
-                  onClick={() => {
-                    if (hasUnsavedChanges && !confirm('You have unsaved permission changes. Refresh and discard them?')) return
+                  onClick={async () => {
+                    if (hasUnsavedChanges && !await confirm({
+                      title: 'Discard permission changes?',
+                      description: 'Refresh and lose unsaved permission changes for this role?',
+                      confirmLabel: 'Discard and refresh',
+                      tone: 'default',
+                    })) return
                     fetchMatrix()
                   }}
                   className="p-1.5 rounded-lg hover:bg-white/5 text-text-muted hover:text-white transition-all"

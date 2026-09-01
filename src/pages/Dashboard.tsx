@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -52,96 +52,65 @@ const MOCK_NEWS: NewsArticle[] = [
   {
     id: '1',
     featured: true,
-    title: 'OpenAI Releases GPT-5 with Unprecedented Reasoning Capabilities',
-    summary: 'OpenAI has unveiled GPT-5, featuring a new chain-of-thought architecture that dramatically improves multi-step reasoning, coding accuracy, and scientific problem-solving — setting a new benchmark across all major AI evaluations.',
+    title: 'OpenAI — research and product updates',
+    summary: 'Official posts from OpenAI on models, safety, and product releases. Opens their blog — not a live headline feed.',
     source: 'OpenAI Blog',
     sourceLogo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/OpenAI_Logo.svg/1024px-OpenAI_Logo.svg.png',
     image: 'https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=900&q=80',
     category: 'OpenAI',
-    publishedAt: '2 hours ago',
-    readingTime: '5 min read',
-    url: 'https://openai.com/index/introducing-gpt-5/',
+    publishedAt: 'Official source',
+    readingTime: 'Blog',
+    url: 'https://openai.com/news/',
   },
   {
     id: '2',
-    title: 'Google DeepMind Achieves Breakthrough in Protein Structure Prediction',
-    summary: 'AlphaFold 3 now predicts interactions between proteins, DNA, RNA, and small molecules with near-experimental accuracy, opening new frontiers in drug discovery.',
+    title: 'Google DeepMind — AlphaFold and research',
+    summary: 'DeepMind’s research blog covering AlphaFold and related scientific work.',
     source: 'Google DeepMind',
     sourceLogo: '',
     image: 'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=600&q=80',
     category: 'Google AI',
-    publishedAt: '5 hours ago',
-    readingTime: '4 min read',
+    publishedAt: 'Official source',
+    readingTime: 'Blog',
     url: 'https://deepmind.google/discover/blog/alphafold-3-predicts-the-structure-and-interactions-of-all-of-lifes-molecules/',
   },
   {
     id: '3',
-    title: 'Anthropic\'s Claude 4 Introduces Extended Context Window of 2M Tokens',
-    summary: 'Claude 4 can now process entire codebases, legal documents, and research libraries in a single prompt, making it the most context-capable model available.',
+    title: 'Anthropic news and announcements',
+    summary: 'Company news, model updates, and research notes published by Anthropic.',
     source: 'Anthropic',
     sourceLogo: '',
     image: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=600&q=80',
     category: 'Anthropic',
-    publishedAt: '8 hours ago',
-    readingTime: '3 min read',
+    publishedAt: 'Official source',
+    readingTime: 'Blog',
     url: 'https://www.anthropic.com/news',
   },
   {
     id: '4',
-    title: 'Microsoft Copilot Now Embedded Across All Azure DevOps Pipelines',
-    summary: 'Microsoft expands its AI Copilot integration to cover CI/CD pipelines, automated test generation, and intelligent code review directly within Azure DevOps.',
+    title: 'Microsoft AI — company blog',
+    summary: 'Microsoft’s AI category on the company blog: Copilot, Azure, and research notes.',
     source: 'Microsoft AI',
     sourceLogo: '',
     image: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&q=80',
     category: 'Microsoft AI',
-    publishedAt: '12 hours ago',
-    readingTime: '3 min read',
+    publishedAt: 'Official source',
+    readingTime: 'Blog',
     url: 'https://blogs.microsoft.com/blog/category/ai/',
   },
   {
     id: '5',
-    title: 'Meta Releases Llama 4 as Fully Open-Source Multimodal Model',
-    summary: 'Meta\'s Llama 4 supports text, image, audio, and video inputs, and is released under a permissive open-source license — challenging proprietary AI providers.',
+    title: 'Meta AI — research blog',
+    summary: 'Meta’s AI research blog, including Llama and related open-source work.',
     source: 'Meta AI',
     sourceLogo: '',
     image: 'https://images.unsplash.com/photo-1655720828018-edd2daec9349?w=600&q=80',
     category: 'Meta AI',
-    publishedAt: '1 day ago',
-    readingTime: '4 min read',
+    publishedAt: 'Official source',
+    readingTime: 'Blog',
     url: 'https://ai.meta.com/blog/',
   },
 ]
-
-// ── Skeleton ─────────────────────────────────────────────────────────────────
-const SkeletonPulse = ({ className }: { className?: string }) => (
-  <div className={cn('rounded-xl animate-pulse', className)} style={{ background: 'var(--hover)' }} />
-)
-
-const NewsSkeleton = () => (
-  <div className="space-y-6">
-    <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--card-bg)', border: '1px solid var(--glass-border)' }}>
-      <SkeletonPulse className="w-full h-52" />
-      <div className="p-6 space-y-3">
-        <SkeletonPulse className="h-3 w-20" />
-        <SkeletonPulse className="h-6 w-3/4" />
-        <SkeletonPulse className="h-4 w-full" />
-        <SkeletonPulse className="h-4 w-5/6" />
-      </div>
-    </div>
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {[1, 2].map(i => (
-        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: 'var(--card-bg)', border: '1px solid var(--glass-border)' }}>
-          <SkeletonPulse className="w-full h-32" />
-          <div className="p-4 space-y-2">
-            <SkeletonPulse className="h-3 w-16" />
-            <SkeletonPulse className="h-5 w-full" />
-            <SkeletonPulse className="h-3 w-2/3" />
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-)
 
 // ── Category Badge ────────────────────────────────────────────────────────────
 const CategoryBadge = ({ category }: { category: string }) => {
@@ -351,21 +320,7 @@ const DateTimeWidget = () => {
 // ── AI News Section ───────────────────────────────────────────────────────────
 const AINewsSection = () => {
   const navigate = useNavigate()
-  const [loading, setLoading] = useState(false)
-  const [news, setNews] = useState<NewsArticle[]>(MOCK_NEWS)
-  const [lastUpdated, setLastUpdated] = useState('Just now')
-  const [spinning, setSpinning] = useState(false)
-
-  const handleRefresh = useCallback(() => {
-    setSpinning(true)
-    setLoading(true)
-    setTimeout(() => {
-      setNews([...MOCK_NEWS].sort(() => Math.random() - 0.5).map((n, i) => ({ ...n, featured: i === 0 })))
-      setLastUpdated('Just now')
-      setLoading(false)
-      setSpinning(false)
-    }, 1200)
-  }, [])
+  const [news] = useState<NewsArticle[]>(MOCK_NEWS)
 
   const featured = news.find(n => n.featured)
   const rest = news.filter(n => !n.featured)
@@ -379,32 +334,20 @@ const AINewsSection = () => {
           <div className="flex items-center gap-2 mb-0.5">
             <Newspaper className="w-4 h-4 text-[#7C5CFF]" />
             <h2 className="text-base sm:text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-              AI News
+              AI sources
             </h2>
           </div>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Latest updates from the world of Artificial Intelligence
+            Curated official blogs — not a live news feed
           </p>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[11px] hidden sm:block" style={{ color: 'var(--text-muted)' }}>
-            Updated {lastUpdated}
-          </span>
-          <button
-            onClick={handleRefresh}
-            disabled={loading}
-            aria-label="Refresh news"
-            className="p-2 rounded-xl transition-all hover:opacity-80 disabled:opacity-40"
-            style={{ background: 'var(--hover)', color: 'var(--text-secondary)' }}
-          >
-            <RefreshCw className={cn('w-4 h-4 transition-transform duration-700', spinning && 'animate-spin')} />
-          </button>
           <button
             onClick={() => navigate(ROUTES.aiNews)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:opacity-80"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold pressable"
             style={{ background: 'rgba(124,92,255,0.12)', color: '#7C5CFF', border: '1px solid rgba(124,92,255,0.2)' }}
-            aria-label="View all news"
+            aria-label="View all sources"
           >
             View All <ChevronRight className="w-3 h-3" />
           </button>
@@ -414,13 +357,9 @@ const AINewsSection = () => {
       {/* Body */}
       <div className="p-5 sm:p-6">
         <AnimatePresence mode="wait">
-          {loading ? (
-            <motion.div key="skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <NewsSkeleton />
-            </motion.div>
-          ) : news.length === 0 ? (
+          {news.length === 0 ? (
             <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <EmptyState onRefresh={handleRefresh} />
+              <EmptyState onRefresh={() => { /* curated list is static */ }} />
             </motion.div>
           ) : (
             <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -451,7 +390,7 @@ const modules = [
   },
   {
     id: 'test-generator',
-    title: 'Test Case Gen',
+    title: 'Test Cases',
     description: 'Generate comprehensive test suites with edge cases, risks, and automation scripts.',
     icon: FileText,
     color: 'from-blue-500/20 to-transparent',
@@ -494,7 +433,7 @@ export const Dashboard = () => {
         >
           <div className="px-3 py-1 rounded-full bg-white/5 border border-white/10 flex items-center gap-2">
             <Zap className="w-3 h-3 text-accent-gold" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent-gold">System Operational</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-accent-gold">System Operational</span>
           </div>
         </motion.div>
 

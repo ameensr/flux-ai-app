@@ -12,9 +12,11 @@ interface PandaSVGProps {
   eyeOffset: { x: number; y: number }
   headRotation: number
   isBlinking: boolean
+  /** Pixel size. Omit to fill the parent box (login / fluid layouts). */
   size?: number
   /** Show a smartphone held in the panda's paws (e.g. 404 page) */
   holdingPhone?: boolean
+  reducedMotion?: boolean
 }
 
 // ── Breathing animation (continuous, subtle) ──────────────────────────────────
@@ -39,8 +41,9 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
   eyeOffset,
   headRotation,
   isBlinking,
-  size = 160,
+  size,
   holdingPhone = false,
+  reducedMotion = false,
 }) => {
   const isHandsUp = state === 'PASSWORD_HIDE'
   const isOneEyeOpen = state === 'PASSWORD_SHOW'
@@ -66,15 +69,16 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
 
   return (
     <motion.svg
-      width={size}
-      height={size}
+      width={size ?? '100%'}
+      height={size ?? '100%'}
       viewBox="0 0 160 160"
+      preserveAspectRatio="xMidYMax meet"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
-      variants={breatheVariant}
-      animate="animate"
-      style={{ originX: '50%', originY: '100%' }}
+      variants={reducedMotion ? undefined : breatheVariant}
+      animate={reducedMotion ? undefined : 'animate'}
+      style={{ originX: '50%', originY: '100%', display: 'block' }}
     >
       {/* ── Shadow ── */}
       <motion.ellipse
@@ -92,13 +96,13 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
         animate={{
           y: isSuccess ? -8 : isSleeping ? 5 : 0,
           rotate: isSleeping ? -5 : 0,
-          x: isWalking ? [0, 2, 0, -2, 0] : 0,
+          x: reducedMotion || !isWalking ? 0 : [0, 2, 0, -2, 0],
         }}
         transition={{
           type: 'spring',
-          stiffness: 200,
-          damping: 15,
-          x: isWalking ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}
+          bounce: 0,
+          duration: 0.4,
+          x: reducedMotion || !isWalking ? undefined : { duration: 2, repeat: Infinity, ease: 'easeInOut' },
         }}
         style={{ originX: '80px', originY: '140px' }}
       >
@@ -114,8 +118,8 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
           cy="130"
           r="6"
           fill="#1F2937"
-          variants={tailVariant}
-          animate="animate"
+          variants={reducedMotion ? undefined : tailVariant}
+          animate={reducedMotion ? undefined : 'animate'}
           style={{ originX: '56px', originY: '130px' }}
         />
 
@@ -159,13 +163,13 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
             animate={{
               opacity: 1,
               y: isSuccess ? -6 : isSleeping ? 4 : 0,
-              rotate: isSleeping ? -8 : [-3, 3, -3],
+              rotate: reducedMotion ? 0 : isSleeping ? -8 : [-3, 3, -3],
               scale: 1,
             }}
             transition={{
               opacity: { duration: 0.35 },
-              rotate: { duration: 3.5, repeat: Infinity, ease: 'easeInOut' },
-              y: { type: 'spring', stiffness: 200, damping: 15 },
+              rotate: reducedMotion ? { duration: 0.2 } : { duration: 3.5, repeat: Infinity, ease: 'easeInOut' },
+              y: { type: 'spring', bounce: 0, duration: 0.4 },
             }}
             style={{ originX: '80px', originY: '118px' }}
           >

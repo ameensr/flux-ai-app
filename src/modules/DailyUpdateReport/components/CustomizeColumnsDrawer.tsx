@@ -4,17 +4,17 @@
 // dropdown option management, org/project scope, live preview, and save actions.
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, Plus, GripVertical, Eye, EyeOff, Trash2, Pencil, ChevronDown,
   Info, Building2, FolderKanban, RotateCcw, Save, ShieldCheck, Sparkles,
   AlertTriangle, Copy,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useToast } from '@/hooks/use-toast'
-import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { usePermissions } from '@/hooks/usePermissions'
+import { GestureSheet } from '@/components/ui/GestureSheet'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import {
   useColumnConfigStore, generateInternalKey, generateOptionId, isOptionBasedType, normalizeColumnDisplayName,
 } from '../columnConfigStore'
@@ -85,7 +85,7 @@ function sampleValueForColumn(col: ColumnConfig, rowIdx: number): string {
 export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
   open, onClose, tableKey, projectId, projectName, onSaved,
 }) => {
-  useBodyScrollLock(open)
+  const confirm = useConfirm()
   const { toast } = useToast()
   const { can } = usePermissions()
   const {
@@ -183,7 +183,12 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
   const handleCloneFromOrgDefault = async () => {
     if (applyScope !== 'project' || !projectId) return
     if (draft.length > 0) {
-      const proceed = confirm('This will replace the current draft with a fresh copy of the Organization Default columns. Any unsaved changes in this draft will be lost. Continue?')
+      const proceed = await confirm({
+        title: 'Replace this draft?',
+        description: 'This will replace the current draft with a fresh copy of the Organization Default columns. Any unsaved changes in this draft will be lost.',
+        confirmLabel: 'Replace draft',
+        tone: 'danger',
+      })
       if (!proceed) return
     }
     setDraftLoading(true)
@@ -323,7 +328,7 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
     })
   }
 
-  const handleSaveEditColumn = () => {
+  const handleSaveEditColumn = async () => {
     if (!editDraft || !editingId) return
     if (!editDraft.display_name.trim()) {
       toast({ variant: 'destructive', title: 'Column name required', description: 'Please enter a name for this column.' })
@@ -347,9 +352,12 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
     // misrepresent existing stored values (e.g. text -> number).
     const original = draft.find(c => c.id === editingId)
     if (original && original.column_type !== editDraft.column_type) {
-      const proceed = confirm(
-        `Changing the column type from "${COLUMN_TYPE_LABELS[original.column_type]}" to "${COLUMN_TYPE_LABELS[editDraft.column_type]}" may affect how existing values in this column are displayed, validated, or stored. Continue?`
-      )
+      const proceed = await confirm({
+        title: 'Change column type?',
+        description: `Changing from "${COLUMN_TYPE_LABELS[original.column_type]}" to "${COLUMN_TYPE_LABELS[editDraft.column_type]}" may affect how existing values in this column are displayed, validated, or stored.`,
+        confirmLabel: 'Change type',
+        tone: 'danger',
+      })
       if (!proceed) return
     }
 
@@ -476,7 +484,12 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
 
   const handleResetToDefault = async () => {
     if (!projectId) return
-    if (!confirm('Reset this project to the Organization Default column configuration? Any project-specific column customizations will be removed. Existing row data is not affected.')) return
+    if (!await confirm({
+      title: 'Reset to Organization Default?',
+      description: 'Any project-specific column customizations will be removed. Existing row data is not affected.',
+      confirmLabel: 'Reset',
+      tone: 'danger',
+    })) return
     setSaving(true)
     try {
       await resetToOrgDefault(tableKey, projectId)
@@ -566,12 +579,13 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
     // "Clear All Columns" on this scope, so it can't be triggered by a
     // single misclick.
     if (applyScope === 'organization') {
-      const proceed = confirm(
-        `You're about to save changes to the Organization Default configuration for ${tableLabel}.\n\n` +
-        'This is the shared fallback used by EVERY project that has no column configuration of its own — saving here will change what those projects see immediately, not just the current project.\n\n' +
-        'If you only meant to update this project, click Cancel and use "Save as Project Template" instead.\n\n' +
-        'Continue saving the Organization Default?'
-      )
+      const proceed = await confirm({
+        title: 'Save Organization Default?',
+        description:
+          `This is the shared fallback used by every project that has no column configuration of its own — saving here changes what those projects see immediately, not just ${tableLabel}.\n\nIf you only meant to update this project, cancel and use Save as Project Template.`,
+        confirmLabel: 'Save organization default',
+        tone: 'danger',
+      })
       if (!proceed) return
     }
 
@@ -621,35 +635,28 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
   const visibleDraft = draft.filter(c => c.is_visible)
 
   const drawerContent = (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={handleCancel}
-            className="fixed inset-0 z-[80] bg-black/50 dark:bg-black/60 backdrop-blur-sm"
-          />
-          <motion.div
-            initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed top-0 right-0 bottom-0 z-[81] w-full max-w-[760px] flex flex-col shadow-2xl"
-            style={{ background: 'var(--surface)', borderLeft: '1px solid var(--border)' }}
-          >
+    <GestureSheet
+      open={open}
+      onClose={handleCancel}
+      width={760}
+      labelledBy="customize-columns-title"
+      className="flex flex-col shadow-2xl"
+      style={{ background: 'var(--surface)', borderLeft: '1px solid var(--border)' }}
+    >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div className="flex items-center justify-between px-6 py-4 shrink-0 pl-7" style={{ borderBottom: '1px solid var(--border)' }}>
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}>
                   <Sparkles className="w-4 h-4" style={{ color: 'var(--accent)' }} />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                  <h2 id="customize-columns-title" className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
                     Customize QA Daily Update Columns
                   </h2>
                   <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{tableLabel}</p>
                 </div>
               </div>
-              <button onClick={handleCancel} className="p-2 rounded-xl transition-all hover:scale-105 shrink-0" style={{ background: 'var(--hover)', border: '1px solid var(--border)', color: 'var(--text-muted)' }} aria-label="Close">
+              <button onClick={handleCancel} className="p-2 rounded-xl pressable shrink-0" style={{ background: 'var(--hover)', border: '1px solid var(--border)', color: 'var(--text-muted)' }} aria-label="Close">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -734,11 +741,16 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
                               icon={<Trash2 className="w-3.5 h-3.5" />}
                               label="Clear All Columns"
                               variant="red"
-                              onClick={() => {
-                                const warning = applyScope === 'organization'
-                                  ? 'Clear ALL columns from the Organization Default draft? This is the fallback used by every project with no configuration of its own — clearing and saving it will leave those projects with zero columns until new ones are added. This only affects the unsaved draft below until you click Save Configuration.'
-                                  : "Clear ALL columns from this project's draft? This only affects the unsaved draft below — nothing is deleted from the database until you click Save Configuration. You can then add columns from scratch."
-                                if (!confirm(warning)) return
+                              onClick={async () => {
+                                const ok = await confirm({
+                                  title: applyScope === 'organization' ? 'Clear organization columns?' : 'Clear project columns?',
+                                  description: applyScope === 'organization'
+                                    ? 'This is the fallback used by every project with no configuration of its own. Clearing and saving it will leave those projects with zero columns until new ones are added. This only affects the unsaved draft until you save.'
+                                    : 'This only affects the unsaved draft — nothing is deleted from the database until you save. You can then add columns from scratch.',
+                                  confirmLabel: 'Clear columns',
+                                  tone: 'danger',
+                                })
+                                if (!ok) return
                                 setDraft([])
                                 setPendingDeletes(prev => Array.from(new Set([...prev, ...draft.filter(c => !c.id.startsWith('fallback-')).map(c => c.id)])))
                                 setIsEmptyProjectSlate(applyScope === 'project')
@@ -1144,50 +1156,50 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
                 </div>
               </>
             )}
-          </motion.div>
-
-          {/* Delete confirmation dialog */}
-          <AnimatePresence>
-            {confirmDelete && (
-              <>
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[90] bg-black/60" onClick={() => setConfirmDelete(null)} />
-                <div className="fixed inset-0 z-[91] flex items-center justify-center p-4 pointer-events-none">
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                    onClick={e => e.stopPropagation()}
-                    className="pointer-events-auto w-full max-w-sm rounded-2xl p-6 shadow-2xl"
-                    style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)' }}
-                  >
-                    <div className="flex items-start gap-3 mb-4">
-                      <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
-                        <AlertTriangle className="w-4 h-4 text-red-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Delete "{confirmDelete.display_name}"?</h3>
-                        <p className="text-xs mt-1.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                          This column will be removed from the QA Daily Update configuration. Existing data associated with this column may also be affected.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 rounded-xl text-xs font-bold" style={{ background: 'var(--hover)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-                        Cancel
-                      </button>
-                      <button onClick={confirmDeleteColumn} className="px-4 py-2 rounded-xl text-xs font-bold bg-red-500 text-white hover:bg-red-600 transition-all">
-                        Delete Column
-                      </button>
-                    </div>
-                  </motion.div>
-                </div>
-              </>
-            )}
-          </AnimatePresence>
-        </>
-      )}
-    </AnimatePresence>
+    </GestureSheet>
   )
 
-  return createPortal(drawerContent, document.body)
+  return (
+    <>
+      {drawerContent}
+      <AnimatePresence>
+        {confirmDelete && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[90] bg-black/60" onClick={() => setConfirmDelete(null)} />
+            <div className="fixed inset-0 z-[91] flex items-center justify-center p-4 pointer-events-none">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 16 }}
+                transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
+                onClick={e => e.stopPropagation()}
+                className="pointer-events-auto w-full max-w-sm rounded-2xl p-6 shadow-2xl"
+                style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)' }}
+              >
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-4 h-4 text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Delete "{confirmDelete.display_name}"?</h3>
+                    <p className="text-xs mt-1.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                      This column will be removed from the QA Daily Update configuration. Existing data associated with this column may also be affected.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 rounded-xl text-xs font-bold pressable" style={{ background: 'var(--hover)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                    Cancel
+                  </button>
+                  <button onClick={confirmDeleteColumn} className="px-4 py-2 rounded-xl text-xs font-bold bg-red-500 text-white pressable">
+                    Delete Column
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
+    </>
+  )
 }
 
 // ── Icon-only action button with an accessible hover/focus tooltip ─────────

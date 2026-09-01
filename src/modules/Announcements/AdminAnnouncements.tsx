@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useAppStore } from '@/store/useAppStore'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { cn } from '@/lib/utils'
 import {
   Megaphone, Plus, Edit2, Trash2, Pin, PinOff, Eye, EyeOff,
@@ -270,6 +271,7 @@ export function AdminAnnouncements() {
 
   // Permission checks
   const { canView, canCreate, canEdit, canDelete } = usePermissions()
+  const confirm = useConfirm()
   const hasViewPerm = canView('announcements')
   const hasCreatePerm = canCreate('announcements')
   const hasEditPerm = canEdit('announcements')
@@ -301,7 +303,11 @@ export function AdminAnnouncements() {
   }
 
   const handleDelete = async (a: Announcement) => {
-    if (!confirm(`Delete "${a.title}"? This cannot be undone.`)) return
+    if (!await confirm({
+      title: `Delete “${a.title}”?`,
+      description: 'This cannot be undone.',
+      confirmLabel: 'Delete',
+    })) return
     try {
       await deleteAnnouncement(a.id)
       toast({ title: 'Announcement Deleted' })

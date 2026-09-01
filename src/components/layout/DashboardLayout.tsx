@@ -37,7 +37,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg transition-all"
+            className="p-2 rounded-lg pressable"
             style={{ color: 'var(--text-secondary)' }}
             onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--hover)')}
             onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -50,7 +50,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
         <button
           onClick={toggleTheme}
-          className="p-2 rounded-lg transition-all"
+            className="p-2 rounded-lg pressable"
           style={{ color: 'var(--text-secondary)' }}
           onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--hover)')}
           onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -62,7 +62,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
       {/* Main column: content grows, branding footer stays at bottom */}
       <main
-        className="min-h-screen flex flex-col px-4 pt-20 pb-0 lg:px-8 lg:pt-8 transition-[margin-left] duration-300"
+        className="min-h-screen flex flex-col px-4 pt-20 pb-0 lg:px-8 lg:pt-8"
         style={{ marginLeft: isSidebarOpen ? marginLeft : 76 }}
       >
         <div className="flex-1 w-full max-w-7xl mx-auto overflow-hidden">

@@ -162,6 +162,11 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
     will-change: transform, opacity;
   }
   @media (prefers-reduced-motion: reduce) {
+    .animate-float,
+    .animate-float-reverse,
+    .animate-float-glow,
+    .animate-spin-slow,
+    .animate-pulse-glow,
     .team-card-aurora,
     .team-card-rail,
     .team-card-sheen {

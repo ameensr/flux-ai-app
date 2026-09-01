@@ -19,13 +19,6 @@ export const LandingPage = () => {
       <nav className="absolute top-0 left-0 right-0 px-5 sm:px-8 py-5 sm:py-8 flex items-center justify-between max-w-7xl mx-auto w-full z-50">
         <Logo size="lg" />
 
-        <div className="hidden md:flex items-center gap-8 lg:gap-12 text-[10px] font-black uppercase tracking-[0.2em] text-text-muted">
-          <a href="#" className="hover:text-white transition-colors">Platform</a>
-          <a href="#" className="hover:text-white transition-colors">Solutions</a>
-          <a href="#" className="hover:text-white transition-colors">Pricing</a>
-          <a href="#" className="hover:text-white transition-colors">Enterprise</a>
-        </div>
-
         <FloatingButton onClick={() => navigate(ROUTES.login)} className="h-9 sm:h-10 px-4 sm:px-6 text-[10px]">
           Launch App
         </FloatingButton>
@@ -41,9 +34,9 @@ export const LandingPage = () => {
         >
           <div className="inline-flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-6 sm:mb-8 backdrop-blur-xl">
             <Zap className="w-3 h-3 sm:w-4 sm:h-4 text-accent-gold shrink-0" />
-            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] text-accent-gold">Quantum QA Intelligence v2.0</span>
+            <span className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-accent-gold">QA Intelligence</span>
             <div className="h-3 w-px bg-white/10 hidden sm:block" />
-            <span className="text-[9px] sm:text-[10px] font-bold text-text-secondary uppercase tracking-widest hidden sm:block">Early Access</span>
+            <span className="text-[9px] sm:text-[10px] font-medium text-text-secondary uppercase tracking-wider hidden sm:block">Early Access</span>
           </div>
 
           <h1 className="text-[clamp(2.5rem,10vw,7rem)] font-clash font-bold text-white leading-[1.05] mb-6 sm:mb-8">
@@ -70,7 +63,7 @@ export const LandingPage = () => {
       </div>
 
       {/* Floating Features */}
-      <div className="absolute bottom-6 sm:bottom-10 left-0 right-0 flex flex-wrap justify-center gap-4 sm:gap-12 md:gap-24 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] text-text-muted opacity-40 z-10 px-4">
+      <div className="absolute bottom-6 sm:bottom-10 left-0 right-0 flex flex-wrap justify-center gap-4 sm:gap-12 md:gap-24 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-text-muted opacity-40 z-10 px-4">
         <div className="flex items-center gap-2 sm:gap-4"><Shield className="w-3 h-3 sm:w-4 sm:h-4" /> SECURE BY DEFAULT</div>
         <div className="flex items-center gap-2 sm:gap-4"><Globe className="w-3 h-3 sm:w-4 sm:h-4" /> MULTI-MODEL SYNC</div>
         <div className="flex items-center gap-2 sm:gap-4"><Zap className="w-3 h-3 sm:w-4 sm:h-4" /> SUB-SECOND LATENCY</div>

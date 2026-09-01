@@ -1,6 +1,7 @@
 import React from 'react'
 import { cn } from "@/lib/utils"
 import { motion, type HTMLMotionProps } from "framer-motion"
+import { pressTap, springSettle } from '@/lib/motion'
 
 type GlassCardProps = HTMLMotionProps<'div'> & {
   children: React.ReactNode
@@ -11,14 +12,11 @@ export const GlassCard = React.forwardRef<HTMLDivElement, GlassCardProps>(
   ({ children, className, hoverEffect = true, style, ...props }, ref) => {
     return (
       <motion.div
-        whileHover={hoverEffect ? { y: -6, scale: 1.015, boxShadow: '0 20px 30px -10px rgba(0,0,0,0.12)' } : {}}
-        transition={{ duration: 0.25, ease: 'easeOut' }}
+        whileHover={hoverEffect ? { y: -2 } : undefined}
+        whileTap={hoverEffect ? pressTap : undefined}
+        transition={springSettle}
         className={cn("glass-panel p-6 relative overflow-hidden group", className)}
-        style={{
-          backgroundColor: 'var(--card-bg)',
-          borderColor: 'var(--glass-border)',
-          ...style,
-        }}
+        style={style}
         ref={ref}
         {...props}
       >

@@ -88,10 +88,10 @@ export function SupportEmailsModal({
 
           <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 sm:p-6 pointer-events-none">
             <motion.div
-              initial={{ opacity: 0, y: 36, scale: 0.92, rotateX: 10 }}
-              animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
-              exit={{ opacity: 0, y: 24, scale: 0.96, rotateX: -6 }}
-              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
               className="pointer-events-auto w-full max-w-3xl max-h-[88vh]"
               style={{ perspective: '1200px', transformStyle: 'preserve-3d' }}
             >

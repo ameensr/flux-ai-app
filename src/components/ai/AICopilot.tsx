@@ -17,7 +17,7 @@ interface Message { role: 'user' | 'assistant'; content: string }
 
 const QUICK_PROMPTS = [
   { label: 'Fix Bug', icon: Terminal, prompt: 'Help me identify and fix the bug in my current context.' },
-  { label: 'Gen Tests', icon: Code, prompt: 'Generate test cases for the current feature.' },
+  { label: 'Test cases', icon: Code, prompt: 'Generate test cases for the current feature.' },
   { label: 'Risk Check', icon: Cpu, prompt: 'Identify potential risks and edge cases.' },
 ]
 
@@ -121,8 +121,8 @@ export const AICopilot = () => {
       <motion.button
         type="button"
         onClick={toggle}
-        whileHover={{ scale: 1.06 }}
-        whileTap={{ scale: 0.94 }}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.97 }}
         aria-label={isOpen ? 'Close Qaly Copilot' : 'Open Qaly Copilot'}
         aria-expanded={isOpen}
         className={cn(
@@ -169,8 +169,9 @@ export const AICopilot = () => {
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 12 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0, scale: 0.96, y: 16 }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
+            style={{ transformOrigin: '100% 100%' }}
             className="fixed bottom-24 right-4 left-4 sm:left-auto sm:right-6 sm:w-[420px] h-[70vh] sm:h-[560px] z-[55]"
           >
             {/* Solid theme surfaces — no /opacity on CSS vars (breaks light mode) */}
@@ -190,10 +191,8 @@ export const AICopilot = () => {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <span className="font-bold tracking-[0.12em]">
-                      <span style={{ color: 'var(--accent)' }}>qaly.ai</span>
-                      <span className="mx-1.5" style={{ color: 'var(--border)' }}>/</span>
-                      <span style={{ color: 'var(--text-muted)' }}>QALY COPILOT</span>
+                    <span className="font-bold tracking-tight">
+                      <span style={{ color: 'var(--accent)' }}>Copilot</span>
                     </span>
                     <div className="flex items-center gap-2 mt-2">
                       <span className={cn(

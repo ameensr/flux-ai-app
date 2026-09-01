@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useDailyReportStore } from '../store'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import type { SupportLogRecord } from '../types'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useDynamicColumns } from '../useDynamicColumns'
@@ -31,6 +32,7 @@ import { ValidationTooltip } from './ValidationTooltip'
 
 
 export const SupportExceptionLog: React.FC = () => {
+  const confirm = useConfirm()
   const {
     supportRows,
     setSupportRows,
@@ -167,16 +169,16 @@ export const SupportExceptionLog: React.FC = () => {
   }
 
   // Delete selected rows
-  const deleteSelected = () => {
+  const deleteSelected = async () => {
     if (!canDelete) return
     if (selectedIds.size === 0) return
 
-    // Confirmation dialog - Team members can delete any row in their project
-    const confirmMessage = selectedIds.size === 1
-      ? 'Are you sure you want to delete this row? This action cannot be undone.'
-      : `Are you sure you want to delete ${selectedIds.size} rows? This action cannot be undone.`
-
-    if (!confirm(confirmMessage)) return
+    const ok = await confirm({
+      title: selectedIds.size === 1 ? 'Delete this row?' : `Delete ${selectedIds.size} rows?`,
+      description: 'This cannot be undone.',
+      confirmLabel: selectedIds.size === 1 ? 'Delete row' : 'Delete rows',
+    })
+    if (!ok) return
 
     // Filter out selected rows (permission already checked via canDelete)
     const remainingRows = supportRows.filter(r => !selectedIds.has(r.id))

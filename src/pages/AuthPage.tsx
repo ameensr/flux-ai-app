@@ -25,10 +25,12 @@ import { BRAND } from '@/lib/brand'
 import { type PandaEvent } from '@/components/LazyPanda'
 import { AssistantPanel } from '@/components/LazyPanda/AssistantPanel'
 import { AuthFooter } from '@/components/LazyPanda/AuthFooter'
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 
 // ── Liquid Morphing Blobs (NEW) ──────────────────────────────────────────────
 
 function LiquidBlobs() {
+  const reduced = usePrefersReducedMotion()
   const blobs = [
     { id: 1, x: '15%', y: '15%', size: 400, color: '#6366f1', duration: 25 },
     { id: 2, x: '75%', y: '20%', size: 350, color: '#8b5cf6', duration: 30 },
@@ -48,13 +50,13 @@ function LiquidBlobs() {
             width: blob.size,
             height: blob.size,
           }}
-          animate={{
+          animate={reduced ? undefined : {
             x: [0, 50, -30, 40, 0],
             y: [0, -40, 30, -20, 0],
             scale: [1, 1.2, 0.9, 1.1, 1],
             rotate: [0, 90, 180, 270, 360],
           }}
-          transition={{
+          transition={reduced ? undefined : {
             duration: blob.duration,
             repeat: Infinity,
             ease: "easeInOut",
@@ -74,7 +76,7 @@ function LiquidBlobs() {
                 "60% 40% 30% 70% / 60% 30% 70% 40%",
               ],
             }}
-            transition={{
+            transition={reduced ? undefined : {
               duration: blob.duration,
               repeat: Infinity,
               ease: "easeInOut",
@@ -201,6 +203,8 @@ function WaveAnimation() {
 // ── Sparkle particles ─────────────────────────────────────────────────────────
 
 function SparkleParticles() {
+  const reduced = usePrefersReducedMotion()
+  if (reduced) return null
   const particles = Array.from({ length: 20 }, (_, i) => ({
     id: i,
     x: Math.random() * 100,
@@ -241,6 +245,7 @@ function SparkleParticles() {
 // ── Animated gradient border card wrapper ─────────────────────────────────────
 
 function AnimatedBorderCard({ children, className }: { children: React.ReactNode; className?: string }) {
+  const reduced = usePrefersReducedMotion()
   const cardRef = useRef<HTMLDivElement>(null)
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
@@ -269,8 +274,8 @@ function AnimatedBorderCard({ children, className }: { children: React.ReactNode
     <div
       ref={cardRef}
       className={cn("relative group", className)}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
+      onMouseMove={reduced ? undefined : handleMouseMove}
+      onMouseLeave={reduced ? undefined : handleMouseLeave}
       style={{ perspective: '1000px' }}
     >
       {/* Breathing gradient border — pulses gently, no rotation */}
@@ -280,11 +285,11 @@ function AnimatedBorderCard({ children, className }: { children: React.ReactNode
           background: 'linear-gradient(135deg, var(--accent), #3b82f6, #a855f7, #10b981)',
           filter: 'blur(1px)',
         }}
-        animate={{
+        animate={reduced ? { opacity: 0.55 } : {
           opacity: [0.4, 0.75, 0.4],
           scale: [1, 1.002, 1],
         }}
-        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+        transition={reduced ? undefined : { duration: 4, repeat: Infinity, ease: 'easeInOut' }}
       />
       {/* Outer breathing glow */}
       <motion.div
@@ -293,11 +298,11 @@ function AnimatedBorderCard({ children, className }: { children: React.ReactNode
           background: 'linear-gradient(135deg, var(--accent), #3b82f6, #a855f7, #10b981)',
           filter: 'blur(24px)',
         }}
-        animate={{
+        animate={reduced ? { opacity: 0.1 } : {
           opacity: [0.08, 0.2, 0.08],
           scale: [0.98, 1.01, 0.98],
         }}
-        transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+        transition={reduced ? undefined : { duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
       />
       {/* Card content with 3D tilt effect */}
       <motion.div
@@ -317,6 +322,8 @@ function AnimatedBorderCard({ children, className }: { children: React.ReactNode
 // ── Floating particles (works in both dark and light mode) ────────────────────
 
 function FloatingParticles() {
+  const reduced = usePrefersReducedMotion()
+  if (reduced) return null
   const particles = Array.from({ length: 35 }, (_, i) => ({
     id: i,
     x: Math.random() * 100,
@@ -892,8 +899,8 @@ export const AuthPage = () => {
       {/* Particle burst effect */}
       <ParticleBurst {...particleBurst} />
 
-      {/* 2-Column Layout: Assistant Panel (left) + Auth Card (right) */}
-      <div className="relative z-10 min-h-screen grid grid-cols-1 lg:grid-cols-[35%_1fr]">
+      {/* 2-Column Layout: Assistant Panel (left half) + Auth Card (right half) */}
+      <div className="relative z-10 min-h-screen grid grid-cols-1 lg:grid-cols-2">
 
         {/* Left: Lazy Panda Assistant Panel (hidden on mobile) */}
         <AssistantPanel isSignUp={!isLogin} onPandaReady={pandaReady} />

@@ -64,11 +64,7 @@ export function ExecutiveQualityScoreModal({
               initial={{ opacity: 0, x: 80 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 80 }}
-              transition={{
-                type: 'spring',
-                stiffness: 300,
-                damping: 28,
-              }}
+              transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
               className="pointer-events-auto w-[420px] max-h-[90vh] overflow-y-auto"
             >
               <div
@@ -108,8 +104,7 @@ export function ExecutiveQualityScoreModal({
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.15 }}
-                      whileHover={{ scale: 1.1, rotate: 90 }}
-                      whileTap={{ scale: 0.9 }}
+                      whileTap={{ scale: 0.97 }}
                       onClick={onClose}
                       className="w-9 h-9 rounded-lg bg-surface-elevated hover:bg-hover border border-border/30 flex items-center justify-center text-text-secondary hover:text-text-primary transition-all"
                     >

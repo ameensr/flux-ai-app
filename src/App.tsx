@@ -18,6 +18,7 @@ import { logLoginEvent } from '@/services/loginActivity'
 import { useMaintenanceStore } from '@/store/useMaintenanceStore'
 import { useAIPlatformStore } from '@/store/useAIPlatformStore'
 import { useToast } from '@/hooks/use-toast'
+import { ConfirmProvider } from '@/components/ui/ConfirmDialog'
 
 // ── Idle timeout context ──────────────────────────────────────────────────────
 type RegisterOperationFn = (key: string) => () => void
@@ -364,6 +365,7 @@ function SessionExpiredToast() {
 export default function App() {
   return (
     <BrowserRouter>
+      <ConfirmProvider>
       <AuthInitializer>
         <Routes>
           {/* Public routes */}
@@ -402,6 +404,7 @@ export default function App() {
           <Route path="*" element={<Suspense fallback={<FullPageLoader />}><QalyAiEngine404 /></Suspense>} />
         </Routes>
       </AuthInitializer>
+      </ConfirmProvider>
     </BrowserRouter>
   )
 }
