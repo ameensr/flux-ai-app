@@ -54,7 +54,7 @@ export function AuthFooter() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ delay: 1.5, duration: 0.8 }}
-      className="w-full py-6 px-4 flex flex-col items-center gap-3 mt-auto"
+      className="w-full py-3 px-4 flex flex-col items-center gap-2 mt-3"
     >
       {/* Rotating Panda Message */}
       {globalConfig.enabled && (

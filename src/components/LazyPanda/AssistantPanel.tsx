@@ -2,15 +2,16 @@
 // Left-side Lazy Panda Assistant Panel for the authentication page.
 // Displays: Panda, Speech Bubble, Event Greetings, Today's Highlights, Daily Quote.
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Sparkles, Calendar, MessageSquare, Lightbulb } from 'lucide-react'
+import { Sparkles, Calendar, Lightbulb } from 'lucide-react'
 import { LazyPanda } from './LazyPanda'
 import { PandaSpeechBubble } from './PandaSpeechBubble'
 import { EventGreetingBubble } from './EventGreetingBubble'
 import { usePandaConfigStore } from './pandaConfig'
 import { useEventGreetingsStore, isEventActiveToday } from './eventGreetings'
 import type { PandaEvent } from './types'
+import { FitToBox } from '@/components/ui/FitToBox'
 
 // ── Daily Quotes (admin-configurable in future; defaults for now) ─────────────
 
@@ -100,7 +101,7 @@ export function AssistantPanel({ isSignUp, onPandaReady }: AssistantPanelProps) 
   const globalConfig = usePandaConfigStore(s => s.config)
 
   return (
-    <div className="hidden lg:flex relative h-full min-h-0 overflow-hidden">
+    <div className="hidden lg:block relative h-full min-h-0 overflow-hidden">
       {/* Subtle background decoration */}
       <div
         className="absolute inset-0 pointer-events-none"
@@ -109,25 +110,22 @@ export function AssistantPanel({ isSignUp, onPandaReady }: AssistantPanelProps) 
         }}
       />
 
-      {/* Panda sits at the geometric center of the left half; extras orbit around it */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="relative flex items-center justify-center">
-          <div className="absolute bottom-full left-1/2 mb-4 flex w-[min(18rem,calc(50vw-3rem))] -translate-x-1/2 flex-col items-center gap-3">
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
-              className="flex items-center gap-2"
-            >
-              <Sparkles className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--text-muted)' }}>
-                Lazy Panda Assistant
-              </span>
-            </motion.div>
+      <FitToBox className="relative z-10 px-6 xl:px-10">
+        <div className="flex w-[min(18rem,42vw)] flex-col items-center gap-3">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+            className="flex items-center gap-2"
+          >
+            <Sparkles className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--text-muted)' }}>
+              Lazy Panda Assistant
+            </span>
+          </motion.div>
 
-            <EventGreetingBubble className="w-full" />
-            <PandaSpeechBubble className="w-full" />
-          </div>
+          <EventGreetingBubble className="w-full" />
+          <PandaSpeechBubble className="w-full" />
 
           {globalConfig.enabled && (
             <motion.div
@@ -140,12 +138,10 @@ export function AssistantPanel({ isSignUp, onPandaReady }: AssistantPanelProps) 
             </motion.div>
           )}
 
-          <div className="absolute left-1/2 top-full mt-4 flex w-[min(18rem,calc(50vw-3rem))] -translate-x-1/2 flex-col items-center gap-3">
-            <TodaysHighlights />
-            <DailyQuote />
-          </div>
+          <TodaysHighlights />
+          <DailyQuote />
         </div>
-      </div>
+      </FitToBox>
     </div>
   )
 }

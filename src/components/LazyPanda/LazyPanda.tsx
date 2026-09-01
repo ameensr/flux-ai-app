@@ -95,14 +95,14 @@ export const LazyPanda: React.FC<LazyPandaProps> = ({ isSignUp = false, onReady 
           }}
         />
 
-        {/* Fluid size: grows a bit vs the old 170px cap, shrinks on zoom / short viewports */}
+        {/* Scales with the left half; FitToBox on the panel shrinks further if needed */}
         <div
           className="relative flex items-end justify-center"
           style={{
-            width: 'clamp(10.5rem, 22vmin, 17.5rem)',
-            height: 'clamp(10.5rem, 22vmin, 17.5rem)',
+            width: 'clamp(8rem, 18vmin, 15rem)',
+            height: 'clamp(8rem, 18vmin, 15rem)',
             maxWidth: '100%',
-            maxHeight: 'min(17.5rem, 42vh)',
+            maxHeight: 'min(15rem, 36vh)',
             filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1)) drop-shadow(0 0 20px rgba(139, 92, 246, 0.1))',
           }}
         >

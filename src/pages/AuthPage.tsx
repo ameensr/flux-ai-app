@@ -5,18 +5,15 @@ import { ROUTES } from '@/lib/routes'
 import { Logo } from "@/components/ui/Logo"
 import { GlassCard } from "@/components/ui/GlassCard"
 import { FloatingButton } from "@/components/ui/FloatingButton"
+import { FitToBox } from "@/components/ui/FitToBox"
 import {
   Mail,
   MailOpen,
   Lock,
   Eye,
   EyeOff,
-  User,
-  Box,
-  ArrowRight,
   ChevronLeft,
   ShieldCheck,
-  Sparkles
 } from "lucide-react"
 import { cn } from '@/lib/utils'
 import { supabase } from "@/lib/supabase"
@@ -738,6 +735,28 @@ export const AuthPage = () => {
 
   const [signupSuccessEmail, setSignupSuccessEmail] = useState<string | null>(null)
 
+  // Keep /login inside the viewport — zoom must scale, never scroll
+  useEffect(() => {
+    const html = document.documentElement
+    const body = document.body
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      htmlHeight: html.style.height,
+      bodyHeight: body.style.height,
+    }
+    html.style.overflow = 'hidden'
+    body.style.overflow = 'hidden'
+    html.style.height = '100%'
+    body.style.height = '100%'
+    return () => {
+      html.style.overflow = prev.htmlOverflow
+      body.style.overflow = prev.bodyOverflow
+      html.style.height = prev.htmlHeight
+      body.style.height = prev.bodyHeight
+    }
+  }, [])
+
   const clearErrors = () => setFieldError({})
 
   const triggerParticleBurst = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -803,18 +822,6 @@ export const AuthPage = () => {
     }
   }
 
-  const handleOAuth = async (provider: 'github' | 'google') => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: window.location.origin }
-      })
-      if (error) throw error
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "OAuth Error", description: error.message })
-    }
-  }
-
   const handleForgotPassword = async () => {
     clearErrors()
     if (!email.trim()) {
@@ -838,7 +845,7 @@ export const AuthPage = () => {
 
   if (signupSuccessEmail) {
     return (
-      <div className="min-h-screen bg-background relative overflow-hidden flex items-center justify-center">
+      <div className="h-dvh max-h-dvh bg-background relative overflow-hidden">
         {/* Animated Background Layers */}
         <LiquidBlobs />
         <FloatingOrbs />
@@ -847,11 +854,13 @@ export const AuthPage = () => {
         <FloatingParticles />
         <WaveAnimation />
 
+        <div className="absolute inset-0 z-10">
+        <FitToBox className="px-4">
         <motion.div
           initial={{ opacity: 0, y: 40, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full max-w-[480px] px-4 relative z-10"
+          className="w-[min(480px,92vw)]"
         >
           <AnimatedBorderCard>
             <div className="p-8 sm:p-10 text-center space-y-6">
@@ -882,12 +891,14 @@ export const AuthPage = () => {
             </div>
           </AnimatedBorderCard>
         </motion.div>
+        </FitToBox>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
+    <div className="h-dvh max-h-dvh bg-background relative overflow-hidden">
       {/* Animated Background Layers */}
       <LiquidBlobs />
       <FloatingOrbs />
@@ -900,18 +911,19 @@ export const AuthPage = () => {
       <ParticleBurst {...particleBurst} />
 
       {/* 2-Column Layout: Assistant Panel (left half) + Auth Card (right half) */}
-      <div className="relative z-10 min-h-screen grid grid-cols-1 lg:grid-cols-2">
+      <div className="relative z-10 h-full grid grid-cols-1 lg:grid-cols-2">
 
         {/* Left: Lazy Panda Assistant Panel (hidden on mobile) */}
         <AssistantPanel isSignUp={!isLogin} onPandaReady={pandaReady} />
 
-        {/* Right: Authentication Card */}
-        <div className="flex items-center justify-center px-4 sm:px-6 lg:px-12 py-12 sm:py-20">
+        {/* Right: Authentication Card — scales to stay fully on-screen */}
+        <div className="h-full min-h-0">
+          <FitToBox className="px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 60, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full max-w-[480px]"
+            className="w-[min(480px,92vw)]"
           >
             {/* Back to Landing Link */}
             <motion.button
@@ -919,7 +931,7 @@ export const AuthPage = () => {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.5, duration: 0.5 }}
               onClick={() => navigate(ROUTES.landing)}
-              className="flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors mb-12 text-xs font-bold uppercase tracking-widest group"
+              className="flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors mb-4 text-xs font-bold uppercase tracking-widest group"
             >
               <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
               Back to Landing Page
@@ -927,16 +939,17 @@ export const AuthPage = () => {
 
             {/* Card with animated gradient border */}
             <AnimatedBorderCard>
-              <div className="p-6 sm:p-10">
+              <div className="min-h-[36rem] sm:min-h-[38rem] px-6 py-10 sm:px-10 sm:py-12 flex flex-col">
                 {/* Staggered form content */}
                 <motion.div
                   variants={staggerContainer}
                   initial="hidden"
                   animate="visible"
+                  className="flex flex-col flex-1 justify-between"
                 >
                   {/* Header */}
-                  <motion.div variants={staggerItem} className="flex flex-col items-center text-center mb-10">
-                    <div className="mb-8">
+                  <motion.div variants={staggerItem} className="flex flex-col items-center text-center mb-8">
+                    <div className="mb-6">
                       <Logo size="lg" animate={false} />
                     </div>
 
@@ -944,7 +957,7 @@ export const AuthPage = () => {
                   </motion.div>
 
                   {/* Form */}
-                  <form onSubmit={handleAuth} className="space-y-6">
+                  <form onSubmit={handleAuth} className="space-y-5 flex-1 flex flex-col justify-center">
                     {/* General error banner */}
                     <AnimatePresence>
                       {fieldError.general && (
@@ -1119,7 +1132,7 @@ export const AuthPage = () => {
                         disabled={isLoading}
                       >
                         {isLoading ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-center gap-2">
                             <motion.div
                               className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full"
                               animate={{ rotate: 360 }}
@@ -1128,62 +1141,14 @@ export const AuthPage = () => {
                             <span>Authenticating...</span>
                           </div>
                         ) : (
-                          <motion.div
-                            className="flex items-center gap-2"
-                            whileHover={{ x: 3 }}
-                          >
-                            <Sparkles className="w-4 h-4" />
-                            <span>{isLogin ? 'Continue' : 'Create Account'}</span>
-                            <motion.div
-                              animate={{ x: [0, 4, 0] }}
-                              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                            >
-                              <ArrowRight className="w-4 h-4" />
-                            </motion.div>
-                          </motion.div>
+                          <span>{isLogin ? 'Continue' : 'Create Account'}</span>
                         )}
                       </FloatingButton>
                     </motion.div>
                   </form>
 
-                  {/* Divider */}
-                  <motion.div variants={staggerItem} className="relative my-10">
-                    <div className="w-full border-t border-border" />
-                    <div className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 bg-surface text-text-muted text-[10px] uppercase tracking-widest">
-                      or continue with
-                    </div>
-                  </motion.div>
-
-                  {/* OAuth Buttons */}
-                  <motion.div variants={staggerItem} className="grid grid-cols-2 gap-4">
-                    <motion.button
-                      type="button"
-                      onClick={() => handleOAuth('github')}
-                      whileHover={{ scale: 1.03, y: -2 }}
-                      whileTap={{ scale: 0.97 }}
-                      className="flex items-center justify-center gap-3 py-3.5 rounded-2xl bg-white/5 border border-border hover:border-accent/30 hover:bg-white/10 transition-all text-xs font-bold text-text-primary group"
-                    >
-                      <motion.div whileHover={{ rotate: 360 }} transition={{ duration: 0.5 }}>
-                        <User className="w-4 h-4" />
-                      </motion.div>
-                      GitHub
-                    </motion.button>
-                    <motion.button
-                      type="button"
-                      onClick={() => handleOAuth('google')}
-                      whileHover={{ scale: 1.03, y: -2 }}
-                      whileTap={{ scale: 0.97 }}
-                      className="flex items-center justify-center gap-3 py-3.5 rounded-2xl bg-white/5 border border-border hover:border-accent/30 hover:bg-white/10 transition-all text-xs font-bold text-text-primary group"
-                    >
-                      <motion.div whileHover={{ rotate: 360 }} transition={{ duration: 0.5 }}>
-                        <Box className="w-4 h-4" />
-                      </motion.div>
-                      Google
-                    </motion.button>
-                  </motion.div>
-
                   {/* Footer Toggle */}
-                  <motion.div variants={staggerItem} className="mt-10 text-center">
+                  <motion.div variants={staggerItem} className="mt-8 text-center">
                     <motion.button
                       onClick={() => { navigate(isLogin ? ROUTES.signup : ROUTES.login, { replace: true }); clearErrors() }}
                       whileHover={{ scale: 1.02 }}
@@ -1204,6 +1169,7 @@ export const AuthPage = () => {
             {/* Premium Auth Footer */}
             <AuthFooter />
           </motion.div>
+          </FitToBox>
         </div>
 
       </div>
