@@ -3,7 +3,7 @@ import DOMPurify from 'dompurify'
 import { useQAReportStore } from '../store'
 import { useAppStore } from '@/store/useAppStore'
 import { toast } from '@/hooks/use-toast'
-import { X, Save, CheckCircle2, Eye } from 'lucide-react'
+import { X, Save, CheckCircle2, Eye, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GestureSheet } from '@/components/ui/GestureSheet'
 import { defaultReportName, findMatchingWeekReport, getReportDisplayName } from '../types'
@@ -53,6 +53,8 @@ const drawerStyles = `
   .drw-content {
     font-family: system-ui, -apple-system, sans-serif;
     line-height: 1.6;
+    text-align: justify;
+    hyphens: auto;
   }
   .drw-h1 {
     font-size: 1.4rem;
@@ -175,6 +177,11 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
   const [saved, setSaved] = useState(false)
   const [savedName, setSavedName] = useState<string | null>(null)
   const [nameModalOpen, setNameModalOpen] = useState(false)
+  const [zoomLevel, setZoomLevel] = useState(100)
+
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 10, 150))
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 10, 70))
+  const handleZoomReset = () => setZoomLevel(100)
 
   const suggestedName = useMemo(
     () => defaultReportName(form),
@@ -309,10 +316,75 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
               </button>
             </div>
 
+            {/* Zoom Controls */}
+            <div
+              className="flex items-center justify-between px-6 py-2.5 shrink-0"
+              style={{ borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)' }}
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                Font Size
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleZoomOut}
+                  disabled={zoomLevel <= 70}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105"
+                  style={{ 
+                    background: 'var(--hover)', 
+                    border: '1px solid var(--border)',
+                    cursor: zoomLevel <= 70 ? 'not-allowed' : 'pointer'
+                  }}
+                  aria-label="Decrease font size"
+                >
+                  <ZoomOut className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                </button>
+                <div
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold min-w-[3.5rem] text-center"
+                  style={{ 
+                    background: 'var(--hover)', 
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-primary)' 
+                  }}
+                >
+                  {zoomLevel}%
+                </div>
+                <button
+                  onClick={handleZoomIn}
+                  disabled={zoomLevel >= 150}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105"
+                  style={{ 
+                    background: 'var(--hover)', 
+                    border: '1px solid var(--border)',
+                    cursor: zoomLevel >= 150 ? 'not-allowed' : 'pointer'
+                  }}
+                  aria-label="Increase font size"
+                >
+                  <ZoomIn className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                </button>
+                {zoomLevel !== 100 && (
+                  <button
+                    onClick={handleZoomReset}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-105 ml-1"
+                    style={{ 
+                      background: 'rgba(99, 102, 241, 0.15)', 
+                      border: '1px solid rgba(99, 102, 241, 0.3)' 
+                    }}
+                    aria-label="Reset to default size"
+                  >
+                    <RotateCcw className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Content - scrollable */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
               <style>{drawerStyles}</style>
-              <div className="drw-content" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(mdToHtml(markdown)) }} />
+              <div
+                className="drw-content"
+                style={{ fontSize: `${zoomLevel}%` }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(mdToHtml(markdown)) }}
+              />
             </div>
 
             {/* Footer Actions */}
