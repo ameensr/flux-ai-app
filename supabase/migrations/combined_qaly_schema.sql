@@ -2576,6 +2576,15 @@ on conflict (module_key) do update set
   is_active = excluded.is_active,
   sort_order = excluded.sort_order;
 
+-- Bug Status Module (074_bug_status_module.sql)
+insert into public.modules (module_key, module_name, route_path, icon, is_active, sort_order)
+values ('bug-status', 'What''s the Bug Status?', '/bug-status', 'AlertCircle', true, 15)
+on conflict (module_key) do update set
+  module_name = excluded.module_name,
+  route_path = excluded.route_path,
+  is_active = excluded.is_active,
+  sort_order = excluded.sort_order;
+
 insert into public.permissions (permission_key, permission_name, description) values
   ('can_manage_users',         'Manage Users',         'Create, update, and deactivate users'),
   ('can_manage_permissions',   'Manage Permissions',   'Edit role-module permission matrix'),
@@ -2623,6 +2632,40 @@ begin
       on conflict (role_id, module_id, permission_id) do update set is_enabled = true;
     end if;
   end loop;
+end $$;
+
+-- ============================================================================
+-- SECTION: Bug Status Module Permissions
+-- Source: 074_bug_status_module.sql
+-- ============================================================================
+do $$
+declare
+  v_module_id uuid;
+  v_perm_view_id uuid;
+  v_perm_export_id uuid;
+  v_role_id uuid;
+  v_role_key text;
+begin
+  select id into v_module_id from public.modules where module_key = 'bug-status';
+  select id into v_perm_view_id from public.permissions where permission_key = 'can_view';
+  select id into v_perm_export_id from public.permissions where permission_key = 'can_export';
+  
+  if v_module_id is not null and v_perm_view_id is not null then
+    for v_role_id, v_role_key in select id, role_key from public.roles
+    loop
+      -- can_view for all roles
+      insert into public.role_module_permissions (role_id, module_id, permission_id, is_enabled)
+      values (v_role_id, v_module_id, v_perm_view_id, true)
+      on conflict (role_id, module_id, permission_id) do update set is_enabled = true;
+      
+      -- can_export for admin, super_admin, pro roles
+      if v_role_key in ('admin', 'super_admin', 'pro') and v_perm_export_id is not null then
+        insert into public.role_module_permissions (role_id, module_id, permission_id, is_enabled)
+        values (v_role_id, v_module_id, v_perm_export_id, true)
+        on conflict (role_id, module_id, permission_id) do update set is_enabled = true;
+      end if;
+    end loop;
+  end if;
 end $$;
 
 -- ============================================================================

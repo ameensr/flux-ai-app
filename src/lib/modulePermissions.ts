@@ -270,6 +270,18 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
     ],
     description: 'Central administration hub for system management'
   },
+
+  // ── Bug Status Module ─────────────────────────────────────────────────────
+
+  'bug-status': {
+    moduleKey: 'bug-status',
+    moduleName: "What's the Bug Status?",
+    supportedPermissions: [
+      'can_view',
+      'can_export',
+    ],
+    description: 'Upload bug tracker exports to analyze status distribution'
+  },
 }
 
 /**

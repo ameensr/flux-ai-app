@@ -22,6 +22,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
       can_manage_columns: true, can_add_columns: true, can_rename_columns: true, can_reorder_columns: true,
       can_hide_show_columns: true, can_delete_custom_columns: true, can_manage_org_config: true, can_manage_project_config: true,
     },
+    'bug-status': { can_view: true, can_export: true },
     'project-hub': { can_view: true, can_create: true, can_edit: true, can_delete: true },
     admin: { can_view: true, can_create: true, can_edit: true, can_delete: true },
     'admin-hub': {
@@ -47,6 +48,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
       can_manage_columns: true, can_add_columns: true, can_rename_columns: true, can_reorder_columns: true,
       can_hide_show_columns: true, can_delete_custom_columns: true, can_manage_org_config: true, can_manage_project_config: true,
     },
+    'bug-status': { can_view: true, can_export: true },
     'project-hub': { can_view: true, can_create: true, can_edit: true, can_delete: true },
     admin: { can_view: true, can_create: true, can_edit: true, can_delete: true },
     'admin-hub': {
@@ -73,6 +75,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
       can_manage_columns: true, can_add_columns: true, can_rename_columns: true, can_reorder_columns: true,
       can_hide_show_columns: true, can_delete_custom_columns: true, can_manage_project_config: true,
     },
+    'bug-status': { can_view: true, can_export: true },
     announcements: { can_view: true },
     settings: { can_view: true },
   },
@@ -84,6 +87,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     'writing-assistant': { can_view: true, can_generate_ai: true },
     'qa-report': { can_view: true, can_create: true, can_generate_ai: true },
     'daily-report': { can_view: true, can_create: true },
+    'bug-status': { can_view: true },
     announcements: { can_view: true },
     settings: { can_view: true },
   },

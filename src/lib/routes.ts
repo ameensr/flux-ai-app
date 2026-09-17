@@ -56,6 +56,9 @@ export const ROUTES = {
   // their own dropdown options per-column via the Customize Columns drawer)
   dailyReport: '/daily-report',
 
+  // Bug Status Module
+  bugStatus: '/bug-status',
+
   // QA Weekly Report Config
   qaReportConfig: '/qa-report/configuration', // Project Configurations (name/code/description/status)
   qaReportDropdownConfig: '/qa-report/dropdown-configuration', // Testing Status / Priority master dropdown lists
@@ -90,6 +93,7 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.enterprisePanda]: 'admin',
   [ROUTES.enterpriseTeams]: 'admin',
   [ROUTES.dailyReport]: 'daily-report',
+  [ROUTES.bugStatus]: 'bug-status',
 }
 
 /** Resolve RBAC module for a pathname (exact or nested, e.g. `/project-hub/:id`). */

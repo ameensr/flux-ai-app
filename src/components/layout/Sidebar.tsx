@@ -7,7 +7,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import {
   LayoutDashboard, Bug, FileText, PenTool, Settings,
   ChevronLeft, Shield, LogOut, ClipboardList,
-  ClipboardCheck, FolderKanban, UserRound,
+  ClipboardCheck, FolderKanban, UserRound, AlertCircle,
 } from 'lucide-react'
 import { Logo } from '../ui/Logo'
 import { SignOutConfirmModal } from './SignOutConfirmModal'
@@ -17,6 +17,7 @@ import { ROUTES } from '@/lib/routes'
 const ALL_MENU_ITEMS = [
   { path: ROUTES.dashboard, label: 'Dashboard', icon: LayoutDashboard, moduleKey: 'dashboard' },
   { path: ROUTES.dailyReport, label: 'Daily Update Report', icon: ClipboardCheck, moduleKey: 'daily-report' },
+  { path: ROUTES.bugStatus, label: "What's the Bug Status?", icon: AlertCircle, moduleKey: 'bug-status' },
   { path: ROUTES.bugRefiner, label: 'AI Bug Refiner', icon: Bug, moduleKey: 'bug-refiner' },
   { path: ROUTES.testGenerator, label: 'Test Cases', icon: FileText, moduleKey: 'test-generator' },
   { path: ROUTES.writingAssistant, label: 'Writing Assistant', icon: PenTool, moduleKey: 'writing-assistant' },
