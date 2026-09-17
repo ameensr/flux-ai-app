@@ -6,17 +6,25 @@ import { useEffect } from 'react'
  * (including on iOS where `overflow: hidden` alone is unreliable).
  */
 let lockCount = 0
-let savedScrollY = 0
+let originalBodyOverflow = ''
+let originalHtmlOverflow = ''
+let originalPaddingRight = ''
 
 function applyLock() {
-  savedScrollY = window.scrollY
   const body = document.body
   const html = document.documentElement
-  body.style.position = 'fixed'
-  body.style.top = `-${savedScrollY}px`
-  body.style.left = '0'
-  body.style.right = '0'
-  body.style.width = '100%'
+
+  // Calculate scrollbar width to prevent horizontal layout jump when scrollbar vanishes
+  const scrollbarWidth = window.innerWidth - html.clientWidth
+
+  originalBodyOverflow = body.style.overflow
+  originalHtmlOverflow = html.style.overflow
+  originalPaddingRight = body.style.paddingRight
+
+  if (scrollbarWidth > 0) {
+    body.style.paddingRight = `${scrollbarWidth}px`
+  }
+
   body.style.overflow = 'hidden'
   html.style.overflow = 'hidden'
   html.classList.add('modal-scroll-locked')
@@ -25,15 +33,11 @@ function applyLock() {
 function releaseLock() {
   const body = document.body
   const html = document.documentElement
-  body.style.position = ''
-  body.style.top = ''
-  body.style.left = ''
-  body.style.right = ''
-  body.style.width = ''
-  body.style.overflow = ''
-  html.style.overflow = ''
+
+  body.style.overflow = originalBodyOverflow
+  html.style.overflow = originalHtmlOverflow
+  body.style.paddingRight = originalPaddingRight
   html.classList.remove('modal-scroll-locked')
-  window.scrollTo(0, savedScrollY)
 }
 
 /**

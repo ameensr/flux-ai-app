@@ -71,6 +71,12 @@
     overflow-x: hidden;
   }
 
+  html.modal-scroll-locked,
+  html.modal-scroll-locked body {
+    overflow: hidden !important;
+    overscroll-behavior: contain;
+  }
+
   html {
     font-optical-sizing: auto;
     transition: background-color 0.2s ease, color 0.2s ease;
