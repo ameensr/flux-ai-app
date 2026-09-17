@@ -122,6 +122,7 @@ export interface QAReportForm {
   supportTickets: SupportTicket[]
   releaseItems: ReleaseItem[]
   releaseBugStatus?: any // ReleaseBugAnalytics — stored as JSON
+  taskWiseStatus?: any // TaskWiseAnalytics — stored as JSON
   teamCapacity?: any // TeamCapacityData — stored as JSON
   defectsLastWeek: DefectMetrics
   defectsMTD: DefectMetrics
@@ -277,6 +278,7 @@ export const ensureFormData = (form: any): QAReportForm => {
       customFields: item?.customFields || undefined
     })) : [],
     releaseBugStatus: f.releaseBugStatus || null,
+    taskWiseStatus: f.taskWiseStatus || null,
     teamCapacity: f.teamCapacity || null,
     defectsLastWeek: {
       reported: Number(f.defectsLastWeek?.reported) || 0,

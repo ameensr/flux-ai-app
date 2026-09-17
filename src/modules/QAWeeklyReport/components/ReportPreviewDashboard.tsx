@@ -9,7 +9,7 @@ import {
   Minimize2, RefreshCw, X, ChevronRight,
   BookOpen, Star, Sparkles, FileText, LayoutGrid, Users, History, CheckCheck,
   ArrowRightLeft, GitCompare, Palette, Lock, Unlock,
-  Code2, ChevronDown, Info, CalendarDays, UserRound, Target
+  Code2, ChevronDown, Info, CalendarDays, UserRound, Target, BarChart3
 } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
 import { BRAND } from '@/lib/brand'
@@ -382,6 +382,7 @@ import { ExecutiveQualityScoreModal } from './ExecutiveQualityScoreModal'
 import { ReleaseScopeModal } from './ReleaseScopeModal'
 import { ReleaseFeaturesModal } from './ReleaseFeaturesModal'
 import { CodeFixesModal } from './CodeFixesModal'
+import { TaskWiseStatusModal } from './TaskWiseStatusModal'
 import { resolveChartAnimation, glowStyle, GlowAreaGradient, StackedAreaGradient, BarFillGradient, axisPreset, legendPreset, PremiumTooltip, BAR_RADIUS } from './report-preview/chartTheme'
 
 // Report preview has its own isolated theme system — independent of the global dark/light toggle.
@@ -694,6 +695,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const [showReleaseScopeModal, setShowReleaseScopeModal] = useState(false)
   const [showReleaseFeaturesModal, setShowReleaseFeaturesModal] = useState(false)
   const [showCodeFixesModal, setShowCodeFixesModal] = useState(false)
+  const [showTaskWiseStatusModal, setShowTaskWiseStatusModal] = useState(false)
 
   // Pause expensive ambient canvas while any modal / launch overlay is open
   const particlesPaused =
@@ -707,7 +709,8 @@ const ReportPreviewDashboardContent: React.FC = () => {
     showQualityScoreModal ||
     showReleaseScopeModal ||
     showReleaseFeaturesModal ||
-    showCodeFixesModal
+    showCodeFixesModal ||
+    showTaskWiseStatusModal
 
   const releasePreviewColumns = useMemo(
     () =>
@@ -1479,15 +1482,34 @@ Do not return markdown wraps, only raw JSON text.
     { name: 'New Features', value: newFeaturesCount, hex: '#facc15' }
   ]
 
-  // Use Release Bug Status data if available, otherwise fall back to manual entry
+  // Use Release Bug Status data if available, then Task-Wise Status, otherwise fall back to manual entry
   const releaseBugMetrics = data.releaseBugStatus?.metrics
+  const taskWiseOverallStatus = data.taskWiseStatus?.overallStatus
+  
+  // Helper function for status colors (same as in DefectStatusModal)
+  const getDefectStatusColor = (status: string, idx: number): string => {
+    const s = (status || '').toLowerCase()
+    if (['closed', 'done', 'completed', 'resolved', 'verified'].some(v => s.includes(v))) return '#10b981'
+    if (['open', 'new', 'active'].some(v => s.includes(v))) return '#3b82f6'
+    if (['in progress', 'in-progress', 'wip'].some(v => s.includes(v))) return '#8b5cf6'
+    if (['blocked', 'failed', 'rejected'].some(v => s.includes(v))) return '#ef4444'
+    if (['deferred', 'on hold', 'pending'].some(v => s.includes(v))) return '#f59e0b'
+    if (['fixed', 'ready'].some(v => s.includes(v))) return '#06b6d4'
+    const palette = ['#6366f1', '#ec4899', '#14b8a6', '#f97316', '#84cc16']
+    return palette[idx % palette.length]
+  }
+  
   const defectStatusData = releaseBugMetrics ? [
     { name: 'Active Defects', value: releaseBugMetrics.activeBugs, hex: '#f87171' },
     { name: 'Resolved (Ready for QA)', value: releaseBugMetrics.resolvedBugs, hex: '#fb923c' },
     { name: 'Closed', value: releaseBugMetrics.completedBugs, hex: '#10b981' },
     ...(releaseBugMetrics.deferredBugs > 0 ? [{ name: 'Deferred', value: releaseBugMetrics.deferredBugs, hex: '#eab308' }] : []),
     ...(releaseBugMetrics.invalidBugs > 0 ? [{ name: 'Invalid/Won\'t Fix', value: releaseBugMetrics.invalidBugs, hex: '#64748b' }] : [])
-  ] : [
+  ] : taskWiseOverallStatus?.length ? taskWiseOverallStatus.map((item: any, idx: number) => ({
+    name: item.status,
+    value: item.count,
+    hex: getDefectStatusColor(item.status, idx)
+  })) : [
     { name: 'Open Defects', value: data.defectsLastWeek.open, hex: '#f87171' },
     { name: 'Fixed Defects', value: data.defectsLastWeek.fixed, hex: '#fb923c' },
     { name: 'Closed Defects', value: data.defectsLastWeek.closed, hex: '#10b981' }
@@ -2354,6 +2376,201 @@ Do not return markdown wraps, only raw JSON text.
         )}
 
         {/* ════════════════════════════════════════════════════════════
+            TASK-WISE STATUS (from uploaded Excel)
+        ════════════════════════════════════════════════════════════ */}
+
+        {data.taskWiseStatus && vis.show_taskWiseStatus !== false && (
+          <motion.section
+            variants={sectionVariants}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: "-80px" }}
+            className="flex flex-col gap-5"
+          >
+            <div className="flex items-center gap-2">
+              <LayoutGrid className="w-5 h-5 text-accent-gold" />
+              <h2 className="text-2xl font-extrabold font-clash">Task-Wise Status</h2>
+              <span className={`ml-2 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                {data.taskWiseStatus.rawRowCount} Records
+              </span>
+            </div>
+
+            {/* Summary KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: 'Total Records', val: data.taskWiseStatus.rawRowCount, color: 'text-blue-400', icon: '📊' },
+                { label: 'Unique Parents', val: data.taskWiseStatus.uniqueParents, color: 'text-purple-400', icon: '🗂️' },
+                { label: 'Unique Statuses', val: data.taskWiseStatus.uniqueStatuses?.length || 0, color: 'text-emerald-400', icon: '🏷️' },
+                { label: 'Blank Parents', val: data.taskWiseStatus.validation?.blankParentCount || 0, color: 'text-amber-400', icon: '⚠️' },
+              ].map(kpi => (
+                <motion.div
+                  key={kpi.label}
+                  initial={{ opacity: 0, y: 10 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  className={`p-5 rounded-2xl border relative overflow-hidden group transition-all duration-300 ${theme === 'dark' ? 'bg-gradient-to-br from-white/[0.02] to-white/[0.01] border-white/5 hover:border-white/10' : 'bg-gradient-to-br from-white to-slate-50 border-slate-200 hover:shadow-lg'}`}
+                >
+                  <span className="absolute top-3 right-3 text-2xl opacity-20 group-hover:opacity-40 transition-opacity">{kpi.icon}</span>
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted block mb-1">{kpi.label}</span>
+                  <span className={`text-3xl font-black ${kpi.color}`}>
+                    <CountUpNumber end={kpi.val} />
+                  </span>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Overall Status Summary - Only show if Release Bug Status is NOT visible to avoid duplication */}
+            {data.taskWiseStatus.overallStatus?.length > 0 && !(data.releaseBugStatus && vis.show_releaseBugStatus !== false) && (
+              <div className={`p-6 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+                <div className="flex items-center gap-2 mb-4">
+                  <BarChart3 className="w-4 h-4 text-accent-gold" />
+                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Overall Status Summary</span>
+                </div>
+                <RankedProgressList
+                  theme={theme}
+                  hasPlayed={hasPlayed}
+                  items={data.taskWiseStatus.overallStatus.map((row: any, idx: number) => ({
+                    label: row.status,
+                    count: row.count,
+                    percent: data.taskWiseStatus.rawRowCount > 0 ? (row.count / data.taskWiseStatus.rawRowCount) * 100 : 0,
+                    colorClass: bugStatusColorClass(row.status, idx)
+                  }))}
+                />
+              </div>
+            )}
+
+            {/* Parent-Wise Status Table - Clickable */}
+            {data.taskWiseStatus.parentWiseStatus?.length > 0 && data.taskWiseStatus.uniqueStatuses?.length > 0 && (
+              <div 
+                onClick={() => setShowTaskWiseStatusModal(true)}
+                className={`rounded-2xl border overflow-hidden cursor-pointer group relative transition-all duration-300 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 hover:border-accent-gold/30 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:border-accent-gold/40 hover:shadow-2xl'}`}
+              >
+                {/* Hover Glow Effect */}
+                <div className="absolute inset-0 bg-gradient-to-br from-accent-gold/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-2xl" />
+
+                {/* Click Indicator */}
+                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-gold/10 border border-accent-gold/20">
+                    <span className="text-[9px] font-bold text-accent-gold uppercase tracking-wider">Click to Expand</span>
+                    <svg className="w-3 h-3 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className={`px-6 py-4 border-b relative z-10 ${theme === 'dark' ? 'border-white/5 bg-white/[0.02]' : 'border-slate-100 bg-slate-50'}`}>
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-accent-gold" />
+                    <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Parent-Wise Status Breakdown</span>
+                    <span className={`ml-auto px-2 py-0.5 rounded-lg text-[10px] font-bold ${theme === 'dark' ? 'bg-white/5 text-white/50' : 'bg-slate-100 text-slate-500'}`}>
+                      {data.taskWiseStatus.parentWiseStatus.length} Parents
+                    </span>
+                  </div>
+                </div>
+                <div className="overflow-x-auto max-h-[300px] overflow-y-auto relative z-10">
+                  <table className="w-full text-xs">
+                    <thead className={`sticky top-0 z-10 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-slate-50'}`}>
+                      <tr className={theme === 'dark' ? 'border-b border-white/5' : 'border-b border-slate-200'}>
+                        <th className={`text-left py-3 px-4 font-black uppercase tracking-wider ${theme === 'dark' ? 'text-white/60' : 'text-slate-500'}`}>Parent</th>
+                        <th className={`text-right py-3 px-4 font-black uppercase tracking-wider ${theme === 'dark' ? 'text-white/60' : 'text-slate-500'}`}>Total</th>
+                        {data.taskWiseStatus.uniqueStatuses.slice(0, 5).map((status: string) => (
+                          <th key={status} className={`text-right py-3 px-4 font-bold uppercase tracking-wider whitespace-nowrap ${theme === 'dark' ? 'text-white/50' : 'text-slate-400'}`}>
+                            {status}
+                          </th>
+                        ))}
+                        {data.taskWiseStatus.uniqueStatuses.length > 5 && (
+                          <th className={`text-right py-3 px-4 font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-white/50' : 'text-slate-400'}`}>...</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.taskWiseStatus.parentWiseStatus.slice(0, 5).map((row: any, idx: number) => (
+                        <motion.tr
+                          key={row.parent}
+                          initial={{ opacity: 0, x: -10 }}
+                          whileInView={{ opacity: 1, x: 0 }}
+                          viewport={{ once: true }}
+                          transition={{ delay: Math.min(idx * 0.02, 0.3) }}
+                          className={`${theme === 'dark' ? 'border-b border-white/[0.03]' : 'border-b border-slate-100'} transition-colors`}
+                        >
+                          <td className={`py-3 px-4 font-semibold max-w-[200px] truncate ${theme === 'dark' ? 'text-white/90' : 'text-slate-800'}`} title={row.parent}>
+                            {row.parent}
+                          </td>
+                          <td className={`py-3 px-4 text-right font-black ${theme === 'dark' ? 'text-accent-gold' : 'text-amber-600'}`}>
+                            {row.total}
+                          </td>
+                          {data.taskWiseStatus.uniqueStatuses.slice(0, 5).map((status: string) => {
+                            const count = row.statusCounts?.[status] || 0
+                            return (
+                              <td key={status} className={`py-3 px-4 text-right ${count > 0 ? (theme === 'dark' ? 'text-white/80' : 'text-slate-700') : (theme === 'dark' ? 'text-white/20' : 'text-slate-300')}`}>
+                                {count || '—'}
+                              </td>
+                            )
+                          })}
+                          {data.taskWiseStatus.uniqueStatuses.length > 5 && (
+                            <td className={`py-3 px-4 text-right ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>...</td>
+                          )}
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {data.taskWiseStatus.parentWiseStatus.length > 5 && (
+                    <div className={`py-3 px-4 text-center text-xs font-medium ${theme === 'dark' ? 'text-white/40 bg-white/[0.02]' : 'text-slate-400 bg-slate-50'}`}>
+                      + {data.taskWiseStatus.parentWiseStatus.length - 5} more parents • Click to view all
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Validation Summary */}
+            {data.taskWiseStatus.validation && (
+              <div className={`p-5 rounded-2xl border ${data.taskWiseStatus.validation.totalRecordsMatch && data.taskWiseStatus.validation.overallStatusTotalMatch ? (theme === 'dark' ? 'bg-green-500/5 border-green-500/20' : 'bg-green-50 border-green-200') : (theme === 'dark' ? 'bg-amber-500/5 border-amber-500/20' : 'bg-amber-50 border-amber-200')}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  {data.taskWiseStatus.validation.totalRecordsMatch && data.taskWiseStatus.validation.overallStatusTotalMatch ? (
+                    <Check className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  )}
+                  <span className={`text-xs font-black uppercase tracking-widest ${data.taskWiseStatus.validation.totalRecordsMatch ? 'text-green-400' : 'text-amber-400'}`}>
+                    Validation Summary
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="flex items-center gap-2">
+                    {data.taskWiseStatus.validation.totalRecordsMatch ? (
+                      <Check className="w-3.5 h-3.5 text-green-400" />
+                    ) : (
+                      <X className="w-3.5 h-3.5 text-red-400" />
+                    )}
+                    <span className={`text-xs ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>Total records: {data.taskWiseStatus.rawRowCount}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {data.taskWiseStatus.validation.overallStatusTotalMatch ? (
+                      <Check className="w-3.5 h-3.5 text-green-400" />
+                    ) : (
+                      <X className="w-3.5 h-3.5 text-red-400" />
+                    )}
+                    <span className={`text-xs ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>Status totals match</span>
+                  </div>
+                  {data.taskWiseStatus.parentColumn && (
+                    <div className="flex items-center gap-2">
+                      {data.taskWiseStatus.validation.parentWiseTotalMatch ? (
+                        <Check className="w-3.5 h-3.5 text-green-400" />
+                      ) : (
+                        <X className="w-3.5 h-3.5 text-red-400" />
+                      )}
+                      <span className={`text-xs ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>Parent totals match</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </motion.section>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════
             SUPPORT & EXCEPTION LOG
         ════════════════════════════════════════════════════════════ */}
 
@@ -3197,7 +3414,7 @@ Do not return markdown wraps, only raw JSON text.
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={defectStatusData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} cornerRadius={6} stroke="none" dataKey="value" isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out">
-                      {defectStatusData.map((entry, index) => (
+                      {defectStatusData.map((entry: { name: string; value: number; hex: string }, index: number) => (
                         <Cell key={`cell-${index}`} fill={entry.hex} style={glowStyle(entry.hex, theme)} />
                       ))}
                     </Pie>
@@ -3517,6 +3734,7 @@ Do not return markdown wraps, only raw JSON text.
         isOpen={showDefectModal}
         onClose={() => setShowDefectModal(false)}
         releaseBugStatus={data.releaseBugStatus}
+        taskWiseStatus={data.taskWiseStatus}
         fallbackData={data.defectsLastWeek}
         projectName={data.projectName}
       />
@@ -3595,6 +3813,13 @@ Do not return markdown wraps, only raw JSON text.
         isOpen={showCodeFixesModal}
         onClose={() => setShowCodeFixesModal(false)}
         supportTickets={data.supportTickets || []}
+        projectName={data.projectName}
+      />
+
+      <TaskWiseStatusModal
+        isOpen={showTaskWiseStatusModal}
+        onClose={() => setShowTaskWiseStatusModal(false)}
+        taskWiseStatus={data.taskWiseStatus}
         projectName={data.projectName}
       />
     </>

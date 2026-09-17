@@ -34,6 +34,7 @@ const SECTIONS: DashboardSectionConfig[] = [
   { key: 'show_releaseReadiness', label: 'Release Readiness Meter', description: 'Radial gauge for deployment approval', icon: Target, category: 'Release', defaultEnabled: true },
   { key: 'show_releaseTable', label: 'Release Testing Table', description: 'Full table of release items with status', icon: FileText, category: 'Release', defaultEnabled: true },
   { key: 'show_releaseBugStatus', label: 'Release Bug Status', description: 'Uploaded defect tracker analytics', icon: Bug, category: 'Release', defaultEnabled: true },
+  { key: 'show_taskWiseStatus', label: 'Task-Wise Status Breakdown', description: 'Parent-wise and overall status from uploaded tracker', icon: BarChart3, category: 'Release', defaultEnabled: false },
 
   // Support
   { key: 'show_supportLog', label: 'Support & Exception Log', description: 'Support tickets table', icon: FileText, category: 'Support', defaultEnabled: true },

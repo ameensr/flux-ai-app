@@ -9,6 +9,7 @@ import { PremiumTooltip, glowStyle } from './report-preview/chartTheme'
 import { useTheme } from '@/context/ThemeContext'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import type { ReleaseBugAnalytics } from './ReleaseBugStatus/types'
+import type { TaskWiseAnalytics } from './ReleaseBugStatus/taskWiseTypes'
 import { QATriageLoader } from './QATriageLoader'
 import { ContinuousQATriage } from './ContinuousQATriage'
 
@@ -16,6 +17,7 @@ interface DefectStatusModalProps {
   isOpen: boolean
   onClose: () => void
   releaseBugStatus?: ReleaseBugAnalytics | null
+  taskWiseStatus?: TaskWiseAnalytics | null
   fallbackData?: {
     open: number
     fixed: number
@@ -24,16 +26,40 @@ interface DefectStatusModalProps {
   projectName: string
 }
 
+// Status color mapping for Task-Wise Status
+function getStatusColor(status: string, idx: number): string {
+  const s = (status || '').toLowerCase()
+  if (['closed', 'done', 'completed', 'resolved', 'verified'].some(v => s.includes(v))) return '#10b981'
+  if (['open', 'new', 'active'].some(v => s.includes(v))) return '#3b82f6'
+  if (['in progress', 'in-progress', 'wip'].some(v => s.includes(v))) return '#8b5cf6'
+  if (['blocked', 'failed', 'rejected'].some(v => s.includes(v))) return '#ef4444'
+  if (['deferred', 'on hold', 'pending'].some(v => s.includes(v))) return '#f59e0b'
+  if (['fixed', 'ready'].some(v => s.includes(v))) return '#06b6d4'
+  const palette = ['#6366f1', '#ec4899', '#14b8a6', '#f97316', '#84cc16']
+  return palette[idx % palette.length]
+}
+
+// Status icon mapping
+function getStatusIcon(status: string): any {
+  const s = (status || '').toLowerCase()
+  if (['closed', 'done', 'completed', 'resolved', 'verified'].some(v => s.includes(v))) return CheckCircle
+  if (['blocked', 'failed', 'rejected'].some(v => s.includes(v))) return Ban
+  if (['deferred', 'on hold', 'pending'].some(v => s.includes(v))) return PauseCircle
+  return AlertCircle
+}
+
 export function DefectStatusModal({
   isOpen,
   onClose,
   releaseBugStatus,
+  taskWiseStatus,
   fallbackData,
   projectName
 }: DefectStatusModalProps) {
   useBodyScrollLock(isOpen)
   const { isDark } = useTheme()
   const hasReleaseBugData = !!releaseBugStatus?.metrics
+  const hasTaskWiseData = !!taskWiseStatus?.overallStatus?.length
   const [isAnalyzing, setIsAnalyzing] = useState(true)
 
   useEffect(() => {
@@ -45,12 +71,10 @@ export function DefectStatusModal({
   const metrics = hasReleaseBugData && releaseBugStatus?.metrics ? releaseBugStatus.metrics : null
 
   /**
-   * Slices must be mutually exclusive, so this uses the parser's five disjoint
-   * status groups (completed + resolved + active + deferred + invalid ===
-   * totalBugs). It deliberately does NOT use `openBugs`, which is
-   * `total - completed` and therefore already contains resolved, deferred and
-   * invalid — charting it alongside those groups double-counted them, inflating
-   * the "Total Defects" figure and skewing every percentage.
+   * Build chart data from available sources:
+   * 1. Release Bug Status metrics (if available)
+   * 2. Task-Wise Status overall status (if available)
+   * 3. Fallback to manual defect entry data
    */
   const chartData = metrics ? [
     { name: 'Active (New / In Progress)', value: metrics.activeBugs, hex: '#f87171', icon: AlertCircle },
@@ -58,15 +82,24 @@ export function DefectStatusModal({
     { name: 'Closed', value: metrics.completedBugs, hex: '#10b981', icon: CheckCircle },
     ...(metrics.deferredBugs > 0 ? [{ name: 'Deferred', value: metrics.deferredBugs, hex: '#eab308', icon: PauseCircle }] : []),
     ...(metrics.invalidBugs > 0 ? [{ name: 'Invalid/Won\'t Fix', value: metrics.invalidBugs, hex: '#64748b', icon: Ban }] : [])
-  ] : [
+  ] : hasTaskWiseData ? taskWiseStatus.overallStatus.map((item, idx) => ({
+    name: item.status,
+    value: item.count,
+    hex: getStatusColor(item.status, idx),
+    icon: getStatusIcon(item.status)
+  })) : [
     { name: 'Open Defects', value: fallbackData?.open || 0, hex: '#f87171', icon: AlertCircle },
     { name: 'Fixed Defects', value: fallbackData?.fixed || 0, hex: '#fb923c', icon: Clock },
     { name: 'Closed Defects', value: fallbackData?.closed || 0, hex: '#10b981', icon: CheckCircle }
   ]
 
   // Prefer the parser's authoritative count so the centre figure always matches
-  // "Total Bugs" elsewhere in the app; manual entry has no such total.
-  const totalDefects = metrics ? metrics.totalBugs : chartData.reduce((sum, item) => sum + item.value, 0)
+  const totalDefects = metrics ? metrics.totalBugs : hasTaskWiseData ? taskWiseStatus.rawRowCount : chartData.reduce((sum, item) => sum + item.value, 0)
+  
+  // Determine data source label
+  const dataSourceLabel = hasReleaseBugData ? 'Release Bug Status Analytics' : hasTaskWiseData ? 'Task-Wise Status Analytics' : 'Manual Entry Data'
+  const uploadedFileName = hasReleaseBugData ? releaseBugStatus.uploadedFileName : hasTaskWiseData ? taskWiseStatus.uploadedFileName : null
+  const uploadedAt = hasReleaseBugData ? releaseBugStatus.uploadedAt : hasTaskWiseData ? taskWiseStatus.uploadedAt : null
   const chartTheme = isDark ? 'dark' as const : 'light' as const
 
   return (
@@ -145,7 +178,7 @@ export function DefectStatusModal({
                           transition={{ delay: 0.2 }}
                           className="text-sm text-text-secondary mt-2"
                         >
-                          {projectName} • {hasReleaseBugData ? 'Release Bug Status Analytics' : 'Manual Entry Data'}
+                          {projectName} • {dataSourceLabel}
                         </motion.p>
                       </div>
                     <motion.button
@@ -169,17 +202,19 @@ export function DefectStatusModal({
                       transition={{ delay: 0.25 }}
                       className="mb-6"
                     >
-                      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${hasReleaseBugData
+                      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${(hasReleaseBugData || hasTaskWiseData)
                           ? 'bg-green-500/10 text-green-400 border border-green-500/20'
                           : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                         }`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${hasReleaseBugData ? 'bg-green-400' : 'bg-amber-400'} animate-pulse`} />
-                        {hasReleaseBugData ? (
+                        <div className={`w-1.5 h-1.5 rounded-full ${(hasReleaseBugData || hasTaskWiseData) ? 'bg-green-400' : 'bg-amber-400'} animate-pulse`} />
+                        {uploadedFileName ? (
                           <>
-                            Data from: {releaseBugStatus.uploadedFileName}
-                            <span className="text-text-muted ml-1">
-                              ({new Date(releaseBugStatus.uploadedAt).toLocaleDateString()})
-                            </span>
+                            Data from: {uploadedFileName}
+                            {uploadedAt && (
+                              <span className="text-text-muted ml-1">
+                                ({new Date(uploadedAt).toLocaleDateString()})
+                              </span>
+                            )}
                           </>
                         ) : (
                           'Data from Manual Entry'

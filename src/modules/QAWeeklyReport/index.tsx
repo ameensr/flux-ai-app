@@ -219,6 +219,50 @@ function buildMarkdown(f: QAReportForm): string {
     }
   }
 
+  // Task-Wise Status
+  if (f.taskWiseStatus) {
+    const tws = f.taskWiseStatus
+    lines.push('\n## Task-Wise Status')
+    if (tws.uploadedFileName) lines.push(`**Source:** ${tws.uploadedFileName}`)
+    lines.push(`**Total Records:** ${tws.rawRowCount} | **Unique Parents:** ${tws.uniqueParents} | **Unique Statuses:** ${tws.uniqueStatuses?.length || 0}`)
+    
+    // Overall Status Summary
+    if (tws.overallStatus?.length) {
+      lines.push('\n### Overall Status Summary')
+      lines.push('| Status | Count |')
+      lines.push('|---|---|')
+      tws.overallStatus.forEach((s: any) => lines.push(`| ${s.status} | ${s.count} |`))
+      const total = tws.overallStatus.reduce((sum: number, s: any) => sum + s.count, 0)
+      lines.push(`| **Total** | **${total}** |`)
+    }
+    
+    // Parent-Wise Status Summary
+    if (tws.parentWiseStatus?.length && tws.uniqueStatuses?.length) {
+      lines.push('\n### Parent-Wise Status Summary')
+      const statusHeaders = tws.uniqueStatuses.join(' | ')
+      lines.push(`| Parent | Total | ${statusHeaders} |`)
+      lines.push(`|---|---|${tws.uniqueStatuses.map(() => '---').join('|')}|`)
+      tws.parentWiseStatus.forEach((p: any) => {
+        const statusCounts = tws.uniqueStatuses.map((s: string) => p.statusCounts?.[s] || 0).join(' | ')
+        lines.push(`| ${p.parent} | ${p.total} | ${statusCounts} |`)
+      })
+    }
+    
+    // Validation Summary
+    if (tws.validation) {
+      const v = tws.validation
+      lines.push('\n### Validation Summary')
+      lines.push(`- Total records match: ${v.totalRecordsMatch ? '✓' : '✗'}`)
+      lines.push(`- Overall status totals match: ${v.overallStatusTotalMatch ? '✓' : '✗'}`)
+      if (tws.parentColumn) {
+        lines.push(`- Parent-wise totals match: ${v.parentWiseTotalMatch ? '✓' : '✗'}`)
+      }
+      if (v.blankParentCount > 0) {
+        lines.push(`- Records with blank parent: ${v.blankParentCount}`)
+      }
+    }
+  }
+
   // Defect Analysis
   lines.push('\n## Internal Defect Analysis')
   lines.push('| Metric | Last Week | Month To Date |')
@@ -815,10 +859,13 @@ export const QAWeeklyReport: React.FC = () => {
             <ReleaseTable />
           </DisabledSectionWrapper>
 
-          <DisabledSectionWrapper isEnabled={sectionVisibility.show_releaseBugStatus !== false} sectionName="Release Bug Status">
+          <DisabledSectionWrapper isEnabled={sectionVisibility.show_releaseBugStatus !== false || sectionVisibility.show_taskWiseStatus !== false} sectionName="Release Bug Status / Task-Wise Status">
             <ReleaseBugStatus
               analytics={form.releaseBugStatus}
               onChange={(data) => setForm({ releaseBugStatus: data })}
+              taskWiseAnalytics={form.taskWiseStatus}
+              onTaskWiseChange={(data) => setForm({ taskWiseStatus: data })}
+              sectionVisibility={sectionVisibility}
             />
           </DisabledSectionWrapper>
 
