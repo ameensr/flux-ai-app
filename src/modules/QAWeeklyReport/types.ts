@@ -38,13 +38,11 @@ export interface ReleaseItem {
 }
 
 export interface ProductionIssueBlock {
-  escapedIssue: number
-  supportFix: number
+  productionIssues: number
+  fixesForValidation: number
+  escapedDefects: number
+  /** Computed total — sum of the 3 fields above */
   support: number
-  changeRequest: number
-  dataIssue: number
-  backendUpdation: number
-  completedCR?: number
 }
 
 export interface DefectMetrics {
@@ -227,33 +225,31 @@ export const ensureFormData = (form: any): QAReportForm => {
     supportEmails: Number(f.supportEmails) || 0,
     newFeatures: Number(f.newFeatures) || 0,
     codeFixes: Number(f.codeFixes) || 0,
-    lastWeek: {
-      escapedIssue: Number(f.lastWeek?.escapedIssue ?? f.lastWeek?.codeFix) || 0,
-      supportFix: Number(f.lastWeek?.supportFix) || 0,
-      changeRequest: Number(f.lastWeek?.changeRequest) || 0,
-      dataIssue: Number(f.lastWeek?.dataIssue) || 0,
-      backendUpdation: Number(f.lastWeek?.backendUpdation) || 0,
-      completedCR: Number(f.lastWeek?.completedCR) || 0,
-      support: (Number(f.lastWeek?.escapedIssue ?? f.lastWeek?.codeFix) || 0) +
-        (Number(f.lastWeek?.supportFix) || 0) +
-        (Number(f.lastWeek?.changeRequest) || 0) +
-        (Number(f.lastWeek?.dataIssue) || 0) +
-        (Number(f.lastWeek?.backendUpdation) || 0),
-    },
-    monthToDate: {
-      escapedIssue: Number(f.monthToDate?.escapedIssue ?? f.monthToDate?.codeFix) || 0,
-      supportFix: Number(f.monthToDate?.supportFix) || 0,
-      changeRequest: Number(f.monthToDate?.changeRequest) || 0,
-      completedCR: Number(f.monthToDate?.completedCR) || 0,
-      dataIssue: Number(f.monthToDate?.dataIssue) || 0,
-      backendUpdation: Number(f.monthToDate?.backendUpdation) || 0,
-      support: (Number(f.monthToDate?.escapedIssue ?? f.monthToDate?.codeFix) || 0) +
-        (Number(f.monthToDate?.supportFix) || 0) +
-        (Number(f.monthToDate?.changeRequest) || 0) +
-        (Number(f.monthToDate?.completedCR) || 0) +
-        (Number(f.monthToDate?.dataIssue) || 0) +
-        (Number(f.monthToDate?.backendUpdation) || 0),
-    },
+    lastWeek: (() => {
+      // Migrate legacy fields → new 3-field structure
+      const lw = f.lastWeek || {}
+      const productionIssues = Number(lw.productionIssues ?? lw.escapedIssue ?? lw.codeFix) || 0
+      const fixesForValidation = Number(lw.fixesForValidation ?? lw.supportFix ?? lw.changeRequest) || 0
+      const escapedDefects = Number(lw.escapedDefects ?? lw.dataIssue ?? lw.backendUpdation) || 0
+      return {
+        productionIssues,
+        fixesForValidation,
+        escapedDefects,
+        support: productionIssues + fixesForValidation + escapedDefects,
+      }
+    })(),
+    monthToDate: (() => {
+      const mtd = f.monthToDate || {}
+      const productionIssues = Number(mtd.productionIssues ?? mtd.escapedIssue ?? mtd.codeFix) || 0
+      const fixesForValidation = Number(mtd.fixesForValidation ?? mtd.supportFix ?? mtd.changeRequest) || 0
+      const escapedDefects = Number(mtd.escapedDefects ?? mtd.dataIssue ?? mtd.backendUpdation) || 0
+      return {
+        productionIssues,
+        fixesForValidation,
+        escapedDefects,
+        support: productionIssues + fixesForValidation + escapedDefects,
+      }
+    })(),
     newFeatureTeam: Array.isArray(f.newFeatureTeam) ? f.newFeatureTeam.filter(Boolean) : [],
     supportTeam: Array.isArray(f.supportTeam) ? f.supportTeam.filter(Boolean) : [],
     automationTeam: Array.isArray(f.automationTeam) ? f.automationTeam.filter(Boolean) : [],

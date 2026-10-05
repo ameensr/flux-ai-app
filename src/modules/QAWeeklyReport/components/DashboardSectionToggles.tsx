@@ -38,7 +38,7 @@ const SECTIONS: DashboardSectionConfig[] = [
 
   // Support
   { key: 'show_supportLog', label: 'Support & Exception Log', description: 'Support tickets table', icon: FileText, category: 'Support', defaultEnabled: true },
-  { key: 'show_productionIssues', label: 'Production Issues', description: 'Issue categories breakdown table', icon: Bug, category: 'Support', defaultEnabled: true },
+  { key: 'show_productionIssues', label: 'Production & QA Health', description: 'Issue categories breakdown table', icon: Bug, category: 'Support', defaultEnabled: true },
   { key: 'show_teamAllocation', label: 'Team Allocation', description: 'Team resource cards with members', icon: Users, category: 'Support', defaultEnabled: true },
   { key: 'show_teamCapacity', label: 'Team Capacity Overview', description: 'Weekly team availability and testing capacity', icon: Activity, category: 'Support', defaultEnabled: true },
 

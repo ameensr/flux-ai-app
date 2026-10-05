@@ -1,6 +1,54 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@variant dark (&:where(.dark, .dark *));
+
+@source "../index.html";
+@source "./";
+
+@theme {
+  /* Colors */
+  --color-background: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-accent: var(--accent);
+  --color-accent-gold: var(--accent);
+  --color-accent-silver: #C0C0C0;
+  --color-accent-fg: var(--accent-fg);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border);
+  --color-divider: var(--divider);
+  --color-card: var(--card-bg);
+  --color-sidebar: var(--sidebar-bg);
+  --color-input: var(--input-bg);
+  --color-modal: var(--modal-bg);
+  --color-hover: var(--hover);
+  --color-glass: var(--card-bg);
+  --color-glow: var(--hover);
+  --color-foreground: var(--text-primary);
+
+  /* Border radius */
+  --radius-2xl: 24px;
+  --radius-3xl: 32px;
+
+  /* Animations */
+  --animate-glow-pulse: glow-pulse 4s cubic-bezier(0.4,0,0.6,1) infinite;
+  --animate-reveal: reveal 0.8s cubic-bezier(0.22,1,0.36,1) forwards;
+
+  @keyframes glow-pulse {
+    0%, 100% { opacity: 0.1; }
+    50% { opacity: 0.3; }
+  }
+
+  @keyframes reveal {
+    0% { opacity: 0; transform: translateY(20px) scale(0.98); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* Transition timing */
+  --ease-cinematic: cubic-bezier(0.22,1,0.36,1);
+}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Qaly AI Engine — Design System

@@ -122,11 +122,9 @@ function releaseSummary(data: QAReportForm): ReleaseSummary {
 }
 
 const PRODUCTION_ROWS: { label: string; key: keyof QAReportForm['lastWeek'] }[] = [
-  { label: 'Escaped Issue', key: 'escapedIssue' },
-  { label: 'Support Fix', key: 'supportFix' },
-  { label: 'Change Request', key: 'changeRequest' },
-  { label: 'Data Issue', key: 'dataIssue' },
-  { label: 'Backend Update', key: 'backendUpdation' },
+  { label: 'Total Production Issues', key: 'productionIssues' },
+  { label: 'Fixes for Validation', key: 'fixesForValidation' },
+  { label: 'Escaped Defects', key: 'escapedDefects' },
 ]
 
 const ALLOCATION_GROUPS: { label: string; key: 'newFeatureTeam' | 'supportTeam' | 'automationTeam' }[] = [
@@ -182,7 +180,6 @@ export function buildReportMarkdown(data: QAReportForm, meta: ReportExportMeta =
   PRODUCTION_ROWS.forEach(row => {
     L.push(`| ${row.label} | ${data.lastWeek?.[row.key] ?? 0} | ${data.monthToDate?.[row.key] ?? 0} |`)
   })
-  L.push(`| **Total** | **${data.lastWeek?.support ?? 0}** | **${data.monthToDate?.support ?? 0}** |`)
 
   L.push('')
   L.push('## Team Resource Allocation')
@@ -365,11 +362,10 @@ export function buildReportHTML(data: QAReportForm, meta: ReportExportMeta = {})
     ${data.subtitle ? `<p class="note">${escapeHtml(data.subtitle)}</p>` : ''}
   `))
 
-  sections.push(htmlSection('Production Issues', htmlTable(
+  sections.push(htmlSection('Production & QA Health', htmlTable(
     ['Category', 'Last Week', 'Month to Date'],
     [
       ...PRODUCTION_ROWS.map(r => [r.label, data.lastWeek?.[r.key] ?? 0, data.monthToDate?.[r.key] ?? 0]),
-      ['Total', data.lastWeek?.support ?? 0, data.monthToDate?.support ?? 0],
     ],
   )))
 

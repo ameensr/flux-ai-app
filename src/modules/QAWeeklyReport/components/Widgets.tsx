@@ -194,6 +194,7 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
   const [searchProject, setSearchProject] = useState(form.projectId || '')
   const [localSearchText, setLocalSearchText] = useState(historySearch)
   const [renaming, setRenaming] = useState<typeof savedReports[0] | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<typeof savedReports[0] | null>(null)
 
   useEffect(() => {
     if (form.projectId) {
@@ -303,6 +304,7 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
   }
 
   const handleDelete = async (r: typeof savedReports[0]) => {
+    setConfirmDelete(null)
     try {
       await deleteReport(r.id)
       toast({ title: 'Report Deleted', description: `“${getReportDisplayName(r)}” removed from history.` })
@@ -403,7 +405,7 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
                 <button onClick={() => open(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-accent-gold transition-all" title="Open"><ExternalLink className="w-3.5 h-3.5" /></button>
                 <button onClick={() => setRenaming(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-text-primary transition-all" title="Edit name & status"><Pencil className="w-3.5 h-3.5" /></button>
                 <button onClick={() => duplicate(r)} className="p-1.5 rounded-lg hover:bg-hover text-text-muted hover:text-text-primary transition-all" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
-                {canDelete && <button onClick={() => handleDelete(r)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>}
+                {canDelete && <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>}
               </div>
             </div>
           )
@@ -434,6 +436,42 @@ export const ReportHistory: React.FC<{ onReportLoaded?: (snapshot: string) => vo
         onCancel={() => setRenaming(null)}
         onConfirm={handleRenameConfirm}
       />
+
+      {/* Delete confirmation dialog */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setConfirmDelete(null)}>
+          <div
+            className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500/15">
+                <Trash2 className="h-4 w-4 text-red-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-text-primary">Delete Report</h3>
+            </div>
+            <p className="text-xs text-text-muted leading-relaxed mb-5">
+              Are you sure you want to delete{' '}
+              <span className="font-semibold text-text-primary">“{getReportDisplayName(confirmDelete)}”</span>?
+              This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold border border-border bg-hover text-text-primary hover:bg-hover/80 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(confirmDelete)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-500 text-white hover:bg-red-600 transition-all"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </GlassCard>
   )
 }

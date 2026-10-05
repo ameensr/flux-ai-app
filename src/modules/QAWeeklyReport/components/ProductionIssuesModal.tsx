@@ -25,8 +25,8 @@ export function ProductionIssuesModal({
   useBodyScrollLock(isOpen)
   const { isDark } = useTheme()
 
-  const totalLastWeek = prodIssuesData.reduce((sum, item) => sum + item.lastWeek, 0)
-  const totalMTD = prodIssuesData.reduce((sum, item) => sum + item.mtd, 0)
+  const totalLastWeek = prodIssuesData.find(item => item.category === 'Total Production Issues')?.lastWeek ?? 0
+  const totalMTD = prodIssuesData.find(item => item.category === 'Total Production Issues')?.mtd ?? 0
   const chartTheme = isDark ? 'dark' as const : 'light' as const
 
   return (
@@ -113,9 +113,9 @@ export function ProductionIssuesModal({
                         transition={{ delay: 0.25 }}
                         className="bg-surface-elevated/50 backdrop-blur-sm rounded-xl p-4 border border-border/30"
                       >
-                        <div className="text-xs text-text-muted mb-1">Last Week Total</div>
+                        <div className="text-xs text-text-muted mb-1">Last Week</div>
                         <div className="text-3xl font-bold text-accent-gold">{totalLastWeek}</div>
-                        <div className="text-xs text-text-muted mt-1">Production issues</div>
+                        <div className="text-xs text-text-muted mt-1">Total production issues</div>
                       </motion.div>
                       <motion.div
                         initial={{ opacity: 0, scale: 0.9 }}
@@ -123,9 +123,9 @@ export function ProductionIssuesModal({
                         transition={{ delay: 0.3 }}
                         className="bg-surface-elevated/50 backdrop-blur-sm rounded-xl p-4 border border-border/30"
                       >
-                        <div className="text-xs text-text-muted mb-1">Month-to-Date Total</div>
+                        <div className="text-xs text-text-muted mb-1">Month-to-Date</div>
                         <div className="text-3xl font-bold text-blue-400">{totalMTD}</div>
-                        <div className="text-xs text-text-muted mt-1">Cumulative issues</div>
+                        <div className="text-xs text-text-muted mt-1">Total production issues</div>
                       </motion.div>
                     </div>
 
@@ -236,11 +236,12 @@ export function ProductionIssuesModal({
                       className="mt-6 pt-6 border-t border-border/30"
                     >
                       <div className="bg-orange-500/10 rounded-lg p-4 border border-orange-500/20">
-                        <h4 className="text-sm font-semibold text-text-primary mb-2">Production Issue Insights</h4>
+                        <h4 className="text-sm font-semibold text-text-primary mb-2">Production & QA Health Insights</h4>
                         <p className="text-xs text-text-muted leading-relaxed">
-                          This breakdown shows production issues by category, comparing last week's count with the month-to-date total.
-                          Escaped issues are bugs that reached production, while support fixes and change requests represent reactive work.
-                          Monitor trends to identify recurring problem areas that may need preventive measures.
+                          This breakdown shows the 3 core Production & QA Health KPIs comparing last week's count with the month-to-date total.
+                          <strong> Total Production Issues</strong> tracks total support/issues received from production.
+                          <strong> Fixes for Validation</strong> counts code fixes received from the development team for QA/testing.
+                          <strong> Escaped Defects</strong> measures defects that bypassed QA and reached production — the most critical metric to minimize.
                         </p>
                       </div>
                     </motion.div>

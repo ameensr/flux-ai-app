@@ -44,11 +44,11 @@ export function SupportEmailsModal({
   const chartTheme = isDark ? ('dark' as const) : ('light' as const)
 
   const totalLastWeek = useMemo(
-    () => prodIssuesData.reduce((sum, row) => sum + (row.lastWeek || 0), 0),
+    () => prodIssuesData.find((row) => row.category === 'Total Production Issues')?.lastWeek ?? 0,
     [prodIssuesData],
   )
   const totalMtd = useMemo(
-    () => prodIssuesData.reduce((sum, row) => sum + (row.mtd || 0), 0),
+    () => prodIssuesData.find((row) => row.category === 'Total Production Issues')?.mtd ?? 0,
     [prodIssuesData],
   )
   const maxMtd = useMemo(
@@ -198,7 +198,7 @@ export function SupportEmailsModal({
                         <div className={`mt-2 text-3xl font-black tracking-tight ${primary}`}>
                           {totalLastWeek}
                         </div>
-                        <p className={`mt-1 text-xs ${muted}`}>Across categories</p>
+                        <p className={`mt-1 text-xs ${muted}`}>Total production issues</p>
                       </motion.div>
 
                       <motion.div
@@ -213,7 +213,7 @@ export function SupportEmailsModal({
                         <div className={`mt-2 text-3xl font-black tracking-tight ${isDark ? 'text-cyan-300' : 'text-cyan-700'}`}>
                           {totalMtd}
                         </div>
-                        <p className={`mt-1 text-xs ${muted}`}>Cumulative intake</p>
+                        <p className={`mt-1 text-xs ${muted}`}>Total production issues</p>
                       </motion.div>
                     </div>
 

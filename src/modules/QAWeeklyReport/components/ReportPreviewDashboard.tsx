@@ -1026,8 +1026,8 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const comparisons = [
     getMetricComparison('Support Tickets', data.supportTickets?.length || 0, prevReport?.supportTickets?.length || 0, 'lower-better'),
     getMetricComparison('Defects', data.defectsLastWeek.reported, prevReport?.defectsLastWeek.reported, 'lower-better'),
-    getMetricComparison('Change Requests', data.lastWeek.changeRequest, prevReport?.lastWeek.changeRequest, 'neutral'),
-    getMetricComparison('Backend Issues', data.lastWeek.backendUpdation, prevReport?.lastWeek.backendUpdation, 'lower-better'),
+    getMetricComparison('Total Production Issues', data.lastWeek.productionIssues, prevReport?.lastWeek.productionIssues, 'lower-better'),
+    getMetricComparison('Escaped Defects', data.lastWeek.escapedDefects, prevReport?.lastWeek.escapedDefects, 'lower-better'),
     getMetricComparison('Features Completed', data.newFeatures, prevReport?.newFeatures, 'higher-better'),
     getMetricComparison('Testing Completed', data.releaseItems.length, prevReport?.releaseItems.length, 'higher-better')
   ]
@@ -1450,12 +1450,10 @@ Do not return markdown wraps, only raw JSON text.
       reportedDefects: h.form.defectsLastWeek.reported,
       closedDefects: h.form.defectsLastWeek.closed,
       healthScore: calculateQAScore(h.form).score,
-      escapedIssueProd: h.form.lastWeek.escapedIssue ?? (h.form.lastWeek as any).codeFix,
-      supportFixProd: h.form.lastWeek.supportFix || 0,
+      productionIssuesProd: h.form.lastWeek.productionIssues ?? 0,
+      fixesForValidationProd: h.form.lastWeek.fixesForValidation ?? 0,
+      escapedDefectsProd: h.form.lastWeek.escapedDefects ?? 0,
       supportProd: h.form.lastWeek.support,
-      changeRequestProd: h.form.lastWeek.changeRequest,
-      dataIssueProd: h.form.lastWeek.dataIssue,
-      backendUpdationProd: h.form.lastWeek.backendUpdation,
       teamSize: h.form.newFeatureTeam.length + h.form.supportTeam.length + h.form.automationTeam.length,
       passFeatures: passCount,
       failFeatures: failCount,
@@ -1466,11 +1464,9 @@ Do not return markdown wraps, only raw JSON text.
 
   // ── Table Adapters ──
   const prodIssuesData = [
-    { category: 'Escaped Issue', lastWeek: data.lastWeek.escapedIssue ?? (data.lastWeek as any).codeFix, mtd: data.monthToDate.escapedIssue ?? (data.monthToDate as any).codeFix },
-    { category: 'Support', lastWeek: data.lastWeek.supportFix || 0, mtd: data.monthToDate.supportFix || 0 },
-    { category: 'Change Request', lastWeek: data.lastWeek.changeRequest, mtd: data.monthToDate.changeRequest },
-    { category: 'Data Issue', lastWeek: data.lastWeek.dataIssue, mtd: data.monthToDate.dataIssue },
-    { category: 'Backend Update', lastWeek: data.lastWeek.backendUpdation, mtd: data.monthToDate.backendUpdation }
+    { category: 'Total Production Issues', lastWeek: data.lastWeek.productionIssues ?? 0, mtd: data.monthToDate.productionIssues ?? 0 },
+    { category: 'Fixes for Validation', lastWeek: data.lastWeek.fixesForValidation ?? 0, mtd: data.monthToDate.fixesForValidation ?? 0 },
+    { category: 'Escaped Defects', lastWeek: data.lastWeek.escapedDefects ?? 0, mtd: data.monthToDate.escapedDefects ?? 0 },
   ]
 
   // Work Distribution - using actual data from tables
@@ -2939,6 +2935,8 @@ Do not return markdown wraps, only raw JSON text.
                   { name: 'Support Tickets', valA: repA.supportEmails, valB: repB.supportEmails, type: 'lower' },
                   { name: 'Defects Reported', valA: repA.defectsLastWeek.reported, valB: repB.defectsLastWeek.reported, type: 'lower' },
                   { name: 'Open Defects', valA: repA.defectsLastWeek.open, valB: repB.defectsLastWeek.open, type: 'lower' },
+                  { name: 'Total Production Issues', valA: repA.lastWeek.productionIssues, valB: repB.lastWeek.productionIssues, type: 'lower' },
+                  { name: 'Escaped Defects', valA: repA.lastWeek.escapedDefects, valB: repB.lastWeek.escapedDefects, type: 'lower' },
                   { name: 'Features Completed', valA: repA.newFeatures, valB: repB.newFeatures, type: 'higher' },
                   { name: 'Testing Completed', valA: repA.releaseItems.length, valB: repB.releaseItems.length, type: 'higher' }
                 ]
@@ -3186,18 +3184,14 @@ Do not return markdown wraps, only raw JSON text.
                           <StackedAreaGradient id="prodTrendEscapedGrad" color="#d4af37" theme={theme} />
                           <StackedAreaGradient id="prodTrendSupportGrad" color="#eab308" theme={theme} />
                           <StackedAreaGradient id="prodTrendChangeGrad" color="#a855f7" theme={theme} />
-                          <StackedAreaGradient id="prodTrendDataGrad" color="#f87171" theme={theme} />
-                          <StackedAreaGradient id="prodTrendBackendGrad" color="#10b981" theme={theme} />
                         </defs>
                         <XAxis dataKey="name" {...axisPreset()} />
                         <YAxis {...axisPreset()} />
                         <Tooltip content={<PremiumTooltip theme={theme} />} />
                         <Legend {...legendPreset} />
-                        <Area type="monotone" dataKey="escapedIssueProd" stackId="1" name="Escaped Issue" stroke="#d4af37" fill="url(#prodTrendEscapedGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                        <Area type="monotone" dataKey="supportFixProd" stackId="1" name="Support Fix" stroke="#eab308" fill="url(#prodTrendSupportGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                        <Area type="monotone" dataKey="changeRequestProd" stackId="1" name="Change Req" stroke="#a855f7" fill="url(#prodTrendChangeGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                        <Area type="monotone" dataKey="dataIssueProd" stackId="1" name="Data Issue" stroke="#f87171" fill="url(#prodTrendDataGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                        <Area type="monotone" dataKey="backendUpdationProd" stackId="1" name="Backend Update" stroke="#10b981" fill="url(#prodTrendBackendGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="productionIssuesProd" stackId="1" name="Total Production Issues" stroke="#d4af37" fill="url(#prodTrendEscapedGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="fixesForValidationProd" stackId="1" name="Fixes for Validation" stroke="#eab308" fill="url(#prodTrendSupportGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="escapedDefectsProd" stackId="1" name="Escaped Defects" stroke="#a855f7" fill="url(#prodTrendChangeGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>

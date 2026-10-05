@@ -63,9 +63,6 @@ function buildMarkdown(f: QAReportForm): string {
   const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
   const na = 'No updates available for this week.'
 
-  const lwTotal = f.lastWeek.support
-  const mtdTotal = f.monthToDate.support
-
   const passCount = f.releaseItems.filter(i => isPassStatus(i.status)).length
   const passRate = f.releaseItems.length ? Math.round((passCount / f.releaseItems.length) * 100) : 0
 
@@ -101,22 +98,16 @@ function buildMarkdown(f: QAReportForm): string {
   lines.push('\n### Last Week')
   lines.push('| Category | Count |')
   lines.push('|---|---|')
-  lines.push(`| Escaped Issue | ${f.lastWeek.escapedIssue} |`)
-  lines.push(`| Support | ${f.lastWeek.supportFix} |`)
-  lines.push(`| Change Request | ${f.lastWeek.changeRequest} |`)
-  lines.push(`| Data Issue | ${f.lastWeek.dataIssue} |`)
-  lines.push(`| Backend Updation | ${f.lastWeek.backendUpdation} |`)
-  lines.push(`| **Total (Support Mails)** | **${lwTotal}** |`)
+  lines.push(`| Total Production Issues | ${f.lastWeek.productionIssues} |`)
+  lines.push(`| Fixes for Validation | ${f.lastWeek.fixesForValidation} |`)
+  lines.push(`| Escaped Defects | ${f.lastWeek.escapedDefects} |`)
 
   lines.push('\n### Month To Date')
   lines.push('| Category | Count |')
   lines.push('|---|---|')
-  lines.push(`| Escaped Issue | ${f.monthToDate.escapedIssue} |`)
-  lines.push(`| Support | ${f.monthToDate.supportFix} |`)
-  lines.push(`| Change Request | ${f.monthToDate.changeRequest} |`)
-  lines.push(`| Data Issue | ${f.monthToDate.dataIssue} |`)
-  lines.push(`| Backend Updation | ${f.monthToDate.backendUpdation} |`)
-  lines.push(`| **Total (Support Mails)** | **${mtdTotal}** |`)
+  lines.push(`| Total Production Issues | ${f.monthToDate.productionIssues} |`)
+  lines.push(`| Fixes for Validation | ${f.monthToDate.fixesForValidation} |`)
+  lines.push(`| Escaped Defects | ${f.monthToDate.escapedDefects} |`)
 
   // Team Allocation
   lines.push('\n## Team Resource Allocation')
@@ -843,7 +834,7 @@ export const QAWeeklyReport: React.FC = () => {
             <KPICards />
           </DisabledSectionWrapper>
 
-          <DisabledSectionWrapper isEnabled={sectionVisibility.show_productionIssues !== false} sectionName="Production Issues">
+          <DisabledSectionWrapper isEnabled={sectionVisibility.show_productionIssues !== false} sectionName="Production & QA Health">
             <ProductionIssues />
           </DisabledSectionWrapper>
 
