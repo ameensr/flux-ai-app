@@ -1012,7 +1012,7 @@ create trigger projects_deletion_audit
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- SECTION 10: Weekly Reports (QA Weekly Report module)
--- (source: 007_weekly_reports.sql, 021, 031, 034, 044, 059 — 059 is final RLS)
+-- (source: 007_weekly_reports.sql, 021, 031, 034, 044, 059, 075 — 075 is final RLS)
 -- ══════════════════════════════════════════════════════════════════════════════
 
 create table if not exists public.weekly_reports (
@@ -1046,19 +1046,24 @@ drop policy if exists "weekly_reports_select_team" on public.weekly_reports;
 drop policy if exists "weekly_reports_update_team" on public.weekly_reports;
 drop policy if exists "weekly_reports_delete_team" on public.weekly_reports;
 
--- Final policies from 059 + tightened update/delete in 065 (shared-project only)
+-- Final policies from 059 + 075 (any project member can see project reports)
 create policy "weekly_reports_select_team" on public.weekly_reports
   for select using (
+    -- Own reports
     auth.uid() = user_id
-    or (
-      exists (select 1 from public.profiles p where p.id = auth.uid() and p.role in ('manager', 'qa_lead'))
+    or
+    -- Any member of the same project can see the report
+    (
+      project_id is not null
       and exists (
-        select 1 from public.project_members pm1
-        join public.project_members pm2 on pm1.project_id = pm2.project_id
-        where pm1.user_id = auth.uid() and pm2.user_id = weekly_reports.user_id
+        select 1 from public.project_members pm
+        where pm.user_id = auth.uid()
+          and pm.project_id = weekly_reports.project_id
       )
     )
-    or private.is_admin()
+    or
+    -- Admins see everything
+    private.is_admin()
   );
 
 create policy "weekly_reports_insert_own" on public.weekly_reports

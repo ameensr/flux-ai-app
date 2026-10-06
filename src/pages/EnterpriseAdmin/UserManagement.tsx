@@ -1,5 +1,6 @@
 // src/pages/EnterpriseAdmin/UserManagement.tsx
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase, SUPABASE_URL } from '@/lib/supabase'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -55,7 +56,7 @@ function ActionMenu({
   canManagePasswords: boolean
 }) {
   const [open, setOpen] = useState(false)
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number; dropUp: boolean }>({ top: 0, left: 0, dropUp: false })
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
   const buttonRef = React.useRef<HTMLButtonElement>(null)
 
   const actions = [
@@ -70,19 +71,27 @@ function ActionMenu({
     { id: 'delete', label: 'Delete User', icon: Trash2, danger: true },
   ]
 
-  const handleOpen = () => {
+  const handleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation()
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect()
       const spaceBelow = window.innerHeight - rect.bottom
-      const dropUp = spaceBelow < 240
+      const dropUp = spaceBelow < 220
       setMenuPos({
-        top: dropUp ? rect.top - 220 : rect.bottom + 4,
-        left: rect.right - 192, // 192 = w-48 (12rem)
-        dropUp,
+        top: dropUp ? rect.top - (actions.length * 40 + 8) : rect.bottom + 4,
+        left: Math.max(8, rect.right - 192),
       })
     }
     setOpen(v => !v)
   }
+
+  // Close on scroll so the menu doesn't float away from its anchor
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('scroll', close, true)
+    return () => window.removeEventListener('scroll', close, true)
+  }, [open])
 
   return (
     <>
@@ -93,40 +102,43 @@ function ActionMenu({
       >
         <MoreVertical className="w-4 h-4" />
       </button>
-      <AnimatePresence>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.15 }}
-              className="fixed z-[9999] w-48 py-1 rounded-xl border shadow-2xl"
-              style={{
-                top: menuPos.top,
-                left: Math.max(8, menuPos.left),
-                backgroundColor: 'var(--surface-elevated)',
-                borderColor: 'var(--border)',
-              }}
-            >
-              {actions.map(a => (
-                <button
-                  key={a.id}
-                  onClick={() => { setOpen(false); onAction(a.id, user) }}
-                  className={cn(
-                    'flex items-center gap-2.5 w-full px-4 py-2.5 text-xs font-medium transition-colors hover:bg-white/5',
-                    (a as any).danger ? 'text-red-400 hover:text-red-300' : 'text-text-secondary hover:text-white'
-                  )}
-                >
-                  <a.icon className="w-3.5 h-3.5" />
-                  {a.label}
-                </button>
-              ))}
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+
+      {open && createPortal(
+        <>
+          {/* backdrop */}
+          <div
+            className="fixed inset-0"
+            style={{ zIndex: 9998 }}
+            onClick={() => setOpen(false)}
+          />
+          {/* menu */}
+          <div
+            className="fixed w-48 py-1 rounded-xl border shadow-2xl"
+            style={{
+              zIndex: 9999,
+              top: menuPos.top,
+              left: menuPos.left,
+              backgroundColor: 'var(--surface-elevated)',
+              borderColor: 'var(--border)',
+            }}
+          >
+            {actions.map(a => (
+              <button
+                key={a.id}
+                onClick={(e) => { e.stopPropagation(); setOpen(false); onAction(a.id, user) }}
+                className={cn(
+                  'flex items-center gap-2.5 w-full px-4 py-2.5 text-xs font-medium transition-colors hover:bg-white/5',
+                  (a as any).danger ? 'text-red-400 hover:text-red-300' : 'text-text-secondary hover:text-white'
+                )}
+              >
+                <a.icon className="w-3.5 h-3.5" />
+                {a.label}
+              </button>
+            ))}
+          </div>
+        </>,
+        document.body
+      )}
     </>
   )
 }
@@ -821,11 +833,18 @@ function ChangeRoleModal({
     if (selectedRole === user.role) { onClose(); return }
     setSaving(true)
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: selectedRole })
-        .eq('id', user.id)
-      if (error) throw error
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Session expired. Please sign in again.')
+      const resp = await fetch(
+        `${SUPABASE_URL}/functions/v1/admin-permissions?action=update_user_role`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ user_id: user.id, role: selectedRole }),
+        }
+      )
+      const result = await resp.json()
+      if (!resp.ok) throw new Error(result.error ?? 'Failed to update role')
       toast({ title: 'Role Updated', description: `${user.full_name || user.email} → ${selectedRole}` })
       onSaved(user.id, selectedRole)
       onClose()
@@ -1034,11 +1053,18 @@ export function UserManagement() {
     } else if (action === 'change_status') {
       const newStatus: UserStatus = user.status === 'active' ? 'inactive' : 'active'
       try {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ status: newStatus })
-          .eq('id', user.id)
-        if (error) throw error
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) throw new Error('Session expired. Please sign in again.')
+        const resp = await fetch(
+          `${SUPABASE_URL}/functions/v1/admin-permissions?action=update_user_status`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ user_id: user.id, status: newStatus }),
+          }
+        )
+        const result = await resp.json()
+        if (!resp.ok) throw new Error(result.error ?? 'Failed to update status')
         setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u))
         toast({ title: 'Status Updated', description: `${user.full_name || user.email} is now ${newStatus}.` })
       } catch (e: any) {
