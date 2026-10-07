@@ -59,6 +59,9 @@ export const ROUTES = {
   // Bug Status Module
   bugStatus: '/bug-status',
 
+  // Support Issue Tracker Module
+  supportTracker: '/support-tracker',
+
   // QA Weekly Report Config
   qaReportConfig: '/qa-report/configuration', // Project Configurations (name/code/description/status)
   qaReportDropdownConfig: '/qa-report/dropdown-configuration', // Testing Status / Priority master dropdown lists
@@ -94,6 +97,7 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.enterpriseTeams]: 'admin',
   [ROUTES.dailyReport]: 'daily-report',
   [ROUTES.bugStatus]: 'bug-status',
+  [ROUTES.supportTracker]: 'support-tracker',
 }
 
 /** Resolve RBAC module for a pathname (exact or nested, e.g. `/project-hub/:id`). */

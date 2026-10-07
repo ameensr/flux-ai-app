@@ -48,6 +48,7 @@ const RequireFullNameGate = lazy(() =>
 )
 const DailyUpdateReport = lazy(() => import('@/modules/DailyUpdateReport').then(m => ({ default: m.DailyUpdateReport })))
 const BugStatus = lazy(() => import('@/modules/BugStatus').then(m => ({ default: m.BugStatus })))
+const SupportIssueTracker = lazy(() => import('@/modules/SupportIssueTracker').then(m => ({ default: m.SupportIssueTracker })))
 const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINews })))
 const MaintenancePage = lazy(() => import('@/pages/MaintenancePage').then(m => ({ default: m.MaintenancePage })))
 const QalyAiEngine404 = lazy(() => import('@/pages/qalyaiengine404/App'))
@@ -395,6 +396,8 @@ export default function App() {
             <Route path={ROUTES.qaReport} element={<QAWeeklyReport />} />
             <Route path={ROUTES.dailyReport} element={<DailyUpdateReport />} />
             <Route path={ROUTES.bugStatus} element={<BugStatus />} />
+            <Route path={ROUTES.supportTracker} element={<SupportIssueTracker />} />
+            <Route path="/support-issue-tracker" element={<Navigate to={ROUTES.supportTracker} replace />} />
             <Route path={ROUTES.qaReportConfig} element={<QAReportConfig />} />
             <Route path={ROUTES.qaReportDropdownConfig} element={<QAReportDropdownConfig />} />
             <Route path={ROUTES.aiNews} element={<AINews />} />

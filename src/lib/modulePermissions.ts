@@ -30,6 +30,11 @@ export type PermissionKey =
   | 'can_delete_custom_columns'
   | 'can_manage_org_config'
   | 'can_manage_project_config'
+  // ── Support Issue Tracker ──────────────────────────────────────────────
+  | 'can_view_dashboard'
+  | 'can_view_history'
+  | 'can_configure_dropdowns'
+  | 'can_import'
 
 export interface ModulePermissionDefinition {
   moduleKey: string
@@ -282,6 +287,26 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
     ],
     description: 'Upload bug tracker exports to analyze status distribution'
   },
+
+  // ── Support Issue Tracker ─────────────────────────────────────────────────
+
+  'support-tracker': {
+    moduleKey: 'support-tracker',
+    moduleName: 'Support Issue Tracker',
+    supportedPermissions: [
+      'can_view',
+      'can_view_dashboard',
+      'can_create',
+      'can_edit',
+      'can_delete',
+      'can_export',
+      'can_import',
+      'can_view_history',
+      'can_configure_dropdowns',
+      'can_manage_permissions',
+    ],
+    description: 'Enterprise QA & support issue tracking system with manager dashboard'
+  },
 }
 
 /**
@@ -343,6 +368,10 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   can_delete_custom_columns: 'Delete Custom Columns',
   can_manage_org_config: 'Manage Org-Level Config',
   can_manage_project_config: 'Manage Project-Level Config',
+  can_view_dashboard: 'View Support Dashboard',
+  can_view_history: 'View History',
+  can_configure_dropdowns: 'Configure Dropdowns',
+  can_import: 'Import Support Issues',
 }
 
 /**
@@ -375,4 +404,8 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   can_delete_custom_columns: 'Can permanently delete custom (non-system) columns',
   can_manage_org_config: 'Can manage the organization-wide default column configuration',
   can_manage_project_config: 'Can manage the column configuration for a specific project',
+  can_view_dashboard: 'Can view the Manager Live Dashboard overview and analytics',
+  can_view_history: 'Can view complete audit history logs and change trails',
+  can_configure_dropdowns: 'Can configure master dropdown lists (testing status, testers)',
+  can_import: 'Can import support issues in bulk from Excel/CSV',
 }

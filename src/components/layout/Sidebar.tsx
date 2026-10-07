@@ -8,6 +8,7 @@ import {
   LayoutDashboard, Bug, FileText, PenTool, Settings,
   ChevronLeft, Shield, LogOut, ClipboardList,
   ClipboardCheck, FolderKanban, UserRound, AlertCircle,
+  LifeBuoy,
 } from 'lucide-react'
 import { Logo } from '../ui/Logo'
 import { SignOutConfirmModal } from './SignOutConfirmModal'
@@ -16,6 +17,7 @@ import { ROUTES } from '@/lib/routes'
 
 const ALL_MENU_ITEMS = [
   { path: ROUTES.dashboard, label: 'Dashboard', icon: LayoutDashboard, moduleKey: 'dashboard' },
+  { path: ROUTES.supportTracker, label: 'Support Issue Tracker', icon: LifeBuoy, moduleKey: 'support-tracker' },
   { path: ROUTES.dailyReport, label: 'Daily Update Report', icon: ClipboardCheck, moduleKey: 'daily-report' },
   { path: ROUTES.bugStatus, label: "What's the Bug Status?", icon: AlertCircle, moduleKey: 'bug-status' },
   { path: ROUTES.bugRefiner, label: 'AI Bug Refiner', icon: Bug, moduleKey: 'bug-refiner' },
