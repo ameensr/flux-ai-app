@@ -397,7 +397,7 @@ export function SupportIssueTable({
                           {(issue.tester_name || 'U').slice(0, 1).toUpperCase()}
                         </div>
                         <span className="font-medium text-text-primary">
-                          {issue.tester_name || 'Unassigned'}
+                          {issue.tester_name ? (issue.tester_name.toLowerCase() === 'unassigned' ? 'Unassigned' : issue.tester_name.toUpperCase()) : 'Unassigned'}
                         </span>
                       </div>
                     </td>

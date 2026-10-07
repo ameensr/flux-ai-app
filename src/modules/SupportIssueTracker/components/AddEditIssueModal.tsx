@@ -35,7 +35,7 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
   const [startDate, setStartDate] = useState('')
   const [finishDate, setFinishDate] = useState('')
   const [testerName, setTesterName] = useState('')
-  const [estimatedHours, setEstimatedHours] = useState<number | string>(8)
+  const [estimatedHours, setEstimatedHours] = useState<number | string>(0)
   const [actualHours, setActualHours] = useState<number | string>(0)
   const [testingStatus, setTestingStatus] = useState('Not Started')
   const [comments, setComments] = useState('')
@@ -53,8 +53,11 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
       setReceivedDate(issueToEdit.received_date || new Date().toISOString().split('T')[0])
       setStartDate(issueToEdit.start_date || '')
       setFinishDate(issueToEdit.finish_date || '')
-      setTesterName(issueToEdit.tester_name || 'Unassigned')
-      setEstimatedHours(issueToEdit.estimated_hours ?? 8)
+      const matchTester = dropdownConfigs.testers.find(
+        t => t.value.toLowerCase() === (issueToEdit.tester_name || '').toLowerCase()
+      )
+      setTesterName(matchTester ? matchTester.value : (issueToEdit.tester_name ? (issueToEdit.tester_name === 'Unassigned' ? 'Unassigned' : issueToEdit.tester_name.toUpperCase()) : 'Unassigned'))
+      setEstimatedHours(issueToEdit.estimated_hours ?? 0)
       setActualHours(issueToEdit.actual_hours ?? 0)
       setTestingStatus(issueToEdit.testing_status || 'Not Started')
       setComments(issueToEdit.comments || '')
@@ -67,8 +70,8 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
       setReceivedDate(new Date().toISOString().split('T')[0])
       setStartDate('')
       setFinishDate('')
-      setTesterName(dropdownConfigs.testers[0]?.value || 'Unassigned')
-      setEstimatedHours(8)
+      setTesterName(dropdownConfigs.testers[0]?.value ? dropdownConfigs.testers[0].value.toUpperCase() : 'Unassigned')
+      setEstimatedHours(0)
       setActualHours(0)
       setTestingStatus('Not Started')
       setComments('')
@@ -125,7 +128,7 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
           received_date: receivedDate,
           start_date: startDate || null,
           finish_date: finishDate || null,
-          tester_name: testerName || 'Unassigned',
+          tester_name: testerName && testerName !== 'Unassigned' ? testerName.trim().toUpperCase() : 'Unassigned',
           estimated_hours: Number(estimatedHours) || 0,
           actual_hours: Number(actualHours) || 0,
           testing_status: testingStatus,
@@ -316,8 +319,8 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
                   >
                     <option value="Unassigned">Unassigned</option>
                     {dropdownConfigs.testers.filter(t => t.is_active).map((t) => (
-                      <option key={t.id} value={t.value}>
-                        {t.label}
+                      <option key={t.id} value={t.value.toUpperCase()}>
+                        {t.label.toUpperCase()}
                       </option>
                     ))}
                   </select>

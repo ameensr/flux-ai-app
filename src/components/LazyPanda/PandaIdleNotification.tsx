@@ -18,13 +18,19 @@ export interface PandaIdleNotificationProps {
 }
 
 export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () => {
-  const { isIdle, message, enabled, resetIdle } = useIdleDetection()
   const prefersReducedMotion = usePrefersReducedMotion()
   const isAuthenticated = useAppStore(s => s.isAuthenticated)
   const [userEnabled] = usePandaEnabled()
   const globalConfig = usePandaConfigStore(s => s.config)
   const profile = useAppStore(s => s.profile)
   const user = useAppStore(s => s.user)
+
+  // Only track idle state when the user is logged in and feature is enabled
+  const isDetectionActive = isAuthenticated && globalConfig.enabled && userEnabled
+
+  const { isIdle, message, enabled, resetIdle } = useIdleDetection({
+    enabled: isDetectionActive,
+  })
 
   // Resolve user display name (full_name -> metadata name -> email handle)
   const resolvedName =
@@ -38,15 +44,13 @@ export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () =>
     return formatPandaIdleMessage(message, resolvedName)
   }, [message, resolvedName])
 
-  // If feature is disabled via .env or globally disabled by admin/user, don't show
-  if (!enabled || !globalConfig.enabled || !userEnabled) {
+  // Panda idle notification is strictly for logged-in users and when enabled
+  if (!isAuthenticated || !enabled || !globalConfig.enabled || !userEnabled) {
     return null
   }
 
   // Float above the AICopilot floating action button when on dashboard
-  const positionClass = isAuthenticated
-    ? 'bottom-24 right-6 sm:right-8'
-    : 'bottom-6 right-6 sm:bottom-8 sm:right-8'
+  const positionClass = 'bottom-24 right-6 sm:right-8'
 
   return (
     <AnimatePresence>

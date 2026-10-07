@@ -24,7 +24,8 @@ import {
   saveDropdownConfigurations,
   fetchSupportTimeLogs,
   addSupportTimeLog,
-  deleteSupportTimeLog
+  deleteSupportTimeLog,
+  LOCAL_STORAGE_ISSUES_KEY
 } from './supportTrackerService'
 
 interface SupportTrackerState {
@@ -202,6 +203,11 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
         ? state.issues.map(i => (i.id === saved.id ? saved : i))
         : [saved, ...state.issues]
 
+      // Save to localStorage immediately
+      try {
+        localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(nextIssues))
+      } catch { /* ignore */ }
+
       // Re-fetch history in background
       fetchSupportHistory().then((hist) => set({ history: hist }))
 
@@ -217,14 +223,25 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
 
     set((state) => {
       const nextIssues = state.issues.filter(i => i.id !== issueId)
+      try {
+        localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(nextIssues))
+      } catch { /* ignore */ }
       fetchSupportHistory().then((hist) => set({ history: hist }))
       return { issues: nextIssues }
     })
   },
 
   updateDropdowns: async (configs, user) => {
-    await saveDropdownConfigurations(configs, user)
-    set({ dropdownConfigs: configs })
+    const normalizedConfigs = {
+      testing_status: configs.testing_status,
+      testers: configs.testers.map(t => ({
+        ...t,
+        label: t.label.trim().toUpperCase(),
+        value: t.value.trim().toUpperCase()
+      }))
+    }
+    await saveDropdownConfigurations(normalizedConfigs, user)
+    set({ dropdownConfigs: normalizedConfigs })
     fetchSupportHistory().then((hist) => set({ history: hist }))
   },
 
@@ -288,7 +305,8 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
 
       // 3. Tester Filter
       if (filters.tester && filters.tester.length > 0) {
-        if (!filters.tester.includes(issue.tester_name)) return false
+        const filterSet = new Set(filters.tester.map(f => f.toLowerCase()))
+        if (!filterSet.has((issue.tester_name || '').toLowerCase())) return false
       }
 
       // 4. Received Date Range
@@ -439,7 +457,7 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
 
     // Initialize all active configured testers so all testers appear in workload
     for (const t of dropdownConfigs.testers.filter(t => t.is_active)) {
-      testerMap.set(t.label, {
+      testerMap.set(t.label.toUpperCase(), {
         activeIssues: 0,
         estimatedHrs: 0,
         actualHrs: 0,
@@ -450,7 +468,8 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
 
     // Accumulate from filtered issues
     for (const issue of filtered) {
-      const name = issue.tester_name || 'Unassigned'
+      const rawName = issue.tester_name || 'Unassigned'
+      const name = rawName === 'Unassigned' ? 'Unassigned' : rawName.toUpperCase()
       const existing = testerMap.get(name) || {
         activeIssues: 0,
         estimatedHrs: 0,

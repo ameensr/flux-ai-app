@@ -156,6 +156,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
   const {
     setUser, setProfile, setPermissionMap, setPermissionsLoaded, initSession,
   } = useAppStore()
+  const isAuthenticated = useAppStore(s => s.isAuthenticated)
 
   const [ready, setReady] = React.useState(false)
   const initPromiseRef = React.useRef<Promise<void> | null>(null)
@@ -342,7 +343,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       <Toaster />
       <AIRestrictedModal />
       <SessionExpiredToast />
-      <PandaIdleNotification />
+      {isAuthenticated && <PandaIdleNotification />}
     </>
   )
 }

@@ -168,7 +168,7 @@ export function ManagerLiveDashboard() {
               <option value="">All Testers</option>
               {dropdownConfigs.testers.filter(t => t.is_active).map((t) => (
                 <option key={t.id} value={t.value}>
-                  {t.label}
+                  {t.label.toUpperCase()}
                 </option>
               ))}
             </select>
@@ -599,7 +599,7 @@ export function ManagerLiveDashboard() {
                           {tester.testerName.slice(0, 2).toUpperCase()}
                         </div>
                         <span className="font-semibold text-xs text-text-primary">
-                          {tester.testerName}
+                          {tester.testerName.toUpperCase()}
                         </span>
                       </div>
 

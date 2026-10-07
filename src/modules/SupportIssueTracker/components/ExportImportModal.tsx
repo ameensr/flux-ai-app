@@ -132,8 +132,11 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
             received_date: row['Received Date'] || new Date().toISOString().split('T')[0],
             start_date: row['Start Date'] || null,
             finish_date: row['Finish Date'] || null,
-            tester_name: row["Who's Testing"] || row['Tester'] || 'Unassigned',
-            estimated_hours: Number(row['Estimation Hrs'] || row['Estimated Hours'] || 8),
+            tester_name: (() => {
+              const rawT = String(row["Who's Testing"] || row['Tester'] || 'Unassigned').trim()
+              return rawT.toLowerCase() === 'unassigned' ? 'Unassigned' : rawT.toUpperCase()
+            })(),
+            estimated_hours: Number(row['Estimation Hrs'] || row['Estimated Hours'] || 0),
             actual_hours: Number(row['Actual Hrs'] || row['Actual Hours'] || 0),
             testing_status: row['Testing Status'] || row['Status'] || 'Not Started',
             comments: row['Comments'] || ''

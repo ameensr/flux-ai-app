@@ -43,14 +43,14 @@ export function AddTimeLogModal({ isOpen, issue, onClose, onSuccess }: Props) {
       setHoursAdded('2')
       setComment('')
       setErrorMsg(null)
-      // Default tester to current user full name, email, or issue assigned tester
+      // Default tester to current user full name, email, or issue assigned tester (ALL CAPS)
       const currentUserName =
         profile?.full_name ||
         user?.user_metadata?.full_name ||
         user?.user_metadata?.name ||
         issue.tester_name ||
-        'Ameen'
-      setTesterName(currentUserName)
+        'AMEEN'
+      setTesterName(currentUserName.toUpperCase())
 
       // Default date to current local date and time formatted for datetime-local
       const now = new Date()
@@ -90,7 +90,7 @@ export function AddTimeLogModal({ isOpen, issue, onClose, onSuccess }: Props) {
         {
           issue_id: issue.issue_id,
           support_issue_id: issue.id,
-          user_name: testerName || actorName,
+          user_name: (testerName || actorName).trim().toUpperCase(),
           user_id: user?.id,
           hours_added: parsedHours,
           comment: comment.trim(),
@@ -246,9 +246,9 @@ export function AddTimeLogModal({ isOpen, issue, onClose, onSuccess }: Props) {
                 <input
                   type="text"
                   value={testerName}
-                  onChange={(e) => setTesterName(e.target.value)}
-                  placeholder="Tester Name (e.g. Ameen SR)"
-                  className="w-full h-9 pl-9 pr-3 text-xs bg-surface-elevated border border-border/50 rounded-xl text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/50 font-medium"
+                  onChange={(e) => setTesterName(e.target.value.toUpperCase())}
+                  placeholder="Tester Name (e.g. AMEEN SR)"
+                  className="w-full h-9 pl-9 pr-3 text-xs bg-surface-elevated border border-border/50 rounded-xl text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/50 font-medium uppercase font-mono"
                 />
               </div>
             </div>

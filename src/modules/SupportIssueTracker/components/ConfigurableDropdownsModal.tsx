@@ -54,7 +54,13 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
   // Re-sync when modal opens
   React.useEffect(() => {
     setStatuses(dropdownConfigs.testing_status)
-    setTesters(dropdownConfigs.testers)
+    setTesters(
+      dropdownConfigs.testers.map(t => ({
+        ...t,
+        label: t.label.toUpperCase(),
+        value: t.value.toUpperCase()
+      }))
+    )
     setNewLabel('')
   }, [isOpen, dropdownConfigs])
 
@@ -63,22 +69,25 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
     if (!newLabel.trim()) return
 
     if (activeTab === 'testing_status') {
+      const trimmedLabel = newLabel.trim()
       const newItem: SupportDropdownOption = {
         id: `ts-${Date.now()}`,
         category: 'testing_status',
-        label: newLabel.trim(),
-        value: newLabel.trim(),
+        label: trimmedLabel,
+        value: trimmedLabel,
         color: newColor,
         is_active: true,
         sort_order: statuses.length + 1
       }
       setStatuses([...statuses, newItem])
     } else {
+      // Tester names must ALWAYS be in FULL CAPITAL for uniformity
+      const cleanUpperName = newLabel.trim().toUpperCase()
       const newItem: SupportDropdownOption = {
         id: `tester-${Date.now()}`,
         category: 'tester',
-        label: newLabel.trim(),
-        value: newLabel.trim(),
+        label: cleanUpperName,
+        value: cleanUpperName,
         is_active: true,
         sort_order: testers.length + 1
       }
@@ -110,19 +119,21 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
     setSyncingProfiles(true)
     try {
       const profileNames = await syncTestersFromUserProfiles()
-      const existingTesterNames = new Set(testers.map(t => t.value.toLowerCase()))
+      const existingTesterNames = new Set(testers.map(t => t.value.toUpperCase()))
       const newAdditions: SupportDropdownOption[] = []
 
       for (const name of profileNames) {
-        if (!existingTesterNames.has(name.toLowerCase())) {
+        const upperName = name.trim().toUpperCase()
+        if (!existingTesterNames.has(upperName)) {
           newAdditions.push({
             id: `tester-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
             category: 'tester',
-            label: name,
-            value: name,
+            label: upperName,
+            value: upperName,
             is_active: true,
             sort_order: testers.length + newAdditions.length + 1
           })
+          existingTesterNames.add(upperName)
         }
       }
 
@@ -130,7 +141,7 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
         setTesters([...testers, ...newAdditions])
         toast({
           title: 'Testers Synchronized',
-          description: `Added ${newAdditions.length} active users from system profiles.`
+          description: `Added ${newAdditions.length} active users in ALL CAPS from system profiles.`
         })
       } else {
         toast({
@@ -154,10 +165,15 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
     setSaving(true)
     try {
       const currentUser = { name: 'Ameen SR' }
+      const normalizedTesters = testers.map(t => ({
+        ...t,
+        label: t.label.trim().toUpperCase(),
+        value: t.value.trim().toUpperCase()
+      }))
       await updateDropdowns(
         {
           testing_status: statuses,
-          testers: testers
+          testers: normalizedTesters
         },
         currentUser
       )
@@ -257,13 +273,23 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
                   <input
                     type="text"
                     value={newLabel}
-                    onChange={(e) => setNewLabel(e.target.value)}
+                    onChange={(e) =>
+                      setNewLabel(activeTab === 'testers' ? e.target.value.toUpperCase() : e.target.value)
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleAddItem()
+                      }
+                    }}
                     placeholder={
                       activeTab === 'testing_status'
                         ? 'e.g. In Security Review'
-                        : 'e.g. John Doe'
+                        : 'e.g. JOHN DOE'
                     }
-                    className="flex-1 h-9 bg-surface-elevated border border-white/15 rounded-lg px-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                    className={`flex-1 h-9 bg-surface-elevated border border-white/15 rounded-lg px-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent ${
+                      activeTab === 'testers' ? 'uppercase font-mono tracking-wider' : ''
+                    }`}
                   />
 
                   {activeTab === 'testing_status' && (
@@ -330,8 +356,8 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
                             style={{ backgroundColor: item.color }}
                           />
                         )}
-                        <span className={`font-semibold ${item.is_active ? 'text-text-primary' : 'text-text-muted line-through'}`}>
-                          {item.label}
+                        <span className={`font-semibold ${item.is_active ? 'text-text-primary' : 'text-text-muted line-through'} ${activeTab === 'testers' ? 'uppercase font-mono tracking-wide' : ''}`}>
+                          {activeTab === 'testers' ? item.label.toUpperCase() : item.label}
                         </span>
                       </div>
 

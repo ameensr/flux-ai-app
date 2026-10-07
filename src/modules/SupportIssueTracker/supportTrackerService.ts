@@ -15,10 +15,34 @@ import type {
 import { DEFAULT_TESTING_STATUSES } from './types'
 import * as XLSX from 'xlsx'
 
-const LOCAL_STORAGE_ISSUES_KEY = 'qaly_support_tracker_issues_v2'
-const LOCAL_STORAGE_HISTORY_KEY = 'qaly_support_tracker_history_v2'
-const LOCAL_STORAGE_DROPDOWNS_KEY = 'qaly_support_tracker_dropdowns_v2'
-const LOCAL_STORAGE_TIMELOGS_KEY = 'qaly_support_tracker_time_logs_v2'
+export const LOCAL_STORAGE_ISSUES_KEY = 'qaly_support_tracker_issues_v2'
+export const LOCAL_STORAGE_HISTORY_KEY = 'qaly_support_tracker_history_v2'
+export const LOCAL_STORAGE_DROPDOWNS_KEY = 'qaly_support_tracker_dropdowns_v2'
+export const LOCAL_STORAGE_TIMELOGS_KEY = 'qaly_support_tracker_time_logs_v2'
+
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
+
+export function isUUID(val?: string | null): boolean {
+  if (!val) return false
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val)
+}
+
+function toValidUUID(id?: string | null): string {
+  if (id && isUUID(id)) return id
+  if (id === 'proj-001') return '00000000-0000-4000-8000-000000000001'
+  if (id === 'proj-002') return '00000000-0000-4000-8000-000000000002'
+  if (id === 'proj-003') return '00000000-0000-4000-8000-000000000003'
+  return generateUUID()
+}
 
 // Automatic cleanup of legacy dummy seed data from localStorage
 const DUMMY_CLEANUP_KEY = 'qaly_support_tracker_dummy_removed_v2'
@@ -39,15 +63,15 @@ if (typeof window !== 'undefined') {
   }
 }
 
-// Default fallback tester options
+// Default fallback tester options (all in FULL CAPITAL for uniformity)
 export const DEFAULT_TESTERS = [
-  'Ameen SR',
-  'Sarah Jenkins',
-  'Michael Ross',
-  'Emily Taylor',
-  'David Kumar',
-  'Alex Chen',
-  'Rachel Green'
+  'AMEEN SR',
+  'SARAH JENKINS',
+  'MICHAEL ROSS',
+  'EMILY TAYLOR',
+  'DAVID KUMAR',
+  'ALEX CHEN',
+  'RACHEL GREEN'
 ]
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -90,7 +114,7 @@ export async function fetchProductsFromProjectHub(): Promise<ProjectWithMembers[
   // Graceful fallback sample projects in development if no projects exist yet
   return [
     {
-      id: 'proj-001',
+      id: '00000000-0000-4000-8000-000000000001',
       name: 'Qaly AI Engine Core',
       project_code: 'QALY-CORE',
       description: 'Core AI Agentic Engine and Execution Pipeline',
@@ -107,7 +131,7 @@ export async function fetchProductsFromProjectHub(): Promise<ProjectWithMembers[
       member_count: 5
     },
     {
-      id: 'proj-002',
+      id: '00000000-0000-4000-8000-000000000002',
       name: 'Flux Web Portal',
       project_code: 'FLUX-WEB',
       description: 'Enterprise User Interface and Analytics Portal',
@@ -124,7 +148,7 @@ export async function fetchProductsFromProjectHub(): Promise<ProjectWithMembers[
       member_count: 4
     },
     {
-      id: 'proj-003',
+      id: '00000000-0000-4000-8000-000000000003',
       name: 'Mobile QA Companion',
       project_code: 'MOB-QA',
       description: 'Cross-platform Mobile Test Automation Service',
@@ -170,6 +194,21 @@ export async function fetchSupportIssues(products: ProjectWithMembers[]): Promis
     })
   }
 
+  // 1. First retrieve existing locally cached issues
+  let localIssues: SupportIssue[] = []
+  const cached = localStorage.getItem(LOCAL_STORAGE_ISSUES_KEY)
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached) as SupportIssue[]
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        localIssues = parsed.filter(item => !item.id?.startsWith('issue-100'))
+      }
+    } catch (e) {
+      console.warn('Failed parsing cached issues', e)
+    }
+  }
+
+  // 2. Fetch from Supabase
   try {
     const { data, error } = await supabase
       .from('support_issues')
@@ -193,7 +232,14 @@ export async function fetchSupportIssues(products: ProjectWithMembers[]): Promis
           overrun_hours: isOverrun ? Math.round((act - est) * 100) / 100 : 0
         }
       })
-      const synced = syncWithTimeLogs(mapped)
+
+      // Merge: Keep all DB records, plus any local issues not yet synced
+      const dbIds = new Set(mapped.map((m: any) => m.id))
+      const dbIssueIds = new Set(mapped.map((m: any) => m.issue_id))
+      const pendingLocal = localIssues.filter(l => !dbIds.has(l.id) && !dbIssueIds.has(l.issue_id))
+      const merged = [...mapped, ...pendingLocal]
+
+      const synced = syncWithTimeLogs(merged)
       localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(synced))
       return synced
     }
@@ -201,28 +247,16 @@ export async function fetchSupportIssues(products: ProjectWithMembers[]): Promis
     console.warn('[supportTrackerService] supabase fetchSupportIssues error:', err)
   }
 
-  // Local storage fallback (excluding any legacy dummy items)
-  const cached = localStorage.getItem(LOCAL_STORAGE_ISSUES_KEY)
-  if (cached) {
-    try {
-      const parsed = JSON.parse(cached) as SupportIssue[]
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const nonDummy = parsed.filter(item => !item.id?.startsWith('issue-100'))
-        if (nonDummy.length > 0) {
-          // Re-sync product names with Project Hub
-          const synced = syncWithTimeLogs(nonDummy.map(item => {
-            const matchingProject = products.find(p => p.id === item.project_id)
-            return matchingProject ? { ...item, product_name: matchingProject.name } : item
-          }))
-          return synced
-        }
-      }
-    } catch (e) {
-      console.warn('Failed parsing cached issues', e)
-    }
+  // 3. Fallback: If Supabase returned empty or error, use local storage issues
+  if (localIssues.length > 0) {
+    const synced = syncWithTimeLogs(localIssues.map(item => {
+      const matchingProject = products.find(p => p.id === item.project_id)
+      return matchingProject ? { ...item, product_name: matchingProject.name } : item
+    }))
+    localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(synced))
+    return synced
   }
 
-  // Return empty list if no user issues exist
   return []
 }
 
@@ -346,9 +380,10 @@ export async function saveSupportIssue(
     const nextSlNo = allIssues.length > 0 ? Math.max(...allIssues.map(i => i.sl_no || 0)) + 1 : 1
     const nextIssueNum = 1024 + nextSlNo
     const autoIssueId = issue.issue_id?.trim() || `SUP-${nextIssueNum}`
+    const generatedId = (issue.id && isUUID(issue.id)) ? issue.id : generateUUID()
 
     savedIssue = {
-      id: `issue-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      id: generatedId,
       sl_no: nextSlNo,
       issue_id: autoIssueId,
       project_id: issue.project_id,
@@ -357,14 +392,14 @@ export async function saveSupportIssue(
       received_date: issue.received_date || new Date().toISOString().split('T')[0],
       start_date: issue.start_date ?? null,
       finish_date: issue.finish_date ?? null,
-      tester_name: issue.tester_name || 'Unassigned',
+      tester_name: issue.tester_name && issue.tester_name !== 'Unassigned' ? issue.tester_name.trim().toUpperCase() : 'Unassigned',
       estimated_hours: est,
       actual_hours: act,
       remaining_hours: remaining,
       overrun_hours: overrun,
       testing_status: issue.testing_status || 'Not Started',
       comments: issue.comments || '',
-      created_by: currentUser.id || null,
+      created_by: (currentUser.id && isUUID(currentUser.id)) ? currentUser.id : null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
@@ -381,12 +416,17 @@ export async function saveSupportIssue(
     })
   }
 
-  // Try DB persistence
+  // 1. Immediately update and persist to LocalStorage (Guaranteed persistence across refresh)
+  const updatedIssues = isEdit
+    ? allIssues.map(i => i.id === savedIssue.id ? savedIssue : i)
+    : [savedIssue, ...allIssues.filter(i => i.id !== savedIssue.id)]
+  localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(updatedIssues))
+
+  // 2. Try DB persistence in Supabase
   try {
-    await supabase.from('support_issues').upsert({
-      id: savedIssue.id,
+    const payload: any = {
+      id: isUUID(savedIssue.id) ? savedIssue.id : generateUUID(),
       sl_no: savedIssue.sl_no,
-      project_id: savedIssue.project_id,
       product_name: savedIssue.product_name,
       issue_id: savedIssue.issue_id,
       description: savedIssue.description,
@@ -399,7 +439,16 @@ export async function saveSupportIssue(
       testing_status: savedIssue.testing_status,
       comments: savedIssue.comments,
       updated_at: savedIssue.updated_at
-    })
+    }
+
+    if (savedIssue.project_id && isUUID(savedIssue.project_id)) {
+      payload.project_id = savedIssue.project_id
+    }
+
+    const { error: dbError } = await supabase.from('support_issues').upsert(payload)
+    if (dbError) {
+      console.warn('[supportTrackerService] supabase save error:', dbError)
+    }
   } catch (err) {
     console.warn('[supportTrackerService] supabase save error:', err)
   }
@@ -425,6 +474,10 @@ export async function deleteSupportIssue(
       new_value: '(Deleted)'
     })
   }
+
+  // Immediately persist deletion in LocalStorage
+  const updatedIssues = allIssues.filter(i => i.id !== issueId)
+  localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(updatedIssues))
 
   try {
     await supabase.from('support_issues').delete().eq('id', issueId)
@@ -751,7 +804,7 @@ export async function fetchSupportHistory(): Promise<SupportIssueHistoryRecord[]
     try {
       const parsed = JSON.parse(cached)
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.filter((h: any) => !h.id?.startsWith('hist-'))
+        return parsed
       }
     } catch { /* ignore */ }
   }
@@ -761,11 +814,11 @@ export async function fetchSupportHistory(): Promise<SupportIssueHistoryRecord[]
 
 export function logHistoryEvent(event: Omit<SupportIssueHistoryRecord, 'id' | 'timestamp'> & { timestamp?: string }): void {
   const newRecord: SupportIssueHistoryRecord = {
-    id: `hist-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    id: generateUUID(),
     issue_id: event.issue_id,
     product_name: event.product_name,
     user_name: event.user_name || 'System User',
-    user_id: event.user_id || null,
+    user_id: (event.user_id && isUUID(event.user_id)) ? event.user_id : null,
     action: event.action,
     field: event.field || '',
     old_value: event.old_value ?? null,
@@ -851,10 +904,17 @@ export async function fetchDropdownConfigurations(): Promise<{
     testerOptions = DEFAULT_TESTERS.map((name, index) => ({
       id: `tester-${index + 1}`,
       category: 'tester',
-      label: name,
-      value: name,
+      label: name.toUpperCase(),
+      value: name.toUpperCase(),
       is_active: true,
       sort_order: index + 1
+    }))
+  } else {
+    // Ensure all testers loaded from Supabase or localStorage are in FULL CAPITAL
+    testerOptions = testerOptions.map(t => ({
+      ...t,
+      label: t.label.toUpperCase(),
+      value: t.value.toUpperCase()
     }))
   }
 
@@ -867,7 +927,18 @@ export async function saveDropdownConfigurations(
   configs: { testing_status: SupportDropdownOption[]; testers: SupportDropdownOption[] },
   currentUser: { name: string; id?: string }
 ): Promise<void> {
-  localStorage.setItem(LOCAL_STORAGE_DROPDOWNS_KEY, JSON.stringify(configs))
+  // Normalize all tester options to FULL CAPITAL
+  const normalizedTesters = configs.testers.map(t => ({
+    ...t,
+    label: t.label.trim().toUpperCase(),
+    value: t.value.trim().toUpperCase()
+  }))
+  const normalizedConfigs = {
+    testing_status: configs.testing_status,
+    testers: normalizedTesters
+  }
+
+  localStorage.setItem(LOCAL_STORAGE_DROPDOWNS_KEY, JSON.stringify(normalizedConfigs))
 
   logHistoryEvent({
     issue_id: 'CONFIG',
@@ -877,12 +948,12 @@ export async function saveDropdownConfigurations(
     action: 'Dropdown Configuration Change',
     field: 'Dropdown Master List',
     old_value: 'Previous options',
-    new_value: `Updated ${configs.testing_status.length} statuses, ${configs.testers.length} testers`
+    new_value: `Updated ${normalizedConfigs.testing_status.length} statuses, ${normalizedConfigs.testers.length} testers`
   })
 
   // Upsert to Supabase
   try {
-    const all = [...configs.testing_status, ...configs.testers]
+    const all = [...normalizedConfigs.testing_status, ...normalizedConfigs.testers]
     for (const item of all) {
       await supabase.from('support_issue_dropdown_configs').upsert({
         id: item.id.startsWith('ts-') || item.id.startsWith('tester-') ? undefined : item.id,
@@ -912,7 +983,7 @@ export async function syncTestersFromUserProfiles(): Promise<string[]> {
 
     if (!error && data && data.length > 0) {
       const names = data
-        .map(p => p.full_name?.trim() || p.email?.split('@')[0])
+        .map(p => (p.full_name?.trim() || p.email?.split('@')[0])?.toUpperCase())
         .filter(Boolean) as string[]
       return Array.from(new Set([...names, ...DEFAULT_TESTERS]))
     }
