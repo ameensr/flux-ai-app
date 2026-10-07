@@ -19,6 +19,7 @@ import { useMaintenanceStore } from '@/store/useMaintenanceStore'
 import { useAIPlatformStore } from '@/store/useAIPlatformStore'
 import { useToast } from '@/hooks/use-toast'
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog'
+import { PandaIdleNotification } from '@/components/LazyPanda'
 
 // ── Idle timeout context ──────────────────────────────────────────────────────
 type RegisterOperationFn = (key: string) => () => void
@@ -340,6 +341,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       <Toaster />
       <AIRestrictedModal />
       <SessionExpiredToast />
+      <PandaIdleNotification />
     </>
   )
 }
