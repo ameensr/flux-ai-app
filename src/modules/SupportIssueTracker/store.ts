@@ -19,6 +19,7 @@ import {
   fetchSupportIssues,
   saveSupportIssue,
   deleteSupportIssue as apiDeleteIssue,
+  toggleSupportIssueEstimationLock,
   fetchSupportHistory,
   fetchDropdownConfigurations,
   saveDropdownConfigurations,
@@ -54,6 +55,11 @@ interface SupportTrackerState {
     user: { name: string; id?: string }
   ) => Promise<SupportIssue>
   deleteIssue: (issueId: string, user: { name: string; id?: string }) => Promise<void>
+  toggleEstimationLock: (
+    issueId: string,
+    shouldLock: boolean,
+    user: { name: string; id?: string }
+  ) => Promise<SupportIssue>
   updateDropdowns: (
     configs: { testing_status: SupportDropdownOption[]; testers: SupportDropdownOption[] },
     user: { name: string; id?: string }
@@ -93,7 +99,8 @@ const DEFAULT_FILTERS: SupportFilters = {
   startDateEnd: '',
   finishDateStart: '',
   finishDateEnd: '',
-  searchQuery: ''
+  searchQuery: '',
+  estimationLock: 'all'
 }
 
 export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => ({
@@ -232,6 +239,17 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
     set({ issues: nextIssues, history: hist })
   },
 
+  toggleEstimationLock: async (issueId, shouldLock, user) => {
+    const { issues } = get()
+    const updated = await toggleSupportIssueEstimationLock(issueId, shouldLock, user, issues)
+    set((state) => ({
+      issues: state.issues.map((i) => (i.id === updated.id ? updated : i))
+    }))
+    const hist = await fetchSupportHistory()
+    set({ history: hist })
+    return updated
+  },
+
   updateDropdowns: async (configs, user) => {
     const normalizedConfigs = {
       testing_status: configs.testing_status,
@@ -353,6 +371,12 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
           issue.tester_name.toLowerCase().includes(query) ||
           (issue.comments && issue.comments.toLowerCase().includes(query))
         if (!matches) return false
+      }
+
+      // 8. Estimation Lock Filter
+      if (filters.estimationLock && filters.estimationLock !== 'all') {
+        if (filters.estimationLock === 'locked' && !issue.estimated_hours_locked) return false
+        if (filters.estimationLock === 'unlocked' && issue.estimated_hours_locked) return false
       }
 
       return true

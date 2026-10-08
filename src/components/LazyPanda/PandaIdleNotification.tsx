@@ -9,7 +9,7 @@ import { PandaSVG } from './PandaSVG'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useIdleDetection } from '@/hooks/useIdleDetection'
 import { useAppStore } from '@/store/useAppStore'
-import { formatPandaIdleMessage } from '@/lib/pandaIdleConfig'
+import { formatPandaIdleMessage, getPandaIdleConfig } from '@/lib/pandaIdleConfig'
 import { usePandaConfigStore } from './pandaConfig'
 import { usePandaEnabled } from './useLazyPanda'
 
@@ -18,6 +18,7 @@ export interface PandaIdleNotificationProps {
 }
 
 export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () => {
+  const envConfig = getPandaIdleConfig()
   const prefersReducedMotion = usePrefersReducedMotion()
   const isAuthenticated = useAppStore(s => s.isAuthenticated)
   const [userEnabled] = usePandaEnabled()
@@ -25,8 +26,13 @@ export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () =>
   const profile = useAppStore(s => s.profile)
   const user = useAppStore(s => s.user)
 
-  // Only track idle state when the user is logged in and feature is enabled
-  const isDetectionActive = isAuthenticated && globalConfig.enabled && userEnabled
+  // Only track idle state when .env enables it, user is logged in, and toggles are on
+  const isDetectionActive =
+    envConfig.enabled &&
+    isAuthenticated &&
+    globalConfig.enabled &&
+    globalConfig.features?.idleSleep !== false &&
+    userEnabled
 
   const { isIdle, message, enabled, resetIdle } = useIdleDetection({
     enabled: isDetectionActive,
@@ -44,8 +50,15 @@ export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () =>
     return formatPandaIdleMessage(message, resolvedName)
   }, [message, resolvedName])
 
-  // Panda idle notification is strictly for logged-in users and when enabled
-  if (!isAuthenticated || !enabled || !globalConfig.enabled || !userEnabled) {
+  // Panda idle notification is strictly for logged-in users and when enabled via env & settings
+  if (
+    !envConfig.enabled ||
+    !isAuthenticated ||
+    !enabled ||
+    !globalConfig.enabled ||
+    globalConfig.features?.idleSleep === false ||
+    !userEnabled
+  ) {
     return null
   }
 

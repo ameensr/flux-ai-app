@@ -306,6 +306,17 @@ export async function saveSupportIssue(
     const existingIndex = allIssues.findIndex(i => i.id === issue.id)
     const existing = existingIndex !== -1 ? allIssues[existingIndex] : null
 
+    // Enforce Estimation Lock server/service validation (Requirement 10, 16 & 25)
+    if (
+      existing?.estimated_hours_locked &&
+      issue.estimated_hours !== undefined &&
+      est !== Number(existing.estimated_hours)
+    ) {
+      throw new Error(
+        'Estimated Hours are locked and cannot be modified. Please contact an authorized user to unlock the estimation.'
+      )
+    }
+
     savedIssue = {
       ...existing,
       ...issue,
@@ -319,7 +330,10 @@ export async function saveSupportIssue(
       start_date: issue.start_date ?? null,
       finish_date: issue.finish_date ?? null,
       tester_name: issue.tester_name || existing?.tester_name || 'Unassigned',
-      estimated_hours: est,
+      estimated_hours: existing?.estimated_hours_locked ? Number(existing.estimated_hours) : est,
+      estimated_hours_locked: existing?.estimated_hours_locked ?? false,
+      estimated_hours_locked_by: existing?.estimated_hours_locked_by ?? null,
+      estimated_hours_locked_at: existing?.estimated_hours_locked_at ?? null,
       actual_hours: act,
       remaining_hours: remaining,
       overrun_hours: overrun,
@@ -463,6 +477,9 @@ export async function saveSupportIssue(
       finish_date: savedIssue.finish_date,
       tester_name: savedIssue.tester_name,
       estimated_hours: savedIssue.estimated_hours,
+      estimated_hours_locked: savedIssue.estimated_hours_locked ?? false,
+      estimated_hours_locked_by: savedIssue.estimated_hours_locked_by ?? null,
+      estimated_hours_locked_at: savedIssue.estimated_hours_locked_at ?? null,
       actual_hours: savedIssue.actual_hours,
       testing_status: savedIssue.testing_status,
       comments: savedIssue.comments,
@@ -482,6 +499,67 @@ export async function saveSupportIssue(
   }
 
   return savedIssue
+}
+
+/**
+ * Toggle Estimation Hours Lock on a specific Support Issue (Requirement 1, 2, 7 & 8)
+ * Records history entry and persists state per issue.
+ */
+export async function toggleSupportIssueEstimationLock(
+  targetId: string,
+  shouldLock: boolean,
+  currentUser: { name: string; id?: string },
+  allIssues: SupportIssue[]
+): Promise<SupportIssue> {
+  const existing = allIssues.find(i => i.id === targetId || i.issue_id === targetId)
+  if (!existing) {
+    throw new Error('Support issue not found')
+  }
+
+  const updatedIssue: SupportIssue = {
+    ...existing,
+    estimated_hours_locked: shouldLock,
+    estimated_hours_locked_by: shouldLock ? currentUser.name : null,
+    estimated_hours_locked_at: shouldLock ? new Date().toISOString() : null,
+    updated_at: new Date().toISOString()
+  }
+
+  // Record audit history (Requirement 14)
+  logHistoryEvent({
+    issue_id: existing.issue_id,
+    product_name: existing.product_name,
+    user_name: currentUser.name,
+    user_id: currentUser.id,
+    action: shouldLock ? 'Estimated Hours Locked' : 'Estimated Hours Unlocked',
+    field: 'Estimation Lock',
+    old_value: shouldLock ? `${existing.estimated_hours} (Unlocked)` : 'Locked',
+    new_value: shouldLock ? `${existing.estimated_hours} (Locked)` : 'Unlocked'
+  })
+
+  // Update local storage
+  const nextIssues = allIssues.map(i => (i.id === updatedIssue.id ? updatedIssue : i))
+  try {
+    localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(nextIssues))
+  } catch { /* ignore */ }
+
+  // Sync to Supabase
+  try {
+    if (isUUID(existing.id)) {
+      await supabase
+        .from('support_issues')
+        .update({
+          estimated_hours_locked: shouldLock,
+          estimated_hours_locked_by: shouldLock ? currentUser.name : null,
+          estimated_hours_locked_at: shouldLock ? new Date().toISOString() : null,
+          updated_at: updatedIssue.updated_at
+        })
+        .eq('id', existing.id)
+    }
+  } catch (err) {
+    console.warn('[supportTrackerService] supabase toggle lock error:', err)
+  }
+
+  return updatedIssue
 }
 
 export async function deleteSupportIssue(
@@ -1070,6 +1148,7 @@ export function exportSupportIssuesToCSV(issues: SupportIssue[], filename = 'sup
     'Finish Date',
     "Who's Testing",
     'Estimation Hrs',
+    'Estimation Status',
     'Actual Hrs',
     'Remaining Hrs',
     'Overrun Hrs',
@@ -1087,6 +1166,7 @@ export function exportSupportIssuesToCSV(issues: SupportIssue[], filename = 'sup
     issue.finish_date || '',
     `"${(issue.tester_name || '').replace(/"/g, '""')}"`,
     issue.estimated_hours,
+    issue.estimated_hours_locked ? 'Locked' : 'Unlocked',
     issue.actual_hours,
     issue.remaining_hours,
     issue.overrun_hours,
@@ -1117,6 +1197,7 @@ export function exportSupportIssuesToExcel(issues: SupportIssue[], filename = 's
     'Finish Date': issue.finish_date || '',
     "Who's Testing": issue.tester_name,
     'Estimation Hrs': issue.estimated_hours,
+    'Estimation Status': issue.estimated_hours_locked ? 'Locked' : 'Unlocked',
     'Actual Hrs': issue.actual_hours,
     'Remaining Hrs': issue.remaining_hours,
     'Overrun Hrs': issue.overrun_hours,
@@ -1139,6 +1220,7 @@ export function exportSupportIssuesToExcel(issues: SupportIssue[], filename = 's
     { wch: 14 }, // Finish
     { wch: 20 }, // Tester
     { wch: 15 }, // Est
+    { wch: 16 }, // Est Status
     { wch: 12 }, // Act
     { wch: 15 }, // Rem
     { wch: 14 }, // Overrun

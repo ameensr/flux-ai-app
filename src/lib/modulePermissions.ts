@@ -30,11 +30,14 @@ export type PermissionKey =
   | 'can_delete_custom_columns'
   | 'can_manage_org_config'
   | 'can_manage_project_config'
-  // ── Support Issue Tracker ──────────────────────────────────────────────
+  // ── Support Issue Tracker & Release Task Tracker ────────────────────────
   | 'can_view_dashboard'
   | 'can_view_history'
   | 'can_configure_dropdowns'
   | 'can_import'
+  | 'can_lock_estimated_hours'
+  | 'can_unlock_estimated_hours'
+  | 'can_edit_estimated_hours'
 
 export interface ModulePermissionDefinition {
   moduleKey: string
@@ -304,8 +307,34 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
       'can_view_history',
       'can_configure_dropdowns',
       'can_manage_permissions',
+      'can_lock_estimated_hours',
+      'can_unlock_estimated_hours',
+      'can_edit_estimated_hours',
     ],
     description: 'Enterprise QA & support issue tracking system with manager dashboard'
+  },
+
+  // ── Release Task Tracker ───────────────────────────────────────────────────
+
+  'release-tracker': {
+    moduleKey: 'release-tracker',
+    moduleName: 'Release Task Tracker',
+    supportedPermissions: [
+      'can_view',
+      'can_view_dashboard',
+      'can_create',
+      'can_edit',
+      'can_delete',
+      'can_export',
+      'can_import',
+      'can_view_history',
+      'can_configure_dropdowns',
+      'can_manage_permissions',
+      'can_lock_estimated_hours',
+      'can_unlock_estimated_hours',
+      'can_edit_estimated_hours',
+    ],
+    description: 'Enterprise QA & release task tracking system with manager dashboard and time logs'
   },
 }
 
@@ -372,6 +401,9 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   can_view_history: 'View History',
   can_configure_dropdowns: 'Configure Dropdowns',
   can_import: 'Import Support Issues',
+  can_lock_estimated_hours: 'Lock Estimated Hours',
+  can_unlock_estimated_hours: 'Unlock Estimated Hours',
+  can_edit_estimated_hours: 'Edit Estimated Hours',
 }
 
 /**
@@ -408,4 +440,7 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   can_view_history: 'Can view complete audit history logs and change trails',
   can_configure_dropdowns: 'Can configure master dropdown lists (testing status, testers)',
   can_import: 'Can import support issues in bulk from Excel/CSV',
+  can_lock_estimated_hours: 'Can lock Estimated Hours for a specific task or issue to prevent modifications',
+  can_unlock_estimated_hours: 'Can unlock Estimated Hours for a specific task or issue',
+  can_edit_estimated_hours: 'Can modify Estimated Hours when the estimation is unlocked',
 }

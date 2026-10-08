@@ -24,6 +24,9 @@ export interface SupportIssue {
   finish_date: string | null// YYYY-MM-DD
   tester_name: string      // Who's Testing
   estimated_hours: number  // Estimation Hrs
+  estimated_hours_locked?: boolean // Requirement: Estimation Hours Lock
+  estimated_hours_locked_by?: string | null // User who locked it
+  estimated_hours_locked_at?: string | null // Timestamp when locked
   actual_hours: number     // Actual Hrs
   remaining_hours: number  // Remaining Hrs (max(0, estimated - actual))
   overrun_hours: number    // Overrun Hrs (max(0, actual - estimated))
@@ -62,6 +65,8 @@ export interface SupportIssueHistoryRecord {
     | 'Work Hours Logged'
     | 'Work Hours Deleted'
     | 'Estimated Hours Updated'
+    | 'Estimated Hours Locked'
+    | 'Estimated Hours Unlocked'
     | 'Comment Added'
     | 'Issue Completed'
     | 'Issue Deleted'
@@ -97,6 +102,7 @@ export interface SupportFilters {
   finishDateStart?: string
   finishDateEnd?: string
   searchQuery?: string
+  estimationLock?: 'all' | 'locked' | 'unlocked'
 }
 
 export interface ProductSummary {

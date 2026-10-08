@@ -56,9 +56,10 @@ const HIGH_FREQUENCY_EVENTS = new Set<string>([
 const ACTIVITY_THROTTLE_MS = 250
 
 export function useIdleDetection(options?: UseIdleDetectionOptions): UseIdleDetectionReturn {
-  // Resolve configuration from env, allowing option overrides
+  // Resolve configuration from env, allowing option overrides.
+  // envConfig.enabled is the authoritative environment master switch.
   const envConfig = getPandaIdleConfig()
-  const enabled = options?.enabled ?? envConfig.enabled
+  const enabled = envConfig.enabled && (options?.enabled ?? true)
   const thresholdSeconds = options?.thresholdSeconds ?? envConfig.thresholdSeconds
   const message = options?.message ?? envConfig.message
 

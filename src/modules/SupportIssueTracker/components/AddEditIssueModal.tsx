@@ -10,8 +10,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Check, Edit3, PlusCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
+import { usePermissions } from '@/hooks/usePermissions'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useAppStore } from '@/store/useAppStore'
+import { EstimationLockControl } from '@/components/qa-operations/EstimationLockControl'
 import { useSupportTrackerStore } from '../store'
 import type { SupportIssue } from '../types'
 import { calculateEffort } from '../types'
@@ -27,7 +29,12 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
   useBodyScrollLock(isOpen)
   const { toast } = useToast()
   const { user, profile } = useAppStore()
-  const { products, dropdownConfigs, issues, addOrUpdateIssue } = useSupportTrackerStore()
+  const { can } = usePermissions()
+  const canLockEst = can('support-tracker', 'can_lock_estimated_hours')
+  const canUnlockEst = can('support-tracker', 'can_unlock_estimated_hours')
+  const canEditEst = can('support-tracker', 'can_edit_estimated_hours')
+
+  const { products, dropdownConfigs, issues, addOrUpdateIssue, toggleEstimationLock } = useSupportTrackerStore()
 
   // Ref guard: prevents double-submission on rapid clicks
   const submitRef = useRef(false)
@@ -42,6 +49,9 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
   const [testerName, setTesterName] = useState('')
   const [estimatedHours, setEstimatedHours] = useState<number | string>(0)
   const [actualHours, setActualHours] = useState<number | string>(0)
+  const [isEstLocked, setIsEstLocked] = useState(false)
+  const [lockedBy, setLockedBy] = useState<string | null>(null)
+  const [lockedAt, setLockedAt] = useState<string | null>(null)
   const [testingStatus, setTestingStatus] = useState('Not Started')
   const [comments, setComments] = useState('')
   const [saving, setSaving] = useState(false)
@@ -73,6 +83,9 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
       )
       setEstimatedHours(issueToEdit.estimated_hours ?? 0)
       setActualHours(issueToEdit.actual_hours ?? 0)
+      setIsEstLocked(Boolean(issueToEdit.estimated_hours_locked))
+      setLockedBy(issueToEdit.estimated_hours_locked_by || null)
+      setLockedAt(issueToEdit.estimated_hours_locked_at || null)
       setTestingStatus(issueToEdit.testing_status || 'Not Started')
       setComments(issueToEdit.comments || '')
     } else {
@@ -88,6 +101,9 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
       setTesterName(dropdownConfigs.testers.find(t => t.is_active)?.value?.toUpperCase() || 'Unassigned')
       setEstimatedHours(0)
       setActualHours(0)
+      setIsEstLocked(false)
+      setLockedBy(null)
+      setLockedAt(null)
       setTestingStatus('Not Started')
       setComments('')
     }
@@ -136,7 +152,7 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
           start_date: startDate || null,
           finish_date: finishDate || null,
           tester_name: testerName && testerName !== 'Unassigned' ? testerName.trim().toUpperCase() : 'Unassigned',
-          estimated_hours: Number(estimatedHours) || 0,
+          estimated_hours: isEstLocked ? Number(issueToEdit?.estimated_hours ?? 0) : (Number(estimatedHours) || 0),
           actual_hours: Number(actualHours) || 0,
           testing_status: testingStatus,
           comments: comments.trim()
@@ -367,17 +383,85 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[11px] font-medium text-text-muted block mb-1">
-                      Estimation Hrs
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-[11px] font-medium text-text-muted">
+                          Estimation Hrs
+                        </label>
+                        {isEstLocked && (
+                          <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5">
+                            🔒 Locked
+                          </span>
+                        )}
+                      </div>
+                      {issueToEdit && (
+                        <EstimationLockControl
+                          isLocked={isEstLocked}
+                          canLock={canLockEst}
+                          canUnlock={canUnlockEst}
+                          lockedBy={lockedBy}
+                          lockedAt={lockedAt ? new Date(lockedAt).toLocaleString() : null}
+                          size="xs"
+                          onToggleLock={async (shouldLock) => {
+                            try {
+                              const updated = await toggleEstimationLock(issueToEdit.id, shouldLock, {
+                                name: (profile?.full_name || user?.user_metadata?.full_name || user?.email || 'System User') as string,
+                                id: user?.id
+                              })
+                              setIsEstLocked(shouldLock)
+                              setLockedBy(updated.estimated_hours_locked_by || null)
+                              setLockedAt(updated.estimated_hours_locked_at || null)
+                              if (shouldLock) {
+                                setEstimatedHours(updated.estimated_hours)
+                              }
+                              toast({
+                                title: shouldLock ? 'Estimation Locked' : 'Estimation Unlocked',
+                                description: shouldLock
+                                  ? `Estimated hours for ${issueToEdit.issue_id} locked at ${updated.estimated_hours} hrs.`
+                                  : `Estimated hours for ${issueToEdit.issue_id} unlocked for editing.`
+                              })
+                            } catch (err: any) {
+                              toast({
+                                title: 'Lock Action Failed',
+                                description: err?.message || 'Failed to update estimation lock',
+                                variant: 'destructive'
+                              })
+                            }
+                          }}
+                        />
+                      )}
+                    </div>
                     <input
                       type="number"
                       step="0.25"
                       min="0"
                       value={estimatedHours}
+                      disabled={isEstLocked || !canEditEst}
                       onChange={(e) => setEstimatedHours(e.target.value)}
-                      className="w-full h-9 bg-surface-elevated border border-white/10 rounded-lg px-2.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono"
+                      className={`w-full h-9 bg-surface-elevated border rounded-lg px-2.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono ${
+                        isEstLocked || !canEditEst
+                          ? 'opacity-65 cursor-not-allowed bg-surface-elevated/40 border-amber-500/20'
+                          : 'border-white/10'
+                      }`}
+                      title={
+                        isEstLocked
+                          ? 'Estimated Hours are locked and cannot be modified.'
+                          : !canEditEst
+                          ? 'Requires "Edit Estimated Hours" permission to modify.'
+                          : 'Enter estimated hours'
+                      }
                     />
+                    {isEstLocked && (
+                      <p className="text-[10px] text-amber-300/80 mt-1 leading-tight">
+                        🔒 Locked{lockedBy ? ` by ${lockedBy}` : ''}{lockedAt ? ` on ${new Date(lockedAt).toLocaleDateString()}` : ''}.
+                        {canUnlockEst ? ' Click 🔒 above to unlock.' : ' Contact an authorized QA Lead to unlock.'}
+                      </p>
+                    )}
+                    {!isEstLocked && !canEditEst && (
+                      <p className="text-[10px] text-text-muted mt-1 leading-tight">
+                        * You need "Edit Estimated Hours" permission to change this value.
+                      </p>
+                    )}
                     {errors.estimatedHours && (
                       <span className="text-[11px] text-rose-400 mt-1 block">{errors.estimatedHours}</span>
                     )}

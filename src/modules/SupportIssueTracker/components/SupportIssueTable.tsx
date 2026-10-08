@@ -8,6 +8,9 @@ import {
 import { GlassCard } from '@/components/ui/GlassCard'
 import { Badge } from '@/components/ui/badge'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useToast } from '@/hooks/use-toast'
+import { useAppStore } from '@/store/useAppStore'
+import { EstimationLockControl } from '@/components/qa-operations/EstimationLockControl'
 import { useSupportTrackerStore } from '../store'
 import type { SupportIssue, EffortIndicatorState } from '../types'
 import { calculateEffort, DEFAULT_TESTING_STATUSES } from '../types'
@@ -27,10 +30,19 @@ export function SupportIssueTable({
   onLogHours,
   onViewTimeLogs
 }: Props) {
+  const { toast } = useToast()
+  const { user, profile } = useAppStore()
+  const currentUser = {
+    name: (profile?.full_name || user?.user_metadata?.full_name || user?.email || 'System User') as string,
+    id: user?.id
+  }
+
   const { can } = usePermissions()
   const canEdit = can('support-tracker', 'can_edit')
   const canDelete = can('support-tracker', 'can_delete')
   const canViewHistory = can('support-tracker', 'can_view_history')
+  const canLockEst = can('support-tracker', 'can_lock_estimated_hours')
+  const canUnlockEst = can('support-tracker', 'can_unlock_estimated_hours')
 
   const {
     getFilteredIssues,
@@ -39,7 +51,8 @@ export function SupportIssueTable({
     dropdownConfigs,
     drillDownTarget,
     setDrillDownTarget,
-    getTimeLogsForIssue
+    getTimeLogsForIssue,
+    toggleEstimationLock
   } = useSupportTrackerStore()
 
   const issues = getFilteredIssues()
@@ -402,9 +415,36 @@ export function SupportIssueTable({
                       </div>
                     </td>
 
-                    {/* 9. Estimation Hrs (Always crisp text-text-primary) */}
-                    <td className="py-3.5 px-3 text-right font-semibold text-text-primary whitespace-nowrap align-middle text-xs">
-                      {issue.estimated_hours} hrs
+                    {/* 9. Estimation Hrs (With per-record lock indicator and toggle) */}
+                    <td className="py-3.5 px-3 text-right whitespace-nowrap align-middle text-xs">
+                      <div className="inline-flex items-center justify-end gap-1.5 font-semibold text-text-primary">
+                        <span>{issue.estimated_hours} hrs</span>
+                        <EstimationLockControl
+                          isLocked={issue.estimated_hours_locked}
+                          canLock={canLockEst}
+                          canUnlock={canUnlockEst}
+                          lockedBy={issue.estimated_hours_locked_by}
+                          lockedAt={issue.estimated_hours_locked_at ? new Date(issue.estimated_hours_locked_at).toLocaleString() : null}
+                          size="xs"
+                          onToggleLock={async (shouldLock) => {
+                            try {
+                              await toggleEstimationLock(issue.id, shouldLock, currentUser)
+                              toast({
+                                title: shouldLock ? 'Estimation Locked' : 'Estimation Unlocked',
+                                description: shouldLock
+                                  ? `Estimated hours for ${issue.issue_id} locked at ${issue.estimated_hours} hrs.`
+                                  : `Estimated hours for ${issue.issue_id} unlocked for editing.`
+                              })
+                            } catch (err: any) {
+                              toast({
+                                title: 'Action Failed',
+                                description: err?.message || 'Failed to update estimation lock',
+                                variant: 'destructive'
+                              })
+                            }
+                          }}
+                        />
+                      </div>
                     </td>
 
                     {/* 10. Actual Hrs & Indicators (Incremental Time-Log) */}
