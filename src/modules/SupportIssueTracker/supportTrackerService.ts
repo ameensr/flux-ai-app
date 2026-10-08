@@ -171,12 +171,40 @@ export async function fetchProductsFromProjectHub(): Promise<ProjectWithMembers[
 // 2. SUPPORT ISSUES CRUD
 // ══════════════════════════════════════════════════════════════════════════════
 
-export async function fetchSupportIssues(products: ProjectWithMembers[]): Promise<SupportIssue[]> {
-  const timeLogs = await fetchSupportTimeLogs()
+/**
+ * Deduplicate an array of issues by UUID id, keeping the first occurrence.
+ */
+function deduplicateIssues(issues: SupportIssue[]): SupportIssue[] {
+  const seen = new Set<string>()
+  return issues.filter(i => {
+    if (seen.has(i.id)) return false
+    seen.add(i.id)
+    return true
+  })
+}
+
+/**
+ * Deduplicate time logs by UUID id.
+ */
+function deduplicateLogs(logs: SupportIssueTimeLog[]): SupportIssueTimeLog[] {
+  const seen = new Set<string>()
+  return logs.filter(l => {
+    if (seen.has(l.id)) return false
+    seen.add(l.id)
+    return true
+  })
+}
+
+export async function fetchSupportIssues(
+  products: ProjectWithMembers[],
+  timeLogs?: SupportIssueTimeLog[]
+): Promise<SupportIssue[]> {
+  // Accept pre-fetched timeLogs to avoid double-fetching from the store
+  const resolvedLogs = timeLogs ?? await fetchSupportTimeLogs()
 
   const syncWithTimeLogs = (issuesList: SupportIssue[]): SupportIssue[] => {
     return issuesList.map(issue => {
-      const logs = timeLogs.filter(
+      const logs = resolvedLogs.filter(
         l => l.issue_id === issue.issue_id || (issue.id && l.support_issue_id === issue.id)
       )
       if (logs.length > 0) {
@@ -201,7 +229,7 @@ export async function fetchSupportIssues(products: ProjectWithMembers[]): Promis
     try {
       const parsed = JSON.parse(cached) as SupportIssue[]
       if (Array.isArray(parsed) && parsed.length > 0) {
-        localIssues = parsed.filter(item => !item.id?.startsWith('issue-100'))
+        localIssues = deduplicateIssues(parsed.filter(item => !item.id?.startsWith('issue-100')))
       }
     } catch (e) {
       console.warn('Failed parsing cached issues', e)
@@ -233,11 +261,11 @@ export async function fetchSupportIssues(products: ProjectWithMembers[]): Promis
         }
       })
 
-      // Merge: Keep all DB records, plus any local issues not yet synced
+      // Merge: Keep all DB records, plus any local issues not yet synced to DB
       const dbIds = new Set(mapped.map((m: any) => m.id))
       const dbIssueIds = new Set(mapped.map((m: any) => m.issue_id))
       const pendingLocal = localIssues.filter(l => !dbIds.has(l.id) && !dbIssueIds.has(l.issue_id))
-      const merged = [...mapped, ...pendingLocal]
+      const merged = deduplicateIssues([...mapped, ...pendingLocal])
 
       const synced = syncWithTimeLogs(merged)
       localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(synced))
@@ -506,7 +534,7 @@ export async function fetchSupportTimeLogs(issueId?: string): Promise<SupportIss
 
     const { data, error } = await query
     if (!error && data && data.length > 0) {
-      const mapped: SupportIssueTimeLog[] = data.map((d: any) => ({
+      const mapped: SupportIssueTimeLog[] = deduplicateLogs(data.map((d: any) => ({
         id: d.id,
         issue_id: d.issue_id,
         support_issue_id: d.support_issue_id,
@@ -516,7 +544,7 @@ export async function fetchSupportTimeLogs(issueId?: string): Promise<SupportIss
         comment: d.comment || '',
         logged_at: d.logged_at || d.created_at,
         created_at: d.created_at
-      }))
+      })))
       localStorage.setItem(LOCAL_STORAGE_TIMELOGS_KEY, JSON.stringify(mapped))
       return mapped
     }
@@ -531,7 +559,7 @@ export async function fetchSupportTimeLogs(issueId?: string): Promise<SupportIss
     try {
       const parsed = JSON.parse(cached)
       if (Array.isArray(parsed) && parsed.length > 0) {
-        allLogs = parsed.filter((l: any) => !l.id?.startsWith('log-10'))
+        allLogs = deduplicateLogs(parsed.filter((l: any) => !l.id?.startsWith('log-10')))
       }
     } catch { /* ignore */ }
   }
@@ -599,7 +627,7 @@ export async function addSupportTimeLog(
     console.warn('[supportTrackerService] supabase insert time log error:', err)
   }
 
-  // Update local storage time logs
+  // Update local storage time logs — deduplicate to prevent double-entry
   const existingLogsStr = localStorage.getItem(LOCAL_STORAGE_TIMELOGS_KEY)
   let allLogs: SupportIssueTimeLog[] = []
   if (existingLogsStr) {
@@ -610,7 +638,10 @@ export async function addSupportTimeLog(
       }
     } catch { /* ignore */ }
   }
-  allLogs.unshift(newLog)
+  // Only prepend if not already present (prevents optimistic + DB response duplication)
+  if (!allLogs.some(l => l.id === newLog.id)) {
+    allLogs.unshift(newLog)
+  }
   localStorage.setItem(LOCAL_STORAGE_TIMELOGS_KEY, JSON.stringify(allLogs))
 
   // Find target issue and recalculate actual_hours = sum(all time logs for this issue)
@@ -854,6 +885,20 @@ export function logHistoryEvent(event: Omit<SupportIssueHistoryRecord, 'id' | 't
 // 4. CONFIGURABLE DROPDOWNS
 // ══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Deduplicate dropdown options by value within a category.
+ * Keeps the first occurrence (DB record wins over defaults).
+ */
+function deduplicateDropdowns(options: SupportDropdownOption[]): SupportDropdownOption[] {
+  const seen = new Set<string>()
+  return options.filter(o => {
+    const key = o.value.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export async function fetchDropdownConfigurations(): Promise<{
   testing_status: SupportDropdownOption[]
   testers: SupportDropdownOption[]
@@ -868,29 +913,38 @@ export async function fetchDropdownConfigurations(): Promise<{
       .order('sort_order', { ascending: true })
 
     if (!error && data && data.length > 0) {
-      testingStatusOptions = data.filter((d: any) => d.category === 'testing_status')
-      testerOptions = data.filter((d: any) => d.category === 'tester')
+      testingStatusOptions = deduplicateDropdowns(
+        data.filter((d: any) => d.category === 'testing_status')
+      )
+      testerOptions = deduplicateDropdowns(
+        data.filter((d: any) => d.category === 'tester')
+      )
     }
   } catch (e) {
     console.warn('[supportTrackerService] dropdown configs fetch error:', e)
   }
 
+  // Fall back to localStorage only for categories that are still empty
   if (testingStatusOptions.length === 0 || testerOptions.length === 0) {
     const cached = localStorage.getItem(LOCAL_STORAGE_DROPDOWNS_KEY)
     if (cached) {
       try {
         const parsed = JSON.parse(cached)
-        if (parsed.testing_status?.length) testingStatusOptions = parsed.testing_status
-        if (parsed.testers?.length) testerOptions = parsed.testers
+        if (testingStatusOptions.length === 0 && parsed.testing_status?.length) {
+          testingStatusOptions = deduplicateDropdowns(parsed.testing_status)
+        }
+        if (testerOptions.length === 0 && parsed.testers?.length) {
+          testerOptions = deduplicateDropdowns(parsed.testers)
+        }
       } catch { /* ignore */ }
     }
   }
 
-  // Default testing statuses if none
+  // Default testing statuses if still none — use canonical list, no duplicates
   if (testingStatusOptions.length === 0) {
     testingStatusOptions = DEFAULT_TESTING_STATUSES.map((item, index) => ({
-      id: `ts-${index + 1}`,
-      category: 'testing_status',
+      id: `ts-default-${index + 1}`,
+      category: 'testing_status' as const,
       label: item.label,
       value: item.value,
       color: item.color,
@@ -899,23 +953,25 @@ export async function fetchDropdownConfigurations(): Promise<{
     }))
   }
 
-  // Default testers if none
+  // Default testers if still none
   if (testerOptions.length === 0) {
     testerOptions = DEFAULT_TESTERS.map((name, index) => ({
-      id: `tester-${index + 1}`,
-      category: 'tester',
+      id: `tester-default-${index + 1}`,
+      category: 'tester' as const,
       label: name.toUpperCase(),
       value: name.toUpperCase(),
       is_active: true,
       sort_order: index + 1
     }))
   } else {
-    // Ensure all testers loaded from Supabase or localStorage are in FULL CAPITAL
-    testerOptions = testerOptions.map(t => ({
-      ...t,
-      label: t.label.toUpperCase(),
-      value: t.value.toUpperCase()
-    }))
+    // Normalise to FULL CAPS and deduplicate again after normalisation
+    testerOptions = deduplicateDropdowns(
+      testerOptions.map(t => ({
+        ...t,
+        label: t.label.toUpperCase(),
+        value: t.value.toUpperCase()
+      }))
+    )
   }
 
   const result = { testing_status: testingStatusOptions, testers: testerOptions }
@@ -951,19 +1007,24 @@ export async function saveDropdownConfigurations(
     new_value: `Updated ${normalizedConfigs.testing_status.length} statuses, ${normalizedConfigs.testers.length} testers`
   })
 
-  // Upsert to Supabase
+  // Upsert to Supabase — use id only when it is a real UUID to avoid conflicts
   try {
     const all = [...normalizedConfigs.testing_status, ...normalizedConfigs.testers]
     for (const item of all) {
-      await supabase.from('support_issue_dropdown_configs').upsert({
-        id: item.id.startsWith('ts-') || item.id.startsWith('tester-') ? undefined : item.id,
-        category: item.category,
-        label: item.label,
-        value: item.value,
-        color: item.color || null,
-        is_active: item.is_active,
-        sort_order: item.sort_order
-      })
+      const isRealUUID = isUUID(item.id)
+      await supabase.from('support_issue_dropdown_configs').upsert(
+        {
+          ...(isRealUUID ? { id: item.id } : {}),
+          category: item.category,
+          label: item.label,
+          value: item.value,
+          color: item.color || null,
+          is_active: item.is_active,
+          sort_order: item.sort_order
+        },
+        // Upsert on (category, value) to prevent duplicate rows in DB
+        { onConflict: 'category,value', ignoreDuplicates: false }
+      )
     }
   } catch (err) {
     console.warn('[supportTrackerService] supabase dropdown save error:', err)
@@ -985,12 +1046,13 @@ export async function syncTestersFromUserProfiles(): Promise<string[]> {
       const names = data
         .map(p => (p.full_name?.trim() || p.email?.split('@')[0])?.toUpperCase())
         .filter(Boolean) as string[]
+      // Deduplicate by uppercased name
       return Array.from(new Set([...names, ...DEFAULT_TESTERS]))
     }
   } catch (err) {
     console.warn('[supportTrackerService] syncTestersFromUserProfiles error:', err)
   }
-  return DEFAULT_TESTERS
+  return [...DEFAULT_TESTERS]
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

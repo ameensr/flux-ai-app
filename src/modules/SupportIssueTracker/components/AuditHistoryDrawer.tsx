@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { Badge } from '@/components/ui/badge'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useSupportTrackerStore } from '../store'
 import type { SupportIssueHistoryRecord } from '../types'
 
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function AuditHistoryDrawer({ isOpen, targetIssueId, onClose }: Props) {
+  useBodyScrollLock(isOpen)
   const { history } = useSupportTrackerStore()
 
   const [search, setSearch] = useState('')

@@ -268,8 +268,8 @@ export function SupportIssueTable({
 
       {/* ── Support Issue Tracker Main Table ───────────────────────────────── */}
       <GlassCard hoverEffect={false} className="p-0 border border-border/40 rounded-2xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full min-w-[1100px] text-left text-xs border-collapse">
             <thead>
               <tr className="bg-surface-secondary/80 border-b border-border/40 text-[11px] uppercase tracking-wider text-text-muted font-semibold">
                 <th
@@ -496,7 +496,7 @@ export function SupportIssueTable({
                       <p className="font-medium">No support issues found matching the active filters.</p>
                       <button
                         type="button"
-                        onClick={useSupportTrackerStore.getState().resetFilters}
+                        onClick={() => useSupportTrackerStore.getState().resetFilters()}
                         className="text-accent hover:underline text-xs"
                       >
                         Reset filters to view all issues

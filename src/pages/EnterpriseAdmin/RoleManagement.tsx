@@ -525,8 +525,8 @@ export function RoleManagement() {
         if (role) counts[role.id] = (counts[role.id] ?? 0) + 1
       }
       setUserCounts(counts)
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed to load', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed to load', description: e instanceof Error ? e.message : String(e) })
     } finally {
       setLoading(false)
     }
@@ -621,7 +621,7 @@ export function RoleManagement() {
       })
 
       toast({ title: 'Permissions Saved', description: `${rows.length} change${rows.length !== 1 ? 's' : ''} applied.` })
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({ variant: 'destructive', title: 'Failed to save permissions', description: e?.message })
     } finally {
       setSavingAll(false)

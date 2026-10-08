@@ -107,8 +107,8 @@ export const QAReportDropdownConfig: React.FC = () => {
       setNewValue('')
       const categoryLabel = CATEGORIES.find(c => c.key === activeTab)?.label.slice(0, -1) || 'Configuration'
       toast({ variant: 'success', title: 'Added Successfully', description: `${categoryLabel} "${newValue.trim()}" added successfully.` })
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed to Add', description: e.message || 'Error creating dropdown config.' })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed to Add', description: e instanceof Error ? e.message : String(e) || 'Error creating dropdown config.' })
     }
   }
 
@@ -120,8 +120,8 @@ export const QAReportDropdownConfig: React.FC = () => {
       setEditValue('')
       const categoryLabel = CATEGORIES.find(c => c.key === activeTab)?.label.slice(0, -1) || 'Configuration'
       toast({ variant: 'success', title: 'Updated Successfully', description: `${categoryLabel} updated successfully.` })
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed to Update', description: e.message || 'Error updating configuration.' })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed to Update', description: e instanceof Error ? e.message : String(e) || 'Error updating configuration.' })
     }
   }
 
@@ -131,8 +131,8 @@ export const QAReportDropdownConfig: React.FC = () => {
       const categoryLabel = CATEGORIES.find(c => c.key === activeTab)?.label.slice(0, -1) || 'Configuration'
       const action = !config.is_active ? 'activated' : 'deactivated'
       toast({ variant: 'success', title: 'Status Updated', description: `${categoryLabel} ${action} successfully.` })
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed to Update Status', description: e.message || 'Error toggling configuration status.' })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed to Update Status', description: e instanceof Error ? e.message : String(e) || 'Error toggling configuration status.' })
     }
   }
 
@@ -146,8 +146,8 @@ export const QAReportDropdownConfig: React.FC = () => {
       await deleteDropdownConfig(id)
       const categoryLabel = CATEGORIES.find(c => c.key === activeTab)?.label.slice(0, -1) || 'Configuration'
       toast({ variant: 'success', title: 'Deleted Successfully', description: `${categoryLabel} deleted successfully.` })
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed to Delete', description: e.message || 'Error deleting configuration.' })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed to Delete', description: e instanceof Error ? e.message : String(e) || 'Error deleting configuration.' })
     }
   }
 

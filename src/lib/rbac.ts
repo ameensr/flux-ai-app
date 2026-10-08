@@ -161,7 +161,7 @@ export async function loadPermissionsForRole(roleKey: string): Promise<RolePermi
 
   const { data, error } = await supabase.rpc('get_role_permissions', { p_role_key: roleKey })
 
-  if (error || !data || (data as any[]).length === 0) {
+  if (error || !data || (data as { module_key: string; permission_key: string; is_enabled: boolean }[]).length === 0) {
     return FALLBACK_MAPS[roleKey] ?? FALLBACK_MAPS.free
   }
 

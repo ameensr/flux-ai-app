@@ -812,10 +812,10 @@ export const AuthPage = () => {
           toast({ title: 'Verify your email', description: 'Check your inbox to confirm your account.' })
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[AuthPage] Authentication failed:', error)
       pandaSend({ type: 'LOGIN_ERROR' })
-      const mapped = mapAuthError(error?.message ?? '')
+      const mapped = mapAuthError(error instanceof Error ? error instanceof Error ? error.message : String(error) : String(error) ?? '')
       setFieldError({ [mapped.field]: mapped.text })
     } finally {
       setIsLoading(false)
@@ -836,8 +836,8 @@ export const AuthPage = () => {
       })
       if (error) throw error
       toast({ title: 'Reset email sent', description: 'Check your email inbox for a password reset link.' })
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
+    } catch (error: unknown) {
+      toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : String(error) })
     } finally {
       setIsLoading(false)
     }

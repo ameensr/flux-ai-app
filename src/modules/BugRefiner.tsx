@@ -98,11 +98,11 @@ export const BugRefiner = () => {
         title: "Bug Refined!",
         description: "Your professional bug report is ready."
       })
-    } catch (error: any) {
+    } catch (error: unknown) {
       setAiProvider(null)
       toast({
         title: "Generation Failed",
-        description: error.message,
+        description: error instanceof Error ? error.message : String(error),
         variant: "destructive"
       })
     } finally {

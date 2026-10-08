@@ -99,9 +99,9 @@ export function TimeLogDrawer({ isOpen, issue, onClose, onOpenAddHours, onAddHou
     try {
       setIsDeleting(true)
       const actorName =
-        profile?.full_name ||
-        user?.user_metadata?.full_name ||
-        user?.user_metadata?.name ||
+        (profile?.full_name as string) ||
+        (user?.user_metadata?.full_name as string) ||
+        (user?.user_metadata?.name as string) ||
         'Ameen'
 
       await removeTimeLog(log.id, { name: actorName, id: user?.id })

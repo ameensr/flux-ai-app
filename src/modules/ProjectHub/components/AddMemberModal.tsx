@@ -45,7 +45,7 @@ export function AddMemberModal({ projectId, existingMemberIds, onClose, onSucces
       setSearching(true)
       const results = await searchUsers(searchQuery, existingMemberIds)
       setUsers(results)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Search error:', error)
     } finally {
       setSearching(false)
@@ -68,11 +68,11 @@ export function AddMemberModal({ projectId, existingMemberIds, onClose, onSucces
         project_role: selectedRole
       })
       onSuccess()
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error.message || 'Failed to add member'
+        description: error instanceof Error ? error.message : String(error) || 'Failed to add member'
       })
     } finally {
       setLoading(false)

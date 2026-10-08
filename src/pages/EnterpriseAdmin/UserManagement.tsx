@@ -155,6 +155,11 @@ type UserDeleteDependencies = {
   releaseLogsCount: number
 }
 
+type MembershipRow = {
+  project_role: string
+  project: { id: string; name: string; project_code: string | null } | null
+}
+
 async function fetchUserDeleteDependencies(userId: string): Promise<UserDeleteDependencies> {
   const empty: UserDeleteDependencies = {
     ownedProjects: [],
@@ -193,7 +198,7 @@ async function fetchUserDeleteDependencies(userId: string): Promise<UserDeleteDe
   const leadProjects: UserDeleteDependencies['leadProjects'] = []
   const memberProjects: UserDeleteDependencies['memberProjects'] = []
 
-  for (const row of (membershipsRes.data || []) as any[]) {
+  for (const row of (membershipsRes.data || []) as MembershipRow[]) {
     const p = row.project
     if (!p?.id) continue
     if (row.project_role === 'owner') {
@@ -336,8 +341,8 @@ function DeleteUserModal({
       })
       onDeleted(user.id)
       onClose()
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed to delete user', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed to delete user', description: e instanceof Error ? e.message : String(e) })
     } finally {
       setDeleting(false)
     }
@@ -556,8 +561,8 @@ function ChangePasswordModal({
         description: `Password changed for ${user.full_name || user.email}.`,
       })
       onClose()
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed to change password', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed to change password', description: e instanceof Error ? e.message : String(e) })
       setStep('form')
     } finally {
       setSaving(false)
@@ -848,8 +853,8 @@ function ChangeRoleModal({
       toast({ title: 'Role Updated', description: `${user.full_name || user.email} → ${selectedRole}` })
       onSaved(user.id, selectedRole)
       onClose()
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed to update role', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed to update role', description: e instanceof Error ? e.message : String(e) })
     } finally {
       setSaving(false)
     }
@@ -983,8 +988,8 @@ export function UserManagement() {
     setLoading(true)
     try {
       // Try with teams join first; fall back without it if migration 031 hasn't run yet
-      let usersData: any[] | null = null
-      let usersError: any = null
+      let usersData: EnterpriseUser[] | null = null
+      let usersError: { message: string } | null = null
 
       const withTeams = await supabase.from('profiles').select(`
         id, email, full_name, employee_id, avatar_url, role, status,
@@ -999,10 +1004,10 @@ export function UserManagement() {
           last_login_at, created_at, department_id, plan_id,
           departments(name), plans(plan_name)
         `).order('created_at', { ascending: false })
-        usersData = withoutTeams.data
+        usersData = withoutTeams.data as typeof usersData
         usersError = withoutTeams.error
       } else {
-        usersData = withTeams.data
+        usersData = withTeams.data as typeof usersData
       }
 
       const [{ data: rolesData }, { data: deptsData }] = await Promise.all([
@@ -1013,7 +1018,7 @@ export function UserManagement() {
       if (usersError) throw usersError
 
       // Enrich last_login_at with real data from login_events
-      const userIds = (usersData ?? []).map((u: any) => u.id)
+      const userIds = (usersData ?? []).map((u) => u.id)
       let lastLogins: Record<string, string> = {}
       if (userIds.length > 0) {
         const { data: loginData } = await supabase
@@ -1022,24 +1027,24 @@ export function UserManagement() {
           .in('user_id', userIds)
           .eq('event_type', 'sign_in')
           .order('created_at', { ascending: false })
-        if (loginData) {
-          for (const row of loginData as { user_id: string; created_at: string }[]) {
+      if (loginData) {
+        for (const row of loginData as { user_id: string; created_at: string }[]) {
             if (!lastLogins[row.user_id]) lastLogins[row.user_id] = row.created_at
           }
         }
       }
 
-      setUsers((usersData ?? []).map((u: any) => ({
+      setUsers((usersData ?? []).map((u) => ({
         ...u,
         last_login_at: lastLogins[u.id] || u.last_login_at || null,
-        department_name: u.departments?.name ?? null,
-        plan_name: u.plans?.plan_name ?? null,
-        team_name: u.teams?.name ?? null,
+        department_name: (u as unknown as { departments?: { name: string } }).departments?.name ?? null,
+        plan_name: (u as unknown as { plans?: { plan_name: string } }).plans?.plan_name ?? null,
+        team_name: (u as unknown as { teams?: { name: string } }).teams?.name ?? null,
       })))
       setRoles(rolesData ?? [])
       setDepartments(deptsData ?? [])
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed to load users', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed to load users', description: e instanceof Error ? e.message : String(e) })
     } finally {
       setLoading(false)
     }
@@ -1067,8 +1072,8 @@ export function UserManagement() {
         if (!resp.ok) throw new Error(result.error ?? 'Failed to update status')
         setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u))
         toast({ title: 'Status Updated', description: `${user.full_name || user.email} is now ${newStatus}.` })
-      } catch (e: any) {
-        toast({ variant: 'destructive', title: 'Failed', description: e.message })
+      } catch (e: unknown) {
+        toast({ variant: 'destructive', title: 'Failed', description: e instanceof Error ? e.message : String(e) })
       }
     } else if (action === 'delete') {
       setDeleteModalUser(user)
@@ -1106,8 +1111,8 @@ export function UserManagement() {
           title: 'Password Reset Email Sent',
           description: `A reset link was sent to ${user.email}.`,
         })
-      } catch (e: any) {
-        toast({ variant: 'destructive', title: 'Failed to send reset email', description: e.message })
+      } catch (e: unknown) {
+        toast({ variant: 'destructive', title: 'Failed to send reset email', description: e instanceof Error ? e.message : String(e) })
       }
     }
   }

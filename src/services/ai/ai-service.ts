@@ -158,7 +158,7 @@ export class AIService {
           const detail = typeof body.detail === 'string'
             ? body.detail
             : Array.isArray(body.detail)
-              ? body.detail.map((d: any) => d.msg || JSON.stringify(d)).join('; ')
+              ? body.detail.map((d: { msg?: string }) => d.msg || JSON.stringify(d)).join('; ')
               : body.error
           throw new Error(detail || `AI request failed (${res.status})`)
         }
@@ -171,8 +171,8 @@ export class AIService {
           })
         }
         return content as string
-      } catch (e: any) {
-        if (e.name === 'AbortError') {
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name === 'AbortError') {
           throw new Error('AI request timed out. Please try again.')
         }
         throw e
@@ -255,8 +255,8 @@ export class AIService {
           }
         }
       }
-    } catch (e: any) {
-      if (e.name === 'AbortError') {
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError') {
         throw new Error(
           'AI stream timed out (no response from providers). Gemini may be rate-limited — wait a minute and try 20+ again.',
         )

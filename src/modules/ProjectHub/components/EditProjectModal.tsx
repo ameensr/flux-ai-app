@@ -60,11 +60,11 @@ export function EditProjectModal({ project, onClose, onSuccess }: EditProjectMod
         tags: formData.tags || [] // Always send tags array, even if empty
       })
       onSuccess()
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error.message || 'Failed to update project'
+        description: error instanceof Error ? error.message : String(error) || 'Failed to update project'
       })
     } finally {
       setLoading(false)

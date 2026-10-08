@@ -45,9 +45,9 @@ export function AddTimeLogModal({ isOpen, issue, onClose, onSuccess }: Props) {
       setErrorMsg(null)
       // Default tester to current user full name, email, or issue assigned tester (ALL CAPS)
       const currentUserName =
-        profile?.full_name ||
-        user?.user_metadata?.full_name ||
-        user?.user_metadata?.name ||
+        (profile?.full_name as string) ||
+        (user?.user_metadata?.full_name as string) ||
+        (user?.user_metadata?.name as string) ||
         issue.tester_name ||
         'AMEEN'
       setTesterName(currentUserName.toUpperCase())

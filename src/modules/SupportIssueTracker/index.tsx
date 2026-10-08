@@ -4,7 +4,7 @@
 // 1. Manager Live Dashboard (Permission: 'can_view_dashboard')
 // 2. Support Issue Tracker (Permission: 'can_view')
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   LifeBuoy, Plus, Sliders, History, Download, Upload, RefreshCw,
@@ -14,6 +14,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/hooks/use-toast'
 import { Badge } from '@/components/ui/badge'
+import { useAppStore } from '@/store/useAppStore'
 import { useSupportTrackerStore } from './store'
 import { ManagerLiveDashboard } from './components/ManagerLiveDashboard'
 import { SupportIssueTable } from './components/SupportIssueTable'
@@ -43,14 +44,11 @@ export function SupportIssueTracker() {
   const canConfigureDropdowns = can('support-tracker', 'can_configure_dropdowns')
   const canManagePermissions = can('support-tracker', 'can_manage_permissions')
 
-  const {
-    fetchInitialData,
-    refreshData,
-    loading,
-    isRefreshing,
-    deleteIssue,
-    products
-  } = useSupportTrackerStore()
+  const { user, profile } = useAppStore()
+  const currentUser = {
+    name: (profile?.full_name || user?.user_metadata?.full_name || user?.email || 'System User') as string,
+    id: user?.id
+  }
 
   // Modal visibility states
   const [isAddEditOpen, setIsAddEditOpen] = useState(false)
@@ -68,10 +66,22 @@ export function SupportIssueTracker() {
   const [isTimeLogDrawerOpen, setIsTimeLogDrawerOpen] = useState(false)
   const [timeLogTargetIssue, setTimeLogTargetIssue] = useState<SupportIssue | null>(null)
 
-  // Initial load
+  const {
+    fetchInitialData,
+    refreshData,
+    loading,
+    isRefreshing,
+    deleteIssue,
+    products
+  } = useSupportTrackerStore()
+
+  // Use a ref to ensure fetchInitialData is only called once on mount
+  const hasFetched = useRef(false)
   useEffect(() => {
+    if (hasFetched.current) return
+    hasFetched.current = true
     fetchInitialData()
-  }, [fetchInitialData])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle Edit Issue
   const handleEditIssue = (issue: SupportIssue) => {
@@ -91,7 +101,6 @@ export function SupportIssueTracker() {
 
     if (isConfirmed) {
       try {
-        const currentUser = { name: 'Ameen SR' }
         await deleteIssue(issue.id, currentUser)
         toast({
           title: 'Issue Deleted',

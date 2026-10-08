@@ -448,8 +448,8 @@ export const SupportExceptionLog: React.FC = () => {
           const workbook = XLSX.read(new Uint8Array(data), { type: 'array', cellDates: true })
           const { headers, dataRows } = extractWorkbookImportMatrix(workbook, XLSX)
           await finishWithRows(headers, dataRows)
-        } catch (error: any) {
-          alert(`Failed to import Excel file: ${error?.message || error || 'Unknown error'}`)
+        } catch (error: unknown) {
+          alert(`Failed to import Excel file: ${error instanceof Error ? error instanceof Error ? error.message : String(error) : String(error) || error || 'Unknown error'}`)
         }
       }
       reader.onerror = () => alert('Failed to read the file from disk.')
@@ -471,8 +471,8 @@ export const SupportExceptionLog: React.FC = () => {
             return cells.slice(0, Math.max(headers.length, cells.length))
           })
           await finishWithRows(headers, dataRows)
-        } catch (error: any) {
-          alert(`Failed to import CSV file: ${error?.message || error}`)
+        } catch (error: unknown) {
+          alert(`Failed to import CSV file: ${error instanceof Error ? error instanceof Error ? error.message : String(error) : String(error) || error}`)
         }
       }
       reader.onerror = () => alert('Failed to read the file from disk.')

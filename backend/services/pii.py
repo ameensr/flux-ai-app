@@ -27,8 +27,10 @@ def mask_pii(text: str, language: str = "en") -> tuple[str, list[dict]]:
     """
     Returns (masked_text, findings).
     findings is a list of {entity_type, start, end, score} for audit logging.
+    The language parameter is accepted for API compatibility but regex masking
+    is language-agnostic.
     """
-    del language  # regex path is language-agnostic
+    _ = language  # regex path is language-agnostic; kept for API compatibility
     findings: list[dict] = []
     masked = text
 

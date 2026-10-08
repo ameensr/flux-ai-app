@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, createContext, useContext } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
+import type { User } from '@supabase/supabase-js'
 import { useAppStore } from '@/store/useAppStore'
 import type { Profile } from '@/store/useAppStore'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -162,7 +163,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
   const initPromiseRef = React.useRef<Promise<void> | null>(null)
 
   React.useEffect(() => {
-    const handleSession = (user: any, isNewLogin = false): Promise<void> => {
+    const handleSession = (user: User, isNewLogin = false): Promise<void> => {
       // Single-flight only while a load is in progress — must clear when done
       // so role/profile changes (e.g. SQL promote to super_admin) are picked up
       // on refresh, token refresh, and re-login.

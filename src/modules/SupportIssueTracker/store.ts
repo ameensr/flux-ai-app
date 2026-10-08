@@ -111,21 +111,25 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
   drillDownTarget: null,
 
   fetchInitialData: async () => {
+    // Guard: skip if already loading to prevent double-invocation
+    if (get().loading === false && get().issues.length > 0) return
     try {
       set({ loading: true })
       // 1. Fetch products from Project Hub (Single Source of Truth)
       const products = await fetchProductsFromProjectHub()
-      set({ products })
 
-      // 2. Concurrently fetch issues, history, dropdowns, and time logs
-      const [issues, history, dropdownConfigs, timeLogs] = await Promise.all([
-        fetchSupportIssues(products),
+      // 2. Fetch time logs first so fetchSupportIssues can use them without a second fetch
+      const [timeLogs, history, dropdownConfigs] = await Promise.all([
+        fetchSupportTimeLogs(),
         fetchSupportHistory(),
-        fetchDropdownConfigurations(),
-        fetchSupportTimeLogs()
+        fetchDropdownConfigurations()
       ])
 
+      // 3. Pass pre-fetched timeLogs to avoid double-fetching inside fetchSupportIssues
+      const issues = await fetchSupportIssues(products, timeLogs)
+
       set({
+        products,
         issues,
         history,
         dropdownConfigs,
@@ -141,14 +145,13 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
   refreshData: async () => {
     try {
       set({ isRefreshing: true })
-      // Dynamically re-fetch products from Project Hub so any new or edited product shows up
       const products = await fetchProductsFromProjectHub()
-      const [issues, history, dropdownConfigs, timeLogs] = await Promise.all([
-        fetchSupportIssues(products),
+      const [timeLogs, history, dropdownConfigs] = await Promise.all([
+        fetchSupportTimeLogs(),
         fetchSupportHistory(),
-        fetchDropdownConfigurations(),
-        fetchSupportTimeLogs()
+        fetchDropdownConfigurations()
       ])
+      const issues = await fetchSupportIssues(products, timeLogs)
 
       set({
         products,
@@ -186,7 +189,6 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
 
   addOrUpdateIssue: async (issueInput, user) => {
     const { issues, products } = get()
-    // Resolve project name from Project Hub
     const matchingProject = products.find(p => p.id === issueInput.project_id)
     const enrichedInput = {
       ...issueInput,
@@ -196,23 +198,23 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
 
     const saved = await saveSupportIssue(enrichedInput, user, issues)
 
-    // Optimistically update store
+    // Update store with the authoritative saved record — no blind append
     set((state) => {
       const exists = state.issues.some(i => i.id === saved.id)
       const nextIssues = exists
         ? state.issues.map(i => (i.id === saved.id ? saved : i))
-        : [saved, ...state.issues]
+        : [saved, ...state.issues.filter(i => i.id !== saved.id)]
 
-      // Save to localStorage immediately
       try {
         localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(nextIssues))
       } catch { /* ignore */ }
 
-      // Re-fetch history in background
-      fetchSupportHistory().then((hist) => set({ history: hist }))
-
       return { issues: nextIssues }
     })
+
+    // Refresh history once after save (not in background to avoid race)
+    const hist = await fetchSupportHistory()
+    set({ history: hist })
 
     return saved
   },
@@ -221,14 +223,13 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
     const { issues } = get()
     await apiDeleteIssue(issueId, user, issues)
 
-    set((state) => {
-      const nextIssues = state.issues.filter(i => i.id !== issueId)
-      try {
-        localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(nextIssues))
-      } catch { /* ignore */ }
-      fetchSupportHistory().then((hist) => set({ history: hist }))
-      return { issues: nextIssues }
-    })
+    const nextIssues = issues.filter(i => i.id !== issueId)
+    try {
+      localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(nextIssues))
+    } catch { /* ignore */ }
+
+    const hist = await fetchSupportHistory()
+    set({ issues: nextIssues, history: hist })
   },
 
   updateDropdowns: async (configs, user) => {
@@ -241,8 +242,8 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
       }))
     }
     await saveDropdownConfigurations(normalizedConfigs, user)
-    set({ dropdownConfigs: normalizedConfigs })
-    fetchSupportHistory().then((hist) => set({ history: hist }))
+    const hist = await fetchSupportHistory()
+    set({ dropdownConfigs: normalizedConfigs, history: hist })
   },
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -253,14 +254,20 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
     const { issues } = get()
     const { newLog, updatedIssue } = await addSupportTimeLog(input, user, issues)
 
+    // Deduplicate: only prepend if not already in state (prevents optimistic+DB duplication)
     set((state) => {
-      const nextLogs = [newLog, ...state.timeLogs]
+      const alreadyExists = state.timeLogs.some(l => l.id === newLog.id)
+      const nextLogs = alreadyExists
+        ? state.timeLogs.map(l => l.id === newLog.id ? newLog : l)
+        : [newLog, ...state.timeLogs]
       const nextIssues = state.issues.map((i) =>
         i.id === updatedIssue.id ? updatedIssue : i
       )
-      fetchSupportHistory().then((hist) => set({ history: hist }))
       return { timeLogs: nextLogs, issues: nextIssues }
     })
+
+    const hist = await fetchSupportHistory()
+    set({ history: hist })
 
     return { newLog, updatedIssue }
   },
@@ -269,21 +276,24 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
     const { issues } = get()
     const { deletedLogId, updatedIssue } = await deleteSupportTimeLog(logId, user, issues)
 
-    set((state) => {
-      const nextLogs = state.timeLogs.filter((l) => l.id !== deletedLogId)
-      const nextIssues = state.issues.map((i) =>
-        i.id === updatedIssue.id ? updatedIssue : i
-      )
-      fetchSupportHistory().then((hist) => set({ history: hist }))
-      return { timeLogs: nextLogs, issues: nextIssues }
-    })
+    const nextLogs = get().timeLogs.filter((l) => l.id !== deletedLogId)
+    const nextIssues = get().issues.map((i) =>
+      i.id === updatedIssue.id ? updatedIssue : i
+    )
+    const hist = await fetchSupportHistory()
+    set({ timeLogs: nextLogs, issues: nextIssues, history: hist })
   },
 
   getTimeLogsForIssue: (issueId: string) => {
     const { timeLogs } = get()
-    return timeLogs.filter(
-      (l) => l.issue_id === issueId || l.support_issue_id === issueId
-    )
+    // Deduplicate by id before returning to prevent double-display
+    const seen = new Set<string>()
+    return timeLogs.filter((l) => {
+      if (l.issue_id !== issueId && l.support_issue_id !== issueId) return false
+      if (seen.has(l.id)) return false
+      seen.add(l.id)
+      return true
+    })
   },
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -396,11 +406,13 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
   },
 
   getProductSummaries: () => {
-    const { products, issues, filters } = get()
-    // Product summary aggregates issues based on active status/date filters, but lists all relevant products
+    const { products } = get()
+    // Use filtered issues so dashboard always matches the tracker table
+    const filtered = get().getFilteredIssues()
+
     return products.map((product) => {
-      const productIssues = issues.filter((i) => i.project_id === product.id)
-      
+      const productIssues = filtered.filter((i) => i.project_id === product.id)
+
       let open = 0
       let inTesting = 0
       let blocked = 0

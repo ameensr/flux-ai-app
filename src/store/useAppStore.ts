@@ -11,14 +11,21 @@ export interface Profile {
   created_at: string
 }
 
+type AuthUser = {
+  id: string
+  email?: string
+  user_metadata?: Record<string, unknown>
+  [key: string]: unknown
+}
+
 interface AppState {
   isSidebarOpen: boolean
   setSidebarOpen: (isOpen: boolean) => void
   showLanding: boolean
   setShowLanding: (show: boolean) => void
   isAuthenticated: boolean
-  user: any | null
-  setUser: (user: any | null) => void
+  user: AuthUser | null
+  setUser: (user: AuthUser | null) => void
   profile: Profile | null
   setProfile: (profile: Profile | null) => void
   role: Role
@@ -27,7 +34,7 @@ interface AppState {
   setPermissionMap: (map: RolePermissionMap) => void
   permissionsLoaded: boolean
   setPermissionsLoaded: (loaded: boolean) => void
-  initSession: (user: any, map: RolePermissionMap) => void
+  initSession: (user: AuthUser, map: RolePermissionMap) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({

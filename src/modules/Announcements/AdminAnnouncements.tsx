@@ -126,8 +126,8 @@ function FormModal({ announcement, onClose, onSaved }: FormModalProps) {
       }
       onSaved()
       onClose()
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed', description: e instanceof Error ? e.message : String(e) })
     } finally {
       setSaving(false)
     }
@@ -312,8 +312,8 @@ export function AdminAnnouncements() {
       await deleteAnnouncement(a.id)
       toast({ title: 'Announcement Deleted' })
       fetchForAdmin()
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed', description: e instanceof Error ? e.message : String(e) })
     }
   }
 
@@ -322,8 +322,8 @@ export function AdminAnnouncements() {
       await updateAnnouncement(a.id, { is_pinned: !a.is_pinned })
       toast({ title: a.is_pinned ? 'Unpinned' : 'Pinned' })
       fetchForAdmin()
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed', description: e instanceof Error ? e.message : String(e) })
     }
   }
 
@@ -336,8 +336,8 @@ export function AdminAnnouncements() {
       })
       toast({ title: next === 'published' ? 'Published' : 'Unpublished' })
       fetchForAdmin()
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed', description: e instanceof Error ? e.message : String(e) })
     }
   }
 
@@ -346,8 +346,8 @@ export function AdminAnnouncements() {
       await updateAnnouncement(a.id, { status: 'archived' })
       toast({ title: 'Archived' })
       fetchForAdmin()
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed', description: e instanceof Error ? e.message : String(e) })
     }
   }
 

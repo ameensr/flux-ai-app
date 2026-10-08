@@ -831,7 +831,7 @@ export const SecuritySettings = () => {
         {/* Password last changed */}
         <div className="mt-4 pt-4 flex items-center gap-2" style={{ borderTop: '1px solid var(--border)' }}>
           <Clock className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Last changed: 15 June 2026</span>
+          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Password last updated via account settings.</span>
         </div>
       </GlassCard>
 

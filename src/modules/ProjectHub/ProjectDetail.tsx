@@ -50,11 +50,11 @@ export function ProjectDetail() {
       setLoading(true)
       const data = await fetchProjectById(projectId)
       setProject(data)
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error.message || 'Failed to load project'
+        description: error instanceof Error ? error.message : String(error) || 'Failed to load project'
       })
       navigate(ROUTES.projectHub)
     } finally {
@@ -74,11 +74,11 @@ export function ProjectDetail() {
       await archiveProject(project.id)
       toast({ title: 'Success', description: 'Project archived' })
       navigate(ROUTES.projectHub)
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error.message || 'Failed to archive project'
+        description: error instanceof Error ? error.message : String(error) || 'Failed to archive project'
       })
     }
   }
@@ -97,7 +97,7 @@ export function ProjectDetail() {
         description: 'Project deleted successfully. All associated data has been permanently removed.'
       })
       navigate(ROUTES.projectHub)
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Error will be shown in modal
       throw error
     }

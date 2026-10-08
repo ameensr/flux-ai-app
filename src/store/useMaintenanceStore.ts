@@ -97,23 +97,27 @@ export const useMaintenanceStore = create<MaintenanceStore>((set, get) => ({
     const { config } = get()
     const { data: { session } } = await supabase.auth.getSession()
 
-    const payload: any = {
-      ...patch,
-      updated_by: session?.user?.id || null,
-      updated_at: new Date().toISOString(),
-    }
+    const updated_by = session?.user?.id || null
+    const updated_at = new Date().toISOString()
 
-    // Remove id from payload to avoid conflicts
-    delete payload.id
+    // Exclude id from the update payload to avoid conflicts
+    const { id: _id, ...patchWithoutId } = patch
+    void _id
+
+    const updatePayload: Omit<Partial<MaintenanceConfig>, 'id'> & { updated_by: string | null; updated_at: string } = {
+      ...patchWithoutId,
+      updated_by,
+      updated_at,
+    }
 
     const { error } = await supabase
       .from('maintenance_config')
-      .update(payload)
+      .update(updatePayload)
       .eq('id', config.id)
 
     if (error) throw new Error(error.message)
 
-    set({ config: { ...config, ...patch, updated_at: payload.updated_at, updated_by: payload.updated_by } })
+    set({ config: { ...config, ...patch, updated_at, updated_by } })
   },
 
   isMaintenanceActive: () => {

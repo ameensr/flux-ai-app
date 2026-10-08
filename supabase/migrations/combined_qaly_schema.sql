@@ -2875,7 +2875,18 @@ CREATE INDEX IF NOT EXISTS idx_support_time_logs_issue_str ON public.support_iss
 CREATE INDEX IF NOT EXISTS idx_support_time_logs_issue_id ON public.support_issue_time_logs(support_issue_id);
 CREATE INDEX IF NOT EXISTS idx_support_time_logs_logged_at ON public.support_issue_time_logs(logged_at DESC);
 
--- 8. Enable RLS
+-- 8. Relax project_id FK so issues can be saved without a matching projects row
+ALTER TABLE public.support_issues DROP CONSTRAINT IF EXISTS support_issues_project_id_fkey;
+ALTER TABLE public.support_issues ALTER COLUMN project_id DROP NOT NULL;
+
+-- 9. Unique indexes to prevent duplicate data at the DB level
+CREATE UNIQUE INDEX IF NOT EXISTS uq_support_dropdown_category_value
+  ON public.support_issue_dropdown_configs (category, lower(value));
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_support_issues_issue_id
+  ON public.support_issues (issue_id);
+
+-- 10. Enable RLS
 ALTER TABLE public.support_issues ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.support_issue_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.support_issue_dropdown_configs ENABLE ROW LEVEL SECURITY;

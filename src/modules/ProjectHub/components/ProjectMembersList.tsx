@@ -91,11 +91,11 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
       await updateMemberRole(memberId, newRole, projectId)
       toast({ title: 'Success', description: 'Member role updated successfully' })
       onUpdate()
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error.message || 'Failed to update role'
+        description: error instanceof Error ? error.message : String(error) || 'Failed to update role'
       })
     } finally {
       setLoading(false)
@@ -144,11 +144,11 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
       await removeMember(memberId, projectId)
       toast({ title: 'Success', description: 'Member removed from project' })
       onUpdate()
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error.message || 'Failed to remove member'
+        description: error instanceof Error ? error.message : String(error) || 'Failed to remove member'
       })
     } finally {
       setLoading(false)

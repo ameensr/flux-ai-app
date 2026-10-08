@@ -51,8 +51,9 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
   const [syncingProfiles, setSyncingProfiles] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Re-sync when modal opens
+  // Re-sync ONLY when modal opens (not on every dropdownConfigs change to avoid reset loops)
   React.useEffect(() => {
+    if (!isOpen) return
     setStatuses(dropdownConfigs.testing_status)
     setTesters(
       dropdownConfigs.testers.map(t => ({
@@ -62,14 +63,20 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
       }))
     )
     setNewLabel('')
-  }, [isOpen, dropdownConfigs])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
 
-  // Handle Add Item
+  // Handle Add Item — deduplicate by value before adding
   const handleAddItem = () => {
     if (!newLabel.trim()) return
 
     if (activeTab === 'testing_status') {
       const trimmedLabel = newLabel.trim()
+      // Prevent duplicate status values
+      if (statuses.some(s => s.value.toLowerCase() === trimmedLabel.toLowerCase())) {
+        setNewLabel('')
+        return
+      }
       const newItem: SupportDropdownOption = {
         id: `ts-${Date.now()}`,
         category: 'testing_status',
@@ -81,8 +88,12 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
       }
       setStatuses([...statuses, newItem])
     } else {
-      // Tester names must ALWAYS be in FULL CAPITAL for uniformity
       const cleanUpperName = newLabel.trim().toUpperCase()
+      // Prevent duplicate tester values
+      if (testers.some(t => t.value.toUpperCase() === cleanUpperName)) {
+        setNewLabel('')
+        return
+      }
       const newItem: SupportDropdownOption = {
         id: `tester-${Date.now()}`,
         category: 'tester',
@@ -236,7 +247,7 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
             </div>
 
             {/* Tab switch */}
-            <div className="flex items-center gap-2 pt-4 pb-2 border-b border-white/5">
+            <div className="flex items-center gap-2 px-6 pt-4 pb-2 border-b border-white/5">
               <button
                 type="button"
                 onClick={() => setActiveTab('testing_status')}
@@ -262,7 +273,7 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
             </div>
 
             {/* Content Body */}
-            <div className="overflow-y-auto space-y-4 py-4 pr-1 flex-1">
+            <div className="overflow-y-auto space-y-4 px-6 py-4 flex-1">
               {/* Add New Option Input Box */}
               <div className="p-3.5 rounded-xl bg-surface border border-white/10 space-y-2.5">
                 <span className="text-xs font-semibold text-text-primary block">

@@ -1391,7 +1391,7 @@ Do not return markdown wraps, only raw JSON text.
       } else {
         throw new Error('Incomplete JSON schema returned')
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.warn('AI summary generation failed. Using default.', String(e?.message ?? '').replace(/[\r\n]/g, ' '))
       toast({
         title: 'Refinement Offline',

@@ -340,8 +340,8 @@ export async function parseTeamCapacityExcel(file: File): Promise<TeamCapacityDa
           members,
           stats,
         })
-      } catch (error: any) {
-        reject(new Error(`Failed to parse Excel: ${error?.message || String(error)}`))
+      } catch (error: unknown) {
+        reject(new Error(`Failed to parse Excel: ${error instanceof Error ? error instanceof Error ? error.message : String(error) : String(error) || String(error)}`))
       }
     }
 

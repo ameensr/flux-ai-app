@@ -66,11 +66,11 @@ export function CreateProjectModal({ onClose, onSuccess }: CreateProjectModalPro
         tags: formData.tags && formData.tags.length > 0 ? formData.tags : undefined
       })
       onSuccess()
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error.message || 'Failed to create project'
+        description: error instanceof Error ? error.message : String(error) || 'Failed to create project'
       })
     } finally {
       setLoading(false)

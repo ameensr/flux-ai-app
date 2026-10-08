@@ -522,9 +522,9 @@ export const TestCaseGenerator = () => {
             : '') +
           (allCases.length < caseCount ? ` (requested ${countLabel})` : ''),
       })
-    } catch (error: any) {
+    } catch (error: unknown) {
       setAiProvider(null)
-      toast({ title: "Generation Failed", description: error.message, variant: "destructive" })
+      toast({ title: "Generation Failed", description: error instanceof Error ? error.message : String(error), variant: "destructive" })
     } finally {
       setIsGenerating(false)
     }
@@ -590,7 +590,7 @@ export const TestCaseGenerator = () => {
         title: 'Excel downloaded',
         description: 'Open the .xlsx file — sheets for Test Cases, Gaps, Questions, Risks, and more.',
       })
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: 'Export failed',
         description: e?.message || 'Could not create Excel file.',

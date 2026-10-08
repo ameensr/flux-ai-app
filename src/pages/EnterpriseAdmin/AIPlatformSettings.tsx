@@ -172,8 +172,8 @@ export function AIPlatformSettings() {
             : 'No users selected — only Admin / Super Admin can use AI.')
           : 'All AI generation features are blocked for every user.',
       })
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Save Failed', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Save Failed', description: e instanceof Error ? e.message : String(e) })
     } finally {
       setSaving(false)
     }

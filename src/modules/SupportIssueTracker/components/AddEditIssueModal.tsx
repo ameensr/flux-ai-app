@@ -5,12 +5,13 @@
 // Validates mandatory fields before saving.
 // Fixed sticky footer ensures Save/Cancel buttons are ALWAYS visible regardless of scroll.
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, AlertCircle, Clock, ShieldCheck, Flame, Edit3, PlusCircle } from 'lucide-react'
+import { X, Check, Edit3, PlusCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import { useAppStore } from '@/store/useAppStore'
 import { useSupportTrackerStore } from '../store'
 import type { SupportIssue } from '../types'
 import { calculateEffort } from '../types'
@@ -25,7 +26,11 @@ interface Props {
 export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess }: Props) {
   useBodyScrollLock(isOpen)
   const { toast } = useToast()
+  const { user, profile } = useAppStore()
   const { products, dropdownConfigs, issues, addOrUpdateIssue } = useSupportTrackerStore()
+
+  // Ref guard: prevents double-submission on rapid clicks
+  const submitRef = useRef(false)
 
   // Form states
   const [projectId, setProjectId] = useState('')
@@ -42,12 +47,15 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Initialize form strictly when modal opens or issueToEdit changes
+  // Initialize form when modal opens — depend only on isOpen + issueToEdit?.id to avoid stale closure
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) {
+      submitRef.current = false
+      return
+    }
 
     if (issueToEdit) {
-      setProjectId(issueToEdit.project_id || (products[0]?.id || ''))
+      setProjectId(issueToEdit.project_id || products[0]?.id || '')
       setIssueId(issueToEdit.issue_id || '')
       setDescription(issueToEdit.description || '')
       setReceivedDate(issueToEdit.received_date || new Date().toISOString().split('T')[0])
@@ -56,21 +64,28 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
       const matchTester = dropdownConfigs.testers.find(
         t => t.value.toLowerCase() === (issueToEdit.tester_name || '').toLowerCase()
       )
-      setTesterName(matchTester ? matchTester.value : (issueToEdit.tester_name ? (issueToEdit.tester_name === 'Unassigned' ? 'Unassigned' : issueToEdit.tester_name.toUpperCase()) : 'Unassigned'))
+      setTesterName(
+        matchTester
+          ? matchTester.value
+          : issueToEdit.tester_name === 'Unassigned' || !issueToEdit.tester_name
+          ? 'Unassigned'
+          : issueToEdit.tester_name.toUpperCase()
+      )
       setEstimatedHours(issueToEdit.estimated_hours ?? 0)
       setActualHours(issueToEdit.actual_hours ?? 0)
       setTestingStatus(issueToEdit.testing_status || 'Not Started')
       setComments(issueToEdit.comments || '')
     } else {
-      // Auto-populate for new issue
-      const nextNum = 1024 + (issues.length > 0 ? Math.max(...issues.map(i => i.sl_no || 0)) + 1 : 1)
+      // Snapshot issues at open time to avoid stale closure
+      const currentMax = issues.length > 0 ? Math.max(...issues.map(i => i.sl_no || 0)) : 0
+      const nextNum = 1024 + currentMax + 1
       setProjectId(products[0]?.id || '')
       setIssueId(`SUP-${nextNum}`)
       setDescription('')
       setReceivedDate(new Date().toISOString().split('T')[0])
       setStartDate('')
       setFinishDate('')
-      setTesterName(dropdownConfigs.testers[0]?.value ? dropdownConfigs.testers[0].value.toUpperCase() : 'Unassigned')
+      setTesterName(dropdownConfigs.testers.find(t => t.is_active)?.value?.toUpperCase() || 'Unassigned')
       setEstimatedHours(0)
       setActualHours(0)
       setTestingStatus('Not Started')
@@ -78,32 +93,18 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
     }
     setErrors({})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, issueToEdit])
+  }, [isOpen, issueToEdit?.id])
 
   // Live effort calculation preview
   const effortCalc = calculateEffort(Number(estimatedHours) || 0, Number(actualHours) || 0)
 
-  // Validation
   const validateForm = () => {
     const errs: Record<string, string> = {}
-    if (!projectId) {
-      errs.projectId = 'Please select a Product from Project Hub'
-    }
-    if (!description.trim()) {
-      errs.description = 'Support issue description is required'
-    }
-    if (!receivedDate) {
-      errs.receivedDate = 'Received date is required'
-    }
-    if (Number(estimatedHours) < 0) {
-      errs.estimatedHours = 'Estimated hours cannot be negative'
-    }
-    if (Number(actualHours) < 0) {
-      errs.actualHours = 'Actual hours cannot be negative'
-    }
-    if (!testingStatus) {
-      errs.testingStatus = 'Testing status is required'
-    }
+    if (!projectId) errs.projectId = 'Please select a Product from Project Hub'
+    if (!description.trim()) errs.description = 'Support issue description is required'
+    if (!receivedDate) errs.receivedDate = 'Received date is required'
+    if (Number(estimatedHours) < 0) errs.estimatedHours = 'Estimated hours cannot be negative'
+    if (!testingStatus) errs.testingStatus = 'Testing status is required'
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -111,11 +112,17 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!validateForm()) return
-
+    // Prevent double-submission
+    if (submitRef.current || saving) return
+    submitRef.current = true
     setSaving(true)
+
     try {
       const selectedProject = products.find(p => p.id === projectId)
-      const currentUser = { name: 'Ameen SR' }
+      const currentUser = {
+        name: (profile?.full_name || user?.user_metadata?.full_name || user?.email || 'System User') as string,
+        id: user?.id
+      }
 
       await addOrUpdateIssue(
         {
@@ -146,6 +153,8 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
       onClose()
     } catch (err: any) {
       console.error('Failed saving support issue:', err)
+      // Reset guard so user can retry
+      submitRef.current = false
       toast({
         variant: 'destructive',
         title: 'Error Saving Issue',
@@ -174,7 +183,7 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
           style={{ backgroundColor: 'var(--modal-bg, #141c2b)' }}
         >
           {/* ── Fixed Modal Header ────────────────────────────────────────────── */}
-          <div className="px-6 py-4.5 border-b border-white/10 flex items-center justify-between shrink-0 bg-surface/50">
+          <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-surface/50">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-accent">
                 {issueToEdit ? <Edit3 className="w-5 h-5" /> : <PlusCircle className="w-5 h-5" />}
@@ -341,10 +350,13 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
                       </option>
                     ))}
                   </select>
+                  {errors.testingStatus && (
+                    <span className="text-[11px] text-rose-400 mt-1 block font-medium">{errors.testingStatus}</span>
+                  )}
                 </div>
               </div>
 
-              {/* 6. Estimation & Actual Hours with Live Indicator Preview (Requirements 9 & 10) */}
+              {/* 6. Estimation & Actual Hours with Live Indicator Preview */}
               <div className="p-4 rounded-xl bg-surface/80 border border-white/10 space-y-3">
                 <div className="text-xs font-semibold text-text-primary flex items-center justify-between">
                   <span>Effort & Hours Calculation</span>
@@ -366,6 +378,9 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
                       onChange={(e) => setEstimatedHours(e.target.value)}
                       className="w-full h-9 bg-surface-elevated border border-white/10 rounded-lg px-2.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono"
                     />
+                    {errors.estimatedHours && (
+                      <span className="text-[11px] text-rose-400 mt-1 block">{errors.estimatedHours}</span>
+                    )}
                   </div>
 
                   <div>
@@ -407,19 +422,13 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
                   <div className="flex items-center gap-2">
                     <span className="text-text-muted">Status:</span>
                     {effortCalc.indicatorState === 'on_track' && (
-                      <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                        🟢 On Track ({effortCalc.percentage}%)
-                      </span>
+                      <span className="text-emerald-400 font-semibold">🟢 On Track ({effortCalc.percentage}%)</span>
                     )}
                     {effortCalc.indicatorState === 'attention' && (
-                      <span className="text-amber-400 font-semibold flex items-center gap-1">
-                        🟡 Attention ({effortCalc.percentage}%)
-                      </span>
+                      <span className="text-amber-400 font-semibold">🟡 Attention ({effortCalc.percentage}%)</span>
                     )}
                     {effortCalc.indicatorState === 'overrun' && (
-                      <span className="text-rose-400 font-semibold flex items-center gap-1">
-                        🔴 Overrun ({effortCalc.percentage}%)
-                      </span>
+                      <span className="text-rose-400 font-semibold">🔴 Overrun ({effortCalc.percentage}%)</span>
                     )}
                   </div>
                 </div>
@@ -446,14 +455,14 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
                 type="button"
                 onClick={onClose}
                 disabled={saving}
-                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-text-muted hover:text-text-primary hover:bg-white/10 transition-colors"
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-text-muted hover:text-text-primary hover:bg-white/10 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-6 py-2.5 rounded-xl text-xs font-bold bg-accent hover:bg-accent-hover text-white transition-all shadow-lg shadow-accent/25 flex items-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
+                className="px-6 py-2.5 rounded-xl text-xs font-bold bg-accent hover:bg-accent-hover text-white transition-all shadow-lg shadow-accent/25 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-95"
               >
                 <Check className="w-4 h-4" />
                 {saving ? 'Saving...' : issueToEdit ? 'Update Issue' : 'Save Support Issue'}

@@ -58,8 +58,8 @@ export function PermissionTemplates() {
       setPermissions(permsRes.data ?? [])
       setMatrix(rmpRes.data ?? [])
       if (!targetRoleId && rolesRes.data?.length) setTargetRoleId(rolesRes.data[0].id)
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed to load', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed to load', description: e instanceof Error ? e.message : String(e) })
     } finally {
       setLoading(false)
     }
@@ -98,8 +98,8 @@ export function PermissionTemplates() {
 
       toast({ title: 'Template Applied', description: `${selectedTemplate.name} applied to ${role?.role_name}.` })
       setSelectedTemplate(null)
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed', description: e instanceof Error ? e.message : String(e) })
     } finally {
       setApplying(false)
     }

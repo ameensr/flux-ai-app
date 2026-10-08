@@ -49,11 +49,11 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
       await archiveProject(project.id)
       toast({ title: 'Success', description: 'Project archived successfully' })
       onUpdate()
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error.message || 'Failed to archive project'
+        description: error instanceof Error ? error.message : String(error) || 'Failed to archive project'
       })
     } finally {
       setLoading(false)
@@ -75,7 +75,7 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
         description: 'Project deleted successfully. All associated data has been permanently removed.'
       })
       onUpdate()
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Error will be shown in modal
       throw error
     }

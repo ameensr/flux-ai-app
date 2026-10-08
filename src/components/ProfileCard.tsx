@@ -45,8 +45,8 @@ export const ProfileCard: React.FC = () => {
       setProfile({ ...profile, full_name: name.trim() || null, phone: phone.trim() || null })
       setEditing(false)
       toast({ variant: 'success', title: 'Profile Updated', description: 'Your details have been saved.' })
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Update Failed', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Update Failed', description: e instanceof Error ? e.message : String(e) })
     } finally {
       setSaving(false)
     }

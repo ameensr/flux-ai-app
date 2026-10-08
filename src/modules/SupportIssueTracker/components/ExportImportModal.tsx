@@ -14,6 +14,7 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useAppStore } from '@/store/useAppStore'
 import { useSupportTrackerStore } from '../store'
 import {
   exportSupportIssuesToCSV,
@@ -31,6 +32,7 @@ interface Props {
 export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Props) {
   useBodyScrollLock(isOpen)
   const { toast } = useToast()
+  const { user, profile } = useAppStore()
   const { can } = usePermissions()
   const canExport = can('support-tracker', 'can_export')
   const canImport = can('support-tracker', 'can_import')
@@ -64,12 +66,13 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
       exportSupportIssuesToCSV(filteredIssues, filename)
     }
 
+    const actorName = (profile?.full_name || user?.user_metadata?.full_name || user?.email || 'System User') as string
     logHistoryEvent({
       issue_id: 'EXPORT',
       product_name: filters.selectedProductId !== 'all'
         ? products.find(p => p.id === filters.selectedProductId)?.name || 'Filtered Product'
         : 'All Products',
-      user_name: 'Ameen SR',
+      user_name: actorName,
       action: 'Export',
       field: `${format.toUpperCase()} Export`,
       old_value: null,
@@ -159,10 +162,19 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
 
     setIsProcessing(true)
     try {
-      const currentUser = { name: 'Ameen SR' }
+      const actorName = (profile?.full_name || user?.user_metadata?.full_name || user?.email || 'System User') as string
+      const currentUser = { name: actorName, id: user?.id }
       let importedCount = 0
 
-      for (const row of importPreview) {
+      // Deduplicate import rows by issue_id before saving
+      const existingIssueIds = new Set(issues.map(i => i.issue_id))
+      const uniqueRows = importPreview.filter(row => {
+        if (existingIssueIds.has(row.issue_id)) return false
+        existingIssueIds.add(row.issue_id)
+        return true
+      })
+
+      for (const row of uniqueRows) {
         await addOrUpdateIssue(row, currentUser)
         importedCount++
       }
@@ -170,7 +182,7 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
       logHistoryEvent({
         issue_id: 'IMPORT',
         product_name: 'All Products',
-        user_name: currentUser.name,
+        user_name: actorName,
         action: 'Import',
         field: 'Bulk Dataset',
         old_value: null,

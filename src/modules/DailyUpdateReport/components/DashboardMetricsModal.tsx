@@ -113,7 +113,7 @@ export const DashboardMetricsModal: React.FC<DashboardMetricsModalProps> = ({ op
         description: `"${selectedColumn.display_name}" now feeds the ${tableLabel} summary cards.`,
       })
       onClose()
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({ variant: 'destructive', title: 'Save failed', description: e?.message || 'Could not update dashboard metrics.' })
     } finally {
       setSaving(false)

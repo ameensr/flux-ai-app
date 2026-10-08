@@ -57,8 +57,8 @@ export function AuditLogs() {
         .limit(500)
       if (error) throw error
       setLogs(data ?? [])
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed to load audit logs', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Failed to load audit logs', description: e instanceof Error ? e.message : String(e) })
     } finally {
       setLoading(false)
     }

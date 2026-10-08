@@ -51,12 +51,12 @@ export function ProjectHub() {
       }
       const data = await fetchProjects(filters)
       setProjects(data)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[ProjectHub] Load projects error:', error)
       toast({
         variant: 'destructive',
         title: 'Failed to Load Projects',
-        description: error.message || 'Unable to fetch projects. Please check if migrations have been run.'
+        description: error instanceof Error ? error.message : String(error) || 'Unable to fetch projects. Please check if migrations have been run.'
       })
     } finally {
       setLoading(false)
@@ -67,7 +67,7 @@ export function ProjectHub() {
     try {
       const data = await fetchProjectStats()
       setStats(data)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to load stats:', error)
     }
   }

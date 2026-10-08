@@ -109,8 +109,8 @@ export function MaintenanceSettings() {
         custom_message: customMessage || null,
       })
       toast({ variant: 'success', title: 'Maintenance Config Saved', description: enabled ? 'Maintenance mode is now ACTIVE.' : 'Maintenance mode is OFF.' })
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Save Failed', description: e.message })
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Save Failed', description: e instanceof Error ? e.message : String(e) })
     } finally {
       setSaving(false)
     }

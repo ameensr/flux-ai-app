@@ -11,6 +11,7 @@ Auth: Supabase JWT validated on every request via verify_token().
 """
 import json
 import time
+from contextlib import asynccontextmanager
 from typing import Annotated, AsyncIterator, Literal
 
 import asyncpg
@@ -87,9 +88,30 @@ WRITING_SYSTEM = (
     "Return only the rewritten text, no preamble."
 )
 
+# ── DB pool ───────────────────────────────────────────────────────────────────
+
+_pool: asyncpg.Pool | None = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):  # noqa: ARG001
+    global _pool
+    if settings.database_url:
+        try:
+            _pool = await asyncpg.create_pool(settings.database_url, min_size=2, max_size=10)
+        except Exception as e:
+            print(f"WARNING: Could not connect to PostgreSQL database: {e}")
+            print("Backend will run with database-dependent endpoints disabled.")
+    else:
+        print("WARNING: DATABASE_URL not set — feedback endpoints disabled.")
+    yield
+    if _pool:
+        await _pool.close()
+
+
 # ── App ───────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="Flux AI Backend", version="2.0.0")
+app = FastAPI(title="Flux AI Backend", version="2.0.0", lifespan=lifespan)
 
 _cors_origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
 # Local Vite often hits either localhost or 127.0.0.1 — allow both in dev.
@@ -104,27 +126,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ── DB pool ───────────────────────────────────────────────────────────────────
-
-_pool: asyncpg.Pool | None = None
-
-@app.on_event("startup")
-async def startup():
-    global _pool
-    if not settings.database_url:
-        print("WARNING: DATABASE_URL not set — feedback endpoints disabled.")
-        return
-    try:
-        _pool = await asyncpg.create_pool(settings.database_url, min_size=2, max_size=10)
-    except Exception as e:
-        print(f"WARNING: Could not connect to PostgreSQL database: {e}")
-        print("Backend will run with database-dependent endpoints disabled.")
-
-@app.on_event("shutdown")
-async def shutdown():
-    if _pool:
-        await _pool.close()
 
 def get_pool() -> asyncpg.Pool:
     if not _pool:
@@ -161,7 +162,7 @@ async def verify_token(authorization: str = "") -> dict:
     if res.status_code != 200:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-    data = res.json()
+    data: dict = res.json()
     user_id = data.get("id")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
@@ -184,7 +185,7 @@ User = Annotated[dict, Depends(get_current_user)]
 _AI_CONFIG_ID = "00000000-0000-0000-0000-000000000001"
 _AI_CACHE_TTL_S = 5.0
 # Cache: (monotonic_ts, enabled, allowed_user_ids)
-_ai_config_cache: tuple[float, bool, list[str]] | None = None
+_ai_config_cache: tuple[float, bool, list[str]] | None = None  # module-level, protected by single-threaded async
 
 
 def _normalize_user_ids(raw_ids) -> list[str]:
@@ -195,7 +196,6 @@ def _normalize_user_ids(raw_ids) -> list[str]:
 
 async def _read_ai_platform_config() -> tuple[bool, list[str]] | None:
     """Return (enabled, allowed_user_ids), or None if it could not be read."""
-    global _pool
     if _pool is not None:
         try:
             async with _pool.acquire() as conn:
@@ -225,10 +225,10 @@ async def _read_ai_platform_config() -> tuple[bool, list[str]] | None:
                 },
             )
         if res.status_code == 200:
-            data = res.json()
-            if isinstance(data, list) and data:
-                row = data[0]
-                return bool(row.get("enabled", True)), _normalize_user_ids(row.get("allowed_user_ids") or [])
+            rest_data: list[dict] = res.json()
+            if rest_data:
+                row_data = rest_data[0]
+                return bool(row_data.get("enabled", True)), _normalize_user_ids(row_data.get("allowed_user_ids") or [])
         else:
             print(f"WARNING: ai_platform_config REST status {res.status_code}: {res.text[:300]}")
     except Exception as e:
@@ -239,7 +239,6 @@ async def _read_ai_platform_config() -> tuple[bool, list[str]] | None:
 
 async def _is_platform_admin(user_id: str, authorization: str = "") -> bool:
     """True when profiles.role is admin or super_admin (always bypass allowlist)."""
-    global _pool
     if _pool is not None:
         try:
             async with _pool.acquire() as conn:
@@ -271,9 +270,9 @@ async def _is_platform_admin(user_id: str, authorization: str = "") -> bool:
                 headers=headers,
             )
         if res.status_code == 200:
-            data = res.json()
-            if isinstance(data, list) and data:
-                return str(data[0].get("role") or "") in ("admin", "super_admin")
+            profile_data: list[dict] = res.json()
+            if profile_data:
+                return str(profile_data[0].get("role") or "") in ("admin", "super_admin")
     except Exception as e:
         print(f"WARNING: profiles role REST read failed: {e}")
 
