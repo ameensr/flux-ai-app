@@ -1,20 +1,20 @@
 // src/modules/ReleaseTaskTracker/components/ReleaseConfigurableDropdownsModal.tsx
-// Configuration UI for master dropdown lists (Task Status, Priority, Assigned To).
-// Follows the same architecture and UI/UX as Support Issue Tracker.
+// Configuration UI for master dropdown lists (Task Status, Priority, Who's Testing).
+// Uses the exact same method as /support-tracker for "Who's Testing" (Add New Tester, uppercase names, profile sync).
 // Permission-controlled: Requires 'can_configure_dropdowns' permission.
 
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, Plus, Check, Trash2, Sliders, RefreshCw, ShieldAlert,
-  Users, CheckSquare, Square
+  CheckSquare, Square
 } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useToast } from '@/hooks/use-toast'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAppStore } from '@/store/useAppStore'
 import { useReleaseTrackerStore } from '../store'
-import { syncReleaseAssigneesFromProfiles, generateUUID } from '../releaseTrackerService'
+import { syncReleaseAssigneesFromProfiles } from '../releaseTrackerService'
 import type { ReleaseDropdownOption } from '../types'
 
 interface Props {
@@ -49,7 +49,13 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
   // Working copies of configurations
   const [statuses, setStatuses] = useState<ReleaseDropdownOption[]>(dropdownConfigs.task_status)
   const [priorities, setPriorities] = useState<ReleaseDropdownOption[]>(dropdownConfigs.priority)
-  const [assignees, setAssignees] = useState<ReleaseDropdownOption[]>(dropdownConfigs.assigned_to)
+  const [testers, setTesters] = useState<ReleaseDropdownOption[]>(
+    dropdownConfigs.assigned_to.map(t => ({
+      ...t,
+      label: t.label.toUpperCase(),
+      value: t.value.toUpperCase()
+    }))
+  )
 
   // New item inputs
   const [newLabel, setNewLabel] = useState('')
@@ -62,11 +68,17 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
     if (!isOpen) return
     setStatuses(dropdownConfigs.task_status)
     setPriorities(dropdownConfigs.priority)
-    setAssignees(dropdownConfigs.assigned_to)
+    setTesters(
+      dropdownConfigs.assigned_to.map(t => ({
+        ...t,
+        label: t.label.toUpperCase(),
+        value: t.value.toUpperCase()
+      }))
+    )
     setNewLabel('')
   }, [isOpen, dropdownConfigs])
 
-  // Handle Add Item
+  // Handle Add Item — uses exact same method as /support-tracker
   const handleAddItem = () => {
     if (!canConfigure) {
       toast({
@@ -78,55 +90,55 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
     }
 
     if (!newLabel.trim()) return
-    const trimmed = newLabel.trim()
 
     if (activeTab === 'task_status') {
-      if (statuses.some(s => s.value.toLowerCase() === trimmed.toLowerCase())) {
-        toast({ variant: 'destructive', title: 'Duplicate', description: `"${trimmed}" already exists.` })
+      const trimmedLabel = newLabel.trim()
+      if (statuses.some(s => s.value.toLowerCase() === trimmedLabel.toLowerCase())) {
+        toast({ variant: 'destructive', title: 'Duplicate', description: `"${trimmedLabel}" already exists.` })
         return
       }
       const newItem: ReleaseDropdownOption = {
         id: `stat-${Date.now()}`,
         category: 'task_status',
-        label: trimmed,
-        value: trimmed,
+        label: trimmedLabel,
+        value: trimmedLabel,
         color: newColor,
         is_active: true,
         sort_order: statuses.length + 1
       }
       setStatuses([...statuses, newItem])
     } else if (activeTab === 'priority') {
-      if (priorities.some(p => p.value.toLowerCase() === trimmed.toLowerCase())) {
-        toast({ variant: 'destructive', title: 'Duplicate', description: `"${trimmed}" already exists.` })
+      const trimmedLabel = newLabel.trim()
+      if (priorities.some(p => p.value.toLowerCase() === trimmedLabel.toLowerCase())) {
+        toast({ variant: 'destructive', title: 'Duplicate', description: `"${trimmedLabel}" already exists.` })
         return
       }
       const newItem: ReleaseDropdownOption = {
         id: `prio-${Date.now()}`,
         category: 'priority',
-        label: trimmed,
-        value: trimmed,
+        label: trimmedLabel,
+        value: trimmedLabel,
         color: newColor,
         is_active: true,
         sort_order: priorities.length + 1
       }
       setPriorities([...priorities, newItem])
     } else {
-      // Assigned To
-      if (assignees.some(a => a.label.toLowerCase() === trimmed.toLowerCase())) {
-        toast({ variant: 'destructive', title: 'Duplicate', description: `"${trimmed}" is already configured.` })
+      // Who's Testing (New Tester) — formatted in ALL CAPS matching Support Issue Tracker
+      const cleanUpperName = newLabel.trim().toUpperCase()
+      if (testers.some(t => t.value.toUpperCase() === cleanUpperName || t.label.toUpperCase() === cleanUpperName)) {
+        toast({ variant: 'destructive', title: 'Duplicate Tester', description: `"${cleanUpperName}" is already in the list.` })
         return
       }
-      const stableId = `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
       const newItem: ReleaseDropdownOption = {
-        id: stableId,
+        id: `tester-${Date.now()}`,
         category: 'assigned_to',
-        label: trimmed,
-        value: stableId, // Stable unique ID internally
-        user_id: stableId,
+        label: cleanUpperName,
+        value: cleanUpperName,
         is_active: true,
-        sort_order: assignees.length + 1
+        sort_order: testers.length + 1
       }
-      setAssignees([...assignees, newItem])
+      setTesters([...testers, newItem])
     }
     setNewLabel('')
   }
@@ -139,7 +151,7 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
     } else if (activeTab === 'priority') {
       setPriorities(priorities.filter(p => p.id !== id))
     } else {
-      setAssignees(assignees.filter(a => a.id !== id))
+      setTesters(testers.filter(t => t.id !== id))
     }
   }
 
@@ -151,41 +163,44 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
     } else if (activeTab === 'priority') {
       setPriorities(priorities.map(p => p.id === id ? { ...p, is_active: !p.is_active } : p))
     } else {
-      setAssignees(assignees.map(a => a.id === id ? { ...a, is_active: !a.is_active } : a))
+      setTesters(testers.map(t => t.id === id ? { ...t, is_active: !t.is_active } : t))
     }
   }
 
-  // Sync Assignees from user profiles
+  // Sync Testers from user profiles matching /support-tracker method
   const handleSyncProfiles = async () => {
     if (!canConfigure) return
     setSyncingProfiles(true)
     try {
       const profileOptions = await syncReleaseAssigneesFromProfiles()
-      const existingValues = new Set(assignees.map(a => a.value.toLowerCase()))
-      const existingLabels = new Set(assignees.map(a => a.label.toLowerCase()))
+      const existingTesterNames = new Set(testers.map(t => t.label.toUpperCase()))
       const newAdditions: ReleaseDropdownOption[] = []
 
       for (const p of profileOptions) {
-        if (!existingValues.has(p.value.toLowerCase()) && !existingLabels.has(p.label.toLowerCase())) {
+        const upperName = p.label.trim().toUpperCase()
+        if (!existingTesterNames.has(upperName)) {
           newAdditions.push({
-            ...p,
-            sort_order: assignees.length + newAdditions.length + 1
+            id: `tester-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+            category: 'assigned_to',
+            label: upperName,
+            value: upperName,
+            is_active: true,
+            sort_order: testers.length + newAdditions.length + 1
           })
-          existingValues.add(p.value.toLowerCase())
-          existingLabels.add(p.label.toLowerCase())
+          existingTesterNames.add(upperName)
         }
       }
 
       if (newAdditions.length > 0) {
-        setAssignees([...assignees, ...newAdditions])
+        setTesters([...testers, ...newAdditions])
         toast({
-          title: 'Employees Synchronized',
-          description: `Added ${newAdditions.length} active team members from system profiles.`
+          title: 'Testers Synchronized',
+          description: `Added ${newAdditions.length} active users in ALL CAPS from system profiles.`
         })
       } else {
         toast({
-          title: 'Already Synchronized',
-          description: 'All system profile users already exist in the Assigned To list.'
+          title: 'Testers Up-to-date',
+          description: 'All system profile users already exist in the tester list.'
         })
       }
     } catch (err: any) {
@@ -218,18 +233,24 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
         user?.email ||
         'QA Admin'
 
+      const normalizedTesters = testers.map(t => ({
+        ...t,
+        label: t.label.trim().toUpperCase(),
+        value: t.value.trim().toUpperCase()
+      }))
+
       await updateDropdowns(
         {
           task_status: statuses,
           priority: priorities,
-          assigned_to: assignees
+          assigned_to: normalizedTesters
         },
         { name: actorName, id: user?.id }
       )
 
       toast({
         title: 'Configurations Saved',
-        description: 'Release Task dropdowns (Statuses, Priorities, and Assigned To) updated successfully.'
+        description: 'Dropdown options and status lists updated successfully.'
       })
       onClose()
     } catch (err: any) {
@@ -250,7 +271,7 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
       ? statuses
       : activeTab === 'priority'
       ? priorities
-      : assignees
+      : testers
 
   return (
     <AnimatePresence>
@@ -275,10 +296,10 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
               </div>
               <div>
                 <h3 className="text-base font-bold text-text-primary">
-                  Configure Release Dropdowns
+                  Configure Dropdowns
                 </h3>
                 <p className="text-xs text-text-muted">
-                  Customizable master lists for Task Statuses, Priorities, and Assigned To employees
+                  Customizable master lists for task statuses, priorities, and tester employees
                 </p>
               </div>
             </div>
@@ -312,7 +333,7 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
                   : 'text-text-muted hover:text-text-primary hover:bg-white/5'
               }`}
             >
-              Task Status ({statuses.length})
+              Task Statuses ({statuses.length})
             </button>
             <button
               type="button"
@@ -323,7 +344,7 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
                   : 'text-text-muted hover:text-text-primary hover:bg-white/5'
               }`}
             >
-              Priority ({priorities.length})
+              Priorities ({priorities.length})
             </button>
             <button
               type="button"
@@ -334,7 +355,7 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
                   : 'text-text-muted hover:text-text-primary hover:bg-white/5'
               }`}
             >
-              Assigned To ({assignees.length})
+              Who's Testing ({testers.length})
             </button>
           </div>
 
@@ -343,14 +364,16 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
             {/* Add New Option Input Box */}
             <div className="p-3.5 rounded-xl bg-surface border border-white/10 space-y-2.5">
               <span className="text-xs font-semibold text-text-primary block">
-                Add New {activeTab === 'task_status' ? 'Status' : activeTab === 'priority' ? 'Priority' : 'Employee'}
+                Add New {activeTab === 'task_status' ? 'Status' : activeTab === 'priority' ? 'Priority' : 'Tester'}
               </span>
 
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
+                  onChange={(e) =>
+                    setNewLabel(activeTab === 'assigned_to' ? e.target.value.toUpperCase() : e.target.value)
+                  }
                   disabled={!canConfigure}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -360,12 +383,14 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
                   }}
                   placeholder={
                     activeTab === 'task_status'
-                      ? 'e.g. In Security Audit'
+                      ? 'e.g. In Security Review'
                       : activeTab === 'priority'
-                      ? 'e.g. Blocker'
-                      : 'e.g. Ameen SR'
+                      ? 'e.g. Critical'
+                      : 'e.g. JOHN DOE'
                   }
-                  className="flex-1 h-9 bg-surface-elevated border border-white/15 rounded-lg px-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                  className={`flex-1 h-9 bg-surface-elevated border border-white/15 rounded-lg px-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 ${
+                    activeTab === 'assigned_to' ? 'uppercase font-mono tracking-wider' : ''
+                  }`}
                 />
 
                 {activeTab !== 'assigned_to' && (
@@ -399,7 +424,7 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
               {activeTab === 'assigned_to' && (
                 <div className="pt-2 border-t border-white/5 flex items-center justify-between">
                   <span className="text-[11px] text-text-muted">
-                    Pull registered employees and testers from user profiles
+                    Quickly pull active team members from company profiles
                   </span>
                   <button
                     type="button"
@@ -408,7 +433,7 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
                     className="text-xs font-semibold text-accent hover:underline flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${syncingProfiles ? 'animate-spin' : ''}`} />
-                    Sync from Team Profiles
+                    Sync from User Profiles
                   </button>
                 </div>
               )}
@@ -417,7 +442,7 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
             {/* Items List */}
             <div className="space-y-2">
               <span className="text-xs font-semibold text-text-muted block">
-                Configured Options ({currentList.length})
+                Active Options ({currentList.length})
               </span>
 
               <div className="divide-y divide-white/5 border border-white/10 rounded-xl overflow-hidden bg-surface">
@@ -427,40 +452,16 @@ export function ReleaseConfigurableDropdownsModal({ isOpen, onClose }: Props) {
                     className="p-3 flex items-center justify-between text-xs hover:bg-white/[0.02] transition-colors"
                   >
                     <div className="flex items-center gap-2.5">
-                      {/* Checkbox icon for assigned_to (Requirement 12: ☑ Ameen, ☑ Rahul, ☐ John) */}
-                      {activeTab === 'assigned_to' ? (
-                        <button
-                          type="button"
-                          disabled={!canConfigure}
-                          onClick={() => handleToggleActive(item.id)}
-                          className="text-text-muted hover:text-accent transition-colors disabled:cursor-not-allowed"
-                          title={item.is_active ? 'Click to disable' : 'Click to enable'}
-                        >
-                          {item.is_active ? (
-                            <CheckSquare className="w-4 h-4 text-emerald-400" />
-                          ) : (
-                            <Square className="w-4 h-4 text-zinc-500" />
-                          )}
-                        </button>
-                      ) : (
-                        item.color && (
-                          <div
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: item.color }}
-                          />
-                        )
+                      {activeTab !== 'assigned_to' && item.color && (
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
                       )}
 
-                      <div className="flex flex-col">
-                        <span className={`font-semibold ${item.is_active ? 'text-text-primary' : 'text-text-muted line-through'}`}>
-                          {item.label}
-                        </span>
-                        {activeTab === 'assigned_to' && item.value && (
-                          <span className="text-[10px] text-text-muted font-mono">
-                            ID: {item.value}
-                          </span>
-                        )}
-                      </div>
+                      <span className={`font-semibold ${item.is_active ? 'text-text-primary' : 'text-text-muted line-through'} ${activeTab === 'assigned_to' ? 'uppercase font-mono tracking-wide' : ''}`}>
+                        {activeTab === 'assigned_to' ? item.label.toUpperCase() : item.label}
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-2">

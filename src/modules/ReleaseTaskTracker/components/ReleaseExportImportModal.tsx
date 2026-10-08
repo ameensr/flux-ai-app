@@ -110,7 +110,7 @@ export function ReleaseExportImportModal({
         const est = parseFloat(row['Estimated Hrs'] || row['estimated_hours'] || '0') || 0
         const prio = row['Priority'] || row['priority'] || 'Medium'
         const status = row['Task Status'] || row['Status'] || row['status'] || 'Not Started'
-        const assignee = row['Assigned To'] || row['assigned_to'] || 'Unassigned'
+        const assignee = row["Who's Testing"] || row['Who’s Testing'] || row['Assigned To'] || row['assigned_to'] || 'Unassigned'
         const comments = row['Comments'] || row['comments'] || ''
 
         await addOrUpdateTask(
@@ -259,7 +259,7 @@ export function ReleaseExportImportModal({
             {activeTab === 'import' && (
               <div className="space-y-4">
                 <p className="text-xs text-text-muted">
-                  Upload an Excel or CSV file containing columns: <strong>Product, Release, Task Description, Priority, Estimated Hrs, Task Status, Assigned To</strong>.
+                  Upload an Excel or CSV file containing columns: <strong>Product, Release, Task Description, Priority, Estimated Hrs, Task Status, Who's Testing</strong>.
                 </p>
 
                 <label className="border-2 border-dashed border-white/15 hover:border-accent/40 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors bg-surface-elevated/30">

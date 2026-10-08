@@ -463,7 +463,7 @@ export async function saveReleaseTask(
         user_name: currentUser.name,
         user_id: currentUser.id,
         action: 'Task Assigned',
-        field: 'Assigned To',
+        field: "Who's Testing",
         old_value: existing.assigned_to_name,
         new_value: savedTask.assigned_to_name
       })
@@ -1329,7 +1329,7 @@ export function exportReleaseTasksToExcel(tasks: ReleaseTask[], filename?: strin
     'Start Date': t.start_date || '—',
     'Target Date': t.target_date || '—',
     'Finish Date': t.finish_date || '—',
-    'Assigned To': t.assigned_to_name,
+    "Who's Testing": t.assigned_to_name,
     'Estimated Hrs': t.estimated_hours,
     'Estimation Status': t.estimated_hours_locked ? 'Locked' : 'Unlocked',
     'Actual Hrs': t.actual_hours,
@@ -1355,7 +1355,7 @@ export function exportReleaseTasksToExcel(tasks: ReleaseTask[], filename?: strin
     { wch: 14 }, // Start Date
     { wch: 14 }, // Target Date
     { wch: 14 }, // Finish Date
-    { wch: 20 }, // Assigned To
+    { wch: 20 }, // Who's Testing
     { wch: 15 }, // Estimated Hrs
     { wch: 16 }, // Estimation Status
     { wch: 14 }, // Actual Hrs
@@ -1382,7 +1382,7 @@ export function exportReleaseTasksToCSV(tasks: ReleaseTask[], filename?: string)
     'Start Date',
     'Target Date',
     'Finish Date',
-    'Assigned To',
+    "Who's Testing",
     'Estimated Hrs',
     'Estimation Status',
     'Actual Hrs',

@@ -204,7 +204,7 @@ export function ViewReleaseTaskModal({
 
                   <div>
                     <span className="text-[10px] uppercase font-semibold tracking-wider text-text-muted block mb-1">
-                      Assigned To
+                      Who's Testing
                     </span>
                     <div className="flex items-center gap-1.5 text-xs font-medium text-text-primary">
                       <div className="w-5 h-5 rounded-full bg-accent/20 text-accent flex items-center justify-center text-[9px] font-bold">

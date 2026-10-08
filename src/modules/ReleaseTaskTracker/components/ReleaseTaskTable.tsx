@@ -381,13 +381,13 @@ export function ReleaseTaskTable({
                 </div>
               </th>
 
-              {/* 10. Assigned To */}
+              {/* 10. Who's Testing */}
               <th
                 onClick={() => handleSort('assigned_to_name')}
                 className="py-3 px-3 cursor-pointer hover:text-text-primary"
               >
                 <div className="flex items-center gap-1">
-                  <span>Assigned To</span>
+                  <span>Who's Testing</span>
                   <ArrowUpDown className="w-3 h-3 text-text-muted/60" />
                 </div>
               </th>

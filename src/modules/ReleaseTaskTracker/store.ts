@@ -13,8 +13,10 @@ import type {
   ReleaseKPICounters,
   ReleaseProgressData,
   ProductReleaseSummary,
-  EmployeeUser
+  EmployeeUser,
+  TesterWorkload
 } from './types'
+import { DEFAULT_TASK_STATUSES } from './types'
 import {
   fetchProductsFromProjectHub,
   fetchActiveEmployees,
@@ -106,6 +108,8 @@ interface ReleaseTrackerState {
   getProductReleaseSummaries: () => ProductReleaseSummary[]
   getRecentActivities: () => ReleaseTaskHistoryRecord[]
   getAvailableReleases: () => string[]
+  getTesterWorkloads: () => TesterWorkload[]
+  getStatusDistribution: () => Array<{ status: string; count: number; color: string }>
 }
 
 const DEFAULT_FILTERS: ReleaseFilters = {
@@ -553,5 +557,87 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
     }
 
     return Array.from(relSet).sort()
+  },
+
+  getTesterWorkloads: () => {
+    const filtered = get().getFilteredTasks()
+    const { dropdownConfigs } = get()
+
+    const testerMap = new Map<string, {
+      activeTasks: number
+      estimatedHrs: number
+      actualHrs: number
+      remainingHrs: number
+      overrunHrs: number
+    }>()
+
+    // Initialize all active configured testers so all testers appear in workload
+    for (const t of (dropdownConfigs.assigned_to || []).filter(t => t.is_active)) {
+      testerMap.set(t.label.toUpperCase(), {
+        activeTasks: 0,
+        estimatedHrs: 0,
+        actualHrs: 0,
+        remainingHrs: 0,
+        overrunHrs: 0
+      })
+    }
+
+    // Accumulate from filtered tasks
+    for (const task of filtered) {
+      const rawName = task.assigned_to_name || 'Unassigned'
+      const name = rawName === 'Unassigned' ? 'Unassigned' : rawName.toUpperCase()
+      const existing = testerMap.get(name) || {
+        activeTasks: 0,
+        estimatedHrs: 0,
+        actualHrs: 0,
+        remainingHrs: 0,
+        overrunHrs: 0
+      }
+
+      const s = (task.task_status || '').toLowerCase()
+      if (s !== 'completed' && s !== 'cancelled') {
+        existing.activeTasks++
+      }
+
+      existing.estimatedHrs += Number(task.estimated_hours) || 0
+      existing.actualHrs += Number(task.actual_hours) || 0
+      existing.remainingHrs += Number(task.remaining_hours) || 0
+      existing.overrunHrs += Number(task.overrun_hours) || 0
+
+      testerMap.set(name, existing)
+    }
+
+    return Array.from(testerMap.entries()).map(([testerName, data]) => ({
+      testerName,
+      activeTasks: data.activeTasks,
+      estimatedHrs: Math.round(data.estimatedHrs * 10) / 10,
+      actualHrs: Math.round(data.actualHrs * 10) / 10,
+      remainingHrs: Math.round(data.remainingHrs * 10) / 10,
+      overrunHrs: Math.round(data.overrunHrs * 10) / 10
+    })).sort((a, b) => b.remainingHrs - a.remainingHrs || b.overrunHrs - a.overrunHrs)
+  },
+
+  getStatusDistribution: () => {
+    const filtered = get().getFilteredTasks()
+    const { dropdownConfigs } = get()
+
+    if (dropdownConfigs.task_status && dropdownConfigs.task_status.length > 0) {
+      return dropdownConfigs.task_status
+        .filter(ts => ts.is_active)
+        .map(ts => {
+          const count = filtered.filter(t => t.task_status === ts.value).length
+          return {
+            status: ts.label,
+            count,
+            color: ts.color || '#6366f1'
+          }
+        })
+    }
+
+    return DEFAULT_TASK_STATUSES.map(s => ({
+      status: s.label,
+      count: filtered.filter(t => t.task_status === s.value).length,
+      color: s.color
+    }))
   }
 }))

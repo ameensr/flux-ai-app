@@ -166,6 +166,15 @@ export interface ProductReleaseSummary {
   overrunHrs: number
 }
 
+export interface TesterWorkload {
+  testerName: string
+  activeTasks: number
+  estimatedHrs: number
+  actualHrs: number
+  remainingHrs: number
+  overrunHrs: number
+}
+
 export interface EmployeeUser {
   id: string
   name: string

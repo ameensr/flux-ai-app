@@ -399,10 +399,10 @@ export function AddEditReleaseTaskModal({
                 </select>
               </div>
 
-              {/* Assigned To (Configured via Configuration -> Assigned To) */}
+              {/* Who's Testing (Configured via Configuration -> Who's Testing) */}
               <div>
                 <label className="text-xs font-semibold text-text-secondary block mb-1">
-                  Assigned To
+                  Who's Testing
                 </label>
                 <select
                   value={assignedUserId}

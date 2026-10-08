@@ -17,7 +17,7 @@ import {
 import { GlassCard } from '@/components/ui/GlassCard'
 import { Badge } from '@/components/ui/badge'
 import { useReleaseTrackerStore } from '../store'
-import type { ProductReleaseSummary } from '../types'
+import type { ProductReleaseSummary, TesterWorkload } from '../types'
 
 export function ReleaseManagerDashboard() {
   const {
@@ -32,6 +32,8 @@ export function ReleaseManagerDashboard() {
     getReleaseProgress,
     getProductReleaseSummaries,
     getAvailableReleases,
+    getTesterWorkloads,
+    getStatusDistribution,
     dropdownConfigs,
     setDrillDownRelease
   } = useReleaseTrackerStore()
@@ -40,6 +42,8 @@ export function ReleaseManagerDashboard() {
   const releaseProgress = getReleaseProgress()
   const summaries = getProductReleaseSummaries()
   const availableReleases = getAvailableReleases()
+  const testerWorkloads = getTesterWorkloads()
+  const statusDistribution = getStatusDistribution()
 
   // Active filters count
   const activeFiltersCount = useMemo(() => {
@@ -64,27 +68,7 @@ export function ReleaseManagerDashboard() {
     }
   }
 
-  // Chart data for status distribution
-  const statusChartData = useMemo(() => {
-    return [
-      { name: 'Not Started', count: kpis.notStarted, color: '#94a3b8' },
-      { name: 'Assigned', count: kpis.assigned, color: '#3b82f6' },
-      { name: 'In Progress', count: kpis.inProgress, color: '#8b5cf6' },
-      { name: 'Blocked', count: kpis.blocked, color: '#ef4444' },
-      { name: 'In Review', count: kpis.inReview, color: '#f59e0b' },
-      { name: 'Completed', count: kpis.completed, color: '#10b981' }
-    ].filter(item => item.count > 0)
-  }, [kpis])
 
-  // Chart data for hours comparison
-  const hoursChartData = useMemo(() => {
-    return [
-      { name: 'Estimated Hrs', hours: kpis.totalEstimatedHours, fill: '#3b82f6' },
-      { name: 'Actual Hrs', hours: kpis.totalActualHours, fill: '#8b5cf6' },
-      { name: 'Remaining Hrs', hours: kpis.remainingHours, fill: '#10b981' },
-      { name: 'Overrun Hrs', hours: kpis.overrunHours, fill: '#ef4444' }
-    ]
-  }, [kpis])
 
   return (
     <div className="space-y-6">
@@ -201,21 +185,21 @@ export function ReleaseManagerDashboard() {
             </select>
           </div>
 
-          {/* Assigned To Filter */}
+          {/* Who's Testing Filter */}
           <div>
             <label htmlFor="filter-assigned" className="text-[11px] font-semibold text-text-muted block mb-1">
-              Assigned To
+              Who's Testing
             </label>
             <select
               id="filter-assigned"
-              aria-label="Filter by Assigned Employee"
+              aria-label="Filter by Tester"
               value={filters.assignedTo[0] || ''}
               onChange={(e) =>
                 setFilters({ assignedTo: e.target.value ? [e.target.value] : [] })
               }
               className="w-full h-9 bg-surface-elevated/70 border border-white/10 rounded-lg px-2.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
             >
-              <option value="">All Employees</option>
+              <option value="">All Testers</option>
               {dropdownConfigs.assigned_to.map((emp) => (
                 <option key={emp.id} value={emp.label}>
                   {emp.label} {!emp.is_active ? '(Inactive)' : ''}
@@ -560,64 +544,164 @@ export function ReleaseManagerDashboard() {
         </div>
       </GlassCard>
 
-      {/* ── Charts: Task Distribution & Hours Comparison ────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Status Distribution */}
-        <GlassCard className="p-4 border border-white/10 bg-surface/90 rounded-2xl">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-text-primary">Task Status Distribution</span>
-            <span className="text-[11px] text-text-muted">Current Filter Scope</span>
+      {/* ── Charts & Tester Workload Section ─────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Testing Status Visualization */}
+        <GlassCard className="lg:col-span-7 p-5 border border-white/10 dark:border-white/5 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-text-primary">
+                  Testing Status Visualization
+                </h3>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Distribution of release tasks across configurable statuses
+                </p>
+              </div>
+            </div>
+
+            <div className="h-[250px] w-full pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={statusDistribution}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 25 }}
+                >
+                  <XAxis
+                    dataKey="status"
+                    tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                    angle={-25}
+                    textAnchor="end"
+                    interval={0}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'var(--modal-bg)',
+                      borderColor: 'var(--border)',
+                      borderRadius: '8px',
+                      color: 'var(--text-primary)',
+                      fontSize: '12px'
+                    }}
+                    formatter={(value: any) => [`${value} Tasks`, 'Count']}
+                  />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                    {statusDistribution.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div className="h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={statusChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} interval={0} />
-                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#18181b',
-                    borderColor: 'rgba(255,255,255,0.1)',
-                    borderRadius: '8px',
-                    fontSize: '11px'
-                  }}
-                />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                  {statusChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+
+          {/* Quick status count pills */}
+          <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-white/5">
+            {statusDistribution.map((item) => (
+              <div
+                key={item.status}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-surface-elevated/70 border border-white/5"
+              >
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                <span className="text-text-muted">{item.status}:</span>
+                <span className="font-bold text-text-primary">{item.count}</span>
+              </div>
+            ))}
           </div>
         </GlassCard>
 
-        {/* Hours Breakdown */}
-        <GlassCard className="p-4 border border-white/10 bg-surface/90 rounded-2xl">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-text-primary">Cumulative Hours Breakdown</span>
-            <span className="text-[11px] text-text-muted">Estimated vs Actual</span>
-          </div>
-          <div className="h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hoursChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                <Tooltip
-                  formatter={(val: any) => [`${val} Hrs`, 'Hours']}
-                  contentStyle={{
-                    backgroundColor: '#18181b',
-                    borderColor: 'rgba(255,255,255,0.1)',
-                    borderRadius: '8px',
-                    fontSize: '11px'
-                  }}
-                />
-                <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
-                  {hoursChartData.map((entry, index) => (
-                    <Cell key={`cell-hrs-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+        {/* Tester Workload */}
+        <GlassCard className="lg:col-span-5 p-5 border border-white/10 dark:border-white/5 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-accent" />
+                  <span>Tester Workload</span>
+                </h3>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Effort allocation, remaining queue & overruns per tester
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 max-h-[290px] overflow-y-auto pr-1">
+              {testerWorkloads.map((tester) => {
+                const hasHighWorkload = tester.remainingHrs > 16 || tester.activeTasks > 3
+                const hasOverrun = tester.overrunHrs > 0
+
+                return (
+                  <div
+                    key={tester.testerName}
+                    className={`p-3 rounded-xl border transition-all ${
+                      hasOverrun
+                        ? 'bg-rose-500/5 border-rose-500/20'
+                        : hasHighWorkload
+                        ? 'bg-amber-500/5 border-amber-500/20'
+                        : 'bg-surface-elevated/60 border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-accent/20 border border-accent/30 text-accent flex items-center justify-center text-[10px] font-bold">
+                          {tester.testerName.slice(0, 2).toUpperCase()}
+                        </div>
+                        <span className="font-semibold text-xs text-text-primary">
+                          {tester.testerName.toUpperCase()}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {hasOverrun && (
+                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                            +{tester.overrunHrs}h Overrun
+                          </Badge>
+                        )}
+                        {hasHighWorkload && !hasOverrun && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/30 text-amber-400 bg-amber-500/10">
+                            Heavy Queue
+                          </Badge>
+                        )}
+                        <span className="text-xs text-text-muted">
+                          {tester.activeTasks} active
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2 text-[11px] pt-1 border-t border-white/5">
+                      <div>
+                        <span className="text-text-muted block text-[10px]">Est.</span>
+                        <span className="font-medium text-text-primary">{tester.estimatedHrs}h</span>
+                      </div>
+                      <div>
+                        <span className="text-text-muted block text-[10px]">Act.</span>
+                        <span className="font-medium text-indigo-300">{tester.actualHrs}h</span>
+                      </div>
+                      <div>
+                        <span className="text-text-muted block text-[10px]">Rem.</span>
+                        <span className={`font-semibold ${tester.remainingHrs > 12 ? 'text-amber-400' : 'text-text-primary'}`}>
+                          {tester.remainingHrs}h
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-text-muted block text-[10px]">Overrun</span>
+                        <span className={`font-semibold ${tester.overrunHrs > 0 ? 'text-rose-400' : 'text-text-muted'}`}>
+                          {tester.overrunHrs}h
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {testerWorkloads.length === 0 && (
+                <div className="text-center py-6 text-xs text-text-muted">
+                  No active testers found in current filtered scope.
+                </div>
+              )}
+            </div>
           </div>
         </GlassCard>
       </div>
