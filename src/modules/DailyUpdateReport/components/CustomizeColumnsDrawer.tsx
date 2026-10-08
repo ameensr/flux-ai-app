@@ -232,7 +232,7 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
         description: `${cloned.length} column${cloned.length === 1 ? '' : 's'} copied into this project's draft. Edit anything below, then click Save Configuration to make it this project's own configuration.`,
       })
     } catch (e: unknown) {
-      toast({ variant: 'destructive', title: 'Clone failed', description: e?.message || 'Could not clone the Organization Default columns.' })
+      toast({ variant: 'destructive', title: 'Clone failed', description: e instanceof Error ? e.message : 'Could not clone the Organization Default columns.' })
     } finally {
       setDraftLoading(false)
     }
@@ -498,7 +498,7 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
       toast({ variant: 'success', title: 'Reset complete', description: 'This project now has no configuration of its own and will use the Organization Default until you save new project-specific columns.' })
       onSaved?.()
     } catch (e: unknown) {
-      toast({ variant: 'destructive', title: 'Reset failed', description: e?.message || 'Could not reset to default.' })
+      toast({ variant: 'destructive', title: 'Reset failed', description: e instanceof Error ? e.message : 'Could not reset to default.' })
     } finally {
       setSaving(false)
     }
@@ -598,7 +598,7 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
       toast({ variant: 'success', title: 'Configuration saved', description: 'QA Daily Update column configuration updated successfully.' })
       onSaved?.()
     } catch (e: unknown) {
-      toast({ variant: 'destructive', title: 'Save failed', description: e?.message || 'Could not save column configuration.' })
+      toast({ variant: 'destructive', title: 'Save failed', description: e instanceof Error ? e.message : 'Could not save column configuration.' })
     } finally {
       setSaving(false)
     }
@@ -625,7 +625,7 @@ export const CustomizeColumnsDrawer: React.FC<CustomizeColumnsDrawerProps> = ({
       toast({ variant: 'success', title: 'Saved as project template', description: 'This configuration is now saved specifically for the current project.' })
       onSaved?.()
     } catch (e: unknown) {
-      const msg = e?.message || e?.details || 'Could not save project template.'
+      const msg = (e instanceof Error ? e.message : '') || (e instanceof Error ? (e as any).details : '') || 'Could not save project template.'
       toast({ variant: 'destructive', title: 'Save failed', description: msg })
     } finally {
       setSaving(false)

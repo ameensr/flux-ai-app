@@ -622,7 +622,7 @@ export function RoleManagement() {
 
       toast({ title: 'Permissions Saved', description: `${rows.length} change${rows.length !== 1 ? 's' : ''} applied.` })
     } catch (e: unknown) {
-      toast({ variant: 'destructive', title: 'Failed to save permissions', description: e?.message })
+      toast({ variant: 'destructive', title: 'Failed to save permissions', description: e instanceof Error ? e.message : String(e) })
     } finally {
       setSavingAll(false)
     }

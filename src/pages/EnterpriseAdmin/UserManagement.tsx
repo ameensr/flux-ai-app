@@ -198,7 +198,7 @@ async function fetchUserDeleteDependencies(userId: string): Promise<UserDeleteDe
   const leadProjects: UserDeleteDependencies['leadProjects'] = []
   const memberProjects: UserDeleteDependencies['memberProjects'] = []
 
-  for (const row of (membershipsRes.data || []) as MembershipRow[]) {
+  for (const row of (membershipsRes.data || []) as unknown as MembershipRow[]) {
     const p = row.project
     if (!p?.id) continue
     if (row.project_role === 'owner') {
@@ -1004,10 +1004,10 @@ export function UserManagement() {
           last_login_at, created_at, department_id, plan_id,
           departments(name), plans(plan_name)
         `).order('created_at', { ascending: false })
-        usersData = withoutTeams.data as typeof usersData
+        usersData = (withoutTeams.data ?? []) as unknown as EnterpriseUser[]
         usersError = withoutTeams.error
       } else {
-        usersData = withTeams.data as typeof usersData
+        usersData = (withTeams.data ?? []) as unknown as EnterpriseUser[]
       }
 
       const [{ data: rolesData }, { data: deptsData }] = await Promise.all([

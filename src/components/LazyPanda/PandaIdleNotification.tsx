@@ -35,8 +35,8 @@ export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () =>
   // Resolve user display name (full_name -> metadata name -> email handle)
   const resolvedName =
     profile?.full_name?.trim() ||
-    user?.user_metadata?.full_name?.trim() ||
-    user?.user_metadata?.name?.trim() ||
+    (user?.user_metadata as Record<string, unknown> | undefined)?.full_name?.toString().trim() ||
+    (user?.user_metadata as Record<string, unknown> | undefined)?.name?.toString().trim() ||
     user?.email?.split('@')[0]?.trim() ||
     null
 

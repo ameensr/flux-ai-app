@@ -1392,7 +1392,7 @@ Do not return markdown wraps, only raw JSON text.
         throw new Error('Incomplete JSON schema returned')
       }
     } catch (e: unknown) {
-      console.warn('AI summary generation failed. Using default.', String(e?.message ?? '').replace(/[\r\n]/g, ' '))
+      console.warn('AI summary generation failed. Using default.', String(e instanceof Error ? e.message : e ?? '').replace(/[\r\n]/g, ' '))
       toast({
         title: 'Refinement Offline',
         description: 'Using pre-calculated QA analytics summary.',

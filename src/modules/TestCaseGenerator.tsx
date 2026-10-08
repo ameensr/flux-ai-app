@@ -593,7 +593,7 @@ export const TestCaseGenerator = () => {
     } catch (e: unknown) {
       toast({
         title: 'Export failed',
-        description: e?.message || 'Could not create Excel file.',
+        description: e instanceof Error ? e.message : 'Could not create Excel file.',
         variant: 'destructive',
       })
     }

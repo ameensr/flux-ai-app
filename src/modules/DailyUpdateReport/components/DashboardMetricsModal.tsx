@@ -114,7 +114,7 @@ export const DashboardMetricsModal: React.FC<DashboardMetricsModalProps> = ({ op
       })
       onClose()
     } catch (e: unknown) {
-      toast({ variant: 'destructive', title: 'Save failed', description: e?.message || 'Could not update dashboard metrics.' })
+      toast({ variant: 'destructive', title: 'Save failed', description: e instanceof Error ? e.message : 'Could not update dashboard metrics.' })
     } finally {
       setSaving(false)
     }

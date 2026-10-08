@@ -11,7 +11,7 @@ export interface Profile {
   created_at: string
 }
 
-type AuthUser = {
+export type AuthUser = {
   id: string
   email?: string
   user_metadata?: Record<string, unknown>

@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, createContext, useContext } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
 import type { User } from '@supabase/supabase-js'
+import type { AuthUser } from '@/store/useAppStore'
 import { useAppStore } from '@/store/useAppStore'
 import type { Profile } from '@/store/useAppStore'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -252,10 +253,10 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
           else setProfile(null)
 
           const map = await loadPermissionsForRole(role)
-          initSession(user, map)
+          initSession(user as unknown as AuthUser, map)
         } catch (e) {
           console.warn('[App] session setup error:', e)
-          initSession(user, FALLBACK_MAPS.free)
+          initSession(user as unknown as AuthUser, FALLBACK_MAPS.free)
         } finally {
           initPromiseRef.current = null
         }
