@@ -39,11 +39,13 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
   const { toast } = useToast()
   const { dropdownConfigs, updateDropdowns } = useSupportTrackerStore()
 
-  const [activeTab, setActiveTab] = useState<'testing_status' | 'testers'>('testing_status')
+  const [activeTab, setActiveTab] = useState<'testing_status' | 'testers' | 'is_qa_miss' | 'retesting_status'>('testing_status')
 
   // Working copy of configurations
   const [statuses, setStatuses] = useState<SupportDropdownOption[]>(dropdownConfigs.testing_status)
   const [testers, setTesters] = useState<SupportDropdownOption[]>(dropdownConfigs.testers)
+  const [isQaMissOptions, setIsQaMissOptions] = useState<SupportDropdownOption[]>(dropdownConfigs.is_qa_miss || [])
+  const [retestingStatusOptions, setRetestingStatusOptions] = useState<SupportDropdownOption[]>(dropdownConfigs.retesting_status || [])
 
   // New item inputs
   const [newLabel, setNewLabel] = useState('')
@@ -55,13 +57,9 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
   React.useEffect(() => {
     if (!isOpen) return
     setStatuses(dropdownConfigs.testing_status)
-    setTesters(
-      dropdownConfigs.testers.map(t => ({
-        ...t,
-        label: t.label.toUpperCase(),
-        value: t.value.toUpperCase()
-      }))
-    )
+    setTesters(dropdownConfigs.testers.map(t => ({ ...t, label: t.label.toUpperCase(), value: t.value.toUpperCase() })))
+    setIsQaMissOptions(dropdownConfigs.is_qa_miss || [])
+    setRetestingStatusOptions(dropdownConfigs.retesting_status || [])
     setNewLabel('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
@@ -72,57 +70,36 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
 
     if (activeTab === 'testing_status') {
       const trimmedLabel = newLabel.trim()
-      // Prevent duplicate status values
-      if (statuses.some(s => s.value.toLowerCase() === trimmedLabel.toLowerCase())) {
-        setNewLabel('')
-        return
-      }
-      const newItem: SupportDropdownOption = {
-        id: `ts-${Date.now()}`,
-        category: 'testing_status',
-        label: trimmedLabel,
-        value: trimmedLabel,
-        color: newColor,
-        is_active: true,
-        sort_order: statuses.length + 1
-      }
-      setStatuses([...statuses, newItem])
-    } else {
+      if (statuses.some(s => s.value.toLowerCase() === trimmedLabel.toLowerCase())) { setNewLabel(''); return }
+      setStatuses([...statuses, { id: `ts-${Date.now()}`, category: 'testing_status', label: trimmedLabel, value: trimmedLabel, color: newColor, is_active: true, sort_order: statuses.length + 1 }])
+    } else if (activeTab === 'testers') {
       const cleanUpperName = newLabel.trim().toUpperCase()
-      // Prevent duplicate tester values
-      if (testers.some(t => t.value.toUpperCase() === cleanUpperName)) {
-        setNewLabel('')
-        return
-      }
-      const newItem: SupportDropdownOption = {
-        id: `tester-${Date.now()}`,
-        category: 'tester',
-        label: cleanUpperName,
-        value: cleanUpperName,
-        is_active: true,
-        sort_order: testers.length + 1
-      }
-      setTesters([...testers, newItem])
+      if (testers.some(t => t.value.toUpperCase() === cleanUpperName)) { setNewLabel(''); return }
+      setTesters([...testers, { id: `tester-${Date.now()}`, category: 'tester', label: cleanUpperName, value: cleanUpperName, is_active: true, sort_order: testers.length + 1 }])
+    } else if (activeTab === 'is_qa_miss') {
+      const trimmedLabel = newLabel.trim()
+      if (isQaMissOptions.some(o => o.value.toLowerCase() === trimmedLabel.toLowerCase())) { setNewLabel(''); return }
+      setIsQaMissOptions([...isQaMissOptions, { id: `qamiss-${Date.now()}`, category: 'is_qa_miss', label: trimmedLabel, value: trimmedLabel, is_active: true, sort_order: isQaMissOptions.length + 1 }])
+    } else if (activeTab === 'retesting_status') {
+      const trimmedLabel = newLabel.trim()
+      if (retestingStatusOptions.some(o => o.value.toLowerCase() === trimmedLabel.toLowerCase())) { setNewLabel(''); return }
+      setRetestingStatusOptions([...retestingStatusOptions, { id: `retest-${Date.now()}`, category: 'retesting_status', label: trimmedLabel, value: trimmedLabel, color: newColor, is_active: true, sort_order: retestingStatusOptions.length + 1 }])
     }
     setNewLabel('')
   }
 
-  // Handle Remove Item
   const handleRemoveItem = (id: string) => {
-    if (activeTab === 'testing_status') {
-      setStatuses(statuses.filter(s => s.id !== id))
-    } else {
-      setTesters(testers.filter(t => t.id !== id))
-    }
+    if (activeTab === 'testing_status') setStatuses(statuses.filter(s => s.id !== id))
+    else if (activeTab === 'testers') setTesters(testers.filter(t => t.id !== id))
+    else if (activeTab === 'is_qa_miss') setIsQaMissOptions(isQaMissOptions.filter(o => o.id !== id))
+    else if (activeTab === 'retesting_status') setRetestingStatusOptions(retestingStatusOptions.filter(o => o.id !== id))
   }
 
-  // Handle Toggle Active
   const handleToggleActive = (id: string) => {
-    if (activeTab === 'testing_status') {
-      setStatuses(statuses.map(s => s.id === id ? { ...s, is_active: !s.is_active } : s))
-    } else {
-      setTesters(testers.map(t => t.id === id ? { ...t, is_active: !t.is_active } : t))
-    }
+    if (activeTab === 'testing_status') setStatuses(statuses.map(s => s.id === id ? { ...s, is_active: !s.is_active } : s))
+    else if (activeTab === 'testers') setTesters(testers.map(t => t.id === id ? { ...t, is_active: !t.is_active } : t))
+    else if (activeTab === 'is_qa_miss') setIsQaMissOptions(isQaMissOptions.map(o => o.id === id ? { ...o, is_active: !o.is_active } : o))
+    else if (activeTab === 'retesting_status') setRetestingStatusOptions(retestingStatusOptions.map(o => o.id === id ? { ...o, is_active: !o.is_active } : o))
   }
 
   // Sync testers with profiles
@@ -182,10 +159,7 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
         value: t.value.trim().toUpperCase()
       }))
       await updateDropdowns(
-        {
-          testing_status: statuses,
-          testers: normalizedTesters
-        },
+        { testing_status: statuses, testers: normalizedTesters, is_qa_miss: isQaMissOptions, retesting_status: retestingStatusOptions },
         currentUser
       )
 
@@ -247,29 +221,21 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
             </div>
 
             {/* Tab switch */}
-            <div className="flex items-center gap-2 px-6 pt-4 pb-2 border-b border-white/5">
-              <button
-                type="button"
-                onClick={() => setActiveTab('testing_status')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activeTab === 'testing_status'
-                    ? 'bg-accent text-white shadow-xs'
-                    : 'text-text-muted hover:text-text-primary hover:bg-white/5'
-                }`}
-              >
-                Testing Statuses ({statuses.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('testers')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activeTab === 'testers'
-                    ? 'bg-accent text-white shadow-xs'
-                    : 'text-text-muted hover:text-text-primary hover:bg-white/5'
-                }`}
-              >
-                Who's Testing ({testers.length})
-              </button>
+            <div className="flex items-center gap-2 px-6 pt-4 pb-2 border-b border-white/5 flex-wrap">
+              {(['testing_status', 'testers', 'is_qa_miss', 'retesting_status'] as const).map(tab => {
+                const labels: Record<string, string> = {
+                  testing_status: `Testing Status (${statuses.length})`,
+                  testers: `QA Engineer (${testers.length})`,
+                  is_qa_miss: `Is QA Miss? (${isQaMissOptions.length})`,
+                  retesting_status: `Retesting Status (${retestingStatusOptions.length})`
+                }
+                return (
+                  <button key={tab} type="button" onClick={() => setActiveTab(tab)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === tab ? 'bg-accent text-white shadow-xs' : 'text-text-muted hover:text-text-primary hover:bg-white/5'}`}>
+                    {labels[tab]}
+                  </button>
+                )
+              })}
             </div>
 
             {/* Content Body */}
@@ -332,18 +298,21 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
 
                 {activeTab === 'testers' && (
                   <div className="pt-2 border-t border-white/5 flex items-center justify-between">
-                    <span className="text-[11px] text-text-muted">
-                      Quickly pull active team members from company profiles
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleSyncProfiles}
-                      disabled={syncingProfiles}
-                      className="text-xs font-semibold text-accent hover:underline flex items-center gap-1.5"
-                    >
+                    <span className="text-[11px] text-text-muted">Quickly pull active team members from company profiles</span>
+                    <button type="button" onClick={handleSyncProfiles} disabled={syncingProfiles}
+                      className="text-xs font-semibold text-accent hover:underline flex items-center gap-1.5">
                       <RefreshCw className={`w-3.5 h-3.5 ${syncingProfiles ? 'animate-spin' : ''}`} />
                       Sync from User Profiles
                     </button>
+                  </div>
+                )}
+                {(activeTab === 'testing_status' || activeTab === 'retesting_status') && (
+                  <div className="flex items-center gap-1 mt-1">
+                    {PRESET_COLORS.slice(0, 5).map((c) => (
+                      <button key={c} type="button" onClick={() => setNewColor(c)}
+                        className={`w-5 h-5 rounded-full border-2 transition-transform ${newColor === c ? 'scale-110 border-white' : 'border-transparent opacity-70'}`}
+                        style={{ backgroundColor: c }} />
+                    ))}
                   </div>
                 )}
               </div>
@@ -351,21 +320,18 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
               {/* Items List */}
               <div className="space-y-2">
                 <span className="text-xs font-semibold text-text-muted block">
-                  Active Options ({activeTab === 'testing_status' ? statuses.length : testers.length})
+                  Active Options ({activeTab === 'testing_status' ? statuses.length : activeTab === 'testers' ? testers.length : activeTab === 'is_qa_miss' ? isQaMissOptions.length : retestingStatusOptions.length})
                 </span>
 
                 <div className="divide-y divide-white/5 border border-white/10 rounded-xl overflow-hidden bg-surface">
-                  {(activeTab === 'testing_status' ? statuses : testers).map((item) => (
+                  {(activeTab === 'testing_status' ? statuses : activeTab === 'testers' ? testers : activeTab === 'is_qa_miss' ? isQaMissOptions : retestingStatusOptions).map((item) => (
                     <div
                       key={item.id}
                       className="p-3 flex items-center justify-between text-xs hover:bg-white/[0.02] transition-colors"
                     >
                       <div className="flex items-center gap-2.5">
-                        {activeTab === 'testing_status' && item.color && (
-                          <div
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: item.color }}
-                          />
+                        {(activeTab === 'testing_status' || activeTab === 'retesting_status') && item.color && (
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
                         )}
                         <span className={`font-semibold ${item.is_active ? 'text-text-primary' : 'text-text-muted line-through'} ${activeTab === 'testers' ? 'uppercase font-mono tracking-wide' : ''}`}>
                           {activeTab === 'testers' ? item.label.toUpperCase() : item.label}

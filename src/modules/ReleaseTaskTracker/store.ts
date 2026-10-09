@@ -29,6 +29,7 @@ import {
   fetchReleaseTimeLogs,
   addReleaseTimeLog as apiAddTimeLog,
   deleteReleaseTimeLog as apiDeleteTimeLog,
+  editReleaseTimeLog as apiEditTimeLog,
   fetchReleaseDropdownConfigs,
   saveReleaseDropdownConfigs as apiSaveDropdowns,
   LOCAL_STORAGE_TASKS_KEY
@@ -95,6 +96,11 @@ interface ReleaseTrackerState {
   ) => Promise<{ newLog: ReleaseTaskTimeLog; updatedTask: ReleaseTask }>
 
   removeTimeLog: (logId: string, currentUser: { name: string; id?: string }) => Promise<void>
+  editTimeLog: (
+    logId: string,
+    updates: { hours_added: number; comment: string; correction_reason: string },
+    currentUser: { name: string; id?: string }
+  ) => Promise<{ updatedLog: ReleaseTaskTimeLog; updatedTask: ReleaseTask }>
   getTimeLogsForTask: (taskId: string) => ReleaseTaskTimeLog[]
 
   updateDropdowns: (
@@ -340,6 +346,18 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
     set({ history: hist })
   },
 
+  editTimeLog: async (logId, updates, currentUser) => {
+    const { tasks, timeLogs } = get()
+    const { updatedLog, updatedTask } = await apiEditTimeLog(logId, updates, currentUser, tasks, timeLogs)
+    set((state) => ({
+      timeLogs: state.timeLogs.map(l => l.id === updatedLog.id ? updatedLog : l),
+      tasks: state.tasks.map(t => t.id === updatedTask.id ? updatedTask : t)
+    }))
+    const hist = await fetchReleaseHistory()
+    set({ history: hist })
+    return { updatedLog, updatedTask }
+  },
+
   getTimeLogsForTask: (taskId) => {
     const { timeLogs } = get()
     const seen = new Set<string>()
@@ -458,7 +476,7 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
       else if (status === 'In Review') inReview++
       else if (status === 'Completed') completed++
 
-      const est = Number(t.estimated_hours) || 0
+      const est = Number((t as any).total_estimation_hrs || t.estimated_hours) || 0
       const act = Number(t.actual_hours) || 0
 
       totalEstimatedHours += est
@@ -535,7 +553,7 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
       if (task.task_status === 'Blocked') item.blocked++
       if (task.task_status === 'Completed') item.completed++
 
-      item.estimatedHrs += Number(task.estimated_hours) || 0
+      item.estimatedHrs += Number((task as any).total_estimation_hrs || task.estimated_hours) || 0
       item.actualHrs += Number(task.actual_hours) || 0
       item.remainingHrs += Number(task.remaining_hours) || 0
       item.overrunHrs += Number(task.overrun_hours) || 0
@@ -617,7 +635,7 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
         existing.activeTasks++
       }
 
-      existing.estimatedHrs += Number(task.estimated_hours) || 0
+      existing.estimatedHrs += Number((task as any).total_estimation_hrs || task.estimated_hours) || 0
       existing.actualHrs += Number(task.actual_hours) || 0
       existing.remainingHrs += Number(task.remaining_hours) || 0
       existing.overrunHrs += Number(task.overrun_hours) || 0

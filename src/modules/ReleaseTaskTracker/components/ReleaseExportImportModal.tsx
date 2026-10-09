@@ -128,11 +128,17 @@ export function ReleaseExportImportModal({
         }
         existingKeys.add(dedupKey)
 
-        const est = parseFloat(row['Estimated Hrs'] || row['estimated_hours'] || '0') || 0
+        const testDesignEst = parseFloat(row['Test Design Est'] || row['test_design_est_hrs'] || '0') || 0
+        const dataPrepEst = parseFloat(row['Data Prep Est'] || row['data_prep_est_hrs'] || '0') || 0
+        const functionalTestingEst = parseFloat(row['Functional Testing Est'] || row['functional_testing_est_hrs'] || row['Estimated Hrs'] || row['estimated_hours'] || '0') || 0
+        const retestingEst = parseFloat(row['Retesting Est'] || row['retesting_est_hrs'] || '0') || 0
         const prio = row['Priority'] || row['priority'] || 'Medium'
         const status = row['Task Status'] || row['Status'] || row['status'] || 'Not Started'
-        const assignee = row["Who's Testing"] || row['Assigned To'] || row['assigned_to'] || 'Unassigned'
+        const assignee = row['QA Engineer'] || row["Who's Testing"] || row['Assigned To'] || row['assigned_to'] || 'Unassigned'
         const comments = row['Comments'] || row['comments'] || ''
+        const receivedDateTime = row['Received Date/Time'] || row['received_date_time'] || null
+        const startDate = row['Actual Start Date'] || row['start_date'] || null
+        const actualEndDate = row['Actual End Date'] || row['actual_end_date'] || null
 
         const nextTaskId = generateNextTaskId(runningTasks)
 
@@ -145,9 +151,15 @@ export function ReleaseExportImportModal({
             release_version: rel,
             description: desc,
             priority: prio,
-            estimated_hours: est,
-            task_status: status,
+            received_date_time: receivedDateTime,
+            start_date: startDate,
+            actual_end_date: actualEndDate,
             assigned_to_name: assignee,
+            test_design_est_hrs: testDesignEst,
+            data_prep_est_hrs: dataPrepEst,
+            functional_testing_est_hrs: functionalTestingEst,
+            retesting_est_hrs: retestingEst,
+            task_status: status,
             comments: String(comments)
           },
           { name: actorName, id: user?.id }
@@ -257,7 +269,7 @@ export function ReleaseExportImportModal({
             {!isExport && canImport && (
               <div className="space-y-4">
                 <p className="text-xs text-text-muted">
-                  Upload an Excel or CSV file containing columns: <strong>Product, Release, Task Description, Priority, Estimated Hrs, Task Status, Who's Testing</strong>.
+                  Upload an Excel or CSV file containing columns: <strong>Product, Release, Task Description, QA Engineer, Test Design Est, Data Prep Est, Functional Testing Est, Retesting Est, Task Status</strong>.
                 </p>
 
                 <label className="border-2 border-dashed border-white/15 hover:border-accent/40 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors bg-surface-elevated/30">

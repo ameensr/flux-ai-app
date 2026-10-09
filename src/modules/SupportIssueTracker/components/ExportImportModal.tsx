@@ -19,6 +19,8 @@ import { useSupportTrackerStore } from '../store'
 import {
   exportSupportIssuesToCSV,
   exportSupportIssuesToExcel,
+  downloadImportTemplate,
+  parseImportRow,
   logHistoryEvent
 } from '../supportTrackerService'
 import * as XLSX from 'xlsx'
@@ -86,73 +88,34 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
     onClose()
   }
 
-  // Handle Import File Change
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
     setImportFile(file)
     const reader = new FileReader()
-
     reader.onload = (event) => {
       try {
         const data = new Uint8Array(event.target?.result as ArrayBuffer)
         const workbook = XLSX.read(data, { type: 'array' })
-        const sheetName = workbook.SheetNames[0]
-        const worksheet = workbook.Sheets[sheetName]
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]]
         const json = XLSX.utils.sheet_to_json(worksheet)
-
         if (!Array.isArray(json) || json.length === 0) {
           setImportErrors(['Uploaded file contains no rows or invalid format.'])
           return
         }
-
-        const validProducts = new Set(products.map(p => p.name.toLowerCase()))
-        const errors: string[] = []
-        const parsedRows = json.map((row: any, idx: number) => {
-          const rowNum = idx + 2
-          const prodName = String(row['Product'] || row['product'] || '').trim()
-          const desc = String(row['Support Issue Description'] || row['Description'] || row['description'] || '').trim()
-
-          if (!prodName) {
-            errors.push(`Row ${rowNum}: Product column is missing.`)
-          } else if (!validProducts.has(prodName.toLowerCase())) {
-            errors.push(`Row ${rowNum}: Product '${prodName}' does not exist in Project Hub. Products must match Project Hub.`)
-          }
-
-          if (!desc) {
-            errors.push(`Row ${rowNum}: Description is missing.`)
-          }
-
-          const matchedProj = products.find(p => p.name.toLowerCase() === prodName.toLowerCase())
-
-          return {
-            rowNum,
-            project_id: matchedProj?.id || products[0]?.id,
-            product_name: matchedProj?.name || prodName,
-            issue_id: row['Support Issue ID'] || row['Issue ID'] || `SUP-${1025 + issues.length + idx}`,
-            description: desc,
-            received_date: row['Received Date'] || new Date().toISOString().split('T')[0],
-            start_date: row['Start Date'] || null,
-            finish_date: row['Finish Date'] || null,
-            tester_name: (() => {
-              const rawT = String(row["Who's Testing"] || row['Tester'] || 'Unassigned').trim()
-              return rawT.toLowerCase() === 'unassigned' ? 'Unassigned' : rawT.toUpperCase()
-            })(),
-            estimated_hours: Number(row['Estimation Hrs'] || row['Estimated Hours'] || 0),
-            actual_hours: Number(row['Actual Hrs'] || row['Actual Hours'] || 0),
-            testing_status: row['Testing Status'] || row['Status'] || 'Not Started',
-            comments: row['Comments'] || ''
-          }
+        const allErrors: string[] = []
+        const parsedRows: any[] = []
+        json.forEach((row: any, idx: number) => {
+          const { parsed, errors } = parseImportRow(row, idx, products, issues, dropdownConfigs)
+          allErrors.push(...errors)
+          parsedRows.push({ rowNum: idx + 2, ...parsed })
         })
-
-        setImportErrors(errors)
+        setImportErrors(allErrors)
         setImportPreview(parsedRows)
       } catch (err: any) {
         setImportErrors([`Failed to parse file: ${err.message}`])
       }
     }
-
     reader.readAsArrayBuffer(file)
   }
 
@@ -211,34 +174,7 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
     }
   }
 
-  // Sample CSV Template download
-  const handleDownloadSample = () => {
-    const p1 = products[0]?.name || 'Qaly AI Engine Core'
-    const sampleHeaders = [
-      'Product',
-      'Support Issue ID',
-      'Support Issue Description',
-      'Received Date',
-      'Start Date',
-      'Finish Date',
-      "Who's Testing",
-      'Estimation Hrs',
-      'Actual Hrs',
-      'Testing Status',
-      'Comments'
-    ]
-    const sampleRows = [
-      [p1, 'SUP-1050', 'Sample defect description for automated test run', '2026-10-07', '2026-10-07', '', 'Ameen SR', 8, 2, 'In Testing', 'Verification sample']
-    ]
-    const content = [sampleHeaders.join(','), ...sampleRows.map(r => r.map(c => `"${c}"`).join(','))].join('\n')
-    const blob = new Blob([content], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'support_issue_import_template.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+  const handleDownloadSample = () => downloadImportTemplate(products)
 
   if (!isOpen) return null
 

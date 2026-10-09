@@ -23,6 +23,7 @@ const PERMISSION_DESCRIPTIONS = [
   { key: 'can_lock_estimated_hours', label: 'Lock Estimated Hours', desc: 'Allows locking Estimated Hrs on a specific release task to prevent further modifications.' },
   { key: 'can_unlock_estimated_hours', label: 'Unlock Estimated Hours', desc: 'Allows authorized QA Leads to unlock Estimated Hrs so modifications can be made.' },
   { key: 'can_edit_estimated_hours', label: 'Edit Estimated Hours', desc: 'Allows editing Estimated Hrs when the task estimation is unlocked.' },
+  { key: 'can_edit_time_logs', label: 'Edit / Correct Logged Hours', desc: 'Allows correcting previously logged time-log entries. Every correction is recorded in audit history with a mandatory reason.' },
   { key: 'can_export', label: 'Export Release Tasks', desc: 'Allows downloading filtered task tables as Excel or CSV spreadsheets.' },
   { key: 'can_view_history', label: 'View Release Task History', desc: 'Allows viewing comprehensive audit change trails.' },
   { key: 'can_configure_dropdowns', label: 'Configure Dropdowns', desc: 'Allows customizing master statuses and priorities.' },

@@ -1,5 +1,4 @@
 // src/modules/SupportIssueTracker/types.ts
-// Comprehensive type definitions for Support Issue Tracker
 
 export type TestingStatusType =
   | 'Not Started'
@@ -11,27 +10,39 @@ export type TestingStatusType =
   | 'Cancelled'
   | string
 
+export type IsQaMissType = 'Yes' | 'No' | 'Under Review' | 'Not Applicable' | string
+export type RetestingStatusType = 'Not Required' | 'Pending' | 'In Retesting' | 'Passed' | 'Failed' | 'Blocked' | string
+
 export interface SupportIssue {
   id: string
   sl_no: number
-  project_id: string       // Linked to Project Hub project id
-  product_name: string     // Display product name from Project Hub
-  product_code?: string | null // Product code from Project Hub
-  issue_id: string         // e.g. 'SUP-1024'
-  description: string      // Support Issue Description
-  received_date: string    // YYYY-MM-DD
-  start_date: string | null// YYYY-MM-DD
-  finish_date: string | null// YYYY-MM-DD
-  tester_name: string      // Who's Testing
-  estimated_hours: number  // Estimation Hrs
-  estimated_hours_locked?: boolean // Requirement: Estimation Hours Lock
-  estimated_hours_locked_by?: string | null // User who locked it
-  estimated_hours_locked_at?: string | null // Timestamp when locked
-  actual_hours: number     // Actual Hrs
-  remaining_hours: number  // Remaining Hrs (max(0, estimated - actual))
-  overrun_hours: number    // Overrun Hrs (max(0, actual - estimated))
+  project_id: string            // Linked to Project Hub project id
+  product_name: string          // Display product name from Project Hub
+  product_code?: string | null  // Product code from Project Hub
+  issue_id: string              // e.g. 'SUP-1024'
+  description: string           // Support Issue Description
+  received_date: string         // YYYY-MM-DD
+  received_time?: string | null // HH:MM (24h) or HH:MM:SS
+  is_qa_miss?: IsQaMissType | null
+  test_case_count?: number | null
+  start_date: string | null     // Actual Start Date (YYYY-MM-DD)
+  planned_end_date?: string | null  // Planned End Date (YYYY-MM-DD)
+  actual_end_date?: string | null   // Actual End Date (YYYY-MM-DD) — NOT auto-set
+  tester_name: string           // QA Engineer
+  estimated_hours: number       // Estimation (Hrs)
+  estimated_hours_locked?: boolean
+  estimated_hours_locked_by?: string | null
+  estimated_hours_locked_at?: string | null
+  actual_hours: number          // Actual / Effort (Hrs) — calculated from time logs
+  remaining_hours: number       // Derived: max(0, estimated - actual)
+  overrun_hours: number         // Derived: max(0, actual - estimated)
+  blocked_hours?: number | null // Total blocked duration in hours
   testing_status: TestingStatusType
   comments: string
+  retesting_status?: RetestingStatusType | null
+  retesting_estimation_hrs?: number | null
+  // Legacy field — kept for backward compat; maps to actual_end_date in new schema
+  finish_date?: string | null
   created_by?: string | null
   created_at: string
   updated_at: string
@@ -39,14 +50,24 @@ export interface SupportIssue {
 
 export interface SupportIssueTimeLog {
   id: string
-  issue_id: string          // Issue string code e.g. 'SUP-1024'
-  support_issue_id?: string // UUID of the parent support issue
-  user_name: string         // Who logged the effort (e.g. 'Ameen', 'Rahul')
-  user_id?: string | null   // Optional profile UUID
-  hours_added: number       // Added effort in hours (e.g. 2, 2.5, 0.75)
-  comment: string           // Description of work done (e.g. 'Payment module testing')
-  logged_at: string         // ISO string timestamp (or formatted)
+  issue_id: string
+  support_issue_id?: string
+  user_name: string
+  user_id?: string | null
+  hours_added: number
+  comment: string
+  logged_at: string
   created_at?: string
+}
+
+export interface SupportIssueBlockedPeriod {
+  id: string
+  support_issue_id: string
+  issue_id: string
+  blocked_at: string
+  unblocked_at?: string | null
+  hours_blocked?: number | null
+  created_at: string
 }
 
 export interface SupportIssueHistoryRecord {
@@ -79,12 +100,19 @@ export interface SupportIssueHistoryRecord {
   field?: string
   old_value?: string | null
   new_value?: string | null
-  timestamp: string // formatted e.g. "07 Oct 2026, 09:32 PM"
+  timestamp: string
 }
+
+export type SupportDropdownCategory =
+  | 'testing_status'
+  | 'tester'
+  | 'is_qa_miss'
+  | 'retesting_status'
+  | 'priority'
 
 export interface SupportDropdownOption {
   id: string
-  category: 'testing_status' | 'tester' | 'priority'
+  category: SupportDropdownCategory
   label: string
   value: string
   color?: string
@@ -93,15 +121,19 @@ export interface SupportDropdownOption {
 }
 
 export interface SupportFilters {
-  selectedProductId: string // 'all' or project_id
-  testingStatus: string[]   // empty = all
-  tester: string[]          // empty = all
+  selectedProductId: string
+  testingStatus: string[]
+  tester: string[]
+  isQaMiss: string[]
+  retestingStatus: string[]
   receivedDateStart?: string
   receivedDateEnd?: string
   startDateStart?: string
   startDateEnd?: string
-  finishDateStart?: string
-  finishDateEnd?: string
+  plannedEndDateStart?: string
+  plannedEndDateEnd?: string
+  actualEndDateStart?: string
+  actualEndDateEnd?: string
   searchQuery?: string
   estimationLock?: 'all' | 'locked' | 'unlocked'
 }
@@ -120,6 +152,10 @@ export interface ProductSummary {
   actualHrs: number
   remainingHrs: number
   overrunHrs: number
+  blockedHrs: number
+  retestingEstHrs: number
+  qaMissCount: number
+  testCaseCount: number
 }
 
 export interface TesterWorkload {
@@ -142,6 +178,10 @@ export interface KPICounters {
   totalActualHours: number
   remainingHours: number
   overrunHours: number
+  totalBlockedHours: number
+  totalRetestingEstHours: number
+  qaMissCount: number
+  totalTestCases: number
 }
 
 export type EffortIndicatorState = 'on_track' | 'attention' | 'overrun'
@@ -155,7 +195,6 @@ export interface EffortCalculation {
   displayText: string
 }
 
-// Default testing statuses and their visual badges
 export const DEFAULT_TESTING_STATUSES: Array<{
   label: string
   value: string
@@ -171,15 +210,30 @@ export const DEFAULT_TESTING_STATUSES: Array<{
   { label: 'Cancelled',   value: 'Cancelled',   color: '#6b7280', badgeClass: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' },
 ]
 
-// Calculation helper for Actual vs Estimated effort
+export const DEFAULT_IS_QA_MISS_OPTIONS: Array<{ label: string; value: string }> = [
+  { label: 'Yes',            value: 'Yes' },
+  { label: 'No',             value: 'No' },
+  { label: 'Under Review',   value: 'Under Review' },
+  { label: 'Not Applicable', value: 'Not Applicable' },
+]
+
+export const DEFAULT_RETESTING_STATUS_OPTIONS: Array<{ label: string; value: string; color: string }> = [
+  { label: 'Not Required', value: 'Not Required', color: '#6b7280' },
+  { label: 'Pending',      value: 'Pending',      color: '#f59e0b' },
+  { label: 'In Retesting', value: 'In Retesting', color: '#06b6d4' },
+  { label: 'Passed',       value: 'Passed',       color: '#10b981' },
+  { label: 'Failed',       value: 'Failed',       color: '#ef4444' },
+  { label: 'Blocked',      value: 'Blocked',      color: '#f97316' },
+]
+
 export function calculateEffort(estimated: number, actual: number): EffortCalculation {
   const est = Math.max(0, Number(estimated) || 0)
   const act = Math.max(0, Number(actual) || 0)
-  
+
   const isOverrun = act > est
   const remainingHrs = isOverrun ? 0 : Math.round((est - act) * 100) / 100
   const overrunHrs = isOverrun ? Math.round((act - est) * 100) / 100 : 0
-  
+
   const percentage = est > 0 ? Math.round((act / est) * 100) : (act > 0 ? 100 : 0)
 
   let indicatorState: EffortIndicatorState = 'on_track'
@@ -187,20 +241,11 @@ export function calculateEffort(estimated: number, actual: number): EffortCalcul
     indicatorState = 'overrun'
   } else if (est > 0 && act > est * 0.75) {
     indicatorState = 'attention'
-  } else {
-    indicatorState = 'on_track'
   }
 
   const displayText = isOverrun
     ? `Overrun: ${overrunHrs} Hrs`
     : `${remainingHrs} Hrs`
 
-  return {
-    remainingHrs,
-    overrunHrs,
-    isOverrun,
-    percentage,
-    indicatorState,
-    displayText
-  }
+  return { remainingHrs, overrunHrs, isOverrun, percentage, indicatorState, displayText }
 }

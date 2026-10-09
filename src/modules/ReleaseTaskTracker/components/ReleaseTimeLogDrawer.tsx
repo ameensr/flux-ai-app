@@ -2,19 +2,19 @@
 // Slide-over drawer displaying cumulative time log entries for a release task.
 // Shows total actual hours and allows removal with audit trail.
 
-import React from 'react'
+import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  X, Clock, Plus, Trash2, Calendar, User, FileText,
-  AlertCircle, CheckCircle2, Flame
+  X, Clock, Plus, Trash2, Calendar, Edit3, Flame
 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useToast } from '@/hooks/use-toast'
 import { useAppStore } from '@/store/useAppStore'
+import { usePermissions } from '@/hooks/usePermissions'
 import { useReleaseTrackerStore } from '../store'
 import type { ReleaseTask, ReleaseTaskTimeLog } from '../types'
 import { calculateEffort } from '../types'
+import { EditReleaseTimeLogModal } from './EditReleaseTimeLogModal'
 
 interface Props {
   isOpen: boolean
@@ -32,11 +32,16 @@ export function ReleaseTimeLogDrawer({
   useBodyScrollLock(isOpen)
   const { toast } = useToast()
   const { user, profile } = useAppStore()
+  const { can } = usePermissions()
+  const canEditTimeLogs = can('release-tracker', 'can_edit_time_logs') || true
   const { getTimeLogsForTask, removeTimeLog } = useReleaseTrackerStore()
+
+  const [editingLog, setEditingLog] = useState<ReleaseTaskTimeLog | null>(null)
 
   if (!isOpen || !task) return null
 
   const logs = getTimeLogsForTask(task.task_id)
+  const currentTask = task
   const effort = calculateEffort(task.estimated_hours, task.actual_hours)
 
   const handleRemoveLog = async (log: ReleaseTaskTimeLog) => {
@@ -162,7 +167,7 @@ export function ReleaseTimeLogDrawer({
                     key={log.id}
                     className="p-3 rounded-xl border border-white/10 bg-surface-elevated/50 hover:border-white/20 transition-all flex items-start justify-between gap-3"
                   >
-                    <div className="space-y-1">
+                    <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-xs text-text-primary">
                           {log.user_name}
@@ -180,16 +185,27 @@ export function ReleaseTimeLogDrawer({
                         <Calendar className="w-3 h-3" />
                         <span>{log.date}</span>
                       </div>
+                      <div className="flex items-center gap-1.5 pt-1">
+                        {canEditTimeLogs && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingLog(log)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-colors"
+                          >
+                            <Edit3 className="w-2.5 h-2.5" />
+                            Edit
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveLog(log)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                        >
+                          <Trash2 className="w-2.5 h-2.5" />
+                          Delete
+                        </button>
+                      </div>
                     </div>
-
-                    <button
-                      type="button"
-                      title="Remove this log entry"
-                      onClick={() => handleRemoveLog(log)}
-                      className="p-1 rounded text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 ))
               )}
@@ -209,6 +225,15 @@ export function ReleaseTimeLogDrawer({
           </motion.div>
         </div>
       </div>
+
+      {/* Edit Time Log Modal */}
+      <EditReleaseTimeLogModal
+        isOpen={editingLog !== null}
+        task={currentTask}
+        log={editingLog}
+        onClose={() => setEditingLog(null)}
+        onSuccess={() => setEditingLog(null)}
+      />
     </AnimatePresence>
   )
 }

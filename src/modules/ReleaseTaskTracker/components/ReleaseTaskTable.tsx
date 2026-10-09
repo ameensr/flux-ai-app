@@ -45,6 +45,10 @@ export function ReleaseTaskTable({
     getTimeLogsForTask, drillDownRelease, setDrillDownRelease, toggleEstimationLock
   } = useReleaseTrackerStore()
 
+  // Use total_estimation_hrs for display; fall back to estimated_hours for legacy rows
+  const getDisplayEst = (task: ReleaseTask) =>
+    Number((task as any).total_estimation_hrs ?? task.estimated_hours) || 0
+
   const tasks = getFilteredTasks()
 
   // ── Selection state ──────────────────────────────────────────────────────
@@ -153,7 +157,7 @@ export function ReleaseTaskTable({
   }
 
   const renderEffortCell = (task: ReleaseTask) => {
-    const effort = calculateEffort(task.estimated_hours, task.actual_hours)
+    const effort = calculateEffort(getDisplayEst(task), task.actual_hours)
     let textColor = 'text-emerald-500 dark:text-emerald-400'
     let iconColor = 'bg-emerald-500'
     let barColor = 'bg-emerald-500'
@@ -178,7 +182,7 @@ export function ReleaseTaskTable({
       <div className="space-y-1.5 min-w-[155px]">
         <div className="flex items-center justify-between text-xs font-medium">
           <span className="text-text-primary font-bold font-mono">
-            {task.actual_hours} <span className="text-text-muted font-normal font-sans">/ {task.estimated_hours}h</span>
+            {task.actual_hours} <span className="text-text-muted font-normal font-sans">/ {getDisplayEst(task)}h</span>
           </span>
           <span className={`text-[10px] font-semibold flex items-center gap-1 ${textColor}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${iconColor}`} />
@@ -225,7 +229,7 @@ export function ReleaseTaskTable({
     )
   }
 
-  const renderRemainingCell = (estimated: number, actual: number) => {
+  const renderRemainingCell = (estimated: number | undefined, actual: number) => {
     const est = Number(estimated) || 0
     const act = Number(actual) || 0
     if (act > est) {
@@ -344,7 +348,7 @@ export function ReleaseTaskTable({
       {/* ── Main Release Task Table ───────────────────────────────────────── */}
       <div className="rounded-2xl border border-border/60 bg-surface/80 backdrop-blur-md overflow-hidden shadow-xs">
         <div className="overflow-x-auto w-full">
-          <table className="w-full min-w-[1150px] text-left text-xs border-collapse">
+          <table className="w-full min-w-[1760px] text-left text-xs border-collapse">
             <thead>
               <tr className="bg-surface-secondary/90 border-b border-border/60 text-[11px] uppercase tracking-wider text-text-muted font-semibold sticky top-0 z-10">
                 {canDelete && (
@@ -359,118 +363,49 @@ export function ReleaseTaskTable({
                     />
                   </th>
                 )}
-                <th
-                  onClick={() => handleSort('sl_no')}
-                  className="py-3 px-3 text-center cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-16"
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    <span>#</span>
-                    {renderSortIndicator('sl_no')}
-                  </div>
+                <th onClick={() => handleSort('sl_no')} className="py-3 px-3 text-center cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-12">
+                  <div className="flex items-center justify-center gap-1"><span>#</span>{renderSortIndicator('sl_no')}</div>
                 </th>
-                <th
-                  onClick={() => handleSort('product_name')}
-                  className="py-3 px-3.5 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th min-w-[140px]"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Product</span>
-                    {renderSortIndicator('product_name')}
-                  </div>
+                <th onClick={() => handleSort('product_name')} className="py-3 px-3.5 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th min-w-[130px]">
+                  <div className="flex items-center gap-1"><span>Product</span>{renderSortIndicator('product_name')}</div>
                 </th>
-                <th
-                  onClick={() => handleSort('release_version')}
-                  className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-24"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Release</span>
-                    {renderSortIndicator('release_version')}
-                  </div>
+                <th onClick={() => handleSort('release_version')} className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-24">
+                  <div className="flex items-center gap-1"><span>Release</span>{renderSortIndicator('release_version')}</div>
                 </th>
-                <th
-                  onClick={() => handleSort('task_id')}
-                  className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th min-w-[120px]"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Task ID</span>
-                    {renderSortIndicator('task_id')}
-                  </div>
+                <th onClick={() => handleSort('task_id')} className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th min-w-[110px]">
+                  <div className="flex items-center gap-1"><span>Task ID</span>{renderSortIndicator('task_id')}</div>
                 </th>
-                <th className="py-3 px-4 min-w-[240px]">
-                  Description
+                <th className="py-3 px-4 min-w-[220px]">Description</th>
+                <th onClick={() => handleSort('assigned_to_name')} className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-32">
+                  <div className="flex items-center gap-1"><span>QA Engineer</span>{renderSortIndicator('assigned_to_name')}</div>
                 </th>
-                <th
-                  onClick={() => handleSort('priority')}
-                  className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-24"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Priority</span>
-                    {renderSortIndicator('priority')}
-                  </div>
+                <th onClick={() => handleSort('received_date_time')} className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-36">
+                  <div className="flex items-center gap-1"><span>Received Date/Time</span>{renderSortIndicator('received_date_time')}</div>
                 </th>
-                <th
-                  onClick={() => handleSort('start_date')}
-                  className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-28"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Start Date</span>
-                    {renderSortIndicator('start_date')}
-                  </div>
+                <th onClick={() => handleSort('task_status')} className="py-3 px-3 text-center cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-28">
+                  <div className="flex items-center justify-center gap-1"><span>Status</span>{renderSortIndicator('task_status')}</div>
                 </th>
-                <th
-                  onClick={() => handleSort('target_date')}
-                  className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-28"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Target Date</span>
-                    {renderSortIndicator('target_date')}
-                  </div>
-                </th>
-                <th
-                  onClick={() => handleSort('finish_date')}
-                  className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-28"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Finish Date</span>
-                    {renderSortIndicator('finish_date')}
-                  </div>
-                </th>
-                <th
-                  onClick={() => handleSort('assigned_to_name')}
-                  className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-36"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Who's Testing</span>
-                    {renderSortIndicator('assigned_to_name')}
-                  </div>
-                </th>
-                <th
-                  onClick={() => handleSort('estimated_hours')}
-                  className="py-3 px-3 text-right cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-32"
-                >
-                  <div className="flex items-center justify-end gap-1">
-                    <span>Est. Hrs</span>
-                    {renderSortIndicator('estimated_hours')}
-                  </div>
+                <th className="py-3 px-3 text-right whitespace-nowrap w-24">Test Design Est</th>
+                <th className="py-3 px-3 text-right whitespace-nowrap w-24">Data Prep Est</th>
+                <th className="py-3 px-3 text-right whitespace-nowrap w-28">Func. Testing Est</th>
+                <th className="py-3 px-3 text-right whitespace-nowrap w-24">Retesting Est</th>
+                <th className="py-3 px-3 text-right whitespace-nowrap w-24 text-accent">Total Est</th>
+                <th onClick={() => handleSort('start_date')} className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-28">
+                  <div className="flex items-center gap-1"><span>Actual Start</span>{renderSortIndicator('start_date')}</div>
                 </th>
                 <th className="py-3 px-3.5 text-center min-w-[155px] whitespace-nowrap">Actual / Effort</th>
-                <th className="py-3 px-3.5 text-center whitespace-nowrap w-32">Remaining</th>
-                <th
-                  onClick={() => handleSort('task_status')}
-                  className="py-3 px-3 text-center cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-32"
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    <span>Status</span>
-                    {renderSortIndicator('task_status')}
-                  </div>
+                <th className="py-3 px-3.5 text-center whitespace-nowrap w-28">Remaining Hrs</th>
+                <th onClick={() => handleSort('actual_end_date')} className="py-3 px-3 cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap group/th w-28">
+                  <div className="flex items-center gap-1"><span>Actual End</span>{renderSortIndicator('actual_end_date')}</div>
                 </th>
-                <th className="py-3 px-4 min-w-[180px]">Comments</th>
+                <th className="py-3 px-4 min-w-[160px]">Comments</th>
                 <th className="py-3 px-3 text-center whitespace-nowrap w-28">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/30 font-normal">
               {paginatedTasks.length === 0 ? (
                 <tr>
-                  <td colSpan={canDelete ? 17 : 16} className="py-12 text-center text-text-muted text-xs">
+                  <td colSpan={canDelete ? 20 : 19} className="py-12 text-center text-text-muted text-xs">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <AlertCircle className="w-7 h-7 text-text-muted/50" />
                       <p className="font-semibold text-text-primary text-sm">No release tasks found</p>
@@ -515,77 +450,72 @@ export function ReleaseTaskTable({
                       {/* 2. Product */}
                       <td className="py-3 px-3.5 font-medium whitespace-nowrap align-middle">
                         <div className="flex flex-col">
-                          <span className="font-semibold text-text-primary text-xs group-hover:text-accent transition-colors duration-150">
-                            {task.product_name}
-                          </span>
-                          {task.product_code && (
-                            <span className="text-[10px] text-text-muted font-mono">
-                              {task.product_code}
-                            </span>
-                          )}
+                          <span className="font-semibold text-text-primary text-xs group-hover:text-accent transition-colors duration-150">{task.product_name}</span>
+                          {task.product_code && <span className="text-[10px] text-text-muted font-mono">{task.product_code}</span>}
                         </div>
                       </td>
 
-                      {/* 3. Release Version */}
+                      {/* 3. Release */}
                       <td className="py-3 px-3 font-medium whitespace-nowrap align-middle">
-                        <span className="px-2 py-0.5 rounded-md bg-surface-secondary border border-border/60 font-mono text-xs text-text-secondary">
-                          {task.release_version}
-                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-surface-secondary border border-border/60 font-mono text-xs text-text-secondary">{task.release_version}</span>
                       </td>
 
                       {/* 4. Task ID */}
                       <td className="py-3 px-3 font-mono font-bold whitespace-nowrap align-middle">
-                        <span className="px-2 py-0.5 rounded-md bg-accent/10 border border-accent/25 text-accent text-xs inline-block">
-                          {task.task_id}
-                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-accent/10 border border-accent/25 text-accent text-xs inline-block">{task.task_id}</span>
                       </td>
 
-                      {/* 5. Task Description */}
-                      <td
-                        className="py-3 px-4 text-text-secondary leading-relaxed max-w-sm align-middle text-xs"
-                        title={task.description}
-                      >
-                        <p className="line-clamp-2">
-                          {task.description}
-                        </p>
+                      {/* 5. Description */}
+                      <td className="py-3 px-4 text-text-secondary leading-relaxed max-w-sm align-middle text-xs" title={task.description}>
+                        <p className="line-clamp-2">{task.description}</p>
                       </td>
 
-                      {/* 6. Priority */}
-                      <td className="py-3 px-3 whitespace-nowrap align-middle">
-                        {getPriorityBadge(task.priority)}
-                      </td>
-
-                      {/* 7. Start Date */}
-                      <td className="py-3 px-3 text-text-muted font-mono whitespace-nowrap align-middle text-xs">
-                        {task.start_date || '—'}
-                      </td>
-
-                      {/* 8. Target Date */}
-                      <td className="py-3 px-3 text-text-muted font-mono whitespace-nowrap align-middle text-xs">
-                        {task.target_date || '—'}
-                      </td>
-
-                      {/* 9. Finish Date */}
-                      <td className="py-3 px-3 text-text-muted font-mono whitespace-nowrap align-middle text-xs">
-                        {task.finish_date || '—'}
-                      </td>
-
-                      {/* 10. Who's Testing */}
+                      {/* 6. QA Engineer */}
                       <td className="py-3 px-3 whitespace-nowrap align-middle text-xs">
                         <div className="flex items-center gap-1.5">
                           <div className="w-5 h-5 rounded-full bg-accent/15 border border-accent/30 text-accent flex items-center justify-center text-[9px] font-bold">
                             {(task.assigned_to_name || 'U').slice(0, 1).toUpperCase()}
                           </div>
-                          <span className="font-medium text-text-primary">
-                            {task.assigned_to_name || 'Unassigned'}
-                          </span>
+                          <span className="font-medium text-text-primary">{task.assigned_to_name || 'Unassigned'}</span>
                         </div>
                       </td>
 
-                      {/* 11. Estimation Hrs (with Lock Control) */}
-                      <td className="py-3 px-3 text-right whitespace-nowrap align-middle text-xs">
+                      {/* 7. Received Date/Time */}
+                      <td className="py-3 px-3 text-text-muted font-mono whitespace-nowrap align-middle text-xs">
+                        {task.received_date_time
+                          ? new Date(task.received_date_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+                          : '—'}
+                      </td>
+
+                      {/* 8. Status */}
+                      <td className="py-3 px-3 text-center whitespace-nowrap align-middle">
+                        {getStatusBadge(task.task_status)}
+                      </td>
+
+                      {/* 9. Test Design Est */}
+                      <td className="py-3 px-3 text-right font-mono text-xs text-text-secondary align-middle whitespace-nowrap">
+                        {Number(task.test_design_est_hrs) || 0}h
+                      </td>
+
+                      {/* 10. Data Prep Est */}
+                      <td className="py-3 px-3 text-right font-mono text-xs text-text-secondary align-middle whitespace-nowrap">
+                        {Number(task.data_prep_est_hrs) || 0}h
+                      </td>
+
+                      {/* 11. Functional Testing Est */}
+                      <td className="py-3 px-3 text-right font-mono text-xs text-text-secondary align-middle whitespace-nowrap">
+                        {Number(task.functional_testing_est_hrs) || 0}h
+                      </td>
+
+                      {/* 12. Retesting Est */}
+                      <td className="py-3 px-3 text-right font-mono text-xs text-text-secondary align-middle whitespace-nowrap">
+                        {Number(task.retesting_est_hrs) || 0}h
+                      </td>
+
+                      {/* 13. Total Est (computed, read-only) */}
+                      <td className="py-3 px-3 text-right whitespace-nowrap align-middle">
                         <div className="inline-flex items-center justify-end gap-1.5 font-semibold text-text-primary">
-                          <span className="font-mono tabular-nums">{task.estimated_hours}h</span>
+                          <span className="font-mono tabular-nums text-accent">{getDisplayEst(task)}h</span>
                           <EstimationLockControl
                             isLocked={task.estimated_hours_locked}
                             canLock={canLockEst}
@@ -599,45 +529,41 @@ export function ReleaseTaskTable({
                                 toast({
                                   title: shouldLock ? 'Estimation Locked' : 'Estimation Unlocked',
                                   description: shouldLock
-                                    ? `Estimated hours for ${task.task_id} locked at ${task.estimated_hours}h.`
+                                    ? `Estimated hours for ${task.task_id} locked at ${getDisplayEst(task)}h.`
                                     : `Estimated hours for ${task.task_id} unlocked.`
                                 })
                               } catch (err: any) {
-                                toast({
-                                  title: 'Action Failed',
-                                  description: err?.message || 'Failed to update estimation lock',
-                                  variant: 'destructive'
-                                })
+                                toast({ title: 'Action Failed', description: err?.message || 'Failed to update estimation lock', variant: 'destructive' })
                               }
                             }}
                           />
                         </div>
                       </td>
 
-                      {/* 12. Actual Hrs & Effort */}
+                      {/* 14. Actual Start Date */}
+                      <td className="py-3 px-3 text-text-muted font-mono whitespace-nowrap align-middle text-xs">
+                        {task.start_date || '—'}
+                      </td>
+
+                      {/* 15. Actual / Effort */}
                       <td className="py-3 px-3.5 align-middle">
                         {renderEffortCell(task)}
                       </td>
 
-                      {/* 13. Remaining Hrs */}
+                      {/* 16. Remaining Hrs */}
                       <td className="py-3 px-3.5 text-center align-middle">
-                        {renderRemainingCell(task.estimated_hours, task.actual_hours)}
+                        {renderRemainingCell(getDisplayEst(task), task.actual_hours)}
                       </td>
 
-                      {/* 14. Task Status */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap align-middle">
-                        {getStatusBadge(task.task_status)}
+                      {/* 17. Actual End Date */}
+                      <td className="py-3 px-3 text-text-muted font-mono whitespace-nowrap align-middle text-xs">
+                        {task.actual_end_date || '—'}
                       </td>
 
-                      {/* 15. Comments */}
-                      <td
-                        className="py-3 px-4 text-text-muted text-[11px] leading-relaxed max-w-xs align-middle"
-                        title={task.comments || undefined}
-                      >
+                      {/* 18. Comments */}
+                      <td className="py-3 px-4 text-text-muted text-[11px] leading-relaxed max-w-xs align-middle" title={task.comments || undefined}>
                         {task.comments ? (
-                          <p className="line-clamp-2 italic text-text-secondary">
-                            "{task.comments}"
-                          </p>
+                          <p className="line-clamp-2 italic text-text-secondary">"{task.comments}"</p>
                         ) : (
                           <span className="text-text-muted/40">—</span>
                         )}

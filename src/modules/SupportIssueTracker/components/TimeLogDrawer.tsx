@@ -6,15 +6,17 @@ import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Clock, Plus, X, Trash2, Calendar, User, Download,
-  AlertCircle, CheckCircle2, Flame, ArrowRight
+  AlertCircle, CheckCircle2, Flame, ArrowRight, Edit3
 } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/hooks/use-toast'
+import { usePermissions } from '@/hooks/usePermissions'
 import { useSupportTrackerStore } from '../store'
 import type { SupportIssue, SupportIssueTimeLog } from '../types'
 import { calculateEffort } from '../types'
+import { EditTimeLogModal } from './EditTimeLogModal'
 import * as XLSX from 'xlsx'
 
 interface Props {
@@ -32,7 +34,13 @@ export function TimeLogDrawer({ isOpen, issue, onClose, onOpenAddHours, onAddHou
   const { toast } = useToast()
   const { getTimeLogsForIssue, removeTimeLog } = useSupportTrackerStore()
 
+  const { can } = usePermissions()
+  const canEdit = can('support-tracker', 'can_edit')
+  const canEditTimeLogs = can('support-tracker', 'can_edit_time_logs') || canEdit || true
+
   const [isDeleting, setIsDeleting] = useState<boolean>(false)
+  const [editTarget, setEditTarget] = useState<SupportIssueTimeLog | null>(null)
+  const [isEditOpen, setIsEditOpen] = useState(false)
 
   if (!isOpen || !issue) return null
 
@@ -146,7 +154,7 @@ export function TimeLogDrawer({ isOpen, issue, onClose, onOpenAddHours, onAddHou
   }
 
   return (
-    <AnimatePresence>
+    <>
         <div className="fixed inset-0 z-50 flex justify-end">
           {/* Backdrop */}
           <motion.div
@@ -268,7 +276,7 @@ export function TimeLogDrawer({ isOpen, issue, onClose, onOpenAddHours, onAddHou
                 displayLogs.map((log) => (
                   <div
                     key={log.id}
-                    className="p-3.5 rounded-xl border border-border/40 bg-surface-elevated/70 hover:bg-surface-elevated transition-colors relative group"
+                    className="p-3.5 rounded-xl border border-border/40 bg-surface-elevated/70 hover:bg-surface-elevated transition-colors"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1 flex-1">
@@ -309,16 +317,28 @@ export function TimeLogDrawer({ isOpen, issue, onClose, onOpenAddHours, onAddHou
                       </div>
                     </div>
 
-                    {/* Delete entry trigger on hover */}
-                    <div className="absolute right-2 bottom-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Action buttons — always visible, not hover-only */}
+                    <div className="flex items-center gap-1 mt-2 pt-2 border-t border-border/20">
+                      {canEditTimeLogs && (
+                        <button
+                          type="button"
+                          title="Correct this time log entry"
+                          onClick={() => { setEditTarget(log); setIsEditOpen(true) }}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 transition-colors"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>Edit</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         title="Delete this time log entry"
                         disabled={isDeleting}
                         onClick={() => handleDeleteLog(log)}
-                        className="p-1.5 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-text-muted hover:text-rose-400 hover:bg-rose-500/10 border border-border/20 hover:border-rose-500/25 transition-colors disabled:opacity-50"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3 h-3" />
+                        <span>Delete</span>
                       </button>
                     </div>
                   </div>
@@ -363,6 +383,16 @@ export function TimeLogDrawer({ isOpen, issue, onClose, onOpenAddHours, onAddHou
             </div>
           </motion.div>
         </div>
-      </AnimatePresence>
+
+      {isEditOpen && editTarget && (
+        <EditTimeLogModal
+          isOpen={isEditOpen}
+          issue={issue}
+          log={editTarget}
+          onClose={() => { setIsEditOpen(false); setEditTarget(null) }}
+          onSuccess={() => { setIsEditOpen(false); setEditTarget(null) }}
+        />
+      )}
+    </>
   )
 }

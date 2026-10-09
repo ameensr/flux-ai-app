@@ -31,6 +31,7 @@ const MODULE_PERMISSIONS_LIST = [
   { key: 'can_configure_dropdowns', label: 'Configure Dropdowns', desc: 'Permits adding, editing, and toggling testing status and tester dropdown options.' },
   { key: 'can_manage_permissions', label: 'Manage Permissions', desc: 'Allows configuring RBAC permissions in Enterprise Admin.' },
   { key: 'can_import', label: 'Import Support Issues', desc: 'Enables bulk importing support issues from Excel/CSV mapped to Project Hub.' },
+  { key: 'can_edit_time_logs', label: 'Edit / Correct Logged Hours', desc: 'Allows authorized users to correct previously logged time-log entries. Every correction is recorded in audit history with a mandatory reason.' },
 ]
 
 export function PermissionsInfoModal({ isOpen, onClose }: Props) {

@@ -1,14 +1,8 @@
 // src/modules/SupportIssueTracker/components/AddEditIssueModal.tsx
-// Modal for adding or editing support issues.
-// Populates Product dropdown dynamically from Project Hub (/project-hub)
-// Populates Tester dropdown from configured employees.
-// Validates mandatory fields before saving.
-// Fixed sticky footer ensures Save/Cancel buttons are ALWAYS visible regardless of scroll.
 
 import React, { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, Edit3, PlusCircle } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { AnimatePresence, motion } from 'framer-motion'
+import { X, Check } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
@@ -25,6 +19,11 @@ interface Props {
   onSaveSuccess?: () => void
 }
 
+const inputCls = 'w-full h-9 bg-transparent border border-border rounded-md px-3 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/60 focus:border-accent/60 transition-colors'
+const selectCls = inputCls + ' cursor-pointer'
+const labelCls = 'block text-xs font-medium text-text-muted mb-1'
+const errorCls = 'text-[11px] text-rose-400 mt-0.5 block'
+
 export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess }: Props) {
   useBodyScrollLock(isOpen)
   const { toast } = useToast()
@@ -35,83 +34,93 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
   const canEditEst = can('support-tracker', 'can_edit_estimated_hours')
 
   const { products, dropdownConfigs, issues, addOrUpdateIssue, toggleEstimationLock } = useSupportTrackerStore()
-
-  // Ref guard: prevents double-submission on rapid clicks
   const submitRef = useRef(false)
 
-  // Form states
   const [projectId, setProjectId] = useState('')
   const [issueId, setIssueId] = useState('')
   const [description, setDescription] = useState('')
   const [receivedDate, setReceivedDate] = useState('')
+  const [receivedTime, setReceivedTime] = useState('')
+  const [isQaMiss, setIsQaMiss] = useState('Not Applicable')
+  const [testCaseCount, setTestCaseCount] = useState<number | string>(0)
   const [startDate, setStartDate] = useState('')
-  const [finishDate, setFinishDate] = useState('')
+  const [plannedEndDate, setPlannedEndDate] = useState('')
+  const [actualEndDate, setActualEndDate] = useState('')
   const [testerName, setTesterName] = useState('')
   const [estimatedHours, setEstimatedHours] = useState<number | string>(0)
   const [actualHours, setActualHours] = useState<number | string>(0)
   const [isEstLocked, setIsEstLocked] = useState(false)
   const [lockedBy, setLockedBy] = useState<string | null>(null)
   const [lockedAt, setLockedAt] = useState<string | null>(null)
+  const [blockedHours, setBlockedHours] = useState<number | string>(0)
   const [testingStatus, setTestingStatus] = useState('Not Started')
   const [comments, setComments] = useState('')
+  const [retestingStatus, setRetestingStatus] = useState('Not Required')
+  const [retestingEstHrs, setRetestingEstHrs] = useState<number | string>(0)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Initialize form when modal opens — depend only on isOpen + issueToEdit?.id to avoid stale closure
   useEffect(() => {
-    if (!isOpen) {
-      submitRef.current = false
-      return
-    }
+    if (!isOpen) { submitRef.current = false; return }
 
     if (issueToEdit) {
       setProjectId(issueToEdit.project_id || products[0]?.id || '')
       setIssueId(issueToEdit.issue_id || '')
       setDescription(issueToEdit.description || '')
       setReceivedDate(issueToEdit.received_date || new Date().toISOString().split('T')[0])
+      setReceivedTime(issueToEdit.received_time || '')
+      setIsQaMiss(issueToEdit.is_qa_miss || 'Not Applicable')
+      setTestCaseCount(issueToEdit.test_case_count ?? 0)
       setStartDate(issueToEdit.start_date || '')
-      setFinishDate(issueToEdit.finish_date || '')
+      setPlannedEndDate(issueToEdit.planned_end_date || '')
+      setActualEndDate(issueToEdit.actual_end_date || '')
       const matchTester = dropdownConfigs.testers.find(
         t => t.value.toLowerCase() === (issueToEdit.tester_name || '').toLowerCase()
       )
       setTesterName(
-        matchTester
-          ? matchTester.value
+        matchTester ? matchTester.value
           : issueToEdit.tester_name === 'Unassigned' || !issueToEdit.tester_name
-          ? 'Unassigned'
-          : issueToEdit.tester_name.toUpperCase()
+          ? 'Unassigned' : issueToEdit.tester_name.toUpperCase()
       )
       setEstimatedHours(issueToEdit.estimated_hours ?? 0)
       setActualHours(issueToEdit.actual_hours ?? 0)
       setIsEstLocked(Boolean(issueToEdit.estimated_hours_locked))
       setLockedBy(issueToEdit.estimated_hours_locked_by || null)
       setLockedAt(issueToEdit.estimated_hours_locked_at || null)
+      setBlockedHours(issueToEdit.blocked_hours ?? 0)
       setTestingStatus(issueToEdit.testing_status || 'Not Started')
       setComments(issueToEdit.comments || '')
+      setRetestingStatus(issueToEdit.retesting_status || 'Not Required')
+      setRetestingEstHrs(issueToEdit.retesting_estimation_hrs ?? 0)
     } else {
-      // Snapshot issues at open time to avoid stale closure
       const currentMax = issues.length > 0 ? Math.max(...issues.map(i => i.sl_no || 0)) : 0
       const nextNum = 1024 + currentMax + 1
       setProjectId(products[0]?.id || '')
       setIssueId(`SUP-${nextNum}`)
       setDescription('')
       setReceivedDate(new Date().toISOString().split('T')[0])
+      setReceivedTime('')
+      setIsQaMiss('Not Applicable')
+      setTestCaseCount(0)
       setStartDate('')
-      setFinishDate('')
+      setPlannedEndDate('')
+      setActualEndDate('')
       setTesterName(dropdownConfigs.testers.find(t => t.is_active)?.value?.toUpperCase() || 'Unassigned')
       setEstimatedHours(0)
       setActualHours(0)
       setIsEstLocked(false)
       setLockedBy(null)
       setLockedAt(null)
+      setBlockedHours(0)
       setTestingStatus('Not Started')
       setComments('')
+      setRetestingStatus('Not Required')
+      setRetestingEstHrs(0)
     }
     setErrors({})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, issueToEdit?.id])
 
-  // Live effort calculation preview
   const effortCalc = calculateEffort(Number(estimatedHours) || 0, Number(actualHours) || 0)
 
   const validateForm = () => {
@@ -121,6 +130,9 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
     if (!receivedDate) errs.receivedDate = 'Received date is required'
     if (Number(estimatedHours) < 0) errs.estimatedHours = 'Estimated hours cannot be negative'
     if (!testingStatus) errs.testingStatus = 'Testing status is required'
+    const tcc = Number(testCaseCount)
+    if (isNaN(tcc) || tcc < 0 || !Number.isInteger(tcc)) errs.testCaseCount = 'Test Case Count must be a non-negative whole number'
+    if (Number(retestingEstHrs) < 0) errs.retestingEstHrs = 'Retesting Estimation cannot be negative'
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -128,7 +140,6 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!validateForm()) return
-    // Prevent double-submission
     if (submitRef.current || saving) return
     submitRef.current = true
     setSaving(true)
@@ -149,13 +160,20 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
           issue_id: issueId.trim(),
           description: description.trim(),
           received_date: receivedDate,
+          received_time: receivedTime || null,
+          is_qa_miss: isQaMiss,
+          test_case_count: Math.max(0, Math.floor(Number(testCaseCount) || 0)),
           start_date: startDate || null,
-          finish_date: finishDate || null,
+          planned_end_date: plannedEndDate || null,
+          actual_end_date: actualEndDate || null,
           tester_name: testerName && testerName !== 'Unassigned' ? testerName.trim().toUpperCase() : 'Unassigned',
           estimated_hours: isEstLocked ? Number(issueToEdit?.estimated_hours ?? 0) : (Number(estimatedHours) || 0),
           actual_hours: Number(actualHours) || 0,
+          blocked_hours: Number(blockedHours) || 0,
           testing_status: testingStatus,
-          comments: comments.trim()
+          comments: comments.trim(),
+          retesting_status: retestingStatus,
+          retesting_estimation_hrs: Number(retestingEstHrs) || 0
         },
         currentUser
       )
@@ -164,18 +182,11 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
         title: issueToEdit ? 'Issue Updated' : 'Support Issue Created',
         description: `Successfully ${issueToEdit ? 'saved changes to' : 'created'} ${issueId}`
       })
-
       onSaveSuccess?.()
       onClose()
     } catch (err: any) {
-      console.error('Failed saving support issue:', err)
-      // Reset guard so user can retry
       submitRef.current = false
-      toast({
-        variant: 'destructive',
-        title: 'Error Saving Issue',
-        description: err.message || 'An unexpected error occurred while saving'
-      })
+      toast({ variant: 'destructive', title: 'Error Saving Issue', description: err.message || 'An unexpected error occurred' })
     } finally {
       setSaving(false)
     }
@@ -186,221 +197,147 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
   return (
     <AnimatePresence>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/75 backdrop-blur-sm overflow-hidden"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-[2px]"
         onClick={onClose}
       >
         <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 12 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 12 }}
-          transition={{ duration: 0.2 }}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
+          transition={{ duration: 0.18 }}
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-2xl bg-surface-elevated border border-white/15 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden"
-          style={{ backgroundColor: 'var(--modal-bg, #141c2b)' }}
+          className="w-full max-w-2xl bg-surface border border-border rounded-lg shadow-xl flex flex-col max-h-[92vh] overflow-hidden"
         >
-          {/* ── Fixed Modal Header ────────────────────────────────────────────── */}
-          <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-surface/50">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-accent">
-                {issueToEdit ? <Edit3 className="w-5 h-5" /> : <PlusCircle className="w-5 h-5" />}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-bold text-text-primary">
-                    {issueToEdit ? 'Edit Support Issue' : 'Add Support Issue'}
-                  </h3>
-                  {issueToEdit && (
-                    <Badge variant="outline" className="font-mono text-accent border-accent/30 text-xs">
-                      {issueToEdit.issue_id}
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-text-muted mt-0.5">
-                  Products are dynamically sourced from Project Hub as single source of truth
-                </p>
-              </div>
+          {/* Header */}
+          <div className="px-5 py-3.5 border-b border-border flex items-center justify-between shrink-0">
+            <div>
+              <h3 className="text-sm font-semibold text-text-primary">
+                {issueToEdit ? `Edit Issue — ${issueToEdit.issue_id}` : 'Add Support Issue'}
+              </h3>
+              <p className="text-xs text-text-muted mt-0.5">Products sourced from Project Hub</p>
             </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-xl text-text-muted hover:text-text-primary hover:bg-white/10 transition-colors"
-            >
-              <X className="w-5 h-5" />
+            <button type="button" onClick={onClose} className="p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-white/8 transition-colors">
+              <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* ── Form with Independent Scrollable Body & Sticky Footer ─────────── */}
+          {/* Form */}
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
-            {/* Scrollable Form Body */}
-            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* 1. Product Dropdown (from Project Hub) */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
+
+              {/* Product + Issue ID */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-text-primary block mb-1">
-                    Product <span className="text-rose-400">*</span>
-                  </label>
-                  <select
-                    value={projectId}
-                    onChange={(e) => setProjectId(e.target.value)}
-                    className="w-full h-10 bg-surface border border-white/15 rounded-xl px-3 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
-                  >
-                    <option value="" disabled>Select Product from Project Hub</option>
+                  <label className={labelCls}>Product <span className="text-rose-400">*</span></label>
+                  <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={selectCls}>
+                    <option value="" disabled>Select Product</option>
                     {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} {p.project_code ? `(${p.project_code})` : ''}
-                      </option>
+                      <option key={p.id} value={p.id}>{p.name}{p.project_code ? ` (${p.project_code})` : ''}</option>
                     ))}
                   </select>
-                  {errors.projectId && (
-                    <span className="text-[11px] text-rose-400 mt-1 block font-medium">{errors.projectId}</span>
-                  )}
+                  {errors.projectId && <span className={errorCls}>{errors.projectId}</span>}
                 </div>
-
-                {/* 2. Support Issue ID */}
                 <div>
-                  <label className="text-xs font-semibold text-text-primary block mb-1">
-                    Support Issue ID <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={issueId}
-                    onChange={(e) => setIssueId(e.target.value)}
+                  <label className={labelCls}>Issue ID <span className="text-rose-400">*</span></label>
+                  <input type="text" value={issueId} onChange={(e) => setIssueId(e.target.value)}
                     placeholder="e.g. SUP-1025"
-                    className="w-full h-10 bg-surface border border-white/15 rounded-xl px-3 font-mono text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-                  />
+                    className={inputCls + ' font-mono'} />
                 </div>
               </div>
 
-              {/* 3. Description */}
+              {/* Description */}
               <div>
-                <label className="text-xs font-semibold text-text-primary block mb-1">
-                  Support Issue Description <span className="text-rose-400">*</span>
-                </label>
-                <textarea
-                  rows={3}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe the defect, behavior, reproduction summary..."
-                  className="w-full bg-surface border border-white/15 rounded-xl p-3 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none leading-relaxed"
-                />
-                {errors.description && (
-                  <span className="text-[11px] text-rose-400 mt-1 block font-medium">{errors.description}</span>
-                )}
+                <label className={labelCls}>Description <span className="text-rose-400">*</span></label>
+                <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Describe the production/support issue..."
+                  className="w-full bg-transparent border border-border rounded-md p-2.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/60 focus:border-accent/60 resize-none leading-relaxed transition-colors" />
+                {errors.description && <span className={errorCls}>{errors.description}</span>}
               </div>
 
-              {/* 4. Dates row */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Received Date + Time */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-text-primary block mb-1">
-                    Received Date <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={receivedDate}
-                    onChange={(e) => setReceivedDate(e.target.value)}
-                    className="w-full h-10 bg-surface border border-white/15 rounded-xl px-3 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
-                  />
-                  {errors.receivedDate && (
-                    <span className="text-[11px] text-rose-400 mt-1 block font-medium">{errors.receivedDate}</span>
-                  )}
+                  <label className={labelCls}>Received Date <span className="text-rose-400">*</span></label>
+                  <input type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} className={inputCls} />
+                  {errors.receivedDate && <span className={errorCls}>{errors.receivedDate}</span>}
                 </div>
-
                 <div>
-                  <label className="text-xs font-semibold text-text-primary block mb-1">
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full h-10 bg-surface border border-white/15 rounded-xl px-3 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-text-primary block mb-1">
-                    Finish Date
-                  </label>
-                  <input
-                    type="date"
-                    value={finishDate}
-                    onChange={(e) => setFinishDate(e.target.value)}
-                    className="w-full h-10 bg-surface border border-white/15 rounded-xl px-3 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
-                  />
+                  <label className={labelCls}>Received Time</label>
+                  <input type="time" value={receivedTime} onChange={(e) => setReceivedTime(e.target.value)} className={inputCls + ' font-mono'} />
                 </div>
               </div>
 
-              {/* 5. Tester & Testing Status */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* QA Engineer + QA Miss */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-text-primary block mb-1">
-                    Who's Testing (Tester)
-                  </label>
-                  <select
-                    value={testerName}
-                    onChange={(e) => setTesterName(e.target.value)}
-                    className="w-full h-10 bg-surface border border-white/15 rounded-xl px-3 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
-                  >
+                  <label className={labelCls}>QA Engineer</label>
+                  <select value={testerName} onChange={(e) => setTesterName(e.target.value)} className={selectCls}>
                     <option value="Unassigned">Unassigned</option>
                     {dropdownConfigs.testers.filter(t => t.is_active).map((t) => (
-                      <option key={t.id} value={t.value.toUpperCase()}>
-                        {t.label.toUpperCase()}
-                      </option>
+                      <option key={t.id} value={t.value.toUpperCase()}>{t.label.toUpperCase()}</option>
                     ))}
                   </select>
                 </div>
-
                 <div>
-                  <label className="text-xs font-semibold text-text-primary block mb-1">
-                    Testing Status <span className="text-rose-400">*</span>
-                  </label>
-                  <select
-                    value={testingStatus}
-                    onChange={(e) => setTestingStatus(e.target.value)}
-                    className="w-full h-10 bg-surface border border-white/15 rounded-xl px-3 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
-                  >
-                    {dropdownConfigs.testing_status.filter(ts => ts.is_active).map((ts) => (
-                      <option key={ts.id} value={ts.value}>
-                        {ts.label}
-                      </option>
+                  <label className={labelCls}>Is QA Miss?</label>
+                  <select value={isQaMiss} onChange={(e) => setIsQaMiss(e.target.value)} className={selectCls}>
+                    {dropdownConfigs.is_qa_miss.filter(o => o.is_active).map((o) => (
+                      <option key={o.id} value={o.value}>{o.label}</option>
                     ))}
                   </select>
-                  {errors.testingStatus && (
-                    <span className="text-[11px] text-rose-400 mt-1 block font-medium">{errors.testingStatus}</span>
-                  )}
                 </div>
               </div>
 
-              {/* 6. Estimation & Actual Hours with Live Indicator Preview */}
-              <div className="p-4 rounded-xl bg-surface/80 border border-white/10 space-y-3">
-                <div className="text-xs font-semibold text-text-primary flex items-center justify-between">
-                  <span>Effort & Hours Calculation</span>
-                  <Badge variant="outline" className="text-[10px] font-mono border-white/15 text-accent">
-                    Live Formula Preview
-                  </Badge>
+              {/* Test Case Count + Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Test Case Count</label>
+                  <input type="number" min="0" step="1" value={testCaseCount}
+                    onChange={(e) => setTestCaseCount(e.target.value)}
+                    className={inputCls + ' font-mono'} />
+                  {errors.testCaseCount && <span className={errorCls}>{errors.testCaseCount}</span>}
                 </div>
+                <div>
+                  <label className={labelCls}>Status <span className="text-rose-400">*</span></label>
+                  <select value={testingStatus} onChange={(e) => setTestingStatus(e.target.value)} className={selectCls}>
+                    {dropdownConfigs.testing_status.filter(ts => ts.is_active).map((ts) => (
+                      <option key={ts.id} value={ts.value}>{ts.label}</option>
+                    ))}
+                  </select>
+                  {errors.testingStatus && <span className={errorCls}>{errors.testingStatus}</span>}
+                </div>
+              </div>
 
-                <div className="grid grid-cols-2 gap-4">
+              {/* Dates */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className={labelCls}>Actual Start Date</label>
+                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Planned End Date</label>
+                  <input type="date" value={plannedEndDate} onChange={(e) => setPlannedEndDate(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Actual End Date</label>
+                  <input type="date" value={actualEndDate} onChange={(e) => setActualEndDate(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+
+              {/* Effort & Hours */}
+              <div className="border border-border rounded-md p-3.5 space-y-3">
+                <p className="text-xs font-semibold text-text-primary">Effort & Hours</p>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <label className="text-[11px] font-medium text-text-muted">
-                          Estimation Hrs
-                        </label>
-                        {isEstLocked && (
-                          <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5">
-                            🔒 Locked
-                          </span>
-                        )}
-                      </div>
+                      <label className={labelCls + ' mb-0'}>
+                        Estimation (Hrs)
+                        {isEstLocked && <span className="ml-1.5 text-[10px] text-amber-400">🔒 Locked</span>}
+                      </label>
                       {issueToEdit && (
                         <EstimationLockControl
-                          isLocked={isEstLocked}
-                          canLock={canLockEst}
-                          canUnlock={canUnlockEst}
-                          lockedBy={lockedBy}
-                          lockedAt={lockedAt ? new Date(lockedAt).toLocaleString() : null}
+                          isLocked={isEstLocked} canLock={canLockEst} canUnlock={canUnlockEst}
+                          lockedBy={lockedBy} lockedAt={lockedAt ? new Date(lockedAt).toLocaleString() : null}
                           size="xs"
                           onToggleLock={async (shouldLock) => {
                             try {
@@ -411,145 +348,103 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
                               setIsEstLocked(shouldLock)
                               setLockedBy(updated.estimated_hours_locked_by || null)
                               setLockedAt(updated.estimated_hours_locked_at || null)
-                              if (shouldLock) {
-                                setEstimatedHours(updated.estimated_hours)
-                              }
-                              toast({
-                                title: shouldLock ? 'Estimation Locked' : 'Estimation Unlocked',
-                                description: shouldLock
-                                  ? `Estimated hours for ${issueToEdit.issue_id} locked at ${updated.estimated_hours} hrs.`
-                                  : `Estimated hours for ${issueToEdit.issue_id} unlocked for editing.`
-                              })
+                              if (shouldLock) setEstimatedHours(updated.estimated_hours)
+                              toast({ title: shouldLock ? 'Estimation Locked' : 'Estimation Unlocked' })
                             } catch (err: any) {
-                              toast({
-                                title: 'Lock Action Failed',
-                                description: err?.message || 'Failed to update estimation lock',
-                                variant: 'destructive'
-                              })
+                              toast({ title: 'Lock Action Failed', description: err?.message, variant: 'destructive' })
                             }
                           }}
                         />
                       )}
                     </div>
-                    <input
-                      type="number"
-                      step="0.25"
-                      min="0"
-                      value={estimatedHours}
+                    <input type="number" step="0.25" min="0" value={estimatedHours}
                       disabled={isEstLocked || !canEditEst}
                       onChange={(e) => setEstimatedHours(e.target.value)}
-                      className={`w-full h-9 bg-surface-elevated border rounded-lg px-2.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono ${
-                        isEstLocked || !canEditEst
-                          ? 'opacity-65 cursor-not-allowed bg-surface-elevated/40 border-amber-500/20'
-                          : 'border-white/10'
-                      }`}
-                      title={
-                        isEstLocked
-                          ? 'Estimated Hours are locked and cannot be modified.'
-                          : !canEditEst
-                          ? 'Requires "Edit Estimated Hours" permission to modify.'
-                          : 'Enter estimated hours'
-                      }
-                    />
-                    {isEstLocked && (
-                      <p className="text-[10px] text-amber-300/80 mt-1 leading-tight">
-                        🔒 Locked{lockedBy ? ` by ${lockedBy}` : ''}{lockedAt ? ` on ${new Date(lockedAt).toLocaleDateString()}` : ''}.
-                        {canUnlockEst ? ' Click 🔒 above to unlock.' : ' Contact an authorized QA Lead to unlock.'}
-                      </p>
-                    )}
-                    {!isEstLocked && !canEditEst && (
-                      <p className="text-[10px] text-text-muted mt-1 leading-tight">
-                        * You need "Edit Estimated Hours" permission to change this value.
-                      </p>
-                    )}
-                    {errors.estimatedHours && (
-                      <span className="text-[11px] text-rose-400 mt-1 block">{errors.estimatedHours}</span>
-                    )}
+                      className={`w-full h-9 bg-transparent border rounded-md px-3 text-sm font-mono text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/60 transition-colors ${isEstLocked || !canEditEst ? 'opacity-60 cursor-not-allowed border-amber-500/30' : 'border-border'}`} />
+                    {errors.estimatedHours && <span className={errorCls}>{errors.estimatedHours}</span>}
                   </div>
-
                   <div>
-                    <label className="text-[11px] font-medium text-text-muted block mb-1">
-                      Total Actual Hrs (Time Logged)
-                    </label>
+                    <label className={labelCls}>Actual / Effort (Hrs)</label>
                     {issueToEdit ? (
-                      <div className="h-9 bg-surface-elevated/60 border border-white/10 rounded-lg px-2.5 flex items-center justify-between text-xs text-text-primary font-mono font-bold">
+                      <div className="h-9 border border-border rounded-md px-3 flex items-center justify-between text-sm font-mono text-text-primary">
                         <span>{actualHours || 0} hrs</span>
-                        <span className="text-[10px] text-accent font-sans font-normal">Cumulative</span>
+                        <span className="text-[10px] text-text-muted font-sans">Cumulative</span>
                       </div>
                     ) : (
-                      <div className="h-9 bg-surface-elevated/40 border border-white/10 rounded-lg px-2.5 flex items-center justify-between text-xs text-text-muted font-mono">
-                        <span>0 hrs</span>
-                        <span className="text-[10px] text-text-muted font-sans">Via Time Log</span>
+                      <div className="h-9 border border-border rounded-md px-3 flex items-center text-xs text-text-muted font-mono">
+                        0 hrs — via Time Log
                       </div>
                     )}
                   </div>
                 </div>
-                <p className="text-[11px] text-text-muted italic">
-                  * Actual hours are cumulative and managed via the progressive Time Log system to maintain QA auditability.
-                </p>
-
-                {/* Calculation outcome banner */}
-                <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs">
+                <p className="text-[11px] text-text-muted">* Actual hours are cumulative and managed via the Time Log system.</p>
+                <div className="pt-2.5 border-t border-border flex items-center justify-between text-xs">
                   <div>
-                    <span className="text-text-muted">Remaining Hrs: </span>
-                    {effortCalc.isOverrun ? (
-                      <span className="font-bold text-rose-400">
-                        Overrun: {effortCalc.overrunHrs} Hrs
-                      </span>
-                    ) : (
-                      <span className="font-bold text-text-primary">
-                        {effortCalc.remainingHrs} Hrs
-                      </span>
-                    )}
+                    <span className="text-text-muted">Remaining: </span>
+                    {effortCalc.isOverrun
+                      ? <span className="font-semibold text-rose-400">Overrun: {effortCalc.overrunHrs} Hrs</span>
+                      : <span className="font-semibold text-text-primary">{effortCalc.remainingHrs} Hrs</span>}
                   </div>
-
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-text-muted">Status:</span>
-                    {effortCalc.indicatorState === 'on_track' && (
-                      <span className="text-emerald-400 font-semibold">🟢 On Track ({effortCalc.percentage}%)</span>
-                    )}
-                    {effortCalc.indicatorState === 'attention' && (
-                      <span className="text-amber-400 font-semibold">🟡 Attention ({effortCalc.percentage}%)</span>
-                    )}
-                    {effortCalc.indicatorState === 'overrun' && (
-                      <span className="text-rose-400 font-semibold">🔴 Overrun ({effortCalc.percentage}%)</span>
-                    )}
+                    {effortCalc.indicatorState === 'on_track' && <span className="text-emerald-400 font-medium">🟢 On Track ({effortCalc.percentage}%)</span>}
+                    {effortCalc.indicatorState === 'attention' && <span className="text-amber-400 font-medium">🟡 Attention ({effortCalc.percentage}%)</span>}
+                    {effortCalc.indicatorState === 'overrun' && <span className="text-rose-400 font-medium">🔴 Overrun ({effortCalc.percentage}%)</span>}
                   </div>
                 </div>
               </div>
 
-              {/* 7. Comments */}
-              <div>
-                <label className="text-xs font-semibold text-text-primary block mb-1">
-                  Comments / Test Notes
-                </label>
-                <textarea
-                  rows={2}
-                  value={comments}
-                  onChange={(e) => setComments(e.target.value)}
-                  placeholder="Additional context, blocker details, or test execution remarks..."
-                  className="w-full bg-surface border border-white/15 rounded-xl p-3 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none leading-relaxed"
-                />
+              {/* Blocked Hours */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Blocked Hours</label>
+                  <input type="number" step="0.25" min="0" value={blockedHours}
+                    onChange={(e) => setBlockedHours(e.target.value)}
+                    placeholder="0"
+                    className={inputCls + ' font-mono'} />
+                  <p className="text-[11px] text-text-muted mt-1">Total hours the issue was blocked</p>
+                </div>
               </div>
+
+              {/* Comments */}
+              <div>
+                <label className={labelCls}>Comments</label>
+                <textarea rows={2} value={comments} onChange={(e) => setComments(e.target.value)}
+                  placeholder="Additional context, blocker details, or test execution remarks..."
+                  className="w-full bg-transparent border border-border rounded-md p-2.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/60 focus:border-accent/60 resize-none leading-relaxed transition-colors" />
+              </div>
+
+              {/* Retesting */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Retesting Status</label>
+                  <select value={retestingStatus} onChange={(e) => setRetestingStatus(e.target.value)} className={selectCls}>
+                    {dropdownConfigs.retesting_status.filter(o => o.is_active).map((o) => (
+                      <option key={o.id} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Retesting Estimation (Hrs)</label>
+                  <input type="number" step="0.25" min="0" value={retestingEstHrs}
+                    onChange={(e) => setRetestingEstHrs(e.target.value)}
+                    className={inputCls + ' font-mono'} />
+                  {errors.retestingEstHrs && <span className={errorCls}>{errors.retestingEstHrs}</span>}
+                </div>
+              </div>
+
             </div>
 
-            {/* ── Fixed Sticky Footer (Always Visible, Never Cut Off!) ────────── */}
-            <div className="px-6 py-4 border-t border-white/10 flex items-center justify-end gap-3 shrink-0 bg-surface/80 backdrop-blur-sm">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={saving}
-                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-text-muted hover:text-text-primary hover:bg-white/10 transition-colors disabled:opacity-50"
-              >
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-border flex items-center justify-end gap-2 shrink-0">
+              <button type="button" onClick={onClose} disabled={saving}
+                className="px-4 py-2 rounded-md text-xs font-medium text-text-muted hover:text-text-primary hover:bg-white/8 transition-colors disabled:opacity-50">
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-6 py-2.5 rounded-xl text-xs font-bold bg-accent hover:bg-accent-hover text-white transition-all shadow-lg shadow-accent/25 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-95"
-              >
-                <Check className="w-4 h-4" />
-                {saving ? 'Saving...' : issueToEdit ? 'Update Issue' : 'Save Support Issue'}
+              <button type="submit" disabled={saving}
+                className="px-5 py-2 rounded-md text-xs font-semibold bg-accent hover:bg-accent-hover text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+                <Check className="w-3.5 h-3.5" />
+                {saving ? 'Saving...' : issueToEdit ? 'Update Issue' : 'Save Issue'}
               </button>
             </div>
           </form>

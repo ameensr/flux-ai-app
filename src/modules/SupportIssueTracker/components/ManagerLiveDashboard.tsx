@@ -45,9 +45,12 @@ export function ManagerLiveDashboard() {
     let count = 0
     if (filters.testingStatus.length > 0) count++
     if (filters.tester.length > 0) count++
+    if (filters.isQaMiss?.length > 0) count++
+    if (filters.retestingStatus?.length > 0) count++
     if (filters.receivedDateStart || filters.receivedDateEnd) count++
     if (filters.startDateStart || filters.startDateEnd) count++
-    if (filters.finishDateStart || filters.finishDateEnd) count++
+    if (filters.plannedEndDateStart || filters.plannedEndDateEnd) count++
+    if (filters.actualEndDateStart || filters.actualEndDateEnd) count++
     return count
   }, [filters])
 
@@ -166,7 +169,7 @@ export function ManagerLiveDashboard() {
 
         {/* Collapsible Secondary Filter Bar */}
         {isDashboardOpen && (showFilters || secondaryFiltersCount > 0) && (
-          <div className="pt-2.5 border-t border-border/40 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+          <div className="pt-2.5 border-t border-border/40 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
             {/* 1. Testing Status */}
             <div>
               <label htmlFor="filter-status-select" className="text-[10px] font-semibold text-text-muted block mb-1">
@@ -215,77 +218,69 @@ export function ManagerLiveDashboard() {
 
             {/* 3. Received Date */}
             <div>
-              <label htmlFor="filter-received-start" className="text-[10px] font-semibold text-text-muted block mb-1">
-                Received (From - To)
-              </label>
+              <label htmlFor="filter-received-start" className="text-[10px] font-semibold text-text-muted block mb-1">Received Date (From - To)</label>
               <div className="grid grid-cols-2 gap-1.5">
-                <input
-                  id="filter-received-start"
-                  type="date"
-                  aria-label="Received Date From"
-                  value={filters.receivedDateStart || ''}
-                  onChange={(e) => setFilters({ receivedDateStart: e.target.value })}
-                  className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-1.5 text-[11px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono"
-                />
-                <input
-                  id="filter-received-end"
-                  type="date"
-                  aria-label="Received Date To"
-                  value={filters.receivedDateEnd || ''}
-                  onChange={(e) => setFilters({ receivedDateEnd: e.target.value })}
-                  className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-1.5 text-[11px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono"
-                />
+                <input id="filter-received-start" type="date" aria-label="Received Date From"
+                  value={filters.receivedDateStart || ''} onChange={(e) => setFilters({ receivedDateStart: e.target.value })}
+                  className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-1.5 text-[11px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono" />
+                <input id="filter-received-end" type="date" aria-label="Received Date To"
+                  value={filters.receivedDateEnd || ''} onChange={(e) => setFilters({ receivedDateEnd: e.target.value })}
+                  className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-1.5 text-[11px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono" />
               </div>
             </div>
 
-            {/* 4. Start Date */}
+            {/* 4. Actual Start Date */}
             <div>
-              <label htmlFor="filter-start-start" className="text-[10px] font-semibold text-text-muted block mb-1">
-                Start Date (From - To)
-              </label>
+              <label htmlFor="filter-start-start" className="text-[10px] font-semibold text-text-muted block mb-1">Actual Start Date (From - To)</label>
               <div className="grid grid-cols-2 gap-1.5">
-                <input
-                  id="filter-start-start"
-                  type="date"
-                  aria-label="Start Date From"
-                  value={filters.startDateStart || ''}
-                  onChange={(e) => setFilters({ startDateStart: e.target.value })}
-                  className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-1.5 text-[11px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono"
-                />
-                <input
-                  id="filter-start-end"
-                  type="date"
-                  aria-label="Start Date To"
-                  value={filters.startDateEnd || ''}
-                  onChange={(e) => setFilters({ startDateEnd: e.target.value })}
-                  className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-1.5 text-[11px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono"
-                />
+                <input id="filter-start-start" type="date" aria-label="Actual Start Date From"
+                  value={filters.startDateStart || ''} onChange={(e) => setFilters({ startDateStart: e.target.value })}
+                  className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-1.5 text-[11px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono" />
+                <input id="filter-start-end" type="date" aria-label="Actual Start Date To"
+                  value={filters.startDateEnd || ''} onChange={(e) => setFilters({ startDateEnd: e.target.value })}
+                  className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-1.5 text-[11px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono" />
               </div>
             </div>
 
             {/* 5. Finish Date */}
             <div>
-              <label htmlFor="filter-finish-start" className="text-[10px] font-semibold text-text-muted block mb-1">
-                Finish Date (From - To)
-              </label>
+              <label htmlFor="filter-finish-start" className="text-[10px] font-semibold text-text-muted block mb-1">Planned End Date (From - To)</label>
               <div className="grid grid-cols-2 gap-1.5">
-                <input
-                  id="filter-finish-start"
-                  type="date"
-                  aria-label="Finish Date From"
-                  value={filters.finishDateStart || ''}
-                  onChange={(e) => setFilters({ finishDateStart: e.target.value })}
-                  className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-1.5 text-[11px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono"
-                />
-                <input
-                  id="filter-finish-end"
-                  type="date"
-                  aria-label="Finish Date To"
-                  value={filters.finishDateEnd || ''}
-                  onChange={(e) => setFilters({ finishDateEnd: e.target.value })}
-                  className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-1.5 text-[11px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono"
-                />
+                <input id="filter-finish-start" type="date" aria-label="Planned End Date From"
+                  value={filters.plannedEndDateStart || ''} onChange={(e) => setFilters({ plannedEndDateStart: e.target.value })}
+                  className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-1.5 text-[11px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono" />
+                <input id="filter-finish-end" type="date" aria-label="Planned End Date To"
+                  value={filters.plannedEndDateEnd || ''} onChange={(e) => setFilters({ plannedEndDateEnd: e.target.value })}
+                  className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-1.5 text-[11px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent font-mono" />
               </div>
+            </div>
+
+            {/* 6. Is QA Miss? */}
+            <div>
+              <label htmlFor="filter-qa-miss" className="text-[10px] font-semibold text-text-muted block mb-1">Is QA Miss?</label>
+              <select id="filter-qa-miss" aria-label="Filter by Is QA Miss?"
+                value={filters.isQaMiss?.[0] || ''}
+                onChange={(e) => setFilters({ isQaMiss: e.target.value ? [e.target.value] : [] })}
+                className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-2.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer">
+                <option value="">All</option>
+                {dropdownConfigs.is_qa_miss?.filter(o => o.is_active).map((o) => (
+                  <option key={o.id} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 7. Retesting Status */}
+            <div>
+              <label htmlFor="filter-retest-status" className="text-[10px] font-semibold text-text-muted block mb-1">Retesting Status</label>
+              <select id="filter-retest-status" aria-label="Filter by Retesting Status"
+                value={filters.retestingStatus?.[0] || ''}
+                onChange={(e) => setFilters({ retestingStatus: e.target.value ? [e.target.value] : [] })}
+                className="w-full h-8 bg-surface-secondary/70 border border-border/50 rounded-lg px-2.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer">
+                <option value="">All</option>
+                {dropdownConfigs.retesting_status?.filter(o => o.is_active).map((o) => (
+                  <option key={o.id} value={o.value}>{o.label}</option>
+                ))}
+              </select>
             </div>
           </div>
         )}
@@ -380,6 +375,42 @@ export function ManagerLiveDashboard() {
                   {kpis.completed}
                 </div>
                 <div className="text-[10px] text-text-muted mt-0.5 truncate">Closed & verified</div>
+              </div>
+            </div>
+
+            {/* Tier 1b: QA Miss + Test Cases */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
+              <div className="p-3 rounded-xl border border-border/50 bg-surface/70 hover:border-rose-500/40 transition-all shadow-xs">
+                <div className="flex items-center justify-between text-text-muted mb-1.5">
+                  <span className="text-[11px] font-medium text-text-muted">QA Miss</span>
+                  <div className="w-6 h-6 rounded-md bg-rose-500/10 text-rose-400 flex items-center justify-center text-[10px] font-bold">!</div>
+                </div>
+                <div className="text-xl sm:text-2xl font-bold font-mono tracking-tight text-rose-400">{kpis.qaMissCount}</div>
+                <div className="text-[10px] text-text-muted mt-0.5 truncate">Confirmed misses</div>
+              </div>
+              <div className="p-3 rounded-xl border border-border/50 bg-surface/70 hover:border-border transition-all shadow-xs">
+                <div className="flex items-center justify-between text-text-muted mb-1.5">
+                  <span className="text-[11px] font-medium text-text-muted">Test Cases</span>
+                  <div className="w-6 h-6 rounded-md bg-accent/10 text-accent flex items-center justify-center text-[10px] font-bold">#</div>
+                </div>
+                <div className="text-xl sm:text-2xl font-bold font-mono tracking-tight text-text-primary">{kpis.totalTestCases}</div>
+                <div className="text-[10px] text-text-muted mt-0.5 truncate">Total test cases</div>
+              </div>
+              <div className="p-3 rounded-xl border border-border/50 bg-surface/70 hover:border-orange-500/40 transition-all shadow-xs">
+                <div className="flex items-center justify-between text-text-muted mb-1.5">
+                  <span className="text-[11px] font-medium text-text-muted">Blocked Hrs</span>
+                  <div className="w-6 h-6 rounded-md bg-orange-500/10 text-orange-400 flex items-center justify-center text-[10px] font-bold">B</div>
+                </div>
+                <div className="text-xl sm:text-2xl font-bold font-mono tracking-tight text-orange-400">{kpis.totalBlockedHours} <span className="text-xs font-normal text-text-muted">hrs</span></div>
+                <div className="text-[10px] text-text-muted mt-0.5 truncate">Total blocked time</div>
+              </div>
+              <div className="p-3 rounded-xl border border-border/50 bg-surface/70 hover:border-cyan-500/40 transition-all shadow-xs">
+                <div className="flex items-center justify-between text-text-muted mb-1.5">
+                  <span className="text-[11px] font-medium text-text-muted">Retest Est.</span>
+                  <div className="w-6 h-6 rounded-md bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-[10px] font-bold">R</div>
+                </div>
+                <div className="text-xl sm:text-2xl font-bold font-mono tracking-tight text-cyan-400">{kpis.totalRetestingEstHours} <span className="text-xs font-normal text-text-muted">hrs</span></div>
+                <div className="text-[10px] text-text-muted mt-0.5 truncate">Retesting estimate</div>
               </div>
             </div>
 

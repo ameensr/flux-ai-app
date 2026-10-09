@@ -38,6 +38,7 @@ export type PermissionKey =
   | 'can_lock_estimated_hours'
   | 'can_unlock_estimated_hours'
   | 'can_edit_estimated_hours'
+  | 'can_edit_time_logs'
 
 export interface ModulePermissionDefinition {
   moduleKey: string
@@ -310,6 +311,7 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
       'can_lock_estimated_hours',
       'can_unlock_estimated_hours',
       'can_edit_estimated_hours',
+      'can_edit_time_logs',
     ],
     description: 'Enterprise QA & support issue tracking system with manager dashboard'
   },
@@ -333,6 +335,7 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
       'can_lock_estimated_hours',
       'can_unlock_estimated_hours',
       'can_edit_estimated_hours',
+      'can_edit_time_logs',
     ],
     description: 'Enterprise QA & release task tracking system with manager dashboard and time logs'
   },
@@ -404,6 +407,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   can_lock_estimated_hours: 'Lock Estimated Hours',
   can_unlock_estimated_hours: 'Unlock Estimated Hours',
   can_edit_estimated_hours: 'Edit Estimated Hours',
+  can_edit_time_logs: 'Edit / Correct Logged Hours',
 }
 
 /**
@@ -443,4 +447,5 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   can_lock_estimated_hours: 'Can lock Estimated Hours for a specific task or issue to prevent modifications',
   can_unlock_estimated_hours: 'Can unlock Estimated Hours for a specific task or issue',
   can_edit_estimated_hours: 'Can modify Estimated Hours when the estimation is unlocked',
+  can_edit_time_logs: 'Can correct previously logged time-log entries. Every correction is recorded in audit history with a mandatory reason.',
 }

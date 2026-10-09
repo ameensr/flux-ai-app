@@ -3123,6 +3123,83 @@ ALTER TABLE public.support_issues
 
 CREATE INDEX IF NOT EXISTS idx_support_issues_locked ON public.support_issues(estimated_hours_locked);
 
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- SECTION (082): Support Issue Tracker — New Columns
+-- (source: 082_support_tracker_new_columns.sql)
+-- ══════════════════════════════════════════════════════════════════════════════
+
+ALTER TABLE public.support_issues
+  ADD COLUMN IF NOT EXISTS received_time             TIME,
+  ADD COLUMN IF NOT EXISTS is_qa_miss                TEXT DEFAULT 'Not Applicable',
+  ADD COLUMN IF NOT EXISTS test_case_count           INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS planned_end_date          DATE,
+  ADD COLUMN IF NOT EXISTS actual_end_date           DATE,
+  ADD COLUMN IF NOT EXISTS blocked_hours             NUMERIC(6,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS retesting_status          TEXT DEFAULT 'Not Required',
+  ADD COLUMN IF NOT EXISTS retesting_estimation_hrs  NUMERIC(6,2) DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_support_issues_is_qa_miss       ON public.support_issues(is_qa_miss);
+CREATE INDEX IF NOT EXISTS idx_support_issues_retesting_status ON public.support_issues(retesting_status);
+CREATE INDEX IF NOT EXISTS idx_support_issues_planned_end      ON public.support_issues(planned_end_date);
+CREATE INDEX IF NOT EXISTS idx_support_issues_actual_end       ON public.support_issues(actual_end_date);
+
+-- Dropdown seeds for is_qa_miss
+INSERT INTO public.support_issue_dropdown_configs (category, label, value, is_active, sort_order)
+VALUES
+  ('is_qa_miss', 'Yes',            'Yes',            true, 1),
+  ('is_qa_miss', 'No',             'No',             true, 2),
+  ('is_qa_miss', 'Under Review',   'Under Review',   true, 3),
+  ('is_qa_miss', 'Not Applicable', 'Not Applicable', true, 4)
+ON CONFLICT (category, lower(value)) DO NOTHING;
+
+-- Dropdown seeds for retesting_status
+INSERT INTO public.support_issue_dropdown_configs (category, label, value, is_active, sort_order)
+VALUES
+  ('retesting_status', 'Not Required', 'Not Required', true, 1),
+  ('retesting_status', 'Pending',      'Pending',      true, 2),
+  ('retesting_status', 'In Retesting', 'In Retesting', true, 3),
+  ('retesting_status', 'Passed',       'Passed',       true, 4),
+  ('retesting_status', 'Failed',       'Failed',       true, 5),
+  ('retesting_status', 'Blocked',      'Blocked',      true, 6)
+ON CONFLICT (category, lower(value)) DO NOTHING;
+
+-- Blocked time tracking table
+CREATE TABLE IF NOT EXISTS public.support_issue_blocked_periods (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  support_issue_id UUID NOT NULL REFERENCES public.support_issues(id) ON DELETE CASCADE,
+  issue_id         TEXT NOT NULL,
+  blocked_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  unblocked_at     TIMESTAMPTZ,
+  hours_blocked    NUMERIC(6,2) GENERATED ALWAYS AS (
+    CASE
+      WHEN unblocked_at IS NOT NULL
+      THEN ROUND(EXTRACT(EPOCH FROM (unblocked_at - blocked_at)) / 3600.0, 2)
+      ELSE NULL
+    END
+  ) STORED,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_blocked_periods_issue_id  ON public.support_issue_blocked_periods(support_issue_id);
+CREATE INDEX IF NOT EXISTS idx_blocked_periods_issue_str ON public.support_issue_blocked_periods(issue_id);
+
+ALTER TABLE public.support_issue_blocked_periods ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "support_blocked_periods_all_auth" ON public.support_issue_blocked_periods;
+  CREATE POLICY "support_blocked_periods_all_auth" ON public.support_issue_blocked_periods
+    FOR ALL TO authenticated USING (true) WITH CHECK (true);
+  DROP POLICY IF EXISTS "support_blocked_periods_all_anon" ON public.support_issue_blocked_periods;
+  CREATE POLICY "support_blocked_periods_all_anon" ON public.support_issue_blocked_periods
+    FOR ALL TO anon USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+GRANT ALL ON TABLE public.support_issue_blocked_periods TO authenticated, anon, service_role;
+
+
 -- Lock columns on release_tasks
 ALTER TABLE public.release_tasks
   ADD COLUMN IF NOT EXISTS estimated_hours_locked    BOOLEAN     NOT NULL DEFAULT false,
@@ -3135,7 +3212,8 @@ CREATE INDEX IF NOT EXISTS idx_release_tasks_locked ON public.release_tasks(esti
 INSERT INTO public.permissions (permission_key, permission_name, description) VALUES
   ('can_lock_estimated_hours',   'Lock Estimated Hours',   'Can lock Estimated Hours for a specific issue or task to prevent edits'),
   ('can_unlock_estimated_hours', 'Unlock Estimated Hours', 'Can unlock Estimated Hours for a specific issue or task'),
-  ('can_edit_estimated_hours',   'Edit Estimated Hours',   'Can modify Estimated Hours when the estimation is unlocked')
+  ('can_edit_estimated_hours',   'Edit Estimated Hours',   'Can modify Estimated Hours when the estimation is unlocked'),
+  ('can_edit_time_logs',         'Edit Time Logs',         'Can correct previously logged time-log entries with mandatory audit reason')
 ON CONFLICT (permission_key) DO UPDATE SET
   permission_name = EXCLUDED.permission_name,
   description     = EXCLUDED.description;
@@ -3154,12 +3232,12 @@ BEGIN
 
   FOR v_role IN SELECT id, role_key FROM public.roles LOOP
     FOR v_perm IN SELECT id, permission_key FROM public.permissions
-      WHERE permission_key IN ('can_lock_estimated_hours','can_unlock_estimated_hours','can_edit_estimated_hours')
+      WHERE permission_key IN ('can_lock_estimated_hours','can_unlock_estimated_hours','can_edit_estimated_hours','can_edit_time_logs')
     LOOP
-      IF v_role.role_key IN ('super_admin','admin','manager','qa_lead','pro') THEN
+      IF v_role.role_key IN ('super_admin','admin','manager','qa_lead') THEN
         v_enabled := true;
-      ELSIF v_role.role_key = 'qa_engineer' THEN
-        v_enabled := v_perm.permission_key = 'can_edit_estimated_hours';
+      ELSIF v_role.role_key IN ('qa_engineer','pro') THEN
+        v_enabled := v_perm.permission_key IN ('can_edit_estimated_hours','can_edit_time_logs');
       ELSE
         v_enabled := false;
       END IF;
@@ -3178,6 +3256,29 @@ BEGIN
     END LOOP;
   END LOOP;
 END $$;
+
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- SECTION (083): Release Task Tracker — Estimation Redesign
+-- (source: 083_release_task_estimation_redesign.sql)
+-- ══════════════════════════════════════════════════════════════════════════════
+
+ALTER TABLE public.release_tasks
+  ADD COLUMN IF NOT EXISTS test_design_est_hrs        NUMERIC(6,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS data_prep_est_hrs          NUMERIC(6,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS functional_testing_est_hrs NUMERIC(6,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS retesting_est_hrs          NUMERIC(6,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS received_date_time         TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS actual_end_date            DATE;
+
+-- Migrate existing estimated_hours → functional_testing_est_hrs for legacy rows
+UPDATE public.release_tasks
+SET functional_testing_est_hrs = estimated_hours
+WHERE functional_testing_est_hrs = 0
+  AND estimated_hours > 0;
+
+CREATE INDEX IF NOT EXISTS idx_release_tasks_received_dt ON public.release_tasks(received_date_time);
+CREATE INDEX IF NOT EXISTS idx_release_tasks_actual_end  ON public.release_tasks(actual_end_date);
 
 
 -- ============================================================================

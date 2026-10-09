@@ -5,8 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, Edit3, PlusCircle, Clock, AlertCircle, Sparkles } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { X, Check, Clock } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
@@ -15,7 +14,7 @@ import { EstimationLockControl } from '@/components/qa-operations/EstimationLock
 import { useReleaseTrackerStore } from '../store'
 import { generateNextTaskId } from '../releaseTrackerService'
 import type { ReleaseTask, PriorityType, TaskStatusType } from '../types'
-import { calculateEffort, DEFAULT_TASK_STATUSES, DEFAULT_PRIORITIES } from '../types'
+import { calculateEffort } from '../types'
 
 interface Props {
   isOpen: boolean
@@ -24,6 +23,11 @@ interface Props {
   onSaveSuccess?: () => void
   onOpenTimeLog?: (task: ReleaseTask) => void
 }
+
+const inputCls = 'w-full h-9 bg-transparent border border-border rounded-md px-3 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/60 focus:border-accent/60 transition-colors'
+const selectCls = inputCls + ' cursor-pointer'
+const labelCls = 'block text-xs font-medium text-text-muted mb-1'
+const errorCls = 'text-[11px] text-rose-400 mt-0.5 block'
 
 export function AddEditReleaseTaskModal({
   isOpen,
@@ -42,7 +46,6 @@ export function AddEditReleaseTaskModal({
 
   const {
     products,
-    employees,
     dropdownConfigs,
     tasks,
     addOrUpdateTask,
@@ -50,21 +53,22 @@ export function AddEditReleaseTaskModal({
     getAvailableReleases
   } = useReleaseTrackerStore()
 
-  // Guard against double submission
   const submitRef = useRef(false)
 
-  // Form states
   const [projectId, setProjectId] = useState('')
   const [releaseVersion, setReleaseVersion] = useState('Release 1.0')
   const [taskId, setTaskId] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<PriorityType>('Medium')
+  const [receivedDateTime, setReceivedDateTime] = useState('')
   const [startDate, setStartDate] = useState('')
-  const [targetDate, setTargetDate] = useState('')
-  const [finishDate, setFinishDate] = useState('')
-  const [assignedUserId, setAssignedUserId] = useState<string>('')
-  const [assignedName, setAssignedName] = useState<string>('Unassigned')
-  const [estimatedHours, setEstimatedHours] = useState<number | string>(8)
+  const [actualEndDate, setActualEndDate] = useState('')
+  const [assignedUserId, setAssignedUserId] = useState('')
+  const [assignedName, setAssignedName] = useState('Unassigned')
+  const [testDesignEst, setTestDesignEst] = useState<number | string>(0)
+  const [dataPrepEst, setDataPrepEst] = useState<number | string>(0)
+  const [functionalTestingEst, setFunctionalTestingEst] = useState<number | string>(8)
+  const [retestingEst, setRetestingEst] = useState<number | string>(0)
   const [isEstLocked, setIsEstLocked] = useState(false)
   const [lockedBy, setLockedBy] = useState<string | null>(null)
   const [lockedAt, setLockedAt] = useState<string | null>(null)
@@ -73,13 +77,16 @@ export function AddEditReleaseTaskModal({
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Compute available assignees from Configuration -> Dropdown Configuration -> Assigned To
-  // Requirement 12: Only enabled users should appear in the task form.
-  // If a configured user is disabled, existing tasks assigned to that user must remain intact.
+  const totalEst = Math.round((
+    (Number(testDesignEst) || 0) +
+    (Number(dataPrepEst) || 0) +
+    (Number(functionalTestingEst) || 0) +
+    (Number(retestingEst) || 0)
+  ) * 100) / 100
+
   const availableAssignees = React.useMemo(() => {
     const all = [...(dropdownConfigs.assigned_to || [])]
     const active = all.filter(a => a.is_active)
-
     if (taskToEdit) {
       const existingAssignee = all.find(
         a =>
@@ -94,12 +101,8 @@ export function AddEditReleaseTaskModal({
     return active
   }, [dropdownConfigs.assigned_to, taskToEdit])
 
-  // Reset or fill form when modal opens
   useEffect(() => {
-    if (!isOpen) {
-      submitRef.current = false
-      return
-    }
+    if (!isOpen) { submitRef.current = false; return }
 
     if (taskToEdit) {
       setProjectId(taskToEdit.project_id || products[0]?.id || '')
@@ -107,12 +110,15 @@ export function AddEditReleaseTaskModal({
       setTaskId(taskToEdit.task_id || '')
       setDescription(taskToEdit.description || '')
       setPriority(taskToEdit.priority || 'Medium')
+      setReceivedDateTime(taskToEdit.received_date_time || '')
       setStartDate(taskToEdit.start_date || '')
-      setTargetDate(taskToEdit.target_date || '')
-      setFinishDate(taskToEdit.finish_date || '')
+      setActualEndDate(taskToEdit.actual_end_date || '')
       setAssignedUserId(taskToEdit.assigned_to_user_id || '')
       setAssignedName(taskToEdit.assigned_to_name || 'Unassigned')
-      setEstimatedHours(taskToEdit.estimated_hours ?? 0)
+      setTestDesignEst(taskToEdit.test_design_est_hrs ?? 0)
+      setDataPrepEst(taskToEdit.data_prep_est_hrs ?? 0)
+      setFunctionalTestingEst(taskToEdit.functional_testing_est_hrs ?? 0)
+      setRetestingEst(taskToEdit.retesting_est_hrs ?? 0)
       setIsEstLocked(Boolean(taskToEdit.estimated_hours_locked))
       setLockedBy(taskToEdit.estimated_hours_locked_by || null)
       setLockedAt(taskToEdit.estimated_hours_locked_at || null)
@@ -131,14 +137,16 @@ export function AddEditReleaseTaskModal({
       setTaskId(generateNextTaskId(tasks))
       setDescription('')
       setPriority('Medium')
-      const today = new Date().toISOString().split('T')[0]
-      setStartDate(today)
-      setTargetDate('')
-      setFinishDate('')
+      setReceivedDateTime('')
+      setStartDate(new Date().toISOString().split('T')[0])
+      setActualEndDate('')
       const defaultAssignee = dropdownConfigs.assigned_to.find(a => a.is_active)
       setAssignedUserId(defaultAssignee?.value || '')
       setAssignedName(defaultAssignee?.label || 'Unassigned')
-      setEstimatedHours(8)
+      setTestDesignEst(0)
+      setDataPrepEst(0)
+      setFunctionalTestingEst(8)
+      setRetestingEst(0)
       setIsEstLocked(false)
       setLockedBy(null)
       setLockedAt(null)
@@ -149,20 +157,15 @@ export function AddEditReleaseTaskModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, taskToEdit?.id])
 
-  // Handle employee change from configuration options
   const handleAssigneeChange = (val: string) => {
     setAssignedUserId(val)
     const found = dropdownConfigs.assigned_to.find(a => a.value === val)
-    if (found) {
-      setAssignedName(found.label.replace(' (Inactive)', ''))
-    } else if (!val) {
-      setAssignedName('Unassigned')
-    }
+    if (found) setAssignedName(found.label.replace(' (Inactive)', ''))
+    else if (!val) setAssignedName('Unassigned')
   }
 
-  // Effort preview
   const currentActual = taskToEdit ? Number(taskToEdit.actual_hours) || 0 : 0
-  const effortCalc = calculateEffort(Number(estimatedHours) || 0, currentActual)
+  const effortCalc = calculateEffort(totalEst, currentActual)
 
   const validateForm = () => {
     const errs: Record<string, string> = {}
@@ -173,7 +176,6 @@ export function AddEditReleaseTaskModal({
       errs.taskId = `Task ID "${taskId.trim()}" already exists. Please use a unique ID.`
     }
     if (!description.trim()) errs.description = 'Task description is required'
-    if (Number(estimatedHours) < 0) errs.estimatedHours = 'Estimated hours cannot be negative'
     if (!taskStatus) errs.taskStatus = 'Task status is required'
     setErrors(errs)
     return Object.keys(errs).length === 0
@@ -205,12 +207,15 @@ export function AddEditReleaseTaskModal({
           release_version: releaseVersion.trim(),
           description: description.trim(),
           priority,
+          received_date_time: receivedDateTime || null,
           start_date: startDate || null,
-          target_date: targetDate || null,
-          finish_date: finishDate || null,
+          actual_end_date: actualEndDate || null,
           assigned_to_user_id: assignedUserId || null,
           assigned_to_name: assignedName,
-          estimated_hours: isEstLocked ? Number(taskToEdit?.estimated_hours ?? 0) : (Number(estimatedHours) || 0),
+          test_design_est_hrs: Number(testDesignEst) || 0,
+          data_prep_est_hrs: Number(dataPrepEst) || 0,
+          functional_testing_est_hrs: Number(functionalTestingEst) || 0,
+          retesting_est_hrs: Number(retestingEst) || 0,
           task_status: taskStatus,
           comments: comments.trim()
         },
@@ -225,11 +230,7 @@ export function AddEditReleaseTaskModal({
       onClose()
       onSaveSuccess?.()
     } catch (err: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Save Failed',
-        description: err.message || 'Could not save release task'
-      })
+      toast({ variant: 'destructive', title: 'Save Failed', description: err.message || 'Could not save release task' })
     } finally {
       setSaving(false)
       submitRef.current = false
@@ -240,257 +241,172 @@ export function AddEditReleaseTaskModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
-        {/* Backdrop */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={() => !saving && onClose()}
-          className="fixed inset-0 bg-black/75 backdrop-blur-sm"
+          className="fixed inset-0 bg-black/60 backdrop-blur-[2px]"
         />
 
-        {/* Modal Window */}
         <motion.div
-          initial={{ scale: 0.95, opacity: 0, y: 10 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.95, opacity: 0, y: 10 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-2xl bg-surface border border-white/15 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] my-auto z-10"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
+          transition={{ duration: 0.18 }}
+          className="relative w-full max-w-2xl bg-surface border border-border rounded-lg shadow-xl flex flex-col max-h-[92vh] my-auto z-10 overflow-hidden"
         >
-          {/* ── Modal Header ── */}
-          <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between bg-surface-elevated/80 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-accent">
-                {taskToEdit ? <Edit3 className="w-4 h-4" /> : <PlusCircle className="w-4 h-4" />}
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-text-primary">
-                  {taskToEdit ? `Edit Task: ${taskToEdit.task_id}` : 'Create New Release Task'}
-                </h3>
-                <p className="text-xs text-text-muted">
-                  {taskToEdit
-                    ? `Updating release task details for ${taskToEdit.product_name}`
-                    : 'Add a new release task with estimation and schedule'}
-                </p>
-              </div>
+          {/* Header */}
+          <div className="px-5 py-3.5 border-b border-border flex items-center justify-between shrink-0">
+            <div>
+              <h3 className="text-sm font-semibold text-text-primary">
+                {taskToEdit ? `Edit Task — ${taskToEdit.task_id}` : 'Create New Release Task'}
+              </h3>
+              <p className="text-xs text-text-muted mt-0.5">
+                {taskToEdit
+                  ? `Updating release task details for ${taskToEdit.product_name}`
+                  : 'Add a new release task with estimation and schedule'}
+              </p>
             </div>
-
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors disabled:opacity-50"
+              className="p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-white/8 transition-colors disabled:opacity-50"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* ── Form Body (Scrollable) ── */}
+          {/* Form Body */}
           <form id="release-task-form" onSubmit={handleSubmit} className="overflow-y-auto p-5 space-y-4 flex-1">
-            {/* Product, Release & Task ID Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-              {/* Product (from /project-hub) */}
+
+            {/* Product, Release & Task ID */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1">
-                  Product <span className="text-rose-400">*</span>
-                </label>
+                <label className={labelCls}>Product <span className="text-rose-400">*</span></label>
                 <select
                   value={projectId}
                   onChange={(e) => setProjectId(e.target.value)}
-                  className={`w-full h-9 bg-surface-elevated border rounded-xl px-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent ${
-                    errors.projectId ? 'border-rose-500' : 'border-white/10'
-                  }`}
+                  className={errors.projectId ? selectCls.replace('border-border', 'border-rose-500') : selectCls}
                 >
-                  <option value="">Select Product from Project Hub</option>
+                  <option value="">Select Product</option>
                   {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} {p.project_code ? `(${p.project_code})` : ''}
-                    </option>
+                    <option key={p.id} value={p.id}>{p.name}{p.project_code ? ` (${p.project_code})` : ''}</option>
                   ))}
                 </select>
-                {errors.projectId && (
-                  <p className="text-[11px] text-rose-400 mt-1">{errors.projectId}</p>
-                )}
+                {errors.projectId && <span className={errorCls}>{errors.projectId}</span>}
               </div>
 
-              {/* Release */}
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1">
-                  Release <span className="text-rose-400">*</span>
-                </label>
+                <label className={labelCls}>Release <span className="text-rose-400">*</span></label>
                 <input
                   type="text"
                   list="release-version-suggestions"
                   value={releaseVersion}
                   onChange={(e) => setReleaseVersion(e.target.value)}
                   placeholder="e.g. Release 4.2"
-                  className={`w-full h-9 bg-surface-elevated border rounded-xl px-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent ${
-                    errors.releaseVersion ? 'border-rose-500' : 'border-white/10'
-                  }`}
+                  className={errors.releaseVersion ? inputCls.replace('border-border', 'border-rose-500') : inputCls}
                 />
                 <datalist id="release-version-suggestions">
-                  {getAvailableReleases().map(rel => (
-                    <option key={rel} value={rel} />
-                  ))}
+                  {getAvailableReleases().map(rel => <option key={rel} value={rel} />)}
                 </datalist>
-                {errors.releaseVersion && (
-                  <p className="text-[11px] text-rose-400 mt-1">{errors.releaseVersion}</p>
-                )}
+                {errors.releaseVersion && <span className={errorCls}>{errors.releaseVersion}</span>}
               </div>
 
-              {/* Task ID */}
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1">
-                  Task ID <span className="text-rose-400">*</span>
-                </label>
+                <label className={labelCls}>Task ID <span className="text-rose-400">*</span></label>
                 <input
                   type="text"
                   value={taskId}
                   onChange={(e) => setTaskId(e.target.value)}
                   placeholder="e.g. REL-001"
                   disabled={Boolean(taskToEdit)}
-                  className={`w-full h-9 bg-surface-elevated border rounded-xl px-3 font-mono text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent ${
-                    errors.taskId ? 'border-rose-500' : 'border-white/10'
-                  } ${taskToEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  className={`${errors.taskId ? inputCls.replace('border-border', 'border-rose-500') : inputCls} font-mono ${taskToEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
                 />
-                {errors.taskId && (
-                  <p className="text-[11px] text-rose-400 mt-1">{errors.taskId}</p>
-                )}
+                {errors.taskId && <span className={errorCls}>{errors.taskId}</span>}
               </div>
             </div>
 
-            {/* Task Description */}
+            {/* Description */}
             <div>
-              <label className="text-xs font-semibold text-text-secondary block mb-1">
-                Task Description <span className="text-rose-400">*</span>
-              </label>
+              <label className={labelCls}>Task Description <span className="text-rose-400">*</span></label>
               <textarea
                 rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Detailed description of the release task, testing scope, acceptance criteria..."
-                className={`w-full bg-surface-elevated border rounded-xl p-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent ${
-                  errors.description ? 'border-rose-500' : 'border-white/10'
-                }`}
+                className={`w-full bg-transparent border rounded-md p-2.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/60 focus:border-accent/60 resize-none leading-relaxed transition-colors ${errors.description ? 'border-rose-500' : 'border-border'}`}
               />
-              {errors.description && (
-                <p className="text-[11px] text-rose-400 mt-1">{errors.description}</p>
-              )}
+              {errors.description && <span className={errorCls}>{errors.description}</span>}
             </div>
 
-            {/* Priority & Assigned To & Status Row */}
+            {/* QA Engineer, Priority & Status */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Priority */}
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1">
-                  Priority
-                </label>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  className="w-full h-9 bg-surface-elevated border border-white/10 rounded-xl px-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                >
-                  {dropdownConfigs.priority.filter(p => p.is_active).map((p) => (
-                    <option key={p.id} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Who's Testing (Configured via Configuration -> Who's Testing) */}
-              <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1">
-                  Who's Testing
-                </label>
-                <select
-                  value={assignedUserId}
-                  onChange={(e) => handleAssigneeChange(e.target.value)}
-                  className="w-full h-9 bg-surface-elevated border border-white/10 rounded-xl px-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                >
+                <label className={labelCls}>QA Engineer</label>
+                <select value={assignedUserId} onChange={(e) => handleAssigneeChange(e.target.value)} className={selectCls}>
                   <option value="">Unassigned</option>
                   {availableAssignees.map((emp) => (
-                    <option key={emp.id} value={emp.value}>
-                      {emp.label}
-                    </option>
+                    <option key={emp.id} value={emp.value}>{emp.label}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Task Status */}
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1">
-                  Task Status <span className="text-rose-400">*</span>
-                </label>
+                <label className={labelCls}>Priority</label>
+                <select value={priority} onChange={(e) => setPriority(e.target.value)} className={selectCls}>
+                  {dropdownConfigs.priority.filter(p => p.is_active).map((p) => (
+                    <option key={p.id} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelCls}>Task Status <span className="text-rose-400">*</span></label>
                 <select
                   value={taskStatus}
                   onChange={(e) => setTaskStatus(e.target.value)}
-                  className="w-full h-9 bg-surface-elevated border border-white/10 rounded-xl px-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                  className={errors.taskStatus ? selectCls.replace('border-border', 'border-rose-500') : selectCls}
                 >
                   {dropdownConfigs.task_status.filter(s => s.is_active).map((s) => (
-                    <option key={s.id} value={s.value}>
-                      {s.label}
-                    </option>
+                    <option key={s.id} value={s.value}>{s.label}</option>
                   ))}
                 </select>
+                {errors.taskStatus && <span className={errorCls}>{errors.taskStatus}</span>}
               </div>
             </div>
 
-            {/* Dates Row: Start Date, Target Date, Finish Date */}
+            {/* Dates */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1">
-                  Start Date
-                </label>
+                <label className={labelCls}>Received Date / Time</label>
                 <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full h-9 bg-surface-elevated border border-white/10 rounded-xl px-2.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                  type="datetime-local"
+                  value={receivedDateTime}
+                  onChange={(e) => setReceivedDateTime(e.target.value)}
+                  className={inputCls}
                 />
               </div>
-
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1">
-                  Target Date
-                </label>
-                <input
-                  type="date"
-                  value={targetDate}
-                  onChange={(e) => setTargetDate(e.target.value)}
-                  className="w-full h-9 bg-surface-elevated border border-white/10 rounded-xl px-2.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                />
+                <label className={labelCls}>Actual Start Date</label>
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} />
               </div>
-
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1">
-                  Finish Date
-                </label>
-                <input
-                  type="date"
-                  value={finishDate}
-                  onChange={(e) => setFinishDate(e.target.value)}
-                  className="w-full h-9 bg-surface-elevated border border-white/10 rounded-xl px-2.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                />
+                <label className={labelCls}>Actual End Date</label>
+                <input type="date" value={actualEndDate} onChange={(e) => setActualEndDate(e.target.value)} className={inputCls} />
               </div>
             </div>
 
-            {/* Hours Row (Estimated vs Actual) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3.5 rounded-xl border border-white/10 bg-surface-elevated/40">
-              {/* Estimated Hours */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-xs font-semibold text-text-secondary">
-                      Estimated Hours <span className="text-rose-400">*</span>
-                    </label>
-                    {isEstLocked && (
-                      <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5">
-                        🔒 Locked
-                      </span>
-                    )}
-                  </div>
+            {/* Estimation Breakdown */}
+            <div className="border border-border rounded-md p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-text-primary">Estimation Breakdown</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-muted">Total:</span>
+                  <span className="font-semibold font-mono text-accent text-sm">{totalEst}h</span>
+                  {isEstLocked && <span className="text-[10px] text-amber-400">🔒 Locked</span>}
                   {taskToEdit && (
                     <EstimationLockControl
                       isLocked={isEstLocked}
@@ -508,86 +424,59 @@ export function AddEditReleaseTaskModal({
                           setIsEstLocked(shouldLock)
                           setLockedBy(updated.estimated_hours_locked_by || null)
                           setLockedAt(updated.estimated_hours_locked_at || null)
-                          if (shouldLock) {
-                            setEstimatedHours(updated.estimated_hours)
-                          }
                           toast({
                             title: shouldLock ? 'Estimation Locked' : 'Estimation Unlocked',
                             description: shouldLock
-                              ? `Estimated hours for ${taskToEdit.task_id} locked at ${updated.estimated_hours}h.`
+                              ? `Estimated hours for ${taskToEdit.task_id} locked at ${totalEst}h.`
                               : `Estimated hours for ${taskToEdit.task_id} unlocked for editing.`
                           })
                         } catch (err: any) {
-                          toast({
-                            title: 'Lock Action Failed',
-                            description: err?.message || 'Failed to update estimation lock',
-                            variant: 'destructive'
-                          })
+                          toast({ title: 'Lock Action Failed', description: err?.message || 'Failed to update estimation lock', variant: 'destructive' })
                         }
                       }}
                     />
                   )}
                 </div>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  value={estimatedHours}
-                  disabled={isEstLocked || !canEditEst}
-                  onChange={(e) => setEstimatedHours(e.target.value)}
-                  className={`w-full h-9 bg-surface-elevated border rounded-xl px-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent ${
-                    isEstLocked || !canEditEst
-                      ? 'opacity-65 cursor-not-allowed bg-surface-elevated/40 border-amber-500/20'
-                      : errors.estimatedHours
-                      ? 'border-rose-500'
-                      : 'border-white/10'
-                  }`}
-                  title={
-                    isEstLocked
-                      ? 'Estimated Hours are locked and cannot be modified.'
-                      : !canEditEst
-                      ? 'Requires "Edit Estimated Hours" permission to modify.'
-                      : 'Enter estimated hours'
-                  }
-                />
-                {isEstLocked && (
-                  <p className="text-[10px] text-amber-300/80 mt-1 leading-tight">
-                    🔒 Locked{lockedBy ? ` by ${lockedBy}` : ''}{lockedAt ? ` on ${new Date(lockedAt).toLocaleDateString()}` : ''}.
-                    {canUnlockEst ? ' Click 🔒 above to unlock.' : ' Contact an authorized QA Lead to unlock.'}
-                  </p>
-                )}
-                {!isEstLocked && !canEditEst && (
-                  <p className="text-[10px] text-text-muted mt-1 leading-tight">
-                    * You need "Edit Estimated Hours" permission to change this value.
-                  </p>
-                )}
-                {errors.estimatedHours && (
-                  <p className="text-[11px] text-rose-400 mt-1">{errors.estimatedHours}</p>
-                )}
               </div>
 
-              {/* Actual Hours — Important: Read-only Cumulative */}
-              <div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {([
+                  { label: 'Test Design', value: testDesignEst, setter: setTestDesignEst },
+                  { label: 'Data Prep', value: dataPrepEst, setter: setDataPrepEst },
+                  { label: 'Functional Testing', value: functionalTestingEst, setter: setFunctionalTestingEst },
+                  { label: 'Retesting', value: retestingEst, setter: setRetestingEst },
+                ] as const).map(({ label, value, setter }) => (
+                  <div key={label}>
+                    <label className={labelCls}>{label} (Hrs)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={value}
+                      disabled={isEstLocked || !canEditEst}
+                      onChange={(e) => setter(e.target.value)}
+                      className={`w-full h-9 bg-transparent border rounded-md px-3 text-sm font-mono text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/60 transition-colors ${
+                        isEstLocked || !canEditEst ? 'opacity-60 cursor-not-allowed border-amber-500/30' : 'border-border'
+                      }`}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Actual Hours — Read-only */}
+              <div className="pt-2.5 border-t border-border">
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-text-secondary">
-                    Actual Hours (Cumulative)
-                  </label>
+                  <label className={labelCls + ' mb-0'}>Actual Hours (Cumulative)</label>
                   {taskToEdit && onOpenTimeLog && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenTimeLog(taskToEdit)}
-                      className="text-[11px] text-accent hover:underline flex items-center gap-1"
-                    >
+                    <button type="button" onClick={() => onOpenTimeLog(taskToEdit)} className="text-[11px] text-accent hover:underline flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       + Add Time Log
                     </button>
                   )}
                 </div>
-                <div className="h-9 px-3 rounded-xl bg-surface-elevated/80 border border-white/10 flex items-center justify-between text-xs font-mono">
-                  <span className="font-bold text-purple-300">
-                    {currentActual} hrs
-                  </span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                <div className="h-9 px-3 rounded-md border border-border flex items-center justify-between text-sm font-mono">
+                  <span className="text-text-primary">{currentActual} hrs</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${
                     effortCalc.indicatorState === 'overrun'
                       ? 'bg-rose-500/15 text-rose-400'
                       : effortCalc.indicatorState === 'attention'
@@ -597,43 +486,38 @@ export function AddEditReleaseTaskModal({
                     {effortCalc.displayText}
                   </span>
                 </div>
-                <p className="text-[10px] text-text-muted mt-1">
-                  Actual hours update automatically from tester time logs.
-                </p>
+                <p className="text-[11px] text-text-muted mt-1">Actual hours update automatically from tester time logs.</p>
               </div>
             </div>
 
             {/* Comments */}
             <div>
-              <label className="text-xs font-semibold text-text-secondary block mb-1">
-                Comments & Notes
-              </label>
+              <label className={labelCls}>Comments & Notes</label>
               <textarea
                 rows={2}
                 value={comments}
                 onChange={(e) => setComments(e.target.value)}
                 placeholder="Optional release task notes, dependencies, blocker remarks..."
-                className="w-full bg-surface-elevated border border-white/10 rounded-xl p-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                className="w-full bg-transparent border border-border rounded-md p-2.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/60 focus:border-accent/60 resize-none leading-relaxed transition-colors"
               />
             </div>
           </form>
 
-          {/* ── Sticky Modal Footer ── */}
-          <div className="px-5 py-3.5 border-t border-white/10 flex items-center justify-end gap-2.5 bg-surface-elevated/90 shrink-0">
+          {/* Footer */}
+          <div className="px-5 py-3 border-t border-border flex items-center justify-end gap-2 shrink-0">
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="h-9 px-4 rounded-xl border border-white/10 text-xs font-medium text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors disabled:opacity-50"
+              className="px-4 py-2 rounded-md text-xs font-medium text-text-muted hover:text-text-primary hover:bg-white/8 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
-
             <button
               type="submit"
               form="release-task-form"
               disabled={saving}
-              className="h-9 px-5 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-bold transition-all shadow-md shadow-accent/20 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-5 py-2 rounded-md text-xs font-semibold bg-accent hover:bg-accent-hover text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? (
                 <>
@@ -642,8 +526,8 @@ export function AddEditReleaseTaskModal({
                 </>
               ) : (
                 <>
-                  <Check className="w-4 h-4" />
-                  <span>{taskToEdit ? 'Save Changes' : 'Create Release Task'}</span>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{taskToEdit ? 'Save Changes' : 'Create Task'}</span>
                 </>
               )}
             </button>

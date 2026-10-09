@@ -1,5 +1,4 @@
 // src/modules/ReleaseTaskTracker/types.ts
-// Comprehensive type definitions for Release Task Tracker module under QA Operations Hub
 
 export type TaskStatusType =
   | 'Not Started'
@@ -11,36 +10,42 @@ export type TaskStatusType =
   | 'Cancelled'
   | string
 
-export type PriorityType =
-  | 'Critical'
-  | 'High'
-  | 'Medium'
-  | 'Low'
-  | string
+export type PriorityType = 'Critical' | 'High' | 'Medium' | 'Low' | string
 
 export interface ReleaseTask {
   id: string
   sl_no: number
-  project_id: string              // Linked to Project Hub project id (Single Source of Truth)
-  product_name: string            // Display product name from Project Hub
-  product_code?: string | null    // Product code from Project Hub
-  release_version: string         // e.g. 'Release 4.2'
-  task_id: string                 // Unique formatted Task ID e.g. 'REL-001'
-  description: string             // Task Description
-  priority: PriorityType          // Configurable Priority
-  start_date: string | null       // YYYY-MM-DD
-  target_date: string | null      // YYYY-MM-DD
-  finish_date: string | null      // YYYY-MM-DD
-  assigned_to_user_id: string | null // Stable Profile / User UUID
-  assigned_to_name: string        // Employee Display Name (Snapshot)
-  estimated_hours: number         // Estimated Hrs
-  estimated_hours_locked?: boolean // Requirement: Estimation Hours Lock
-  estimated_hours_locked_by?: string | null // User who locked it
-  estimated_hours_locked_at?: string | null // Timestamp when locked
-  actual_hours: number            // Actual Hrs (Cumulative sum of all time logs)
-  remaining_hours: number         // Remaining Hrs (max(0, estimated - actual))
-  overrun_hours: number           // Overrun Hrs (max(0, actual - estimated))
-  task_status: TaskStatusType     // Configurable Task Status
+  project_id: string
+  product_name: string
+  product_code?: string | null
+  release_version: string
+  task_id: string
+  description: string
+  priority: PriorityType
+  received_date_time?: string | null       // ISO timestamp — Received Date/Time
+  start_date: string | null                // Actual Start Date
+  actual_end_date?: string | null          // Actual End Date
+  // Legacy date fields kept for backward compat
+  target_date: string | null
+  finish_date: string | null
+  assigned_to_user_id: string | null
+  assigned_to_name: string                 // QA Engineer
+  // Four individual estimation components
+  test_design_est_hrs: number              // Test Design Estimation (Hrs)
+  data_prep_est_hrs: number                // Data Preparation Estimation (Hrs)
+  functional_testing_est_hrs: number       // Functional Testing Estimation (Hrs)
+  retesting_est_hrs: number                // Retesting Estimation (Hrs)
+  // Derived total — always = sum of four components, never stored independently
+  total_estimation_hrs: number
+  // Legacy single estimation kept for backward compat (mirrors total_estimation_hrs)
+  estimated_hours: number
+  estimated_hours_locked?: boolean
+  estimated_hours_locked_by?: string | null
+  estimated_hours_locked_at?: string | null
+  actual_hours: number
+  remaining_hours: number
+  overrun_hours: number
+  task_status: TaskStatusType
   comments: string
   is_deleted?: boolean
   created_by?: string | null
@@ -48,16 +53,28 @@ export interface ReleaseTask {
   updated_at: string
 }
 
+/** Compute total estimation from four components */
+export function computeTotalEstimation(task: Pick<ReleaseTask,
+  'test_design_est_hrs' | 'data_prep_est_hrs' | 'functional_testing_est_hrs' | 'retesting_est_hrs'
+>): number {
+  return Math.round((
+    (Number(task.test_design_est_hrs) || 0) +
+    (Number(task.data_prep_est_hrs) || 0) +
+    (Number(task.functional_testing_est_hrs) || 0) +
+    (Number(task.retesting_est_hrs) || 0)
+  ) * 100) / 100
+}
+
 export interface ReleaseTaskTimeLog {
   id: string
-  task_id: string                 // Unique Task ID string e.g. 'REL-001'
-  release_task_id?: string        // UUID of the parent release task
-  user_name: string               // Tester / Employee who logged the hours
-  user_id?: string | null          // Profile UUID
-  hours_added: number             // Effort added in hours (e.g. +2, +3.5)
-  comment: string                 // Work description / reason
-  date: string                    // Work date (YYYY-MM-DD)
-  logged_at: string               // ISO timestamp or formatted
+  task_id: string
+  release_task_id?: string
+  user_name: string
+  user_id?: string | null
+  hours_added: number
+  comment: string
+  date: string
+  logged_at: string
   created_at?: string
 }
 
@@ -82,6 +99,7 @@ export interface ReleaseTaskHistoryRecord {
     | 'Estimated Hours Unlocked'
     | 'Time Added'
     | 'Time Log Removed'
+    | 'Time Log Corrected'
     | 'Comment Added'
     | 'Task Completed'
     | 'Task Deleted'
@@ -92,7 +110,7 @@ export interface ReleaseTaskHistoryRecord {
   field?: string
   old_value?: string | null
   new_value?: string | null
-  timestamp: string               // formatted e.g. "08 Oct 2026, 10:32 AM"
+  timestamp: string
 }
 
 export interface ReleaseDropdownOption {
@@ -116,14 +134,14 @@ export const DEFAULT_ASSIGNED_TO_OPTIONS: ReleaseDropdownOption[] = [
 ]
 
 export interface ReleaseFilters {
-  selectedProductId: string       // 'all' or project_id from Project Hub
-  selectedRelease: string         // 'all' or release string e.g. 'Release 4.2'
-  taskStatus: string[]            // empty = all
-  assignedTo: string[]            // empty = all (matches assigned_to_user_id or assigned_to_name)
-  priority: string[]              // empty = all
+  selectedProductId: string
+  selectedRelease: string
+  taskStatus: string[]
+  assignedTo: string[]
+  priority: string[]
   dateRangeStart?: string
   dateRangeEnd?: string
-  dateRangeType?: 'start' | 'target' | 'finish'
+  dateRangeType?: 'start' | 'target' | 'finish' | 'received' | 'actual_end'
   searchQuery?: string
   estimationLock?: 'all' | 'locked' | 'unlocked'
 }
@@ -195,13 +213,7 @@ export interface EffortCalculation {
   barPercentage: number
 }
 
-// Default Task Statuses
-export const DEFAULT_TASK_STATUSES: Array<{
-  label: string
-  value: string
-  color: string
-  badgeClass: string
-}> = [
+export const DEFAULT_TASK_STATUSES: Array<{ label: string; value: string; color: string; badgeClass: string }> = [
   { label: 'Not Started', value: 'Not Started', color: '#94a3b8', badgeClass: 'bg-slate-500/15 text-slate-300 border-slate-500/30' },
   { label: 'Assigned',    value: 'Assigned',    color: '#3b82f6', badgeClass: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
   { label: 'In Progress', value: 'In Progress', color: '#8b5cf6', badgeClass: 'bg-purple-500/15 text-purple-300 border-purple-500/30' },
@@ -211,54 +223,24 @@ export const DEFAULT_TASK_STATUSES: Array<{
   { label: 'Cancelled',   value: 'Cancelled',   color: '#6b7280', badgeClass: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' },
 ]
 
-// Default Priorities
-export const DEFAULT_PRIORITIES: Array<{
-  label: string
-  value: string
-  color: string
-  badgeClass: string
-}> = [
+export const DEFAULT_PRIORITIES: Array<{ label: string; value: string; color: string; badgeClass: string }> = [
   { label: 'Critical', value: 'Critical', color: '#ef4444', badgeClass: 'bg-red-500/15 text-red-400 border-red-500/30' },
   { label: 'High',     value: 'High',     color: '#f97316', badgeClass: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
   { label: 'Medium',   value: 'Medium',   color: '#3b82f6', badgeClass: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
   { label: 'Low',      value: 'Low',      color: '#10b981', badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
 ]
 
-// Effort calculation helper:
-// Green: Actual <= 75% of Estimate (On Track)
-// Yellow: Actual > 75% and <= 100% (Attention)
-// Red: Actual > Estimate (Overrun)
 export function calculateEffort(estimated: number, actual: number): EffortCalculation {
   const est = Math.max(0, Number(estimated) || 0)
   const act = Math.max(0, Number(actual) || 0)
-
   const isOverrun = act > est
   const remainingHrs = isOverrun ? 0 : Math.round((est - act) * 100) / 100
   const overrunHrs = isOverrun ? Math.round((act - est) * 100) / 100 : 0
-
   const percentage = est > 0 ? Math.round((act / est) * 100) : (act > 0 ? 100 : 0)
   const barPercentage = Math.min(100, percentage)
-
   let indicatorState: EffortIndicatorState = 'on_track'
-  if (act > est) {
-    indicatorState = 'overrun'
-  } else if (est > 0 && act > est * 0.75) {
-    indicatorState = 'attention'
-  } else {
-    indicatorState = 'on_track'
-  }
-
-  const displayText = isOverrun
-    ? `Overrun: ${overrunHrs} Hrs`
-    : `${remainingHrs} Hrs`
-
-  return {
-    remainingHrs,
-    overrunHrs,
-    isOverrun,
-    percentage,
-    indicatorState,
-    displayText,
-    barPercentage
-  }
+  if (act > est) indicatorState = 'overrun'
+  else if (est > 0 && act > est * 0.75) indicatorState = 'attention'
+  const displayText = isOverrun ? `Overrun: ${overrunHrs} Hrs` : `${remainingHrs} Hrs`
+  return { remainingHrs, overrunHrs, isOverrun, percentage, indicatorState, displayText, barPercentage }
 }
