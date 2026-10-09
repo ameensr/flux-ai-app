@@ -7,6 +7,7 @@ import { X, Shield, CheckCircle2, XCircle } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAppStore } from '@/store/useAppStore'
+import { Badge } from '@/components/ui/badge'
 
 interface Props {
   isOpen: boolean
@@ -32,40 +33,42 @@ const PERMISSION_DESCRIPTIONS = [
 export function ReleasePermissionsInfoModal({ isOpen, onClose }: Props) {
   useBodyScrollLock(isOpen)
   const { can, canView } = usePermissions()
-  const { profile } = useAppStore()
+  const { role, profile } = useAppStore()
 
   if (!isOpen) return null
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm overflow-hidden"
+        onClick={onClose}
+      >
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="fixed inset-0 bg-black/75 backdrop-blur-sm"
-        />
-
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0, y: 10 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.95, opacity: 0, y: 10 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-lg bg-surface border border-white/15 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto z-10 max-h-[85vh]"
+          initial={{ opacity: 0, scale: 0.96, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: 12 }}
+          transition={{ duration: 0.2 }}
+          onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-xl bg-surface-elevated border border-border/60 rounded-2xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden"
+          style={{ backgroundColor: 'var(--modal-bg, #141c2b)' }}
         >
           {/* Header */}
-          <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between bg-surface-elevated/80 shrink-0">
+          <div className="px-6 py-4.5 border-b border-border/50 flex items-center justify-between shrink-0 bg-surface/50">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-accent">
+              <div className="w-9 h-9 rounded-xl bg-accent/15 border border-accent/25 flex items-center justify-center text-accent">
                 <Shield className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-text-primary">
-                  Release Task Tracker Permissions
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-text-primary">
+                    Module Permissions
+                  </h3>
+                  <Badge variant="outline" className="text-[10px] uppercase font-mono font-bold bg-accent/10 text-accent border-accent/20">
+                    Role: {role || profile?.role || 'User'}
+                  </Badge>
+                </div>
                 <p className="text-xs text-text-muted">
-                  Active role: <strong>{profile?.role || 'User'}</strong>
+                  Granular permission architecture for Release Task Tracker
                 </p>
               </div>
             </div>
@@ -73,14 +76,14 @@ export function ReleasePermissionsInfoModal({ isOpen, onClose }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors"
+              className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface transition-colors cursor-pointer"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* List */}
-          <div className="p-5 space-y-2.5 overflow-y-auto flex-1">
+          <div className="overflow-y-auto space-y-2.5 px-6 py-4 flex-1">
             {PERMISSION_DESCRIPTIONS.map((item) => {
               const isAllowed =
                 item.key === 'can_view'
@@ -90,12 +93,15 @@ export function ReleasePermissionsInfoModal({ isOpen, onClose }: Props) {
               return (
                 <div
                   key={item.key}
-                  className="p-3 rounded-xl border border-white/10 bg-surface-elevated/40 flex items-start justify-between gap-3 text-xs"
+                  className="p-3 rounded-xl border border-border/50 bg-surface/70 flex items-start justify-between gap-3 text-xs"
                 >
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-text-primary">
+                      <span className="font-semibold text-xs text-text-primary">
                         {item.label}
+                      </span>
+                      <span className="text-[10px] font-mono text-text-muted">
+                        ({item.key})
                       </span>
                     </div>
                     <p className="text-[11px] text-text-muted leading-relaxed">
@@ -105,14 +111,14 @@ export function ReleasePermissionsInfoModal({ isOpen, onClose }: Props) {
 
                   <div className="shrink-0 pt-0.5">
                     {isAllowed ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Enabled
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full whitespace-nowrap">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Granted
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-full">
-                        <XCircle className="w-3 h-3" />
-                        Disabled
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-full whitespace-nowrap">
+                        <XCircle className="w-3.5 h-3.5" />
+                        Denied
                       </span>
                     )}
                   </div>
@@ -122,11 +128,16 @@ export function ReleasePermissionsInfoModal({ isOpen, onClose }: Props) {
           </div>
 
           {/* Footer */}
-          <div className="px-5 py-3 border-t border-white/10 bg-surface-elevated/70 flex justify-end">
+          <div className="px-6 py-3.5 border-t border-border/50 flex items-center justify-between text-xs bg-surface/40">
+            <span className="text-text-muted flex items-center gap-1">
+              <Shield className="w-3.5 h-3.5 text-accent" />
+              Role-based access enforced
+            </span>
+
             <button
               type="button"
               onClick={onClose}
-              className="h-8 px-4 rounded-xl border border-white/10 text-xs font-medium text-text-primary hover:bg-white/5"
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-surface hover:bg-surface-elevated text-text-primary border border-border/60 transition-colors cursor-pointer"
             >
               Close
             </button>
