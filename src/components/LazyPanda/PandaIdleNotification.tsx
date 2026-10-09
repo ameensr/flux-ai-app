@@ -171,7 +171,7 @@ export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () =>
               />
 
               <div
-                className="w-16 h-16 sm:w-20 sm:h-20 cursor-pointer filter drop-shadow-md"
+                className="w-20 h-20 sm:w-24 sm:h-24 cursor-pointer filter drop-shadow-md"
                 onClick={resetIdle}
                 title="Click Panda to wake up"
               >
@@ -180,7 +180,7 @@ export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () =>
                   eyeOffset={{ x: 0, y: 0 }}
                   headRotation={-5}
                   isBlinking={false}
-                  size={74}
+                  size={90}
                   reducedMotion={prefersReducedMotion}
                 />
               </div>
@@ -188,7 +188,7 @@ export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () =>
 
             {/* ── Speech bubble ── */}
             <div
-              className="rounded-2xl px-5 py-3.5 relative max-w-[280px] sm:max-w-[310px] text-center backdrop-blur-2xl"
+              className="rounded-2xl px-6 py-4 relative max-w-[320px] sm:max-w-[360px] text-center backdrop-blur-2xl"
               style={{
                 background: 'color-mix(in srgb, var(--surface) 94%, transparent)',
                 border: '1px solid var(--border)',
@@ -222,13 +222,13 @@ export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () =>
               {/* Message */}
               <div className="relative z-10 pt-0.5">
                 <p
-                  className="text-sm font-semibold tracking-tight text-balance leading-snug"
+                  className="text-base font-semibold tracking-tight text-balance leading-snug"
                   style={{ color: 'var(--text-primary)' }}
                 >
                   {displayMessage}
                 </p>
                 <p
-                  className="text-[11px] font-medium mt-1 opacity-70"
+                  className="text-xs font-medium mt-1.5 opacity-70"
                   style={{ color: 'var(--text-muted)' }}
                 >
                   Move mouse or press any key to wake up

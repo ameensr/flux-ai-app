@@ -31,12 +31,15 @@ function AnnouncementItem({
   const cCfg = CATEGORY_CONFIG[announcement.category]
   const isNew = Date.now() - new Date(announcement.publish_date || announcement.created_at).getTime() < 48 * 60 * 60 * 1000
 
-  // Mark as read on first view
+  // Mark as read once on first mount (not on every re-render)
+  const markedRef = React.useRef(false)
   useEffect(() => {
-    if (!announcement.is_read) {
+    if (!announcement.is_read && !markedRef.current) {
+      markedRef.current = true
       onMarkRead(announcement.id)
     }
-  }, [announcement.id, announcement.is_read])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <motion.div

@@ -96,7 +96,8 @@ function RedirectIfAuth({ children }: { children: React.ReactNode }) {
 function MaintenanceGuard({ children }: { children: React.ReactNode }) {
   const { role } = useAppStore()
   const { isRoleLocked, loading: maintenanceLoading } = useMaintenanceStore()
-  if (maintenanceLoading) return <FullPageLoader />
+  // Use inline loader (not full-page) since config is fetched at startup
+  if (maintenanceLoading) return <PageLoader />
   if (isRoleLocked(role)) return <Navigate to={ROUTES.maintenance} replace />
   return <>{children}</>
 }
@@ -107,8 +108,10 @@ function DashboardWrapper() {
   const { role } = useAppStore()
   const { isRoleLocked, loading: maintenanceLoading } = useMaintenanceStore()
 
-  // Wait for maintenance config to load before making any routing decision
-  if (maintenanceLoading) return <FullPageLoader />
+  // Maintenance config is fetched in parallel during AuthInitializer startup,
+  // so it's almost always ready by the time this renders. Show a subtle inline
+  // loader (not full-page) to avoid blocking the entire layout on navigation.
+  if (maintenanceLoading) return <PageLoader />
 
   // Redirect locked roles to maintenance page
   if (isRoleLocked(role)) {

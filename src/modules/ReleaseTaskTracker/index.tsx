@@ -60,13 +60,13 @@ export function ReleaseTaskTracker() {
 
   const { fetchInitialData, refreshData, loading, isRefreshing, deleteTask, bulkDeleteTasks, tasks } = useReleaseTrackerStore()
 
-  // Fetch on mount; reset on unmount so revisiting the page re-fetches fresh data
+  // Fetch on mount. The store's loading flag prevents duplicate in-flight fetches.
+  // hasFetched ref prevents double-invoke in React StrictMode dev.
   const hasFetched = useRef(false)
   useEffect(() => {
     if (hasFetched.current) return
     hasFetched.current = true
     fetchInitialData()
-    return () => { hasFetched.current = false }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleBulkDelete = async (ids: string[]) => {

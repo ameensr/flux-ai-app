@@ -35,20 +35,9 @@ export function ProjectHub() {
   const canCreate = can('project-hub', 'can_create')
   const canViewModule = canView('project-hub')
 
-  useEffect(() => {
-    if (canViewModule) {
-      loadProjects()
-      loadStats()
-    }
-  }, [canViewModule])
-
-  const loadProjects = async () => {
+  const loadProjects = async (filters?: ProjectFilters) => {
     try {
       setLoading(true)
-      const filters: ProjectFilters = {
-        search: searchQuery || undefined,
-        status: statusFilter.length > 0 ? statusFilter : undefined
-      }
       const data = await fetchProjects(filters)
       setProjects(data)
     } catch (error: unknown) {
@@ -72,8 +61,23 @@ export function ProjectHub() {
     }
   }
 
+  const buildFilters = (): ProjectFilters => ({
+    search: searchQuery || undefined,
+    status: statusFilter.length > 0 ? statusFilter : undefined
+  })
+
+  // Single effect: runs on mount (canViewModule becomes true) and on filter changes.
+  // loadProjects + loadStats run in parallel on initial load.
+  useEffect(() => {
+    if (!canViewModule) return
+    const filters = buildFilters()
+    // Run both in parallel on first load; stats don't depend on filters
+    Promise.all([loadProjects(filters), loadStats()])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canViewModule, statusFilter])
+
   const handleSearch = () => {
-    loadProjects()
+    loadProjects(buildFilters())
   }
 
   const handleStatusFilterToggle = (status: ProjectStatus) => {
@@ -84,8 +88,7 @@ export function ProjectHub() {
 
   const handleProjectCreated = () => {
     setShowCreateModal(false)
-    loadProjects()
-    loadStats()
+    Promise.all([loadProjects(buildFilters()), loadStats()])
     toast({
       title: 'Success',
       description: 'Project created successfully'
@@ -93,15 +96,8 @@ export function ProjectHub() {
   }
 
   const handleProjectUpdated = () => {
-    loadProjects()
-    loadStats()
+    Promise.all([loadProjects(buildFilters()), loadStats()])
   }
-
-  useEffect(() => {
-    if (canViewModule) {
-      loadProjects()
-    }
-  }, [statusFilter])
 
   if (!canViewModule) {
     return (

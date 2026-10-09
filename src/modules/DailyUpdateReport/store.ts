@@ -191,26 +191,12 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
   setSelectedProjectId: async (projectId: string) => {
     set({ selectedProjectId: projectId })
     if (projectId) {
-      // CRITICAL FIX: Fetch members and role FIRST, then fetch data
-      // This ensures projectMembers and userProjectRole are available
-      // before fetchReportRows() uses them for filtering
-      console.log('[DailyReportStore] Project selected:', projectId)
-
-      // Wait for both member and role fetches to complete
       await Promise.all([
         get().fetchProjectMembers(projectId),
         get().fetchUserProjectRole(projectId)
       ])
-
-      console.log('[DailyReportStore] Members and role loaded, fetching data...')
-      console.log('[DailyReportStore] Project members count:', get().projectMembers.length)
-      console.log('[DailyReportStore] User project role:', get().userProjectRole)
-
-      // Now fetch the actual report rows with correct filters
       await get().fetchReportRows()
     } else {
-      // No project selected - clear everything
-      console.log('[DailyReportStore] Project deselected - clearing data')
       set({
         supportRows: [],
         releaseRows: [],
@@ -219,7 +205,6 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         isProjectViewer: false,
         syncStatus: 'synced'
       })
-      // Clear localStorage
       localStorage.removeItem('flux-daily-support-rows')
       localStorage.removeItem('flux-daily-release-rows')
     }
@@ -238,29 +223,17 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
       const user = useAppStore.getState().user
       const role = useAppStore.getState().role
 
-      console.log('[DailyReportStore] fetchProjects called')
-      console.log('[DailyReportStore] User ID:', user?.id)
-      console.log('[DailyReportStore] User Role:', role)
-
       if (!user) {
-        console.log('[DailyReportStore] No user found, returning empty projects')
         set({ projects: [] })
         return
       }
 
-      // Layer 1: Database-level filtering via RLS (migration 065).
-      // Admins/super_admins see every active project. Everyone else — including
-      // managers — only sees projects they have a project_members row for.
       const isSuperAdmin = role === 'admin' || role === 'super_admin'
-
-      console.log('[DailyReportStore] Is Super Admin?', isSuperAdmin)
 
       let data: any[] = []
       let error: any = null
 
       if (isSuperAdmin) {
-        // Admins and super_admins see all active projects
-        console.log('[DailyReportStore] Fetching as admin - all active projects')
         const response = await supabase
           .from('projects')
           .select('id, name, project_code')
@@ -269,11 +242,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
 
         data = response.data || []
         error = response.error
-        console.log('[DailyReportStore] Admin query result:', { data, error })
       } else {
-        // Managers / qa_leads / members: membership only (RLS also enforces this)
-        console.log('[DailyReportStore] Fetching as regular user - membership query')
-
         const memberResponse = await supabase
           .from('project_members')
           .select(`
@@ -288,8 +257,6 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
             `)
           .eq('user_id', user.id)
           .eq('projects.status', 'active')
-
-        console.log('[DailyReportStore] Membership query response:', memberResponse)
 
         const byId = new Map<string, any>()
 
@@ -306,13 +273,9 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
 
         data = Array.from(byId.values())
         error = memberResponse.error
-        console.log('[DailyReportStore] Membership projects:', data)
       }
 
-      if (error) {
-        console.error('[DailyReportStore] Database error:', error)
-        throw error
-      }
+      if (error) throw error
 
       if (data) {
         const mapped = data.map(p => ({
@@ -320,17 +283,12 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
           project_name: p.name,
           project_code: p.project_code
         }))
-        console.log('[DailyReportStore] Final mapped projects:', mapped)
         set({ projects: mapped })
 
-        // Auto-select first project if available and none selected
         const currentProjectId = get().selectedProjectId
         if (!currentProjectId && mapped.length > 0) {
-          console.log('[DailyReportStore] Auto-selecting first project:', mapped[0].id)
           await get().setSelectedProjectId(mapped[0].id)
         } else if (currentProjectId && !mapped.find(p => p.id === currentProjectId)) {
-          // Layer 2: If currently selected project is not in user's list, clear selection
-          console.log('[DailyReportStore] Current project not in list, clearing selection')
           await get().setSelectedProjectId('')
         }
       }
@@ -381,10 +339,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
 
       if (data) {
         const role = data.project_role as 'owner' | 'lead' | 'member' | 'viewer'
-        const isViewer = role === 'viewer'
-
-        console.log('[DailyReportStore] User project role:', role, 'isViewer:', isViewer)
-        set({ userProjectRole: role, isProjectViewer: isViewer })
+        set({ userProjectRole: role, isProjectViewer: role === 'viewer' })
       } else {
         set({ userProjectRole: null, isProjectViewer: false })
       }
@@ -547,7 +502,6 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
 
   fetchReportRows: async (opts) => {
     const force = !!opts?.force
-    // Captured once at the start of this call — see reportRowsFetchSeq above.
     const seq = ++reportRowsFetchSeq
     set({ loading: true })
     const user = useAppStore.getState().user
@@ -555,9 +509,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
     const selectedProjectId = get().selectedProjectId
     const projectMembers = get().projectMembers
 
-    // ⚠️ CRITICAL FIX: If no project selected, clear data and return
     if (!selectedProjectId) {
-      console.log('[DailyReportStore] No project selected - clearing report rows')
       set({
         supportRows: [],
         releaseRows: [],
@@ -567,7 +519,6 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         userProjectRole: null,
         isProjectViewer: false
       })
-      // Clear localStorage to prevent stale data
       localStorage.removeItem('flux-daily-support-rows')
       localStorage.removeItem('flux-daily-release-rows')
       return
@@ -623,14 +574,10 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         // If they have ANY project role, they should see all project member data
         const hasProjectRole = userProjectRole !== null && ['viewer', 'member', 'lead', 'owner'].includes(userProjectRole)
 
-        // For team roles OR project members (including viewers), show all project member data
         if ((isTeamRole || hasProjectRole) && projectMembers.length > 0) {
-          console.log('[DailyReportStore] Showing all project member data (role:', role, 'projectRole:', userProjectRole, ')')
           supportQuery.in('user_id', projectMembers)
           releaseQuery.in('user_id', projectMembers)
         } else if (!isTeamRole && !hasProjectRole) {
-          // Only filter by user_id for users without team role or project membership
-          console.log('[DailyReportStore] Showing only own data (no team/project role)')
           supportQuery.eq('user_id', user.id)
           releaseQuery.eq('user_id', user.id)
         }
@@ -670,7 +617,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
             }
           }
         } else {
-          console.log('[DailyReportStore] Skipping database overwrite - unsaved changes detected')
+          // unsaved changes — skip DB overwrite
         }
 
         set({ isDbAvailable: true, syncStatus: hasUnsavedChanges ? currentSyncStatus : 'synced' })
@@ -706,14 +653,14 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
     const deletedIds = Array.from(currentIds).filter(id => !newIds.has(id))
 
     if (deletedIds.length > 0) {
-      console.log('[DailyReportStore] Rows marked for deletion:', deletedIds)
+      set({
+        supportRows: rows,
+        syncStatus: 'saving',
+        deletedRowIds: deletedIds
+      })
+    } else {
+      set({ supportRows: rows, syncStatus: 'saving', deletedRowIds: [] })
     }
-
-    set({
-      supportRows: rows,
-      syncStatus: 'saving',
-      deletedRowIds: deletedIds.length > 0 ? deletedIds : []
-    })
     localStorage.setItem('flux-daily-support-rows', JSON.stringify(rows))
 
     if (forceSync) {
@@ -743,14 +690,14 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
     const deletedIds = Array.from(currentIds).filter(id => !newIds.has(id))
 
     if (deletedIds.length > 0) {
-      console.log('[DailyReportStore] Release rows marked for deletion:', deletedIds)
+      set({
+        releaseRows: rows,
+        syncStatus: 'saving',
+        deletedRowIds: deletedIds
+      })
+    } else {
+      set({ releaseRows: rows, syncStatus: 'saving', deletedRowIds: [] })
     }
-
-    set({
-      releaseRows: rows,
-      syncStatus: 'saving',
-      deletedRowIds: deletedIds.length > 0 ? deletedIds : []
-    })
     localStorage.setItem('flux-daily-release-rows', JSON.stringify(rows))
 
     if (forceSync) {
@@ -778,9 +725,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
     const user = useAppStore.getState().user
     const isProjectViewer = get().isProjectViewer
 
-    // ⚠️ CRITICAL: Viewers cannot sync data to database (read-only access)
     if (isProjectViewer) {
-      console.log('[DailyReportStore] Viewer mode - skipping database sync (read-only)')
       set({ syncStatus: 'synced', syncing: false })
       return
     }
@@ -795,43 +740,19 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
       const selectedProjectId = get().selectedProjectId
       const deletedRowIds = get().deletedRowIds
 
-      console.log('[DailyReportStore] Starting sync with project:', selectedProjectId)
-      console.log('[DailyReportStore] Total rows to sync:', {
-        support: get().supportRows.length,
-        release: get().releaseRows.length,
-        deletedRows: deletedRowIds.length
-      })
-
       // STEP 1: Delete rows that were explicitly removed from state
       if (deletedRowIds.length > 0) {
-        console.log('[DailyReportStore] Deleting rows:', deletedRowIds)
-
-        // Delete from both tables (we don't know which table they belong to)
-        // The DELETE will only affect rows that actually exist
         const deletePromises = [
-          supabase
-            .from('daily_support_logs')
-            .delete()
-            .in('id', deletedRowIds),
-          supabase
-            .from('daily_release_testing_status')
-            .delete()
-            .in('id', deletedRowIds)
+          supabase.from('daily_support_logs').delete().in('id', deletedRowIds),
+          supabase.from('daily_release_testing_status').delete().in('id', deletedRowIds)
         ]
-
         const deleteResults = await Promise.all(deletePromises)
-
-        // Log any deletion errors (non-fatal)
         deleteResults.forEach((result, idx) => {
-          const tableName = idx === 0 ? 'daily_support_logs' : 'daily_release_testing_status'
           if (result.error) {
+            const tableName = idx === 0 ? 'daily_support_logs' : 'daily_release_testing_status'
             console.warn(`[DailyReportStore] Delete from ${tableName} had error:`, result.error)
-          } else {
-            console.log(`[DailyReportStore] Successfully deleted from ${tableName}`)
           }
         })
-
-        // Clear the deletion tracking after processing
         set({ deletedRowIds: [] })
       }
 
@@ -955,11 +876,6 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
       const existingReleaseRows = releasePayload.filter(r => r.id && !r.id.startsWith('temp-'))
       const newReleaseRows = releasePayload.filter(r => !r.id || r.id.startsWith('temp-'))
 
-      console.log('[DailyReportStore] Sync strategy:', {
-        support: { existing: existingSupportRows.length, new: newSupportRows.length },
-        release: { existing: existingReleaseRows.length, new: newReleaseRows.length }
-      })
-
       // UPDATE existing rows (will pass UPDATE policy)
       // ⚠️ CRITICAL: Use individual UPDATE operations, NOT UPSERT
       // UPSERT checks INSERT policy even with onConflict, causing RLS violations
@@ -1062,7 +978,6 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
           if (hasUpdateError) {
             hasErrors = true
           } else {
-            console.log('[DailyReportStore] Successfully updated', allData.length, 'existing support rows')
             syncedSupportRows.push(...allData)
           }
         }
@@ -1073,17 +988,14 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         const res = results[resIdx++]
         if (res.error) {
           console.error('[DailyReportStore] New support logs insert failed:', res.error)
-          console.error('[DailyReportStore] Failed payload sample:', JSON.stringify(newSupportRows[0], null, 2))
           hasErrors = true
         } else if (res.data) {
-          console.log('[DailyReportStore] Successfully inserted', res.data.length, 'new support rows')
           syncedSupportRows.push(...(res.data as SupportLogRecord[]))
         }
       }
 
       // Update state with all synced support rows
       if (syncedSupportRows.length > 0) {
-        // Validate and sort by sort_order
         const validatedRows = syncedSupportRows
           .map(row => validateSupportRow(row))
           .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
@@ -1091,10 +1003,8 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         stateUpdate.supportRows = validatedRows
         localStorage.setItem('flux-daily-support-rows', JSON.stringify(validatedRows))
       } else if (supportPayload.length === 0) {
-        // No rows to sync - state already cleared
         stateUpdate.supportRows = []
         localStorage.setItem('flux-daily-support-rows', JSON.stringify([]))
-        console.log('[DailyReportStore] No support rows to sync')
       }
 
       // Collect all synced release rows (from both UPDATE and INSERT operations)
@@ -1121,7 +1031,6 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
           if (hasUpdateError) {
             hasErrors = true
           } else {
-            console.log('[DailyReportStore] Successfully updated', allData.length, 'existing release rows')
             syncedReleaseRows.push(...allData)
           }
         }
@@ -1132,17 +1041,14 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         const res = results[resIdx++]
         if (res.error) {
           console.error('[DailyReportStore] New release logs insert failed:', res.error)
-          console.error('[DailyReportStore] Failed payload sample:', JSON.stringify(newReleaseRows[0], null, 2))
           hasErrors = true
         } else if (res.data) {
-          console.log('[DailyReportStore] Successfully inserted', res.data.length, 'new release rows')
           syncedReleaseRows.push(...(res.data as ReleaseTestingRecord[]))
         }
       }
 
       // Update state with all synced release rows
       if (syncedReleaseRows.length > 0) {
-        // Validate and sort by sort_order
         const validatedRows = syncedReleaseRows
           .map(row => validateReleaseRow(row))
           .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
@@ -1150,19 +1056,13 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         stateUpdate.releaseRows = validatedRows
         localStorage.setItem('flux-daily-release-rows', JSON.stringify(validatedRows))
       } else if (releasePayload.length === 0) {
-        // No rows to sync - state already cleared
         stateUpdate.releaseRows = []
         localStorage.setItem('flux-daily-release-rows', JSON.stringify([]))
-        console.log('[DailyReportStore] No release rows to sync')
       }
 
-      // Only mark as synced if there were no errors
       stateUpdate.syncStatus = hasErrors ? 'error' : 'synced'
-
       if (hasErrors) {
-        console.error('[DailyReportStore] Sync completed with errors. Check logs above for details.')
-      } else {
-        console.log('[DailyReportStore] Sync completed successfully')
+        console.error('[DailyReportStore] Sync completed with errors.')
       }
 
       set(stateUpdate)
@@ -1172,8 +1072,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
     }
   },
 
-  markRowsForDeletion: (rowIds: string[], tableName: 'support' | 'release') => {
-    console.log(`[DailyReportStore] Marking ${rowIds.length} ${tableName} rows for deletion:`, rowIds)
+  markRowsForDeletion: (rowIds: string[], _tableName: 'support' | 'release') => {
     set({ deletedRowIds: rowIds })
   }
 }))

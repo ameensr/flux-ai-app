@@ -438,30 +438,24 @@ export async function searchUsers(query: string, excludeUserIds: string[] = []) 
 // ══════════════════════════════════════════════════════════════════════════════
 
 export async function fetchProjectStats(): Promise<ProjectStats> {
-  const { data: projects, error } = await supabase
-    .from('projects')
-    .select('id, status')
+  // Run both queries in parallel
+  const [projectsRes, membersRes] = await Promise.all([
+    supabase.from('projects').select('id, status'),
+    supabase.from('project_members').select('user_id')
+  ])
 
-  if (error) throw error
+  if (projectsRes.error) throw projectsRes.error
 
-  const stats = {
-    total_projects: projects?.length || 0,
-    active_projects: projects?.filter(p => p.status === 'active').length || 0,
-    completed_projects: projects?.filter(p => p.status === 'completed').length || 0,
-    total_members: 0
+  const projects = projectsRes.data || []
+  const members = membersRes.data || []
+  const uniqueUsers = new Set(members.map(m => m.user_id))
+
+  return {
+    total_projects: projects.length,
+    active_projects: projects.filter(p => p.status === 'active').length,
+    completed_projects: projects.filter(p => p.status === 'completed').length,
+    total_members: uniqueUsers.size
   }
-
-  // Get total unique members across all projects
-  const { data: members, error: membersError } = await supabase
-    .from('project_members')
-    .select('user_id')
-
-  if (!membersError && members) {
-    const uniqueUsers = new Set(members.map(m => m.user_id))
-    stats.total_members = uniqueUsers.size
-  }
-
-  return stats
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
