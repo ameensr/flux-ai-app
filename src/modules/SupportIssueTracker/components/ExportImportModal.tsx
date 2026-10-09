@@ -46,7 +46,7 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
     addOrUpdateIssue
   } = useSupportTrackerStore()
 
-  const [activeTab, setActiveTab] = useState<'export' | 'import'>(initialTab)
+  const isExport = initialTab === 'export'
   const filteredIssues = getFilteredIssues()
 
   // Import state
@@ -165,16 +165,22 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
       const actorName = (profile?.full_name || user?.user_metadata?.full_name || user?.email || 'System User') as string
       const currentUser = { name: actorName, id: user?.id }
       let importedCount = 0
+      let skippedCount = 0
 
-      // Deduplicate import rows by issue_id before saving
-      const existingIssueIds = new Set(issues.map(i => i.issue_id))
-      const uniqueRows = importPreview.filter(row => {
-        if (existingIssueIds.has(row.issue_id)) return false
-        existingIssueIds.add(row.issue_id)
-        return true
-      })
+      // Deduplicate: skip rows whose description+product already exist in the store
+      const existingKeys = new Set(
+        issues.map(i =>
+          `${i.description.trim().toLowerCase()}|${i.product_name.trim().toLowerCase()}`
+        )
+      )
 
-      for (const row of uniqueRows) {
+      for (const row of importPreview) {
+        const dedupKey = `${String(row.description).trim().toLowerCase()}|${String(row.product_name).trim().toLowerCase()}`
+        if (existingKeys.has(dedupKey)) {
+          skippedCount++
+          continue
+        }
+        existingKeys.add(dedupKey)
         await addOrUpdateIssue(row, currentUser)
         importedCount++
       }
@@ -189,10 +195,10 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
         new_value: `${importedCount} support issues imported`
       })
 
-      toast({
-        title: 'Import Successful',
-        description: `Imported ${importedCount} support issues successfully.`
-      })
+      const msg = skippedCount > 0
+        ? `Imported ${importedCount} issues. ${skippedCount} duplicate(s) skipped.`
+        : `Imported ${importedCount} support issues successfully.`
+      toast({ title: 'Import Successful', description: msg })
       onClose()
     } catch (err: any) {
       toast({
@@ -252,17 +258,21 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
           style={{ backgroundColor: 'var(--modal-bg, #141c2b)' }}
         >
           {/* Header */}
-          <div className="px-6 py-4.5 border-b border-white/10 flex items-center justify-between shrink-0 bg-surface/50">
+          <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-surface/50">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-accent">
-                  {activeTab === 'export' ? <Download className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                  isExport
+                    ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
+                    : 'bg-blue-500/20 border border-blue-500/30 text-blue-400'
+                }`}>
+                  {isExport ? <Download className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-text-primary">
-                    {activeTab === 'export' ? 'Export Support Issues' : 'Import Support Issues'}
+                    {isExport ? 'Export Support Issues' : 'Import Support Issues'}
                   </h3>
                   <p className="text-xs text-text-muted">
-                    {activeTab === 'export'
+                    {isExport
                       ? 'Export the filtered dataset to Excel or CSV format'
                       : 'Bulk import issues mapped to existing Project Hub products'}
                   </p>
@@ -277,39 +287,9 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
               </button>
             </div>
 
-            {/* Tab switch */}
-            <div className="flex items-center gap-2 pt-4 pb-2 border-b border-white/5">
-              {canExport && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('export')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'export'
-                      ? 'bg-accent text-white shadow-xs'
-                      : 'text-text-muted hover:text-text-primary hover:bg-white/5'
-                  }`}
-                >
-                  Export Data
-                </button>
-              )}
-              {canImport && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('import')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'import'
-                      ? 'bg-accent text-white shadow-xs'
-                      : 'text-text-muted hover:text-text-primary hover:bg-white/5'
-                  }`}
-                >
-                  Import Data
-                </button>
-              )}
-            </div>
-
             {/* Modal Body */}
             <div className="overflow-y-auto space-y-4 py-4 pr-1 flex-1">
-              {activeTab === 'export' && (
+              {isExport && canExport && (
                 <div className="space-y-4">
                   <div className="p-4 rounded-xl bg-surface border border-white/10 space-y-2">
                     <span className="text-xs font-semibold text-text-primary block">
@@ -376,7 +356,7 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
                 </div>
               )}
 
-              {activeTab === 'import' && (
+              {!isExport && canImport && (
                 <div className="space-y-4">
                   <div className="p-4 rounded-xl border border-dashed border-white/20 bg-surface text-center space-y-2">
                     <Upload className="w-8 h-8 text-accent mx-auto" />

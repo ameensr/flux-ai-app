@@ -400,9 +400,9 @@ export default function App() {
             <Route path={ROUTES.qaReport} element={<QAWeeklyReport />} />
             <Route path={ROUTES.dailyReport} element={<DailyUpdateReport />} />
             <Route path={ROUTES.bugStatus} element={<BugStatus />} />
-            <Route path={ROUTES.supportTracker} element={<SupportIssueTracker />} />
+            <Route path={ROUTES.supportTracker} element={<ProtectedRoute moduleKey="support-tracker"><SupportIssueTracker /></ProtectedRoute>} />
             <Route path="/support-issue-tracker" element={<Navigate to={ROUTES.supportTracker} replace />} />
-            <Route path={ROUTES.releaseTracker} element={<ReleaseTaskTracker />} />
+            <Route path={ROUTES.releaseTracker} element={<ProtectedRoute moduleKey="release-tracker"><ReleaseTaskTracker /></ProtectedRoute>} />
             <Route path="/release-task-tracker" element={<Navigate to={ROUTES.releaseTracker} replace />} />
             <Route path={ROUTES.qaReportConfig} element={<QAReportConfig />} />
             <Route path={ROUTES.qaReportDropdownConfig} element={<QAReportDropdownConfig />} />

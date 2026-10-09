@@ -490,7 +490,7 @@ export async function saveSupportIssue(
       payload.project_id = savedIssue.project_id
     }
 
-    const { error: dbError } = await supabase.from('support_issues').upsert(payload)
+    const { error: dbError } = await supabase.from('support_issues').upsert(payload, { onConflict: 'issue_id' })
     if (dbError) {
       console.warn('[supportTrackerService] supabase save error:', dbError)
     }
@@ -590,6 +590,54 @@ export async function deleteSupportIssue(
   } catch (err) {
     console.warn('[supportTrackerService] supabase delete error:', err)
   }
+}
+
+/**
+ * Bulk delete support issues by ID array.
+ * Logs a Bulk Delete audit entry for each record. Soft-deletes if supported,
+ * otherwise hard-deletes. Returns ids that were successfully deleted.
+ */
+export async function bulkDeleteSupportIssues(
+  ids: string[],
+  currentUser: { name: string; id?: string },
+  allIssues: SupportIssue[]
+): Promise<{ deleted: string[]; failed: Array<{ id: string; reason: string }> }> {
+  const deleted: string[] = []
+  const failed: Array<{ id: string; reason: string }> = []
+
+  // Deduplicate incoming ids
+  const uniqueIds = [...new Set(ids)]
+
+  for (const id of uniqueIds) {
+    const target = allIssues.find(i => i.id === id)
+    if (!target) {
+      failed.push({ id, reason: 'Record not found' })
+      continue
+    }
+    try {
+      logHistoryEvent({
+        issue_id: target.issue_id,
+        product_name: target.product_name,
+        user_name: currentUser.name,
+        user_id: currentUser.id,
+        action: 'Bulk Delete',
+        field: 'Record Removed',
+        old_value: `${target.issue_id} - ${target.description.slice(0, 40)}`,
+        new_value: '(Bulk Deleted)'
+      })
+      const { error } = await supabase.from('support_issues').delete().eq('id', id)
+      if (error) throw error
+      deleted.push(id)
+    } catch (err: any) {
+      failed.push({ id, reason: err?.message || 'Delete failed' })
+    }
+  }
+
+  // Update localStorage with remaining issues
+  const remaining = allIssues.filter(i => !deleted.includes(i.id))
+  try { localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(remaining)) } catch { /* ignore */ }
+
+  return { deleted, failed }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

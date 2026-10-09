@@ -23,6 +23,7 @@ import {
   fetchReleaseTasks,
   saveReleaseTask as apiSaveTask,
   deleteReleaseTask as apiDeleteTask,
+  bulkDeleteReleaseTasks as apiBulkDeleteTasks,
   toggleReleaseTaskEstimationLock,
   fetchReleaseHistory,
   fetchReleaseTimeLogs,
@@ -69,6 +70,10 @@ interface ReleaseTrackerState {
   ) => Promise<ReleaseTask>
 
   deleteTask: (taskId: string, currentUser: { name: string; id?: string }) => Promise<void>
+  bulkDeleteTasks: (
+    ids: string[],
+    currentUser: { name: string; id?: string }
+  ) => Promise<{ deleted: string[]; failed: Array<{ id: string; reason: string }> }>
   toggleEstimationLock: (
     taskId: string,
     shouldLock: boolean,
@@ -142,9 +147,6 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
   drillDownRelease: null,
 
   fetchInitialData: async () => {
-    // Guard: Prevent double-invocation on mount
-    if (get().loading === false && get().tasks.length > 0) return
-
     try {
       set({ loading: true })
 
@@ -276,6 +278,22 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
 
     const hist = await fetchReleaseHistory()
     set({ tasks: nextTasks, history: hist })
+  },
+
+  bulkDeleteTasks: async (ids, currentUser) => {
+    const { tasks } = get()
+    const result = await apiBulkDeleteTasks(ids, currentUser, tasks)
+
+    if (result.deleted.length > 0) {
+      const nextTasks = tasks.filter(t => !result.deleted.includes(t.id))
+      try {
+        localStorage.setItem(LOCAL_STORAGE_TASKS_KEY, JSON.stringify(nextTasks))
+      } catch { /* ignore */ }
+      const hist = await fetchReleaseHistory()
+      set({ tasks: nextTasks, history: hist })
+    }
+
+    return result
   },
 
   toggleEstimationLock: async (taskId, shouldLock, currentUser) => {

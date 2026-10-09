@@ -4,7 +4,7 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  X, Download, Upload, FileSpreadsheet, CheckCircle2,
+  X, Download, Upload, CheckCircle2,
   AlertCircle, FileText
 } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAppStore } from '@/store/useAppStore'
 import { useReleaseTrackerStore } from '../store'
-import { exportReleaseTasksToExcel, exportReleaseTasksToCSV } from '../releaseTrackerService'
+import { exportReleaseTasksToExcel, exportReleaseTasksToCSV, generateNextTaskId } from '../releaseTrackerService'
 import * as XLSX from 'xlsx'
 
 interface Props {
@@ -41,11 +41,11 @@ export function ReleaseExportImportModal({
     addOrUpdateTask
   } = useReleaseTrackerStore()
 
-  const [activeTab, setActiveTab] = useState<'export' | 'import'>(initialTab)
   const [importing, setImporting] = useState(false)
   const [importSummary, setImportSummary] = useState<string | null>(null)
 
   const filteredTasks = getFilteredTasks()
+  const isExport = initialTab === 'export'
 
   if (!isOpen) return null
 
@@ -93,11 +93,22 @@ export function ReleaseExportImportModal({
       }
 
       let importedCount = 0
+      let skippedCount = 0
       const actorName =
         (profile?.full_name as string) ||
         (user?.user_metadata?.full_name as string) ||
         user?.email ||
         'QA Admin'
+
+      // Running snapshot — grows as we import so task_ids stay sequential
+      let runningTasks = [...tasks]
+
+      // Dedup key: description + release_version + product (case-insensitive)
+      const existingKeys = new Set(
+        tasks.map(t =>
+          `${t.description.trim().toLowerCase()}|${t.release_version.trim().toLowerCase()}|${t.product_name.trim().toLowerCase()}`
+        )
+      )
 
       for (const row of jsonData) {
         const prodName = row['Product'] || row['product'] || products[0]?.name || 'General Product'
@@ -105,21 +116,34 @@ export function ReleaseExportImportModal({
           p => p.name.toLowerCase() === String(prodName).toLowerCase()
         ) || products[0]
 
-        const desc = row['Task Description'] || row['Description'] || row['description'] || 'Imported Task'
-        const rel = row['Release'] || row['release'] || 'Release 1.0'
+        const desc = String(row['Task Description'] || row['Description'] || row['description'] || 'Imported Task').trim()
+        const rel = String(row['Release'] || row['release'] || 'Release 1.0').trim()
+        const prodNameResolved = (matchedProduct?.name || String(prodName)).trim()
+
+        // Skip exact duplicates already in the store
+        const dedupKey = `${desc.toLowerCase()}|${rel.toLowerCase()}|${prodNameResolved.toLowerCase()}`
+        if (existingKeys.has(dedupKey)) {
+          skippedCount++
+          continue
+        }
+        existingKeys.add(dedupKey)
+
         const est = parseFloat(row['Estimated Hrs'] || row['estimated_hours'] || '0') || 0
         const prio = row['Priority'] || row['priority'] || 'Medium'
         const status = row['Task Status'] || row['Status'] || row['status'] || 'Not Started'
-        const assignee = row["Who's Testing"] || row['Who’s Testing'] || row['Assigned To'] || row['assigned_to'] || 'Unassigned'
+        const assignee = row["Who's Testing"] || row['Assigned To'] || row['assigned_to'] || 'Unassigned'
         const comments = row['Comments'] || row['comments'] || ''
 
-        await addOrUpdateTask(
+        const nextTaskId = generateNextTaskId(runningTasks)
+
+        const saved = await addOrUpdateTask(
           {
+            task_id: nextTaskId,
             project_id: matchedProduct?.id || products[0]?.id || '',
-            product_name: matchedProduct?.name || prodName,
+            product_name: prodNameResolved,
             product_code: matchedProduct?.project_code || null,
-            release_version: String(rel).trim(),
-            description: String(desc).trim(),
+            release_version: rel,
+            description: desc,
             priority: prio,
             estimated_hours: est,
             task_status: status,
@@ -128,14 +152,15 @@ export function ReleaseExportImportModal({
           },
           { name: actorName, id: user?.id }
         )
+        runningTasks = [...runningTasks, saved]
         importedCount++
       }
 
-      setImportSummary(`Successfully imported ${importedCount} release tasks!`)
-      toast({
-        title: 'Import Successful',
-        description: `Imported ${importedCount} release tasks`
-      })
+      const msg = skippedCount > 0
+        ? `Imported ${importedCount} tasks. ${skippedCount} duplicate(s) skipped.`
+        : `Successfully imported ${importedCount} release tasks!`
+      setImportSummary(msg)
+      toast({ title: 'Import Complete', description: msg })
     } catch (err: any) {
       toast({
         variant: 'destructive',
@@ -169,19 +194,22 @@ export function ReleaseExportImportModal({
           {/* Header */}
           <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between bg-surface-elevated/80 shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                <FileSpreadsheet className="w-5 h-5" />
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                isExport
+                  ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
+                  : 'bg-blue-500/20 border border-blue-500/30 text-blue-400'
+              }`}>
+                {isExport ? <Download className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
               </div>
               <div>
                 <h3 className="text-sm font-bold text-text-primary">
-                  Export / Import Release Tasks
+                  {isExport ? 'Export Release Tasks' : 'Import Release Tasks'}
                 </h3>
                 <p className="text-xs text-text-muted">
-                  Excel (.xlsx) and CSV spreadsheet integration
+                  {isExport ? 'Download tasks as Excel or CSV' : 'Upload an Excel or CSV file to bulk-import tasks'}
                 </p>
               </div>
             </div>
-
             <button
               type="button"
               onClick={onClose}
@@ -191,39 +219,9 @@ export function ReleaseExportImportModal({
             </button>
           </div>
 
-          {/* Tabs */}
-          <div className="flex border-b border-white/10 bg-surface-elevated/40 px-5 pt-2 gap-2">
-            {canExport && (
-              <button
-                type="button"
-                onClick={() => setActiveTab('export')}
-                className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all ${
-                  activeTab === 'export'
-                    ? 'border-emerald-400 text-emerald-300'
-                    : 'border-transparent text-text-muted hover:text-text-primary'
-                }`}
-              >
-                Export
-              </button>
-            )}
-            {canImport && (
-              <button
-                type="button"
-                onClick={() => setActiveTab('import')}
-                className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all ${
-                  activeTab === 'import'
-                    ? 'border-blue-400 text-blue-300'
-                    : 'border-transparent text-text-muted hover:text-text-primary'
-                }`}
-              >
-                Import
-              </button>
-            )}
-          </div>
-
           {/* Content */}
           <div className="p-5 space-y-4">
-            {activeTab === 'export' && (
+            {isExport && canExport && (
               <div className="space-y-4">
                 <div className="p-3.5 rounded-xl border border-white/10 bg-surface-elevated/40 text-xs space-y-1">
                   <div className="flex items-center justify-between">
@@ -256,7 +254,7 @@ export function ReleaseExportImportModal({
               </div>
             )}
 
-            {activeTab === 'import' && (
+            {!isExport && canImport && (
               <div className="space-y-4">
                 <p className="text-xs text-text-muted">
                   Upload an Excel or CSV file containing columns: <strong>Product, Release, Task Description, Priority, Estimated Hrs, Task Status, Who's Testing</strong>.

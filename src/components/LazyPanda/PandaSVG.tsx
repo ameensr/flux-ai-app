@@ -295,17 +295,37 @@ export const PandaSVG: React.FC<PandaSVGProps> = memo(({
           <circle cx="60" cy="82" r="4" fill="#FFB6C1" opacity="0.25" />
           <circle cx="100" cy="82" r="4" fill="#FFB6C1" opacity="0.25" />
 
-          {/* Sleeping Zzz */}
+          {/* Sleeping Zzz — floats up from just above the right ear */}
           {isSleeping && (
-            <motion.g
-              initial={{ opacity: 0, y: 0 }}
-              animate={{ opacity: [0, 1, 0], y: [0, -15, -30] }}
-              transition={{ duration: 2.5, repeat: Infinity, ease: 'easeOut' }}
-            >
-              <text x="105" y="55" fontSize="10" fontWeight="bold" fill="var(--text-muted)" fontFamily="sans-serif">z</text>
-              <text x="112" y="48" fontSize="8" fontWeight="bold" fill="var(--text-muted)" fontFamily="sans-serif">z</text>
-              <text x="117" y="42" fontSize="6" fontWeight="bold" fill="var(--text-muted)" fontFamily="sans-serif">z</text>
-            </motion.g>
+            <>
+              <motion.text
+                x="100" y="52"
+                fontSize="13" fontWeight="bold"
+                fill="#a5b4fc"
+                fontFamily="sans-serif"
+                opacity="0"
+                animate={{ opacity: [0, 1, 0], y: [0, -14, -28], x: [0, 3, 6] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeOut', delay: 0 }}
+              >Z</motion.text>
+              <motion.text
+                x="110" y="44"
+                fontSize="10" fontWeight="bold"
+                fill="#c4b5fd"
+                fontFamily="sans-serif"
+                opacity="0"
+                animate={{ opacity: [0, 1, 0], y: [0, -12, -24], x: [0, 2, 4] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeOut', delay: 0.7 }}
+              >Z</motion.text>
+              <motion.text
+                x="118" y="38"
+                fontSize="7" fontWeight="bold"
+                fill="#ddd6fe"
+                fontFamily="sans-serif"
+                opacity="0"
+                animate={{ opacity: [0, 1, 0], y: [0, -10, -20], x: [0, 2, 4] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeOut', delay: 1.4 }}
+              >Z</motion.text>
+            </>
           )}
 
           {/* One eyebrow raised (password show) with better visibility */}

@@ -71,6 +71,7 @@ export interface SupportIssueHistoryRecord {
     | 'Issue Completed'
     | 'Issue Deleted'
     | 'Issue Restored'
+    | 'Bulk Delete'
     | 'Dropdown Configuration Change'
     | 'Permission Change'
     | 'Export'

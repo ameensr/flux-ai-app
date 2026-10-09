@@ -19,6 +19,7 @@ import {
   fetchSupportIssues,
   saveSupportIssue,
   deleteSupportIssue as apiDeleteIssue,
+  bulkDeleteSupportIssues as apiBulkDeleteIssues,
   toggleSupportIssueEstimationLock,
   fetchSupportHistory,
   fetchDropdownConfigurations,
@@ -55,6 +56,10 @@ interface SupportTrackerState {
     user: { name: string; id?: string }
   ) => Promise<SupportIssue>
   deleteIssue: (issueId: string, user: { name: string; id?: string }) => Promise<void>
+  bulkDeleteIssues: (
+    ids: string[],
+    user: { name: string; id?: string }
+  ) => Promise<{ deleted: string[]; failed: Array<{ id: string; reason: string }> }>
   toggleEstimationLock: (
     issueId: string,
     shouldLock: boolean,
@@ -118,8 +123,6 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
   drillDownTarget: null,
 
   fetchInitialData: async () => {
-    // Guard: skip if already loading to prevent double-invocation
-    if (get().loading === false && get().issues.length > 0) return
     try {
       set({ loading: true })
       // 1. Fetch products from Project Hub (Single Source of Truth)
@@ -237,6 +240,22 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
 
     const hist = await fetchSupportHistory()
     set({ issues: nextIssues, history: hist })
+  },
+
+  bulkDeleteIssues: async (ids, user) => {
+    const { issues } = get()
+    const result = await apiBulkDeleteIssues(ids, user, issues)
+
+    if (result.deleted.length > 0) {
+      const nextIssues = issues.filter(i => !result.deleted.includes(i.id))
+      try {
+        localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(nextIssues))
+      } catch { /* ignore */ }
+      const hist = await fetchSupportHistory()
+      set({ issues: nextIssues, history: hist })
+    }
+
+    return result
   },
 
   toggleEstimationLock: async (issueId, shouldLock, user) => {

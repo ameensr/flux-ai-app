@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import {
   Search, Edit3, Trash2, History, ChevronLeft, ChevronRight,
@@ -21,6 +21,7 @@ interface Props {
   onViewHistory: (issue: SupportIssue) => void
   onLogHours?: (issue: SupportIssue) => void
   onViewTimeLogs?: (issue: SupportIssue) => void
+  onBulkDelete?: (ids: string[]) => void
 }
 
 export function SupportIssueTable({
@@ -28,7 +29,8 @@ export function SupportIssueTable({
   onDeleteIssue,
   onViewHistory,
   onLogHours,
-  onViewTimeLogs
+  onViewTimeLogs,
+  onBulkDelete
 }: Props) {
   const { toast } = useToast()
   const { user, profile } = useAppStore()
@@ -57,6 +59,19 @@ export function SupportIssueTable({
 
   const issues = getFilteredIssues()
 
+  // ── Selection state ──────────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // Clear selection when filters/data change
+  const prevIssueIdsRef = useRef<string>('')
+  useEffect(() => {
+    const key = issues.map(i => i.id).join(',')
+    if (key !== prevIssueIdsRef.current) {
+      setSelectedIds(new Set())
+      prevIssueIdsRef.current = key
+    }
+  }, [issues])
+
   // Local pagination & sorting state
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -84,13 +99,34 @@ export function SupportIssueTable({
     return sortedIssues.slice(from, from + pageSize)
   }, [sortedIssues, currentPage, pageSize])
 
-  const handleSort = (field: keyof SupportIssue) => {
-    if (sortField === field) {
-      setSortAsc(!sortAsc)
+  // Reset page when filter changes
+  useEffect(() => { setCurrentPage(1) }, [issues.length])
+
+  // ── Select-all checkbox state (current page only) ────────────────────────
+  const pageIds = paginatedIssues.map(i => i.id)
+  const selectedOnPage = pageIds.filter(id => selectedIds.has(id))
+  const allPageSelected = pageIds.length > 0 && selectedOnPage.length === pageIds.length
+  const somePageSelected = selectedOnPage.length > 0 && !allPageSelected
+
+  const toggleSelectAll = () => {
+    if (allPageSelected) {
+      setSelectedIds(prev => { const n = new Set(prev); pageIds.forEach(id => n.delete(id)); return n })
     } else {
-      setSortField(field)
-      setSortAsc(true)
+      setSelectedIds(prev => { const n = new Set(prev); pageIds.forEach(id => n.add(id)); return n })
     }
+  }
+
+  const toggleRow = (id: string) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
+  }
+
+  const handleSort = (field: keyof SupportIssue) => {
+    if (sortField === field) setSortAsc(!sortAsc)
+    else { setSortField(field); setSortAsc(true) }
   }
 
   // Get status color / badge class
@@ -219,25 +255,29 @@ export function SupportIssueTable({
 
   return (
     <div id="support-issue-table-section" className="space-y-4">
-      {/* ── Drill-down Banner Alert if active ──────────────────────────────── */}
+      {/* ── Drill-down Banner ── */}
       {drillDownTarget && (
         <div className="p-3 rounded-xl bg-accent/10 border border-accent/25 flex items-center justify-between text-xs text-text-primary">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-accent" />
-            <span>
-              Drill-down active for product: <strong className="text-accent">{drillDownTarget}</strong>
-            </span>
+            <span>Drill-down active for product: <strong className="text-accent">{drillDownTarget}</strong></span>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setDrillDownTarget(null)
-              setFilters({ selectedProductId: 'all' })
-            }}
-            className="text-accent hover:underline font-medium text-xs"
-          >
-            Show All Products
-          </button>
+          <button type="button" onClick={() => { setDrillDownTarget(null); setFilters({ selectedProductId: 'all' }) }} className="text-accent hover:underline font-medium text-xs">Show All Products</button>
+        </div>
+      )}
+
+      {/* ── Bulk Action Toolbar ── */}
+      {canDelete && selectedIds.size > 0 && (
+        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs">
+          <span className="text-rose-300 font-semibold">
+            {selectedIds.size} {selectedIds.size === 1 ? 'issue' : 'issues'} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setSelectedIds(new Set())} className="h-7 px-3 rounded-lg border border-white/10 text-text-muted hover:text-text-primary text-xs transition-colors">Deselect All</button>
+            <button type="button" onClick={() => onBulkDelete?.([...selectedIds])} className="h-7 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors flex items-center gap-1.5">
+              <Trash2 className="w-3.5 h-3.5" />Delete Selected
+            </button>
+          </div>
         </div>
       )}
 
@@ -285,14 +325,21 @@ export function SupportIssueTable({
           <table className="w-full min-w-[1100px] text-left text-xs border-collapse">
             <thead>
               <tr className="bg-surface-secondary/80 border-b border-border/40 text-[11px] uppercase tracking-wider text-text-muted font-semibold">
-                <th
-                  onClick={() => handleSort('sl_no')}
-                  className="py-3.5 px-3 text-center cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap"
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    <span>Sl. No.</span>
-                    <ArrowUpDown className="w-3 h-3 text-text-muted/60" />
-                  </div>
+                {/* Checkbox column — only shown when user can delete */}
+                {canDelete && (
+                  <th className="py-3.5 px-3 text-center w-10">
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      ref={el => { if (el) el.indeterminate = somePageSelected }}
+                      onChange={toggleSelectAll}
+                      className="w-3.5 h-3.5 rounded accent-rose-500 cursor-pointer"
+                      title="Select all on this page"
+                    />
+                  </th>
+                )}
+                <th onClick={() => handleSort('sl_no')} className="py-3.5 px-3 text-center cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap">
+                  <div className="flex items-center justify-center gap-1"><span>Sl. No.</span><ArrowUpDown className="w-3 h-3 text-text-muted/60" /></div>
                 </th>
                 <th
                   onClick={() => handleSort('product_name')}
@@ -350,8 +397,21 @@ export function SupportIssueTable({
                 return (
                   <tr
                     key={issue.id}
-                    className="group transition-colors duration-150 cursor-default hover:bg-accent/[0.07] dark:hover:bg-accent/[0.12]"
+                    className={`group transition-colors duration-150 cursor-default hover:bg-accent/[0.07] dark:hover:bg-accent/[0.12] ${
+                      selectedIds.has(issue.id) ? 'bg-rose-500/[0.06]' : ''
+                    }`}
                   >
+                    {/* Checkbox cell */}
+                    {canDelete && (
+                      <td className="py-3.5 px-3 text-center align-middle" onClick={e => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(issue.id)}
+                          onChange={() => toggleRow(issue.id)}
+                          className="w-3.5 h-3.5 rounded accent-rose-500 cursor-pointer"
+                        />
+                      </td>
+                    )}
                     {/* 1. Sl. No. with crisp 3px accent left indicator */}
                     <td className="py-3.5 px-3 text-center font-mono text-xs text-text-muted border-l-[3px] border-l-transparent group-hover:border-l-accent group-hover:text-accent font-medium group-hover:font-semibold transition-colors duration-150 align-middle">
                       {autoSlNo}
@@ -530,7 +590,7 @@ export function SupportIssueTable({
 
               {paginatedIssues.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="py-12 text-center text-text-muted text-xs">
+                  <td colSpan={canDelete ? 15 : 14} className="py-12 text-center text-text-muted text-xs">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <AlertCircle className="w-6 h-6 text-text-muted/50" />
                       <p className="font-medium">No support issues found matching the active filters.</p>

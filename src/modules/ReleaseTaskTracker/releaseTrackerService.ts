@@ -248,19 +248,29 @@ export async function fetchReleaseTasks(
 ): Promise<ReleaseTask[]> {
   const timeLogs = preFetchedTimeLogs ?? (await fetchReleaseTimeLogs())
 
-  // Calculate actual hours map per task_id or release_task_id
-  const actualHoursMap = new Map<string, number>()
+  // Calculate actual hours map — keyed by release_task_id (UUID) AND task_id (string) separately.
+  // Each log is counted ONCE: prefer release_task_id when available, else fall back to task_id.
+  const actualHoursByUUID = new Map<string, number>()
+  const actualHoursByTaskId = new Map<string, number>()
   for (const log of timeLogs) {
-    const key = log.release_task_id || log.task_id
-    if (key) {
-      const cur = actualHoursMap.get(key) || 0
-      actualHoursMap.set(key, Math.round((cur + (Number(log.hours_added) || 0)) * 100) / 100)
-    }
-    if (log.task_id) {
-      const cur = actualHoursMap.get(log.task_id) || 0
-      actualHoursMap.set(log.task_id, Math.round((cur + (Number(log.hours_added) || 0)) * 100) / 100)
+    const hrs = Number(log.hours_added) || 0
+    if (log.release_task_id) {
+      actualHoursByUUID.set(
+        log.release_task_id,
+        Math.round(((actualHoursByUUID.get(log.release_task_id) || 0) + hrs) * 100) / 100
+      )
+    } else if (log.task_id) {
+      actualHoursByTaskId.set(
+        log.task_id,
+        Math.round(((actualHoursByTaskId.get(log.task_id) || 0) + hrs) * 100) / 100
+      )
     }
   }
+  // Merge: UUID map wins; fall back to task_id map
+  const actualHoursMap = new Map<string, number>([
+    ...actualHoursByTaskId,
+    ...actualHoursByUUID
+  ])
 
   // Try DB fetch
   try {
@@ -273,7 +283,7 @@ export async function fetchReleaseTasks(
     if (!error && data && data.length > 0) {
       const mapped: ReleaseTask[] = data.map((d: any, index: number) => {
         const est = Number(d.estimated_hours) || 0
-        const actFromLogs = actualHoursMap.get(d.id) ?? actualHoursMap.get(d.task_id)
+        const actFromLogs = actualHoursByUUID.get(d.id) ?? actualHoursByTaskId.get(d.task_id)
         const act = actFromLogs !== undefined ? actFromLogs : (Number(d.actual_hours) || 0)
         const effort = calculateEffort(est, act)
 
@@ -330,7 +340,7 @@ export async function fetchReleaseTasks(
           .filter(t => !t.is_deleted)
           .map((t: ReleaseTask, idx: number) => {
             const est = Number(t.estimated_hours) || 0
-            const actFromLogs = actualHoursMap.get(t.id) ?? actualHoursMap.get(t.task_id)
+            const actFromLogs = actualHoursByUUID.get(t.id) ?? actualHoursByTaskId.get(t.task_id)
             const act = actFromLogs !== undefined ? actFromLogs : (Number(t.actual_hours) || 0)
             const effort = calculateEffort(est, act)
             return {
@@ -613,7 +623,7 @@ export async function saveReleaseTask(
       payload.created_by = savedTask.created_by
     }
 
-    const { error: dbError } = await supabase.from('release_tasks').upsert(payload)
+    const { error: dbError } = await supabase.from('release_tasks').upsert(payload, { onConflict: 'task_id' })
     if (dbError) {
       console.warn('[releaseTrackerService] supabase save error:', dbError)
     }
@@ -729,6 +739,60 @@ export async function deleteReleaseTask(
   }
 }
 
+/**
+ * Bulk delete release tasks by ID array.
+ * Soft-deletes each record, logs a Bulk Delete audit entry per task.
+ * Returns ids that were successfully deleted.
+ */
+export async function bulkDeleteReleaseTasks(
+  ids: string[],
+  currentUser: { name: string; id?: string },
+  allTasks: ReleaseTask[]
+): Promise<{ deleted: string[]; failed: Array<{ id: string; reason: string }> }> {
+  const deleted: string[] = []
+  const failed: Array<{ id: string; reason: string }> = []
+
+  const uniqueIds = [...new Set(ids)]
+
+  for (const id of uniqueIds) {
+    const target = allTasks.find(t => t.id === id)
+    if (!target) {
+      failed.push({ id, reason: 'Record not found' })
+      continue
+    }
+    try {
+      logReleaseHistoryEvent({
+        task_id: target.task_id,
+        product_name: target.product_name,
+        release_version: target.release_version,
+        user_name: currentUser.name,
+        user_id: currentUser.id,
+        action: 'Task Deleted',
+        field: 'Bulk Delete',
+        old_value: `${target.task_id} - ${target.description.slice(0, 40)}`,
+        new_value: '(Bulk Deleted)'
+      })
+      // Soft delete first, fallback to hard delete
+      const { error } = await supabase
+        .from('release_tasks')
+        .update({ is_deleted: true, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) {
+        await supabase.from('release_tasks').delete().eq('id', id)
+      }
+      deleted.push(id)
+    } catch (err: any) {
+      failed.push({ id, reason: err?.message || 'Delete failed' })
+    }
+  }
+
+  // Update localStorage
+  const remaining = allTasks.filter(t => !deleted.includes(t.id))
+  try { localStorage.setItem(LOCAL_STORAGE_TASKS_KEY, JSON.stringify(remaining)) } catch { /* ignore */ }
+
+  return { deleted, failed }
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. TIME LOG SYSTEM (Requirements 10 & 11: Cumulative Actual Hours)
 // ══════════════════════════════════════════════════════════════════════════════
@@ -825,7 +889,7 @@ export async function addReleaseTimeLog(
   const timestamp = input.logged_at || new Date().toISOString()
 
   const newLog: ReleaseTaskTimeLog = {
-    id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: generateUUID(),
     task_id: input.task_id,
     release_task_id: input.release_task_id,
     user_name: input.user_name || currentUser.name || 'QA Tester',
@@ -1004,11 +1068,9 @@ export async function deleteReleaseTimeLog(
     throw new Error(`Task for log ${logId} not found`)
   }
 
-  // Remove from Supabase
+  // Remove from Supabase (works for both UUID and legacy log-timestamp ids)
   try {
-    if (isUUID(logId)) {
-      await supabase.from('release_task_time_logs').delete().eq('id', logId)
-    }
+    await supabase.from('release_task_time_logs').delete().eq('id', logId)
   } catch (err) {
     console.warn('[releaseTrackerService] delete log from supabase error:', err)
   }
@@ -1087,7 +1149,7 @@ export function logReleaseHistoryEvent(event: {
   new_value?: string | null
 }): void {
   const newRecord: ReleaseTaskHistoryRecord = {
-    id: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: generateUUID(),
     task_id: event.task_id,
     product_name: event.product_name,
     release_version: event.release_version,

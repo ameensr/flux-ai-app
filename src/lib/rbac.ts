@@ -27,11 +27,13 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
       can_view: true, can_view_dashboard: true, can_create: true, can_edit: true,
       can_delete: true, can_export: true, can_import: true, can_view_history: true,
       can_configure_dropdowns: true, can_manage_permissions: true,
+      can_lock_estimated_hours: true, can_unlock_estimated_hours: true, can_edit_estimated_hours: true,
     },
     'release-tracker': {
       can_view: true, can_view_dashboard: true, can_create: true, can_edit: true,
       can_delete: true, can_export: true, can_import: true, can_view_history: true,
       can_configure_dropdowns: true, can_manage_permissions: true,
+      can_lock_estimated_hours: true, can_unlock_estimated_hours: true, can_edit_estimated_hours: true,
     },
     'project-hub': { can_view: true, can_create: true, can_edit: true, can_delete: true },
     admin: { can_view: true, can_create: true, can_edit: true, can_delete: true },
