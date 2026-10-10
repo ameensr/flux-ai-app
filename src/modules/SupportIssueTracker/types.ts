@@ -136,6 +136,8 @@ export interface SupportFilters {
   actualEndDateEnd?: string
   searchQuery?: string
   estimationLock?: 'all' | 'locked' | 'unlocked'
+  overdueOnly?: boolean
+  overrunOnly?: boolean
 }
 
 export interface ProductSummary {

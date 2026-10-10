@@ -187,9 +187,9 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
         ...t, label: t.label.trim().toUpperCase(), value: t.value.trim().toUpperCase()
       }))
     }
-    await saveDropdownConfigurations(normalizedConfigs, user)
+    const saved = await saveDropdownConfigurations(normalizedConfigs, user)
     const hist = await fetchSupportHistory()
-    set({ dropdownConfigs: normalizedConfigs, history: hist })
+    set({ dropdownConfigs: saved || normalizedConfigs, history: hist })
   },
 
   logWorkHours: async (input, user) => {
@@ -292,6 +292,24 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
       if (filters.estimationLock && filters.estimationLock !== 'all') {
         if (filters.estimationLock === 'locked' && !issue.estimated_hours_locked) return false
         if (filters.estimationLock === 'unlocked' && issue.estimated_hours_locked) return false
+      }
+      if (filters.overdueOnly) {
+        const todayStr = new Date().toISOString().split('T')[0]
+        if (
+          issue.testing_status === 'Completed' ||
+          issue.testing_status === 'Cancelled' ||
+          !issue.planned_end_date ||
+          issue.planned_end_date >= todayStr
+        ) {
+          return false
+        }
+      }
+      if (filters.overrunOnly) {
+        const est = Number(issue.estimated_hours) || 0
+        const act = Number(issue.actual_hours) || 0
+        if (est <= 0 || act <= est) {
+          return false
+        }
       }
       return true
     })

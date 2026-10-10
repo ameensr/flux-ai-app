@@ -113,7 +113,7 @@ export const PERM_LABELS: Record<string, string> = {
 
 export const TEMPLATE_PRESETS: Record<string, Record<string, string[]>> = {
   admin: {
-    dashboard: ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_export', 'can_share', 'can_generate_ai', 'can_configure', 'can_use_advanced_ai'],
+    dashboard: ['can_view', 'can_view_quick_details', 'can_create', 'can_edit', 'can_delete', 'can_export', 'can_share', 'can_generate_ai', 'can_configure', 'can_use_advanced_ai'],
     'bug-refiner': ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_export', 'can_share', 'can_generate_ai', 'can_use_advanced_ai'],
     'test-generator': ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_export', 'can_share', 'can_generate_ai', 'can_use_advanced_ai'],
     'writing-assistant': ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_export', 'can_share', 'can_generate_ai', 'can_use_advanced_ai'],
@@ -124,7 +124,7 @@ export const TEMPLATE_PRESETS: Record<string, Record<string, string[]>> = {
     'team-management': ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_configure'],
   },
   manager: {
-    dashboard: ['can_view', 'can_export', 'can_generate_ai'],
+    dashboard: ['can_view', 'can_view_quick_details', 'can_export', 'can_generate_ai'],
     'bug-refiner': ['can_view', 'can_create', 'can_edit', 'can_export', 'can_share', 'can_generate_ai'],
     'test-generator': ['can_view', 'can_create', 'can_edit', 'can_export', 'can_share', 'can_generate_ai'],
     'writing-assistant': ['can_view', 'can_create', 'can_edit', 'can_export', 'can_share', 'can_generate_ai'],
@@ -145,7 +145,7 @@ export const TEMPLATE_PRESETS: Record<string, Record<string, string[]>> = {
     announcements: ['can_view'],
   },
   qa_engineer: {
-    dashboard: ['can_view', 'can_generate_ai'],
+    dashboard: ['can_view', 'can_view_quick_details', 'can_generate_ai'],
     'bug-refiner': ['can_view', 'can_create', 'can_edit', 'can_export', 'can_generate_ai'],
     'test-generator': ['can_view', 'can_create', 'can_edit', 'can_export', 'can_generate_ai'],
     'writing-assistant': ['can_view', 'can_create', 'can_generate_ai'],

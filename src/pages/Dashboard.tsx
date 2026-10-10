@@ -14,6 +14,7 @@ import {
 // ── Brand ────────────────────────────────────────────────────────────────────
 import { BRAND } from '@/lib/brand'
 import { AnnouncementsWidget } from '@/modules/Announcements/AnnouncementsWidget'
+import { ProjectPulseWidget } from '@/modules/ProjectPulse/ProjectPulseWidget'
 
 
 // ── Motivational lines (rotates daily) ────────────────────────────────────────
@@ -236,8 +237,9 @@ const MODULE_ROUTES: Record<string, string> = {
 export const Dashboard = () => {
   const navigate = useNavigate()
   const { profile, user } = useAppStore()
-  const { canView } = usePermissions()
+  const { canView, can } = usePermissions()
   const displayName = profile?.full_name || user?.email?.split('@')[0] || 'there'
+  const canViewQuickDetails = can('dashboard', 'can_view_quick_details')
 
   return (
     <motion.div
@@ -275,9 +277,9 @@ export const Dashboard = () => {
         </div>
       </header>
 
-      {/* Top Showcase: Something is Building (Left) + Announcements (Right) */}
+      {/* Top Showcase: Project Pulse (if permitted) / Something is Building (fallback) + Announcements (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5 sm:gap-6 mb-8 sm:mb-10 items-stretch">
-        <SomethingBuildingSection />
+        {canViewQuickDetails ? <ProjectPulseWidget /> : <SomethingBuildingSection />}
         <AnnouncementsWidget />
       </div>
 

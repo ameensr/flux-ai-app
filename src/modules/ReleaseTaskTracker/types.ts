@@ -144,6 +144,8 @@ export interface ReleaseFilters {
   dateRangeType?: 'start' | 'target' | 'finish' | 'received' | 'actual_end'
   searchQuery?: string
   estimationLock?: 'all' | 'locked' | 'unlocked'
+  overdueOnly?: boolean
+  overrunOnly?: boolean
 }
 
 export interface ReleaseKPICounters {

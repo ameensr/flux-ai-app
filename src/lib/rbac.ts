@@ -12,7 +12,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000
 
 export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
   admin: {
-    dashboard: { can_view: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
+    dashboard: { can_view: true, can_view_quick_details: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
     'bug-refiner': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
     'test-generator': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
     'writing-assistant': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
@@ -50,7 +50,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     history: { can_view: true },
   },
   super_admin: {
-    dashboard: { can_view: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
+    dashboard: { can_view: true, can_view_quick_details: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
     'bug-refiner': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
     'test-generator': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
     'writing-assistant': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
@@ -88,7 +88,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     history: { can_view: true },
   },
   pro: {
-    dashboard: { can_view: true, can_generate_ai: true },
+    dashboard: { can_view: true, can_view_quick_details: true, can_generate_ai: true },
     'project-hub': { can_view: true, can_create: true, can_edit: true },
     'bug-refiner': { can_view: true, can_generate_ai: true, can_export: true },
     'test-generator': { can_view: true, can_generate_ai: true, can_export: true },
@@ -116,7 +116,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     settings: { can_view: true },
   },
   free: {
-    dashboard: { can_view: true, can_generate_ai: true },
+    dashboard: { can_view: true, can_view_quick_details: false, can_generate_ai: true },
     'project-hub': { can_view: true },
     'bug-refiner': { can_view: true, can_generate_ai: true },
     'test-generator': { can_view: true, can_generate_ai: true },
@@ -140,7 +140,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     settings: { can_view: true },
   },
   manager: {
-    dashboard: { can_view: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
+    dashboard: { can_view: true, can_view_quick_details: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
     'project-hub': { can_view: true, can_create: true, can_edit: true, can_delete: true },
     'support-tracker': {
       can_view: true, can_view_dashboard: true, can_create: true, can_edit: true,
@@ -161,7 +161,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     settings: { can_view: true },
   },
   qa_lead: {
-    dashboard: { can_view: true, can_create: true, can_edit: true, can_export: true, can_generate_ai: true },
+    dashboard: { can_view: true, can_view_quick_details: true, can_create: true, can_edit: true, can_export: true, can_generate_ai: true },
     'project-hub': { can_view: true, can_create: true, can_edit: true },
     'support-tracker': {
       can_view: true, can_view_dashboard: true, can_create: true, can_edit: true,
@@ -182,7 +182,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
     settings: { can_view: true },
   },
   qa_engineer: {
-    dashboard: { can_view: true, can_generate_ai: true },
+    dashboard: { can_view: true, can_view_quick_details: true, can_generate_ai: true },
     'project-hub': { can_view: true },
     'support-tracker': {
       can_view: true, can_view_dashboard: false, can_create: true, can_edit: true,

@@ -370,9 +370,9 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
   },
 
   updateDropdowns: async (configs, currentUser) => {
-    await apiSaveDropdowns(configs, currentUser)
+    const saved = await apiSaveDropdowns(configs, currentUser)
     const hist = await fetchReleaseHistory()
-    set({ dropdownConfigs: configs, history: hist })
+    set({ dropdownConfigs: saved || configs, history: hist })
   },
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -447,6 +447,28 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
       if (filters.estimationLock && filters.estimationLock !== 'all') {
         if (filters.estimationLock === 'locked' && !task.estimated_hours_locked) return false
         if (filters.estimationLock === 'unlocked' && task.estimated_hours_locked) return false
+      }
+
+      // 9. Overdue Only Filter
+      if (filters.overdueOnly) {
+        const todayStr = new Date().toISOString().split('T')[0]
+        if (
+          task.task_status === 'Completed' ||
+          task.task_status === 'Cancelled' ||
+          !task.target_date ||
+          task.target_date >= todayStr
+        ) {
+          return false
+        }
+      }
+
+      // 10. Overrun Only Filter
+      if (filters.overrunOnly) {
+        const est = Number(task.estimated_hours) || 0
+        const act = Number(task.actual_hours) || 0
+        if (est <= 0 || act <= est) {
+          return false
+        }
       }
 
       return true

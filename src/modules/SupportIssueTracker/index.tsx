@@ -1,6 +1,7 @@
 // src/modules/SupportIssueTracker/index.tsx
 
 import React, { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   LifeBuoy, Plus, Sliders, History, Download, Upload, RefreshCw, Shield,
   CheckCircle2, AlertTriangle, Layers
@@ -20,13 +21,14 @@ import { ExportImportModal } from './components/ExportImportModal'
 import { PermissionsInfoModal } from './components/PermissionsInfoModal'
 import { AddTimeLogModal } from './components/AddTimeLogModal'
 import { TimeLogDrawer } from './components/TimeLogDrawer'
-import type { SupportIssue } from './types'
+import type { SupportIssue, SupportFilters } from './types'
 
 export function SupportIssueTracker() {
   const { toast } = useToast()
   const confirm = useConfirm()
   const { can, canView, permissionsLoaded } = usePermissions()
   const { user, profile } = useAppStore()
+  const [searchParams] = useSearchParams()
 
   // Granular Permissions — all gated behind permissionsLoaded
   const canViewDashboard    = can('support-tracker', 'can_view_dashboard')
@@ -56,7 +58,10 @@ export function SupportIssueTracker() {
   const [isTimeLogDrawerOpen, setIsTimeLogDrawerOpen] = useState(false)
   const [timeLogTarget, setTimeLogTarget]         = useState<SupportIssue | null>(null)
 
-  const { fetchInitialData, refreshData, loading, isRefreshing, deleteIssue, bulkDeleteIssues, issues } = useSupportTrackerStore()
+  const {
+    fetchInitialData, refreshData, loading, isRefreshing,
+    deleteIssue, bulkDeleteIssues, issues, setFilters, setSelectedProduct
+  } = useSupportTrackerStore()
 
   // Fetch on mount. The store's loading flag prevents duplicate in-flight fetches.
   // hasFetched ref prevents double-invoke in React StrictMode dev.
@@ -66,6 +71,31 @@ export function SupportIssueTracker() {
     hasFetched.current = true
     fetchInitialData()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply URL query parameter filters
+  useEffect(() => {
+    const statusParam = searchParams.get('status')
+    const searchParam = searchParams.get('search')
+    const overrunParam = searchParams.get('overrun')
+    const productParam = searchParams.get('productId')
+
+    const filterUpdates: Partial<SupportFilters> = {}
+    if (statusParam === 'open') {
+      filterUpdates.testingStatus = ['Not Started', 'Assigned', 'In Testing', 'Blocked', 'Retesting']
+    } else if (statusParam === 'in_testing') {
+      filterUpdates.testingStatus = ['In Testing', 'Retesting']
+    } else if (statusParam === 'overdue') {
+      filterUpdates.overdueOnly = true
+    }
+
+    if (overrunParam === 'true') filterUpdates.overrunOnly = true
+    if (searchParam) filterUpdates.searchQuery = searchParam
+    if (productParam) setSelectedProduct(productParam)
+
+    if (Object.keys(filterUpdates).length > 0) {
+      setFilters(filterUpdates)
+    }
+  }, [searchParams, setFilters, setSelectedProduct])
 
   const handleEditIssue = (issue: SupportIssue) => { setIssueToEdit(issue); setIsAddEditOpen(true) }
 

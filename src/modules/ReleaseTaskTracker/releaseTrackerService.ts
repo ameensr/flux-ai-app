@@ -1459,9 +1459,38 @@ export async function saveReleaseDropdownConfigs(
     assigned_to: ReleaseDropdownOption[]
   },
   currentUser: { name: string; id?: string }
-): Promise<void> {
+): Promise<{
+  task_status: ReleaseDropdownOption[]
+  priority: ReleaseDropdownOption[]
+  assigned_to: ReleaseDropdownOption[]
+}> {
+  const normalizedStatuses = configs.task_status.map((s, idx) => ({
+    ...s,
+    label: s.label.trim(),
+    value: s.value.trim(),
+    sort_order: s.sort_order ?? idx + 1
+  }))
+  const normalizedPriorities = configs.priority.map((p, idx) => ({
+    ...p,
+    label: p.label.trim(),
+    value: p.value.trim(),
+    sort_order: p.sort_order ?? idx + 1
+  }))
+  const normalizedTesters = configs.assigned_to.map((t, idx) => ({
+    ...t,
+    label: t.label.trim().toUpperCase(),
+    value: t.value.trim().toUpperCase(),
+    sort_order: t.sort_order ?? idx + 1
+  }))
+
+  const normalizedConfigs = {
+    task_status: normalizedStatuses,
+    priority: normalizedPriorities,
+    assigned_to: normalizedTesters
+  }
+
   try {
-    localStorage.setItem(LOCAL_STORAGE_DROPDOWNS_KEY, JSON.stringify(configs))
+    localStorage.setItem(LOCAL_STORAGE_DROPDOWNS_KEY, JSON.stringify(normalizedConfigs))
   } catch { /* ignore */ }
 
   logReleaseHistoryEvent({
@@ -1473,31 +1502,132 @@ export async function saveReleaseDropdownConfigs(
     action: 'Dropdown Configuration Change',
     field: 'Dropdown Master Options',
     old_value: 'Previous options',
-    new_value: `Updated dropdown configuration (${configs.task_status.length} statuses, ${configs.priority.length} priorities, ${configs.assigned_to.length} assignees)`
+    new_value: `Updated dropdown configuration (${normalizedConfigs.task_status.length} statuses, ${normalizedConfigs.priority.length} priorities, ${normalizedConfigs.assigned_to.length} assignees)`
   })
 
   try {
-    const allOptions = [
-      ...configs.task_status,
-      ...configs.priority,
-      ...configs.assigned_to
-    ].map((opt, index) => ({
-      category: opt.category,
-      label: opt.label.trim(),
-      value: opt.value.trim(),
-      color: opt.color || null,
-      is_active: opt.is_active,
-      sort_order: opt.sort_order || index + 1
-    }))
+    const categories = ['task_status', 'priority', 'assigned_to']
+    const { data: existingRows, error: fetchErr } = await supabase
+      .from('release_task_dropdown_configs')
+      .select('id, category, value')
+      .in('category', categories)
 
-    for (const opt of allOptions) {
-      await supabase
+    if (fetchErr) {
+      console.warn('[releaseTrackerService] error fetching existing release dropdowns:', fetchErr)
+    }
+
+    const existing = existingRows || []
+    const activeValuesByCategory: Record<string, Set<string>> = {
+      task_status: new Set(normalizedStatuses.map(s => s.value.trim().toLowerCase())),
+      priority: new Set(normalizedPriorities.map(p => p.value.trim().toLowerCase())),
+      assigned_to: new Set(normalizedTesters.map(t => t.value.trim().toLowerCase()))
+    }
+
+    // 1. Delete rows from DB that were removed in the UI
+    const idsToDelete: string[] = []
+    for (const row of existing) {
+      const allowed = activeValuesByCategory[row.category]
+      if (allowed && !allowed.has((row.value || '').trim().toLowerCase())) {
+        idsToDelete.push(row.id)
+      }
+    }
+
+    if (idsToDelete.length > 0) {
+      const { error: delErr } = await supabase
         .from('release_task_dropdown_configs')
-        .upsert(opt, { onConflict: 'category,value' })
+        .delete()
+        .in('id', idsToDelete)
+      if (delErr) {
+        console.warn('[releaseTrackerService] error deleting removed release dropdown options:', delErr)
+      }
+    }
+
+    // 2. Build index of remaining DB rows
+    const remainingExisting = existing.filter(r => !idsToDelete.includes(r.id))
+    const existingByCatAndVal = new Map<string, string>()
+    const existingIds = new Set<string>()
+
+    for (const r of remainingExisting) {
+      existingIds.add(r.id)
+      existingByCatAndVal.set(`${r.category}:${(r.value || '').trim().toLowerCase()}`, r.id)
+    }
+
+    const allKeptOptions = [
+      ...normalizedStatuses,
+      ...normalizedPriorities,
+      ...normalizedTesters
+    ]
+
+    // 3. Update existing or insert new options
+    for (const item of allKeptOptions) {
+      const lookupKey = `${item.category}:${item.value.trim().toLowerCase()}`
+      const matchingId = (item.id && isUUID(item.id) && existingIds.has(item.id))
+        ? item.id
+        : existingByCatAndVal.get(lookupKey)
+
+      if (matchingId) {
+        await supabase
+          .from('release_task_dropdown_configs')
+          .update({
+            label: item.label,
+            value: item.value,
+            color: item.color || null,
+            is_active: item.is_active,
+            sort_order: item.sort_order,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', matchingId)
+      } else {
+        const newRow: any = {
+          category: item.category,
+          label: item.label,
+          value: item.value,
+          color: item.color || null,
+          is_active: item.is_active,
+          sort_order: item.sort_order
+        }
+        if (item.id && isUUID(item.id)) {
+          newRow.id = item.id
+        }
+        const { data: inserted, error: insertErr } = await supabase
+          .from('release_task_dropdown_configs')
+          .insert(newRow)
+          .select('id')
+        if (!insertErr && inserted && inserted[0]?.id) {
+          existingIds.add(inserted[0].id)
+          existingByCatAndVal.set(lookupKey, inserted[0].id)
+        }
+      }
+    }
+
+    // 4. Refresh state from DB
+    const { data: freshData, error: refreshErr } = await supabase
+      .from('release_task_dropdown_configs')
+      .select('*')
+      .order('sort_order', { ascending: true })
+
+    if (!refreshErr && freshData && freshData.length > 0) {
+      const freshStatuses = freshData.filter((d: any) => d.category === 'task_status')
+      const freshPriorities = freshData.filter((d: any) => d.category === 'priority')
+      const freshAssigned = freshData.filter((d: any) => d.category === 'assigned_to').map((t: any) => ({
+        ...t, label: t.label.toUpperCase(), value: t.value.toUpperCase()
+      }))
+
+      const freshConfigs = {
+        task_status: freshStatuses,
+        priority: freshPriorities,
+        assigned_to: freshAssigned
+      }
+      try {
+        localStorage.setItem(LOCAL_STORAGE_DROPDOWNS_KEY, JSON.stringify(freshConfigs))
+      } catch { /* ignore */ }
+      return freshConfigs
     }
   } catch (err) {
     console.warn('[releaseTrackerService] supabase dropdown save error:', err)
   }
+
+  return normalizedConfigs
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -39,6 +39,8 @@ export type PermissionKey =
   | 'can_unlock_estimated_hours'
   | 'can_edit_estimated_hours'
   | 'can_edit_time_logs'
+  // ── Dashboard Quick Details ─────────────────────────────────────────────
+  | 'can_view_quick_details'
 
 export interface ModulePermissionDefinition {
   moduleKey: string
@@ -64,6 +66,7 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
     moduleName: 'Dashboard',
     supportedPermissions: [
       'can_view',
+      'can_view_quick_details', // Role-based Project Pulse & AI insights section
       'can_export', // Export dashboard data/reports
     ],
     description: 'Main dashboard with overview and metrics'
@@ -408,6 +411,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   can_unlock_estimated_hours: 'Unlock Estimated Hours',
   can_edit_estimated_hours: 'Edit Estimated Hours',
   can_edit_time_logs: 'Edit / Correct Logged Hours',
+  can_view_quick_details: 'Project Pulse',
 }
 
 /**
@@ -448,4 +452,5 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   can_unlock_estimated_hours: 'Can unlock Estimated Hours for a specific task or issue',
   can_edit_estimated_hours: 'Can modify Estimated Hours when the estimation is unlocked',
   can_edit_time_logs: 'Can correct previously logged time-log entries. Every correction is recorded in audit history with a mandatory reason.',
+  can_view_quick_details: 'Can view the role-based Project Pulse health dashboard and AI risk summary on the main dashboard',
 }

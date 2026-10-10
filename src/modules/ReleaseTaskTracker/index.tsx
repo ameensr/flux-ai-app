@@ -1,6 +1,7 @@
 // src/modules/ReleaseTaskTracker/index.tsx
 
 import React, { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Rocket, Plus, Sliders, History, Download, Upload, RefreshCw, Shield
 } from 'lucide-react'
@@ -58,7 +59,11 @@ export function ReleaseTaskTracker() {
   const [isImportOpen, setIsImportOpen]               = useState(false)
   const [isPermsInfoOpen, setIsPermsInfoOpen]         = useState(false)
 
-  const { fetchInitialData, refreshData, loading, isRefreshing, deleteTask, bulkDeleteTasks, tasks } = useReleaseTrackerStore()
+  const [searchParams] = useSearchParams()
+  const {
+    fetchInitialData, refreshData, loading, isRefreshing,
+    deleteTask, bulkDeleteTasks, tasks, setFilters, setSelectedProduct
+  } = useReleaseTrackerStore()
 
   // Fetch on mount. The store's loading flag prevents duplicate in-flight fetches.
   // hasFetched ref prevents double-invoke in React StrictMode dev.
@@ -68,6 +73,27 @@ export function ReleaseTaskTracker() {
     hasFetched.current = true
     fetchInitialData()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply filters from URL search params on mount or when searchParams change
+  useEffect(() => {
+    const statusParam = searchParams.get('status')
+    const searchParam = searchParams.get('search')
+    const overrunParam = searchParams.get('overrun')
+    const productParam = searchParams.get('productId')
+
+    const filterUpdates: Partial<import('./types').ReleaseFilters> = {}
+    if (statusParam === 'in_progress') filterUpdates.taskStatus = ['In Progress']
+    else if (statusParam === 'pending') filterUpdates.taskStatus = ['Not Started', 'Assigned']
+    else if (statusParam === 'overdue') filterUpdates.overdueOnly = true
+
+    if (overrunParam === 'true') filterUpdates.overrunOnly = true
+    if (searchParam) filterUpdates.searchQuery = searchParam
+    if (productParam) setSelectedProduct(productParam)
+
+    if (Object.keys(filterUpdates).length > 0) {
+      setFilters(filterUpdates)
+    }
+  }, [searchParams, setFilters, setSelectedProduct])
 
   const handleBulkDelete = async (ids: string[]) => {
     if (!canDelete) {

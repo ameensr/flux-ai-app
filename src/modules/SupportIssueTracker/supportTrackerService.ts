@@ -908,63 +908,63 @@ export async function fetchDropdownConfigurations(): Promise<{
   let testerOptions: SupportDropdownOption[] = []
   let isQaMissOptions: SupportDropdownOption[] = []
   let retestingStatusOptions: SupportDropdownOption[] = []
+  let hasDbRows = false
 
   try {
     const { data, error } = await supabase
       .from('support_issue_dropdown_configs').select('*').order('sort_order', { ascending: true })
     if (!error && data && data.length > 0) {
+      hasDbRows = true
       testingStatusOptions = deduplicateDropdowns(data.filter((d: any) => d.category === 'testing_status'))
-      testerOptions = deduplicateDropdowns(data.filter((d: any) => d.category === 'tester'))
+      testerOptions = deduplicateDropdowns(data.filter((d: any) => d.category === 'tester').map((t: any) => ({
+        ...t, label: t.label.toUpperCase(), value: t.value.toUpperCase()
+      })))
       isQaMissOptions = deduplicateDropdowns(data.filter((d: any) => d.category === 'is_qa_miss'))
       retestingStatusOptions = deduplicateDropdowns(data.filter((d: any) => d.category === 'retesting_status'))
     }
   } catch (e) { console.warn('[supportTrackerService] dropdown configs fetch error:', e) }
 
-  // Fallback to localStorage
-  if (testingStatusOptions.length === 0 || testerOptions.length === 0 ||
-      isQaMissOptions.length === 0 || retestingStatusOptions.length === 0) {
+  // Fallback to localStorage only if DB was completely empty / unreachable
+  if (!hasDbRows) {
     const cached = localStorage.getItem(LOCAL_STORAGE_DROPDOWNS_KEY)
     if (cached) {
       try {
         const parsed = JSON.parse(cached)
-        if (testingStatusOptions.length === 0 && parsed.testing_status?.length)
+        if (parsed.testing_status?.length)
           testingStatusOptions = deduplicateDropdowns(parsed.testing_status)
-        if (testerOptions.length === 0 && parsed.testers?.length)
-          testerOptions = deduplicateDropdowns(parsed.testers)
-        if (isQaMissOptions.length === 0 && parsed.is_qa_miss?.length)
+        if (parsed.testers?.length)
+          testerOptions = deduplicateDropdowns(parsed.testers.map((t: any) => ({ ...t, label: t.label.toUpperCase(), value: t.value.toUpperCase() })))
+        if (parsed.is_qa_miss?.length)
           isQaMissOptions = deduplicateDropdowns(parsed.is_qa_miss)
-        if (retestingStatusOptions.length === 0 && parsed.retesting_status?.length)
+        if (parsed.retesting_status?.length)
           retestingStatusOptions = deduplicateDropdowns(parsed.retesting_status)
       } catch { /* ignore */ }
     }
   }
 
-  if (testingStatusOptions.length === 0) {
+  // Initial seeding defaults ONLY if neither DB nor localStorage provided any options
+  if (!hasDbRows && testingStatusOptions.length === 0) {
     testingStatusOptions = DEFAULT_TESTING_STATUSES.map((item, index) => ({
       id: `ts-default-${index + 1}`, category: 'testing_status' as const,
       label: item.label, value: item.value, color: item.color, is_active: true, sort_order: index + 1
     }))
   }
 
-  if (testerOptions.length === 0) {
+  if (!hasDbRows && testerOptions.length === 0) {
     testerOptions = DEFAULT_TESTERS.map((name, index) => ({
       id: `tester-default-${index + 1}`, category: 'tester' as const,
       label: name.toUpperCase(), value: name.toUpperCase(), is_active: true, sort_order: index + 1
     }))
-  } else {
-    testerOptions = deduplicateDropdowns(testerOptions.map(t => ({
-      ...t, label: t.label.toUpperCase(), value: t.value.toUpperCase()
-    })))
   }
 
-  if (isQaMissOptions.length === 0) {
+  if (!hasDbRows && isQaMissOptions.length === 0) {
     isQaMissOptions = DEFAULT_IS_QA_MISS_OPTIONS.map((item, index) => ({
       id: `qamiss-default-${index + 1}`, category: 'is_qa_miss' as const,
       label: item.label, value: item.value, is_active: true, sort_order: index + 1
     }))
   }
 
-  if (retestingStatusOptions.length === 0) {
+  if (!hasDbRows && retestingStatusOptions.length === 0) {
     retestingStatusOptions = DEFAULT_RETESTING_STATUS_OPTIONS.map((item, index) => ({
       id: `retest-default-${index + 1}`, category: 'retesting_status' as const,
       label: item.label, value: item.value, color: item.color, is_active: true, sort_order: index + 1
@@ -989,15 +989,42 @@ export async function saveDropdownConfigurations(
     retesting_status: SupportDropdownOption[]
   },
   currentUser: { name: string; id?: string }
-): Promise<void> {
-  const normalizedTesters = configs.testers.map(t => ({
-    ...t, label: t.label.trim().toUpperCase(), value: t.value.trim().toUpperCase()
+): Promise<{
+  testing_status: SupportDropdownOption[]
+  testers: SupportDropdownOption[]
+  is_qa_miss: SupportDropdownOption[]
+  retesting_status: SupportDropdownOption[]
+}> {
+  const normalizedStatuses = configs.testing_status.map((s, idx) => ({
+    ...s,
+    label: s.label.trim(),
+    value: s.value.trim(),
+    sort_order: s.sort_order ?? idx + 1
   }))
+  const normalizedTesters = configs.testers.map((t, idx) => ({
+    ...t,
+    label: t.label.trim().toUpperCase(),
+    value: t.value.trim().toUpperCase(),
+    sort_order: t.sort_order ?? idx + 1
+  }))
+  const normalizedMiss = (configs.is_qa_miss || []).map((m, idx) => ({
+    ...m,
+    label: m.label.trim(),
+    value: m.value.trim(),
+    sort_order: m.sort_order ?? idx + 1
+  }))
+  const normalizedRetest = (configs.retesting_status || []).map((r, idx) => ({
+    ...r,
+    label: r.label.trim(),
+    value: r.value.trim(),
+    sort_order: r.sort_order ?? idx + 1
+  }))
+
   const normalizedConfigs = {
-    testing_status: configs.testing_status,
+    testing_status: normalizedStatuses,
     testers: normalizedTesters,
-    is_qa_miss: configs.is_qa_miss,
-    retesting_status: configs.retesting_status
+    is_qa_miss: normalizedMiss,
+    retesting_status: normalizedRetest
   }
 
   localStorage.setItem(LOCAL_STORAGE_DROPDOWNS_KEY, JSON.stringify(normalizedConfigs))
@@ -1011,24 +1038,136 @@ export async function saveDropdownConfigurations(
   })
 
   try {
-    const all = [
-      ...normalizedConfigs.testing_status,
-      ...normalizedConfigs.testers,
-      ...normalizedConfigs.is_qa_miss,
-      ...normalizedConfigs.retesting_status
-    ]
-    for (const item of all) {
-      const isRealUUID = isUUID(item.id)
-      await supabase.from('support_issue_dropdown_configs').upsert(
-        {
-          ...(isRealUUID ? { id: item.id } : {}),
-          category: item.category, label: item.label, value: item.value,
-          color: item.color || null, is_active: item.is_active, sort_order: item.sort_order
-        },
-        { onConflict: 'category,value', ignoreDuplicates: false }
-      )
+    const categories = ['testing_status', 'tester', 'is_qa_miss', 'retesting_status']
+    const { data: existingRows, error: fetchErr } = await supabase
+      .from('support_issue_dropdown_configs')
+      .select('id, category, value')
+      .in('category', categories)
+
+    if (fetchErr) {
+      console.warn('[supportTrackerService] error fetching existing dropdowns for sync:', fetchErr)
     }
-  } catch (err) { console.warn('[supportTrackerService] supabase dropdown save error:', err) }
+
+    const existing = existingRows || []
+
+    const activeValuesByCategory: Record<string, Set<string>> = {
+      testing_status: new Set(normalizedStatuses.map(s => s.value.trim().toLowerCase())),
+      tester: new Set(normalizedTesters.map(t => t.value.trim().toLowerCase())),
+      is_qa_miss: new Set(normalizedMiss.map(m => m.value.trim().toLowerCase())),
+      retesting_status: new Set(normalizedRetest.map(r => r.value.trim().toLowerCase()))
+    }
+
+    // 1. Permanently delete options from DB that were deleted in the UI
+    const idsToDelete: string[] = []
+    for (const row of existing) {
+      const allowed = activeValuesByCategory[row.category]
+      if (allowed && !allowed.has((row.value || '').trim().toLowerCase())) {
+        idsToDelete.push(row.id)
+      }
+    }
+
+    if (idsToDelete.length > 0) {
+      const { error: delErr } = await supabase
+        .from('support_issue_dropdown_configs')
+        .delete()
+        .in('id', idsToDelete)
+      if (delErr) {
+        console.warn('[supportTrackerService] error deleting removed dropdown options:', delErr)
+      }
+    }
+
+    // 2. Build index of remaining DB rows by category + lower(value) and by id
+    const remainingExisting = existing.filter(r => !idsToDelete.includes(r.id))
+    const existingByCatAndVal = new Map<string, string>()
+    const existingIds = new Set<string>()
+
+    for (const r of remainingExisting) {
+      existingIds.add(r.id)
+      existingByCatAndVal.set(`${r.category}:${(r.value || '').trim().toLowerCase()}`, r.id)
+    }
+
+    const allKeptOptions = [
+      ...normalizedStatuses,
+      ...normalizedTesters,
+      ...normalizedMiss,
+      ...normalizedRetest
+    ]
+
+    // 3. Update existing or insert new options without invalid ON CONFLICT specification
+    for (const item of allKeptOptions) {
+      const lookupKey = `${item.category}:${item.value.trim().toLowerCase()}`
+      const matchingId = (item.id && isUUID(item.id) && existingIds.has(item.id))
+        ? item.id
+        : existingByCatAndVal.get(lookupKey)
+
+      if (matchingId) {
+        const { error: updateErr } = await supabase
+          .from('support_issue_dropdown_configs')
+          .update({
+            label: item.label,
+            value: item.value,
+            color: item.color || null,
+            is_active: item.is_active,
+            sort_order: item.sort_order,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', matchingId)
+        if (updateErr) {
+          console.warn('[supportTrackerService] error updating dropdown option:', updateErr)
+        }
+      } else {
+        const newRow: any = {
+          category: item.category,
+          label: item.label,
+          value: item.value,
+          color: item.color || null,
+          is_active: item.is_active,
+          sort_order: item.sort_order
+        }
+        if (item.id && isUUID(item.id)) {
+          newRow.id = item.id
+        }
+        const { data: inserted, error: insertErr } = await supabase
+          .from('support_issue_dropdown_configs')
+          .insert(newRow)
+          .select('id')
+        if (insertErr) {
+          console.warn('[supportTrackerService] error inserting dropdown option:', insertErr)
+        } else if (inserted && inserted[0]?.id) {
+          existingIds.add(inserted[0].id)
+          existingByCatAndVal.set(lookupKey, inserted[0].id)
+        }
+      }
+    }
+
+    // 4. Fetch the refreshed database state
+    const { data: freshData, error: refreshErr } = await supabase
+      .from('support_issue_dropdown_configs')
+      .select('*')
+      .order('sort_order', { ascending: true })
+
+    if (!refreshErr && freshData && freshData.length > 0) {
+      const freshStatuses = deduplicateDropdowns(freshData.filter((d: any) => d.category === 'testing_status'))
+      const freshTesters = deduplicateDropdowns(freshData.filter((d: any) => d.category === 'tester').map((t: any) => ({
+        ...t, label: t.label.toUpperCase(), value: t.value.toUpperCase()
+      })))
+      const freshMiss = deduplicateDropdowns(freshData.filter((d: any) => d.category === 'is_qa_miss'))
+      const freshRetest = deduplicateDropdowns(freshData.filter((d: any) => d.category === 'retesting_status'))
+
+      const freshResult = {
+        testing_status: freshStatuses,
+        testers: freshTesters,
+        is_qa_miss: freshMiss,
+        retesting_status: freshRetest
+      }
+      localStorage.setItem(LOCAL_STORAGE_DROPDOWNS_KEY, JSON.stringify(freshResult))
+      return freshResult
+    }
+  } catch (err) {
+    console.warn('[supportTrackerService] supabase dropdown save error:', err)
+  }
+
+  return normalizedConfigs
 }
 
 export async function syncTestersFromUserProfiles(): Promise<string[]> {
@@ -1039,7 +1178,9 @@ export async function syncTestersFromUserProfiles(): Promise<string[]> {
       const names = data
         .map(p => (p.full_name?.trim() || p.email?.split('@')[0])?.toUpperCase())
         .filter(Boolean) as string[]
-      return Array.from(new Set([...names, ...DEFAULT_TESTERS]))
+      if (names.length > 0) {
+        return Array.from(new Set(names))
+      }
     }
   } catch (err) { console.warn('[supportTrackerService] syncTestersFromUserProfiles error:', err) }
   return [...DEFAULT_TESTERS]

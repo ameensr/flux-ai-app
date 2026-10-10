@@ -2,7 +2,7 @@
 // Main Project Hub page - Premium UI with proper light/dark mode support
 
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Search, Filter, FolderKanban } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -20,6 +20,7 @@ import { PROJECT_STATUS_LABELS } from './types'
 export function ProjectHub() {
   const { toast } = useToast()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { permissionMap } = useAppStore()
   const { canView, can } = usePermissions()
   const { isDark } = useTheme()
@@ -31,6 +32,18 @@ export function ProjectHub() {
   const [statusFilter, setStatusFilter] = useState<ProjectStatus[]>([])
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+
+  // Sync filters from URL search params
+  useEffect(() => {
+    const statusParam = searchParams.get('status') as ProjectStatus | null
+    const searchParam = searchParams.get('search')
+    if (statusParam && ['active', 'on_hold', 'completed', 'archived'].includes(statusParam)) {
+      setStatusFilter([statusParam])
+    }
+    if (searchParam) {
+      setSearchQuery(searchParam)
+    }
+  }, [searchParams])
 
   const canCreate = can('project-hub', 'can_create')
   const canViewModule = canView('project-hub')
