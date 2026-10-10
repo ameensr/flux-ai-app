@@ -298,7 +298,12 @@ export async function fetchReleaseTasks(
 
     const { data, error } = await taskQuery
 
-    if (!error && data && data.length > 0) {
+    if (!error && data) {
+      if (data.length === 0) {
+        // User has authorized projects but no tasks — clear any stale cache and return empty.
+        localStorage.setItem(LOCAL_STORAGE_TASKS_KEY, JSON.stringify([]))
+        return []
+      }
       const mapped: ReleaseTask[] = data.map((d: any, index: number) => {
         const est = Number(d.estimated_hours) || 0
         const actFromLogs = actualHoursByUUID.get(d.id) ?? actualHoursByTaskId.get(d.task_id)

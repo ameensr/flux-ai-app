@@ -178,7 +178,12 @@ export async function fetchSupportIssues(
 
     const { data, error } = await issueQuery
 
-    if (!error && data && data.length > 0) {
+    if (!error && data) {
+      if (data.length === 0) {
+        // User has authorized projects but no issues — clear any stale cache and return empty.
+        localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify([]))
+        return []
+      }
       const mapped = data.map((item: any) => {
         const matchingProject = products.find(p => p.id === item.project_id)
         const est = Number(item.estimated_hours) || 0
@@ -208,7 +213,11 @@ export async function fetchSupportIssues(
 
       const dbIds = new Set(mapped.map((m: any) => m.id))
       const dbIssueIds = new Set(mapped.map((m: any) => m.issue_id))
-      const pendingLocal = localIssues.filter(l => !dbIds.has(l.id) && !dbIssueIds.has(l.issue_id))
+      const authorizedSet = new Set(authorizedProjectIds)
+      const pendingLocal = localIssues.filter(l =>
+        !dbIds.has(l.id) && !dbIssueIds.has(l.issue_id) &&
+        (!l.project_id || authorizedSet.has(l.project_id))
+      )
       const merged = deduplicateIssues([...mapped, ...pendingLocal])
       const synced = syncWithTimeLogs(merged)
       localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(synced))
