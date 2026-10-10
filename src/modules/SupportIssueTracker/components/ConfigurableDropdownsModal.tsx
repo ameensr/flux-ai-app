@@ -1,17 +1,16 @@
 // src/modules/SupportIssueTracker/components/ConfigurableDropdownsModal.tsx
-// Configuration UI for master dropdown lists (Testing Status, Testers).
+// Configuration UI for master dropdown lists (Testing Status, Testers, Is QA Miss, Retesting Status).
 // Permission-controlled: Requires 'can_configure_dropdowns' permission.
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  X, Plus, Check, Trash2, Edit2, RotateCcw, Users, Sliders,
-  RefreshCw, Palette, ShieldAlert
+  X, Plus, Check, Trash2, Sliders,
+  RefreshCw, Palette
 } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
-import { GlassCard } from '@/components/ui/GlassCard'
-import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
+import { useAppStore } from '@/store/useAppStore'
 import { useSupportTrackerStore } from '../store'
 import { syncTestersFromUserProfiles } from '../supportTrackerService'
 import type { SupportDropdownOption } from '../types'
@@ -37,6 +36,7 @@ const PRESET_COLORS = [
 export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
   useBodyScrollLock(isOpen)
   const { toast } = useToast()
+  const { user, profile } = useAppStore()
   const { dropdownConfigs, updateDropdowns } = useSupportTrackerStore()
 
   const [activeTab, setActiveTab] = useState<'testing_status' | 'testers' | 'is_qa_miss' | 'retesting_status'>('testing_status')
@@ -54,15 +54,42 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
   const [saving, setSaving] = useState(false)
 
   // Re-sync ONLY when modal opens (not on every dropdownConfigs change to avoid reset loops)
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isOpen) return
     setStatuses(dropdownConfigs.testing_status)
     setTesters(dropdownConfigs.testers.map(t => ({ ...t, label: t.label.toUpperCase(), value: t.value.toUpperCase() })))
     setIsQaMissOptions(dropdownConfigs.is_qa_miss || [])
     setRetestingStatusOptions(dropdownConfigs.retesting_status || [])
     setNewLabel('')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setNewColor(PRESET_COLORS[0])
   }, [isOpen])
+
+  // Contextual labels & placeholders based on active tab
+  const getTabAddTitle = () => {
+    switch (activeTab) {
+      case 'testing_status':
+        return 'Status'
+      case 'testers':
+        return 'QA Engineer'
+      case 'is_qa_miss':
+        return 'QA Miss Option'
+      case 'retesting_status':
+        return 'Retesting Status'
+    }
+  }
+
+  const getPlaceholder = () => {
+    switch (activeTab) {
+      case 'testing_status':
+        return 'e.g. In Security Review'
+      case 'testers':
+        return 'e.g. JOHN DOE'
+      case 'is_qa_miss':
+        return 'e.g. Under Review or Partial Miss'
+      case 'retesting_status':
+        return 'e.g. Pending Retest or Retest Passed'
+    }
+  }
 
   // Handle Add Item — deduplicate by value before adding
   const handleAddItem = () => {
@@ -70,19 +97,31 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
 
     if (activeTab === 'testing_status') {
       const trimmedLabel = newLabel.trim()
-      if (statuses.some(s => s.value.toLowerCase() === trimmedLabel.toLowerCase())) { setNewLabel(''); return }
+      if (statuses.some(s => s.value.toLowerCase() === trimmedLabel.toLowerCase())) {
+        toast({ variant: 'destructive', title: 'Duplicate Option', description: `"${trimmedLabel}" already exists in Testing Status.` })
+        return
+      }
       setStatuses([...statuses, { id: `ts-${Date.now()}`, category: 'testing_status', label: trimmedLabel, value: trimmedLabel, color: newColor, is_active: true, sort_order: statuses.length + 1 }])
     } else if (activeTab === 'testers') {
       const cleanUpperName = newLabel.trim().toUpperCase()
-      if (testers.some(t => t.value.toUpperCase() === cleanUpperName)) { setNewLabel(''); return }
+      if (testers.some(t => t.value.toUpperCase() === cleanUpperName)) {
+        toast({ variant: 'destructive', title: 'Duplicate Tester', description: `"${cleanUpperName}" already exists in QA Engineers.` })
+        return
+      }
       setTesters([...testers, { id: `tester-${Date.now()}`, category: 'tester', label: cleanUpperName, value: cleanUpperName, is_active: true, sort_order: testers.length + 1 }])
     } else if (activeTab === 'is_qa_miss') {
       const trimmedLabel = newLabel.trim()
-      if (isQaMissOptions.some(o => o.value.toLowerCase() === trimmedLabel.toLowerCase())) { setNewLabel(''); return }
+      if (isQaMissOptions.some(o => o.value.toLowerCase() === trimmedLabel.toLowerCase())) {
+        toast({ variant: 'destructive', title: 'Duplicate Option', description: `"${trimmedLabel}" already exists in QA Miss options.` })
+        return
+      }
       setIsQaMissOptions([...isQaMissOptions, { id: `qamiss-${Date.now()}`, category: 'is_qa_miss', label: trimmedLabel, value: trimmedLabel, is_active: true, sort_order: isQaMissOptions.length + 1 }])
     } else if (activeTab === 'retesting_status') {
       const trimmedLabel = newLabel.trim()
-      if (retestingStatusOptions.some(o => o.value.toLowerCase() === trimmedLabel.toLowerCase())) { setNewLabel(''); return }
+      if (retestingStatusOptions.some(o => o.value.toLowerCase() === trimmedLabel.toLowerCase())) {
+        toast({ variant: 'destructive', title: 'Duplicate Option', description: `"${trimmedLabel}" already exists in Retesting Status.` })
+        return
+      }
       setRetestingStatusOptions([...retestingStatusOptions, { id: `retest-${Date.now()}`, category: 'retesting_status', label: trimmedLabel, value: trimmedLabel, color: newColor, is_active: true, sort_order: retestingStatusOptions.length + 1 }])
     }
     setNewLabel('')
@@ -152,7 +191,13 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
   const handleSaveAll = async () => {
     setSaving(true)
     try {
-      const currentUser = { name: 'Ameen SR' }
+      const actorName =
+        (profile?.full_name as string) ||
+        (user?.user_metadata?.full_name as string) ||
+        user?.email ||
+        'QA Admin'
+      const currentUser = { name: actorName, id: user?.id }
+
       const normalizedTesters = testers.map(t => ({
         ...t,
         label: t.label.trim().toUpperCase(),
@@ -181,6 +226,15 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
 
   if (!isOpen) return null
 
+  const currentList =
+    activeTab === 'testing_status'
+      ? statuses
+      : activeTab === 'testers'
+      ? testers
+      : activeTab === 'is_qa_miss'
+      ? isQaMissOptions
+      : retestingStatusOptions
+
   return (
     <AnimatePresence>
       <div
@@ -198,140 +252,149 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
         >
           {/* Header */}
           <div className="px-6 py-4.5 border-b border-white/10 flex items-center justify-between shrink-0 bg-surface/50">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-accent">
-                  <Sliders className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-text-primary">
-                    Configure Dropdowns
-                  </h3>
-                  <p className="text-xs text-text-muted">
-                    Customizable master lists for testing statuses and tester employees
-                  </p>
-                </div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-accent">
+                <Sliders className="w-5 h-5" />
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div>
+                <h3 className="text-base font-bold text-text-primary">
+                  Configure Dropdowns
+                </h3>
+                <p className="text-xs text-text-muted">
+                  Customizable master lists for testing statuses, QA engineers, QA miss classifications, and retesting statuses
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
-            {/* Tab switch */}
-            <div className="flex items-center gap-2 px-6 pt-4 pb-2 border-b border-white/5 flex-wrap">
-              {(['testing_status', 'testers', 'is_qa_miss', 'retesting_status'] as const).map(tab => {
-                const labels: Record<string, string> = {
-                  testing_status: `Testing Status (${statuses.length})`,
-                  testers: `QA Engineer (${testers.length})`,
-                  is_qa_miss: `Is QA Miss? (${isQaMissOptions.length})`,
-                  retesting_status: `Retesting Status (${retestingStatusOptions.length})`
-                }
-                return (
-                  <button key={tab} type="button" onClick={() => setActiveTab(tab)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === tab ? 'bg-accent text-white shadow-xs' : 'text-text-muted hover:text-text-primary hover:bg-white/5'}`}>
-                    {labels[tab]}
-                  </button>
-                )
-              })}
-            </div>
+          {/* Tab switch */}
+          <div className="flex items-center gap-2 px-6 pt-4 pb-2 border-b border-white/5 flex-wrap">
+            {(['testing_status', 'testers', 'is_qa_miss', 'retesting_status'] as const).map(tab => {
+              const labels: Record<string, string> = {
+                testing_status: `Testing Status (${statuses.length})`,
+                testers: `QA Engineer (${testers.length})`,
+                is_qa_miss: `Is QA Miss? (${isQaMissOptions.length})`,
+                retesting_status: `Retesting Status (${retestingStatusOptions.length})`
+              }
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(tab)
+                    setNewLabel('')
+                    setNewColor(PRESET_COLORS[0])
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === tab
+                      ? 'bg-accent text-white shadow-xs'
+                      : 'text-text-muted hover:text-text-primary hover:bg-white/5'
+                  }`}
+                >
+                  {labels[tab]}
+                </button>
+              )
+            })}
+          </div>
 
-            {/* Content Body */}
-            <div className="overflow-y-auto space-y-4 px-6 py-4 flex-1">
-              {/* Add New Option Input Box */}
-              <div className="p-3.5 rounded-xl bg-surface border border-white/10 space-y-2.5">
-                <span className="text-xs font-semibold text-text-primary block">
-                  Add New {activeTab === 'testing_status' ? 'Status' : 'Tester'}
-                </span>
+          {/* Content Body */}
+          <div className="overflow-y-auto space-y-4 px-6 py-4 flex-1">
+            {/* Add New Option Input Box */}
+            <div className="p-3.5 rounded-xl bg-surface border border-white/10 space-y-2.5">
+              <span className="text-xs font-semibold text-text-primary block">
+                Add New {getTabAddTitle()}
+              </span>
 
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newLabel}
-                    onChange={(e) =>
-                      setNewLabel(activeTab === 'testers' ? e.target.value.toUpperCase() : e.target.value)
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={newLabel}
+                  onChange={(e) =>
+                    setNewLabel(activeTab === 'testers' ? e.target.value.toUpperCase() : e.target.value)
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleAddItem()
                     }
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleAddItem()
-                      }
-                    }}
-                    placeholder={
-                      activeTab === 'testing_status'
-                        ? 'e.g. In Security Review'
-                        : 'e.g. JOHN DOE'
-                    }
-                    className={`flex-1 h-9 bg-surface-elevated border border-white/15 rounded-lg px-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent ${
-                      activeTab === 'testers' ? 'uppercase font-mono tracking-wider' : ''
-                    }`}
-                  />
+                  }}
+                  placeholder={getPlaceholder()}
+                  className={`flex-1 min-w-[160px] h-9 bg-surface-elevated border border-white/15 rounded-lg px-3 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent ${
+                    activeTab === 'testers' ? 'uppercase font-mono tracking-wider' : ''
+                  }`}
+                />
 
-                  {activeTab === 'testing_status' && (
-                    <div className="flex items-center gap-1">
-                      {PRESET_COLORS.slice(0, 5).map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setNewColor(c)}
-                          className={`w-5 h-5 rounded-full border-2 transition-transform ${
-                            newColor === c ? 'scale-110 border-white' : 'border-transparent opacity-70'
-                          }`}
-                          style={{ backgroundColor: c }}
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handleAddItem}
-                    disabled={!newLabel.trim()}
-                    className="h-9 px-3.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Add
-                  </button>
-                </div>
-
-                {activeTab === 'testers' && (
-                  <div className="pt-2 border-t border-white/5 flex items-center justify-between">
-                    <span className="text-[11px] text-text-muted">Quickly pull active team members from company profiles</span>
-                    <button type="button" onClick={handleSyncProfiles} disabled={syncingProfiles}
-                      className="text-xs font-semibold text-accent hover:underline flex items-center gap-1.5">
-                      <RefreshCw className={`w-3.5 h-3.5 ${syncingProfiles ? 'animate-spin' : ''}`} />
-                      Sync from User Profiles
-                    </button>
-                  </div>
-                )}
                 {(activeTab === 'testing_status' || activeTab === 'retesting_status') && (
-                  <div className="flex items-center gap-1 mt-1">
-                    {PRESET_COLORS.slice(0, 5).map((c) => (
-                      <button key={c} type="button" onClick={() => setNewColor(c)}
-                        className={`w-5 h-5 rounded-full border-2 transition-transform ${newColor === c ? 'scale-110 border-white' : 'border-transparent opacity-70'}`}
-                        style={{ backgroundColor: c }} />
+                  <div className="flex items-center gap-1 shrink-0" title="Select color tag">
+                    {PRESET_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setNewColor(c)}
+                        className={`w-5 h-5 rounded-full border-2 transition-transform cursor-pointer ${
+                          newColor === c ? 'scale-110 border-white shadow-xs' : 'border-transparent opacity-70 hover:opacity-100'
+                        }`}
+                        style={{ backgroundColor: c }}
+                        title={`Select color: ${c}`}
+                      />
                     ))}
                   </div>
                 )}
+
+                <button
+                  type="button"
+                  onClick={handleAddItem}
+                  disabled={!newLabel.trim()}
+                  className="h-9 px-3.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50 shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add
+                </button>
               </div>
 
-              {/* Items List */}
-              <div className="space-y-2">
-                <span className="text-xs font-semibold text-text-muted block">
-                  Active Options ({activeTab === 'testing_status' ? statuses.length : activeTab === 'testers' ? testers.length : activeTab === 'is_qa_miss' ? isQaMissOptions.length : retestingStatusOptions.length})
-                </span>
+              {activeTab === 'testers' && (
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                  <span className="text-[11px] text-text-muted">Quickly pull active team members from company profiles</span>
+                  <button
+                    type="button"
+                    onClick={handleSyncProfiles}
+                    disabled={syncingProfiles}
+                    className="text-xs font-semibold text-accent hover:underline flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncingProfiles ? 'animate-spin' : ''}`} />
+                    Sync from User Profiles
+                  </button>
+                </div>
+              )}
+            </div>
 
+            {/* Items List */}
+            <div className="space-y-2">
+              <span className="text-xs font-semibold text-text-muted block">
+                Active Options ({currentList.length})
+              </span>
+
+              {currentList.length === 0 ? (
+                <div className="p-6 text-center text-xs text-text-muted bg-surface rounded-xl border border-white/10">
+                  No options found. Add your first {getTabAddTitle().toLowerCase()} above.
+                </div>
+              ) : (
                 <div className="divide-y divide-white/5 border border-white/10 rounded-xl overflow-hidden bg-surface">
-                  {(activeTab === 'testing_status' ? statuses : activeTab === 'testers' ? testers : activeTab === 'is_qa_miss' ? isQaMissOptions : retestingStatusOptions).map((item) => (
+                  {currentList.map((item) => (
                     <div
                       key={item.id}
                       className="p-3 flex items-center justify-between text-xs hover:bg-white/[0.02] transition-colors"
                     >
                       <div className="flex items-center gap-2.5">
                         {(activeTab === 'testing_status' || activeTab === 'retesting_status') && item.color && (
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
                         )}
                         <span className={`font-semibold ${item.is_active ? 'text-text-primary' : 'text-text-muted line-through'} ${activeTab === 'testers' ? 'uppercase font-mono tracking-wide' : ''}`}>
                           {activeTab === 'testers' ? item.label.toUpperCase() : item.label}
@@ -342,7 +405,7 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
                         <button
                           type="button"
                           onClick={() => handleToggleActive(item.id)}
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border transition-colors ${
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border transition-colors cursor-pointer ${
                             item.is_active
                               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                               : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
@@ -354,7 +417,7 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
                         <button
                           type="button"
                           onClick={() => handleRemoveItem(item.id)}
-                          className="p-1 text-text-muted hover:text-rose-400 transition-colors"
+                          className="p-1 text-text-muted hover:text-rose-400 transition-colors cursor-pointer"
                           title="Remove option"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -363,29 +426,30 @@ export function ConfigurableDropdownsModal({ isOpen, onClose }: Props) {
                     </div>
                   ))}
                 </div>
-              </div>
+              )}
             </div>
+          </div>
 
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-white/10 flex items-center justify-end gap-3 shrink-0 bg-surface/80 backdrop-blur-sm">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={saving}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveAll}
-                disabled={saving}
-                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-accent hover:bg-accent-hover text-white transition-all shadow-md shadow-accent/20 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-              >
-                <Check className="w-4 h-4" />
-                {saving ? 'Saving...' : 'Save Configuration'}
-              </button>
-            </div>
+          {/* Modal Footer */}
+          <div className="px-6 py-4 border-t border-white/10 flex items-center justify-end gap-3 shrink-0 bg-surface/80 backdrop-blur-sm">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveAll}
+              disabled={saving}
+              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-accent hover:bg-accent-hover text-white transition-all shadow-md shadow-accent/20 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              <Check className="w-4 h-4" />
+              {saving ? 'Saving...' : 'Save Configuration'}
+            </button>
+          </div>
         </motion.div>
       </div>
     </AnimatePresence>

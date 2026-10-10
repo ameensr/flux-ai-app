@@ -28,7 +28,7 @@ const MODULE_PERMISSIONS_LIST = [
   { key: 'can_edit_estimated_hours', label: 'Edit Estimated Hours', desc: 'Allows editing Estimated Hrs when the issue estimation is unlocked.' },
   { key: 'can_export', label: 'Export Support Issues', desc: 'Enables downloading filtered datasets to Microsoft Excel and CSV.' },
   { key: 'can_view_history', label: 'View History', desc: 'Allows inspecting the immutable audit history and field diff trails.' },
-  { key: 'can_configure_dropdowns', label: 'Configure Dropdowns', desc: 'Permits adding, editing, and toggling testing status and tester dropdown options.' },
+  { key: 'can_configure_dropdowns', label: 'Configure Dropdowns', desc: 'Permits adding, editing, and toggling testing status, QA engineer, QA miss, and retesting status options.' },
   { key: 'can_manage_permissions', label: 'Manage Permissions', desc: 'Allows configuring RBAC permissions in Enterprise Admin.' },
   { key: 'can_import', label: 'Import Support Issues', desc: 'Enables bulk importing support issues from Excel/CSV mapped to Project Hub.' },
   { key: 'can_edit_time_logs', label: 'Edit / Correct Logged Hours', desc: 'Allows authorized users to correct previously logged time-log entries. Every correction is recorded in audit history with a mandatory reason.' },

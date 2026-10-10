@@ -116,11 +116,13 @@ export function SupportIssueTable({
   }
 
   const getRetestingBadge = (statusName: string) => {
-    const fallback = DEFAULT_RETESTING_STATUS_OPTIONS.find(s => s.value === statusName)
-    const color = fallback?.color || '#6b7280'
+    const config = dropdownConfigs.retesting_status?.find(s => s.value.toLowerCase() === (statusName || '').toLowerCase())
+    const fallback = DEFAULT_RETESTING_STATUS_OPTIONS.find(s => s.value.toLowerCase() === (statusName || '').toLowerCase())
+    const color = config?.color || fallback?.color || '#6b7280'
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border"
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border"
         style={{ backgroundColor: `${color}15`, borderColor: `${color}35`, color }}>
+        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
         {statusName || 'Not Required'}
       </span>
     )
