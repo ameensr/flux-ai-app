@@ -1757,3 +1757,110 @@ export function exportReleaseTasksToCSV(tasks: ReleaseTask[], filename?: string)
   link.click()
   document.body.removeChild(link)
 }
+
+// ── Import Template ───────────────────────────────────────────────────────────
+
+// Exact headers that ReleaseExportImportModal's handleFileUpload reads
+export const RELEASE_IMPORT_HEADERS = [
+  'Product',
+  'Release',
+  'Task Description',
+  'QA Engineer',
+  'Priority',
+  'Task Status',
+  'Received Date/Time',
+  'Actual Start Date',
+  'Actual End Date',
+  'Test Design Est',
+  'Data Prep Est',
+  'Functional Testing Est',
+  'Retesting Est',
+  'Comments'
+] as const
+
+export function downloadReleaseImportTemplate(products: ProjectWithMembers[]): void {
+  const workbook = XLSX.utils.book_new()
+
+  // ── Sheet 1: Import Data ─────────────────────────────────────────────────
+  const dataRows: Record<string, any>[] = []
+  const dataSheet = XLSX.utils.json_to_sheet(dataRows, { header: [...RELEASE_IMPORT_HEADERS] })
+
+  // Bold header row
+  RELEASE_IMPORT_HEADERS.forEach((_, colIdx) => {
+    const cellAddr = XLSX.utils.encode_cell({ r: 0, c: colIdx })
+    if (dataSheet[cellAddr]) {
+      dataSheet[cellAddr].s = { font: { bold: true } }
+    }
+  })
+
+  dataSheet['!cols'] = [
+    { wch: 28 }, // Product
+    { wch: 16 }, // Release
+    { wch: 50 }, // Task Description
+    { wch: 20 }, // QA Engineer
+    { wch: 12 }, // Priority
+    { wch: 16 }, // Task Status
+    { wch: 22 }, // Received Date/Time
+    { wch: 16 }, // Actual Start Date
+    { wch: 16 }, // Actual End Date
+    { wch: 18 }, // Test Design Est
+    { wch: 16 }, // Data Prep Est
+    { wch: 24 }, // Functional Testing Est
+    { wch: 16 }, // Retesting Est
+    { wch: 40 }, // Comments
+  ]
+
+  // Freeze header row
+  dataSheet['!freeze'] = { xSplit: 0, ySplit: 1 }
+
+  XLSX.utils.book_append_sheet(workbook, dataSheet, 'Import Data')
+
+  // ── Sheet 2: Instructions ─────────────────────────────────────────────────
+  const productList = products.map(p => p.name).join(', ') || 'Use exact product name from Project Hub'
+
+  const instructions = [
+    ['Release Task Tracker — Import Template Instructions'],
+    [''],
+    ['HOW TO USE THIS TEMPLATE'],
+    ['1. Fill in your data on the "Import Data" sheet starting from row 2.'],
+    ['2. Do not modify or delete the header row (row 1).'],
+    ['3. Save the file as .xlsx and upload it via the Import popup.'],
+    [''],
+    ['COLUMN REFERENCE'],
+    ['Column', 'Required', 'Format / Accepted Values', 'Notes'],
+    ['Product', 'YES', productList, 'Must exactly match a product name in Project Hub (case-insensitive). Defaults to first product if blank.'],
+    ['Release', 'YES', 'e.g. Release 4.2', 'Free text release label. Defaults to Release 1.0 if blank.'],
+    ['Task Description', 'YES', 'Free text', 'Detailed description of the release task. Cannot be empty.'],
+    ['QA Engineer', 'No', 'e.g. Ameen SR', 'Name of the assigned QA engineer. Defaults to Unassigned.'],
+    ['Priority', 'No', 'Critical | High | Medium | Low', 'Defaults to Medium.'],
+    ['Task Status', 'No', 'Not Started | Assigned | In Progress | Blocked | In Review | Completed | Cancelled', 'Defaults to Not Started.'],
+    ['Received Date/Time', 'No', 'YYYY-MM-DDTHH:MM  e.g. 2026-10-07T09:30', 'ISO datetime format. Leave blank if unknown.'],
+    ['Actual Start Date', 'No', 'YYYY-MM-DD  e.g. 2026-10-07', 'Leave blank if not yet started.'],
+    ['Actual End Date', 'No', 'YYYY-MM-DD  e.g. 2026-10-14', 'Leave blank if not completed.'],
+    ['Test Design Est', 'No', 'Non-negative decimal  e.g. 2 or 1.5', 'Test design estimation in hours. Defaults to 0.'],
+    ['Data Prep Est', 'No', 'Non-negative decimal  e.g. 1', 'Data preparation estimation in hours. Defaults to 0.'],
+    ['Functional Testing Est', 'No', 'Non-negative decimal  e.g. 8', 'Functional testing estimation in hours. Defaults to 0.'],
+    ['Retesting Est', 'No', 'Non-negative decimal  e.g. 2', 'Retesting estimation in hours. Defaults to 0.'],
+    ['Comments', 'No', 'Free text', 'Optional notes, dependencies, or blocker remarks.'],
+    [''],
+    ['CALCULATED FIELDS (do not include in import)'],
+    ['Total Estimation (Hrs)', '—', 'Auto-calculated', 'Sum of Test Design + Data Prep + Functional Testing + Retesting. Never import this column.'],
+    ['Actual / Effort (Hrs)', '—', 'Auto-calculated', 'Cumulative sum of all Time Log entries. Never import this column.'],
+    ['Task ID', '—', 'Auto-generated', 'Sequential REL-001, REL-002 … IDs are assigned automatically on import.'],
+    [''],
+    ['IMPORTANT NOTES'],
+    ['• Duplicate rows (same Description + Release + Product) are automatically skipped.'],
+    ['• Task IDs are generated sequentially — do not include a Task ID column.'],
+    ['• Date format must be YYYY-MM-DD (e.g. 2026-10-07).'],
+    ['• Received Date/Time must be ISO format YYYY-MM-DDTHH:MM (e.g. 2026-10-07T09:30).'],
+    ['• Estimation columns accept decimals in 0.5 increments (e.g. 0.5, 1, 1.5, 2).'],
+  ]
+
+  const instrSheet = XLSX.utils.aoa_to_sheet(instructions)
+  instrSheet['!cols'] = [
+    { wch: 30 }, { wch: 12 }, { wch: 70 }, { wch: 65 }
+  ]
+  XLSX.utils.book_append_sheet(workbook, instrSheet, 'Instructions')
+
+  XLSX.writeFile(workbook, 'Release_Task_Import_Template.xlsx')
+}

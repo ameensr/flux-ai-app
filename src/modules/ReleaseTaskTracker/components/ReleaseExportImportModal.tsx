@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAppStore } from '@/store/useAppStore'
 import { useReleaseTrackerStore } from '../store'
-import { exportReleaseTasksToExcel, exportReleaseTasksToCSV, generateNextTaskId } from '../releaseTrackerService'
+import { exportReleaseTasksToExcel, exportReleaseTasksToCSV, generateNextTaskId, downloadReleaseImportTemplate } from '../releaseTrackerService'
 import * as XLSX from 'xlsx'
 
 interface Props {
@@ -271,6 +271,15 @@ export function ReleaseExportImportModal({
                 <p className="text-xs text-text-muted">
                   Upload an Excel or CSV file containing columns: <strong>Product, Release, Task Description, QA Engineer, Test Design Est, Data Prep Est, Functional Testing Est, Retesting Est, Task Status</strong>.
                 </p>
+
+                <button
+                  type="button"
+                  onClick={() => downloadReleaseImportTemplate(products)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download Excel Template (.xlsx)
+                </button>
 
                 <label className="border-2 border-dashed border-white/15 hover:border-accent/40 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors bg-surface-elevated/30">
                   <Upload className="w-8 h-8 text-accent" />

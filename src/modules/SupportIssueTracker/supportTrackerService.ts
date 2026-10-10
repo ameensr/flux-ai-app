@@ -1271,37 +1271,117 @@ export function exportSupportIssuesToExcel(issues: SupportIssue[], filename = 's
 
 // ── Import Template ───────────────────────────────────────────────────────────
 
-// Columns importable (excludes Actual/Effort Hrs which is time-log driven)
-const IMPORT_TEMPLATE_HEADERS = [
-  'Product', 'Issue ID', 'Description',
-  'Received Date', 'Received Time', 'QA Engineer', 'Is QA Miss?',
-  'Test Case Count', 'Estimation (Hrs)',
-  'Actual Start Date', 'Planned End Date', 'Actual End Date',
-  'Blocked Hours', 'Status', 'Comments',
-  'Retesting Status', 'Retesting Estimation (Hrs)'
-]
+// Exact headers that parseImportRow reads — order matches the data sheet columns
+export const SUPPORT_IMPORT_HEADERS = [
+  'Product',
+  'Issue ID',
+  'Description',
+  'Received Date',
+  'Received Time',
+  'QA Engineer',
+  'Is QA Miss?',
+  'Test Case Count',
+  'Estimation (Hrs)',
+  'Actual Start Date',
+  'Planned End Date',
+  'Actual End Date',
+  'Blocked Hours',
+  'Status',
+  'Comments',
+  'Retesting Status',
+  'Retesting Estimation (Hrs)'
+] as const
 
 export function downloadImportTemplate(products: ProjectWithMembers[]): void {
-  const p1 = products[0]?.name || 'Qaly AI Engine Core'
-  const sampleRow = [
-    p1, 'SUP-1050', 'Sample defect description',
-    '2026-10-07', '09:30', 'AMEEN SR', 'No',
-    5, 8,
-    '2026-10-07', '2026-10-10', '',
-    0, 'In Testing', 'Verification sample',
-    'Not Required', 0
+  downloadSupportImportTemplate(products)
+}
+
+export function downloadSupportImportTemplate(products: ProjectWithMembers[]): void {
+  const workbook = XLSX.utils.book_new()
+
+  // ── Sheet 1: Import Data ──────────────────────────────────────────────────
+  const dataRows: Record<string, any>[] = []
+  const dataSheet = XLSX.utils.json_to_sheet(dataRows, { header: [...SUPPORT_IMPORT_HEADERS] })
+
+  // Bold header row via cell styles (SheetJS community edition supports cell objects)
+  SUPPORT_IMPORT_HEADERS.forEach((_, colIdx) => {
+    const cellAddr = XLSX.utils.encode_cell({ r: 0, c: colIdx })
+    if (dataSheet[cellAddr]) {
+      dataSheet[cellAddr].s = { font: { bold: true } }
+    }
+  })
+
+  dataSheet['!cols'] = [
+    { wch: 28 }, // Product
+    { wch: 14 }, // Issue ID
+    { wch: 50 }, // Description
+    { wch: 14 }, // Received Date
+    { wch: 14 }, // Received Time
+    { wch: 20 }, // QA Engineer
+    { wch: 14 }, // Is QA Miss?
+    { wch: 16 }, // Test Case Count
+    { wch: 16 }, // Estimation (Hrs)
+    { wch: 16 }, // Actual Start Date
+    { wch: 16 }, // Planned End Date
+    { wch: 16 }, // Actual End Date
+    { wch: 14 }, // Blocked Hours
+    { wch: 16 }, // Status
+    { wch: 40 }, // Comments
+    { wch: 18 }, // Retesting Status
+    { wch: 24 }, // Retesting Estimation (Hrs)
   ]
-  const content = [
-    IMPORT_TEMPLATE_HEADERS.join(','),
-    sampleRow.map(c => `"${c}"`).join(',')
-  ].join('\n')
-  const blob = new Blob([content], { type: 'text/csv' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'support_issue_import_template.csv'
-  a.click()
-  URL.revokeObjectURL(url)
+
+  // Freeze header row
+  dataSheet['!freeze'] = { xSplit: 0, ySplit: 1 }
+
+  XLSX.utils.book_append_sheet(workbook, dataSheet, 'Import Data')
+
+  // ── Sheet 2: Instructions ─────────────────────────────────────────────────
+  const productList = products.map(p => p.name).join(', ') || 'Use exact product name from Project Hub'
+
+  const instructions = [
+    ['Support Issue Tracker — Import Template Instructions'],
+    [''],
+    ['HOW TO USE THIS TEMPLATE'],
+    ['1. Fill in your data on the "Import Data" sheet starting from row 2.'],
+    ['2. Do not modify or delete the header row (row 1).'],
+    ['3. Save the file as .xlsx and upload it via the Import popup.'],
+    [''],
+    ['COLUMN REFERENCE'],
+    ['Column', 'Required', 'Format / Accepted Values', 'Notes'],
+    ['Product', 'YES', productList, 'Must exactly match a product name in Project Hub (case-insensitive).'],
+    ['Issue ID', 'No', 'e.g. SUP-1050', 'Auto-generated if left blank.'],
+    ['Description', 'YES', 'Free text', 'Support issue description. Cannot be empty.'],
+    ['Received Date', 'YES', 'YYYY-MM-DD  e.g. 2026-10-07', 'Date the issue was received. Defaults to today if blank.'],
+    ['Received Time', 'No', 'HH:MM  e.g. 09:30', '24-hour format. Leave blank if unknown.'],
+    ['QA Engineer', 'No', 'e.g. AMEEN SR', 'Must match a configured tester name (case-insensitive). Defaults to Unassigned.'],
+    ['Is QA Miss?', 'No', 'Yes | No | Under Review | Not Applicable', 'Defaults to Not Applicable.'],
+    ['Test Case Count', 'No', 'Non-negative whole number  e.g. 5', 'Defaults to 0.'],
+    ['Estimation (Hrs)', 'No', 'Non-negative decimal  e.g. 8 or 2.5', 'Defaults to 0. Actual hours are managed via Time Logs.'],
+    ['Actual Start Date', 'No', 'YYYY-MM-DD', 'Leave blank if not yet started.'],
+    ['Planned End Date', 'No', 'YYYY-MM-DD', 'Leave blank if not planned.'],
+    ['Actual End Date', 'No', 'YYYY-MM-DD', 'Leave blank if not completed.'],
+    ['Blocked Hours', 'No', 'Non-negative decimal  e.g. 2', 'Total hours the issue was blocked. Defaults to 0.'],
+    ['Status', 'No', 'Not Started | Assigned | In Testing | Blocked | Retesting | Completed | Cancelled', 'Defaults to Not Started. Must match a configured status value.'],
+    ['Comments', 'No', 'Free text', 'Optional remarks, blocker details, or test notes.'],
+    ['Retesting Status', 'No', 'Not Required | Pending | In Retesting | Passed | Failed | Blocked', 'Defaults to Not Required.'],
+    ['Retesting Estimation (Hrs)', 'No', 'Non-negative decimal  e.g. 1.5', 'Defaults to 0.'],
+    [''],
+    ['IMPORTANT NOTES'],
+    ['• Actual / Effort (Hrs) is NOT imported — it is calculated cumulatively from Time Logs.'],
+    ['• Duplicate rows (same Description + Product) are automatically skipped.'],
+    ['• Rows with validation errors will be reported before import is confirmed.'],
+    ['• Date format must be YYYY-MM-DD (e.g. 2026-10-07).'],
+    ['• Time format must be HH:MM in 24-hour notation (e.g. 14:30).'],
+  ]
+
+  const instrSheet = XLSX.utils.aoa_to_sheet(instructions)
+  instrSheet['!cols'] = [
+    { wch: 30 }, { wch: 12 }, { wch: 70 }, { wch: 60 }
+  ]
+  XLSX.utils.book_append_sheet(workbook, instrSheet, 'Instructions')
+
+  XLSX.writeFile(workbook, 'Support_Issue_Import_Template.xlsx')
 }
 
 export function parseImportRow(

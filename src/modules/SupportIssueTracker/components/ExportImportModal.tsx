@@ -19,7 +19,7 @@ import { useSupportTrackerStore } from '../store'
 import {
   exportSupportIssuesToCSV,
   exportSupportIssuesToExcel,
-  downloadImportTemplate,
+  downloadSupportImportTemplate,
   parseImportRow,
   logHistoryEvent
 } from '../supportTrackerService'
@@ -174,7 +174,7 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
     }
   }
 
-  const handleDownloadSample = () => downloadImportTemplate(products)
+  const handleDownloadTemplate = () => downloadSupportImportTemplate(products)
 
   if (!isOpen) return null
 
@@ -326,14 +326,14 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-text-muted">Need a template format?</span>
+                  <div className="flex items-center gap-2 pt-1">
                     <button
                       type="button"
-                      onClick={handleDownloadSample}
-                      className="text-accent hover:underline font-medium"
+                      onClick={handleDownloadTemplate}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-colors"
                     >
-                      Download Sample CSV Template
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      Download Excel Template (.xlsx)
                     </button>
                   </div>
 
