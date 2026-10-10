@@ -198,7 +198,6 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
     <AnimatePresence>
       <div
         className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-[2px]"
-        onClick={onClose}
       >
         <motion.div
           initial={{ opacity: 0, y: 8 }}
