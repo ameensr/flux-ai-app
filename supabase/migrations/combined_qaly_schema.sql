@@ -2893,11 +2893,36 @@ ALTER TABLE public.support_issue_dropdown_configs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.support_issue_time_logs ENABLE ROW LEVEL SECURITY;
 
 -- 9. Policies for authenticated users
+-- support_issues: scoped SELECT (085) + permissive writes
 DO $$
 BEGIN
-  DROP POLICY IF EXISTS "support_issues_all_auth" ON public.support_issues;
-  CREATE POLICY "support_issues_all_auth" ON public.support_issues
-    FOR ALL TO authenticated USING (true) WITH CHECK (true);
+  DROP POLICY IF EXISTS "support_issues_all_auth"       ON public.support_issues;
+  DROP POLICY IF EXISTS "support_issues_all_anon"       ON public.support_issues;
+  DROP POLICY IF EXISTS "support_issues_select_scoped"  ON public.support_issues;
+  DROP POLICY IF EXISTS "support_issues_insert_auth"    ON public.support_issues;
+  DROP POLICY IF EXISTS "support_issues_update_auth"    ON public.support_issues;
+  DROP POLICY IF EXISTS "support_issues_delete_auth"    ON public.support_issues;
+
+  -- Scoped SELECT: admins see all; others see only rows for their projects
+  CREATE POLICY "support_issues_select_scoped" ON public.support_issues
+    FOR SELECT TO authenticated
+    USING (
+      private.is_admin()
+      OR project_id IS NULL
+      OR private.is_project_member(project_id)
+    );
+
+  CREATE POLICY "support_issues_insert_auth" ON public.support_issues
+    FOR INSERT TO authenticated WITH CHECK (true);
+
+  CREATE POLICY "support_issues_update_auth" ON public.support_issues
+    FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+  CREATE POLICY "support_issues_delete_auth" ON public.support_issues
+    FOR DELETE TO authenticated USING (true);
+
+  CREATE POLICY "support_issues_all_anon" ON public.support_issues
+    FOR ALL TO anon USING (true) WITH CHECK (true);
 
   DROP POLICY IF EXISTS "support_history_all_auth" ON public.support_issue_history;
   CREATE POLICY "support_history_all_auth" ON public.support_issue_history
@@ -3079,12 +3104,36 @@ ALTER TABLE public.release_task_time_logs       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.release_task_history         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.release_task_dropdown_configs ENABLE ROW LEVEL SECURITY;
 
+-- release_tasks: scoped SELECT (085) + permissive writes
 DO $$
 BEGIN
-  DROP POLICY IF EXISTS "release_tasks_all_auth"  ON public.release_tasks;
-  DROP POLICY IF EXISTS "release_tasks_all_anon"  ON public.release_tasks;
-  CREATE POLICY "release_tasks_all_auth" ON public.release_tasks FOR ALL TO authenticated USING (true) WITH CHECK (true);
-  CREATE POLICY "release_tasks_all_anon" ON public.release_tasks FOR ALL TO anon        USING (true) WITH CHECK (true);
+  DROP POLICY IF EXISTS "release_tasks_all_auth"         ON public.release_tasks;
+  DROP POLICY IF EXISTS "release_tasks_all_anon"         ON public.release_tasks;
+  DROP POLICY IF EXISTS "release_tasks_select_scoped"    ON public.release_tasks;
+  DROP POLICY IF EXISTS "release_tasks_insert_auth"      ON public.release_tasks;
+  DROP POLICY IF EXISTS "release_tasks_update_auth"      ON public.release_tasks;
+  DROP POLICY IF EXISTS "release_tasks_delete_auth"      ON public.release_tasks;
+
+  -- Scoped SELECT: admins see all; others see only rows for their projects
+  CREATE POLICY "release_tasks_select_scoped" ON public.release_tasks
+    FOR SELECT TO authenticated
+    USING (
+      private.is_admin()
+      OR project_id IS NULL
+      OR private.is_project_member(project_id)
+    );
+
+  CREATE POLICY "release_tasks_insert_auth" ON public.release_tasks
+    FOR INSERT TO authenticated WITH CHECK (true);
+
+  CREATE POLICY "release_tasks_update_auth" ON public.release_tasks
+    FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+  CREATE POLICY "release_tasks_delete_auth" ON public.release_tasks
+    FOR DELETE TO authenticated USING (true);
+
+  CREATE POLICY "release_tasks_all_anon" ON public.release_tasks
+    FOR ALL TO anon USING (true) WITH CHECK (true);
 
   DROP POLICY IF EXISTS "release_time_logs_all_auth" ON public.release_task_time_logs;
   DROP POLICY IF EXISTS "release_time_logs_all_anon" ON public.release_task_time_logs;

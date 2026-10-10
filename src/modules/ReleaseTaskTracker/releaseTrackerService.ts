@@ -273,13 +273,30 @@ export async function fetchReleaseTasks(
     ...actualHoursByUUID
   ])
 
+  // Collect authorized project IDs from the already-fetched products list.
+  // This scopes the query to only rows the current user is permitted to see,
+  // matching the RLS boundary on the projects table (migration 065).
+  const authorizedProjectIds = products
+    .map(p => p.id)
+    .filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))
+
   // Try DB fetch
   try {
-    const { data, error } = await supabase
+    let taskQuery = supabase
       .from('release_tasks')
       .select('*')
       .eq('is_deleted', false)
       .order('sl_no', { ascending: true })
+
+    // Only apply the project filter when we have real UUID project IDs.
+    if (authorizedProjectIds.length > 0) {
+      taskQuery = taskQuery.in('project_id', authorizedProjectIds)
+    } else {
+      // User has no authorized projects — return empty set immediately.
+      return []
+    }
+
+    const { data, error } = await taskQuery
 
     if (!error && data && data.length > 0) {
       const mapped: ReleaseTask[] = data.map((d: any, index: number) => {
@@ -349,8 +366,10 @@ export async function fetchReleaseTasks(
     try {
       const parsed = JSON.parse(cached)
       if (Array.isArray(parsed) && parsed.length > 0) {
+        const authorizedSet = new Set(authorizedProjectIds)
         const enriched = parsed
           .filter(t => !t.is_deleted)
+          .filter((t: ReleaseTask) => !t.project_id || authorizedSet.has(t.project_id))
           .map((t: ReleaseTask, idx: number) => {
             const est = Number(t.estimated_hours) || 0
             const actFromLogs = actualHoursByUUID.get(t.id) ?? actualHoursByTaskId.get(t.task_id)

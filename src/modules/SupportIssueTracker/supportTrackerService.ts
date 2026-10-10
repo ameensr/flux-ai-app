@@ -153,11 +153,30 @@ export async function fetchSupportIssues(
     } catch (e) { console.warn('Failed parsing cached issues', e) }
   }
 
+  // Collect authorized project IDs from the already-fetched products list.
+  // This scopes the query to only rows the current user is permitted to see,
+  // matching the RLS boundary on the projects table (migration 065).
+  const authorizedProjectIds = products
+    .map(p => p.id)
+    .filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))
+
   try {
-    const { data, error } = await supabase
+    let issueQuery = supabase
       .from('support_issues')
       .select('*')
       .order('sl_no', { ascending: true })
+
+    // Only apply the project filter when we have real UUID project IDs.
+    // If the list is empty (no projects assigned) return nothing rather than
+    // falling through to an unfiltered query.
+    if (authorizedProjectIds.length > 0) {
+      issueQuery = issueQuery.in('project_id', authorizedProjectIds)
+    } else {
+      // User has no authorized projects — return empty set immediately.
+      return []
+    }
+
+    const { data, error } = await issueQuery
 
     if (!error && data && data.length > 0) {
       const mapped = data.map((item: any) => {
@@ -200,7 +219,12 @@ export async function fetchSupportIssues(
   }
 
   if (localIssues.length > 0) {
-    const synced = syncWithTimeLogs(localIssues.map(item => {
+    // Filter cached issues to only those belonging to authorized projects.
+    const authorizedSet = new Set(authorizedProjectIds)
+    const filtered = localIssues.filter(item =>
+      !item.project_id || authorizedSet.has(item.project_id)
+    )
+    const synced = syncWithTimeLogs(filtered.map(item => {
       const matchingProject = products.find(p => p.id === item.project_id)
       return matchingProject ? { ...item, product_name: matchingProject.name } : item
     }))

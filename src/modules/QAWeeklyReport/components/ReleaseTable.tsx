@@ -11,7 +11,11 @@ import { Plus, Trash2, Copy, Download, Upload, Search, Columns, Eye, EyeOff } fr
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import { ColumnMappingModal } from './ColumnMappingModal'
+import { ImportFromQAOHModal } from './ImportFromQAOHModal'
 import { applyReleaseMapping, mergeReleaseImport, type MappingEntry } from '../dupImportMapping'
+import { importReleaseTasks } from '../qaohImportMapping'
+import type { ReleaseTask } from '@/modules/ReleaseTaskTracker/types'
+import { usePermissions } from '@/hooks/usePermissions'
 import {
   applyVisibilityToSchema,
   buildDestinationColumnsFromMapping,
@@ -41,7 +45,10 @@ export const ReleaseTable: React.FC = () => {
   const [showColumnMenu, setShowColumnMenu] = useState(false)
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 })
   const [showMappingModal, setShowMappingModal] = useState(false)
+  const [showQAOHModal, setShowQAOHModal] = useState(false)
+  const [importingQAOH, setImportingQAOH] = useState(false)
   const columnButtonRef = useRef<HTMLButtonElement>(null)
+  const { can } = usePermissions()
 
   // Fetch dropdown configs on mount
   useEffect(() => {
@@ -246,7 +253,8 @@ export const ReleaseTable: React.FC = () => {
   return (
     <GlassCard hoverEffect={false} className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
+        {/* Row 1: label + pass rate + search + utility actions */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-3">
             <span className="label-xs">Release Testing Log</span>
             {items.length > 0 && visibleColumns.status !== false && (
@@ -258,13 +266,11 @@ export const ReleaseTable: React.FC = () => {
               </span>
             )}
           </div>
-        </div>
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10">
-            <Search className="w-3 h-3 text-text-muted" />
-            <input className="bg-transparent text-xs text-white focus:outline-none w-32 placeholder:text-text-muted" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10">
+              <Search className="w-3 h-3 text-text-muted" />
+              <input className="bg-transparent text-xs text-white focus:outline-none w-28 placeholder:text-text-muted" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
             <button
               onClick={addRow}
               className="flex items-center justify-center w-8 h-8 rounded-xl bg-accent-gold/10 border border-accent-gold/20 text-accent-gold hover:bg-accent-gold/20 transition-all"
@@ -288,14 +294,6 @@ export const ReleaseTable: React.FC = () => {
               <Copy className="w-3 h-3" /> Dupe
             </button>
             <button
-              onClick={importFromDailyReport}
-              disabled={importing}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all disabled:opacity-50 whitespace-nowrap"
-              title="Import data from Daily Update Report"
-            >
-              <Upload className={`w-3 h-3 ${importing ? 'animate-spin' : ''}`} /> {importing ? 'Loading…' : 'Import from DUP'}
-            </button>
-            <button
               onClick={exportCSV}
               className="flex items-center justify-center w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-text-secondary hover:text-white transition-all"
               title="Export to CSV"
@@ -311,6 +309,35 @@ export const ReleaseTable: React.FC = () => {
               <Columns className="w-3 h-3" /> Columns
             </button>
           </div>
+        </div>
+        {/* Row 2: import actions */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={importFromDailyReport}
+            disabled={importing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all disabled:opacity-50 whitespace-nowrap"
+            title="Import data from Daily Update Report"
+          >
+            <Upload className={`w-3 h-3 ${importing ? 'animate-spin' : ''}`} />
+            {importing ? 'Loading…' : 'Import from DUP'}
+          </button>
+          {can('release-tracker', 'can_view') && (
+            <button
+              onClick={() => {
+                if (!form.projectId) {
+                  toast({ variant: 'destructive', title: 'No project selected', description: 'Select a project for this QA report before importing from QAOH.' })
+                  return
+                }
+                setShowQAOHModal(true)
+              }}
+              disabled={importingQAOH}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white transition-all disabled:opacity-50 whitespace-nowrap"
+              title="Import data from QA Operations Hub — Release Task Register"
+            >
+              <Upload className={`w-3 h-3 ${importingQAOH ? 'animate-spin' : ''}`} />
+              {importingQAOH ? 'Loading…' : 'Import From QAOH'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -452,6 +479,29 @@ export const ReleaseTable: React.FC = () => {
         columns={getColumns('release')}
         projectId={form.projectId || null}
         onConfirm={handleMappingConfirm}
+      />
+
+      <ImportFromQAOHModal
+        open={showQAOHModal}
+        onClose={() => setShowQAOHModal(false)}
+        tableKey="release"
+        projectId={form.projectId || ''}
+        onConfirm={(records) => {
+          setShowQAOHModal(false)
+          setImportingQAOH(true)
+          try {
+            const { rows: mergedRows, added, updated } = importReleaseTasks(items, records as ReleaseTask[])
+            if (!added && !updated) {
+              toast({ title: 'Nothing to import', description: 'All selected records are already present in the Release Testing Log.' })
+              return
+            }
+            setForm({ releaseItems: mergedRows })
+            const parts = [added ? `${added} added` : null, updated ? `${updated} updated` : null].filter(Boolean).join(', ')
+            toast({ title: 'Imported from QAOH', description: `${parts} in Release Testing Log.` })
+          } finally {
+            setImportingQAOH(false)
+          }
+        }}
       />
     </GlassCard>
   )
