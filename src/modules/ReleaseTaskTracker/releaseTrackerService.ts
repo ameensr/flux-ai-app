@@ -1668,14 +1668,14 @@ export function exportReleaseTasksToExcel(tasks: ReleaseTask[], filename?: strin
       'Product': t.product_name,
       'Release': t.release_version,
       'Task ID': t.task_id,
-      'Description': t.description,
+      'Task Description': t.description,
       'QA Engineer': t.assigned_to_name,
       'Received Date/Time': (t as any).received_date_time || '',
-      'Status': t.task_status,
-      'Test Design Estimation (Hrs)': (t as any).test_design_est_hrs ?? 0,
-      'Data Preparation Estimation (Hrs)': (t as any).data_prep_est_hrs ?? 0,
-      'Functional Testing Estimation (Hrs)': (t as any).functional_testing_est_hrs ?? 0,
-      'Retesting Estimation (Hrs)': (t as any).retesting_est_hrs ?? 0,
+      'Task Status': t.task_status,
+      'Test Design Est': (t as any).test_design_est_hrs ?? 0,
+      'Data Prep Est': (t as any).data_prep_est_hrs ?? 0,
+      'Functional Testing Est': (t as any).functional_testing_est_hrs ?? 0,
+      'Retesting Est': (t as any).retesting_est_hrs ?? 0,
       'Total Estimation (Hrs)': total,
       'Actual Start Date': t.start_date || '',
       'Actual / Effort (Hrs)': act,
@@ -1695,17 +1695,17 @@ export function exportReleaseTasksToExcel(tasks: ReleaseTask[], filename?: strin
     { wch: 24 }, // Product
     { wch: 16 }, // Release
     { wch: 14 }, // Task ID
-    { wch: 45 }, // Description
+    { wch: 45 }, // Task Description
     { wch: 20 }, // QA Engineer
     { wch: 20 }, // Received Date/Time
-    { wch: 16 }, // Status
-    { wch: 26 }, // Test Design Est
-    { wch: 30 }, // Data Prep Est
-    { wch: 30 }, // Functional Testing Est
-    { wch: 24 }, // Retesting Est
-    { wch: 22 }, // Total Estimation
+    { wch: 16 }, // Task Status
+    { wch: 18 }, // Test Design Est
+    { wch: 16 }, // Data Prep Est
+    { wch: 24 }, // Functional Testing Est
+    { wch: 16 }, // Retesting Est
+    { wch: 22 }, // Total Estimation (Hrs)
     { wch: 16 }, // Actual Start Date
-    { wch: 18 }, // Actual / Effort
+    { wch: 18 }, // Actual / Effort (Hrs)
     { wch: 18 }, // Remaining Hrs
     { wch: 16 }, // Actual End Date
     { wch: 35 }  // Comments
@@ -1722,14 +1722,14 @@ export function exportReleaseTasksToCSV(tasks: ReleaseTask[], filename?: string)
     'Product',
     'Release',
     'Task ID',
-    'Description',
+    'Task Description',
     'QA Engineer',
     'Received Date/Time',
-    'Status',
-    'Test Design Estimation (Hrs)',
-    'Data Preparation Estimation (Hrs)',
-    'Functional Testing Estimation (Hrs)',
-    'Retesting Estimation (Hrs)',
+    'Task Status',
+    'Test Design Est',
+    'Data Prep Est',
+    'Functional Testing Est',
+    'Retesting Est',
     'Total Estimation (Hrs)',
     'Actual Start Date',
     'Actual / Effort (Hrs)',

@@ -103,7 +103,8 @@ export function ReleaseExportImportModal({
       // Running snapshot — grows as we import so task_ids stay sequential
       let runningTasks = [...tasks]
 
-      // Dedup key: description + release_version + product (case-insensitive)
+      // Dedup key: task_id (if present) OR description + release_version + product (case-insensitive)
+      const existingTaskIds = new Set(tasks.map(t => t.task_id.trim().toLowerCase()))
       const existingKeys = new Set(
         tasks.map(t =>
           `${t.description.trim().toLowerCase()}|${t.release_version.trim().toLowerCase()}|${t.product_name.trim().toLowerCase()}`
@@ -121,6 +122,11 @@ export function ReleaseExportImportModal({
         const prodNameResolved = (matchedProduct?.name || String(prodName)).trim()
 
         // Skip exact duplicates already in the store
+        const rowTaskIdForDedup = String(row['Task ID'] || row['task_id'] || '').trim().toLowerCase()
+        if (rowTaskIdForDedup && existingTaskIds.has(rowTaskIdForDedup)) {
+          skippedCount++
+          continue
+        }
         const dedupKey = `${desc.toLowerCase()}|${rel.toLowerCase()}|${prodNameResolved.toLowerCase()}`
         if (existingKeys.has(dedupKey)) {
           skippedCount++
@@ -140,7 +146,8 @@ export function ReleaseExportImportModal({
         const startDate = row['Actual Start Date'] || row['start_date'] || null
         const actualEndDate = row['Actual End Date'] || row['actual_end_date'] || null
 
-        const nextTaskId = generateNextTaskId(runningTasks)
+        const rowTaskId = String(row['Task ID'] || row['task_id'] || '').trim()
+        const nextTaskId = /^REL-\d+$/i.test(rowTaskId) ? rowTaskId : generateNextTaskId(runningTasks)
 
         const saved = await addOrUpdateTask(
           {

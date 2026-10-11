@@ -41,6 +41,8 @@ export type PermissionKey =
   | 'can_edit_time_logs'
   // ── Dashboard Quick Details ─────────────────────────────────────────────
   | 'can_view_quick_details'
+  // ── Project Data Archive ────────────────────────────────────────────────
+  | 'can_archive_data'
 
 export interface ModulePermissionDefinition {
   moduleKey: string
@@ -260,6 +262,7 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
       'can_delete',
       'can_assign_members',
       'can_manage_roles',
+      'can_archive_data',
     ],
     description: 'Project management and team collaboration'
   },
@@ -412,6 +415,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   can_edit_estimated_hours: 'Edit Estimated Hours',
   can_edit_time_logs: 'Edit / Correct Logged Hours',
   can_view_quick_details: 'Project Pulse',
+  can_archive_data: 'Archive Project Data',
 }
 
 /**
@@ -453,4 +457,5 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   can_edit_estimated_hours: 'Can modify Estimated Hours when the estimation is unlocked',
   can_edit_time_logs: 'Can correct previously logged time-log entries. Every correction is recorded in audit history with a mandatory reason.',
   can_view_quick_details: 'Can view the role-based Project Pulse health dashboard and AI risk summary on the main dashboard',
+  can_archive_data: 'Can export project data to Excel and permanently delete archived records from the active database',
 }

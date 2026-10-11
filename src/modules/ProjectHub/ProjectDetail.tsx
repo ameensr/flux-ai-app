@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Edit, Archive, Trash2, Users, Calendar, Tag, Clock, FolderKanban } from 'lucide-react'
+import { ProjectDataArchive } from './components/ProjectDataArchive'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -381,6 +382,9 @@ export function ProjectDetail() {
           }}
         />
       )}
+
+      {/* Project Data Archive section */}
+      <ProjectDataArchive project={project} />
 
       {showEditProject && (
         <EditProjectModal
