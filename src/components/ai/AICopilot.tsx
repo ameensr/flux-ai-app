@@ -3,10 +3,11 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Send, Terminal, Code, Cpu, RefreshCw } from 'lucide-react'
+import { X, Send, Terminal, Code, Cpu, RefreshCw, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AIService } from '@/services/ai/ai-service'
 import { COPILOT_PROMPT } from '@/ai/prompts/copilotPrompt'
+import { PandaSVG } from '@/components/LazyPanda/PandaSVG'
 import {
   ADVANCED_AI_PERMISSION_DENIED,
   AI_USER_RESTRICTED,
@@ -25,10 +26,12 @@ const WELCOME =
   'Hello! I am your Qaly AI Engine Copilot. How can I help you with your QA tasks today?'
 
 export const AICopilot = () => {
-  const { aiEnabled, userAllowed, canUseCopilot, notifyIfRestricted } = useAIAccess()
+  const { aiEnabled, configLoaded, userAllowed, canUseCopilot, getCopilotDenyReason, notifyIfRestricted } = useAIAccess()
   const copilotAllowed = canUseCopilot()
+  const denyReason = getCopilotDenyReason()
   // Restricted users stay interactive so the allowlist popup can appear.
   const inputLocked = !copilotAllowed && userAllowed
+
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: WELCOME },
@@ -36,6 +39,10 @@ export const AICopilot = () => {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  // Don't render at all until config is loaded, or if AI is globally disabled
+  // and the user is not on the allowlist (no point showing the FAB)
+  if (!configLoaded || !aiEnabled || !userAllowed) return null
 
   useEffect(() => {
     if (isOpen) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -118,51 +125,106 @@ export const AICopilot = () => {
   return (
     <>
       {/* FAB — toggles open/close */}
-      <motion.button
-        type="button"
-        onClick={toggle}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.97 }}
-        aria-label={isOpen ? 'Close Qaly Copilot' : 'Open Qaly Copilot'}
-        aria-expanded={isOpen}
-        className={cn(
-          'fixed bottom-6 right-6 w-14 h-14 rounded-2xl flex items-center justify-center z-[60]',
-          'border transition-colors'
+      <div className="fixed bottom-6 right-6 z-[60] group">
+        {/* Tooltip for locked state */}
+        {!copilotAllowed && (
+          <div
+            className="absolute bottom-full right-0 mb-2 px-3 py-2 rounded-xl text-[11px] font-medium whitespace-nowrap pointer-events-none
+              opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+            style={{
+              background: 'var(--surface-elevated)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-secondary)',
+              boxShadow: 'var(--shadow)',
+            }}
+          >
+            <div className="flex items-center gap-1.5">
+              <Lock className="w-3 h-3 shrink-0" style={{ color: 'var(--accent)' }} />
+              {denyReason === 'permission'
+                ? 'Advanced AI permission required'
+                : denyReason === 'restricted'
+                  ? 'AI access restricted'
+                  : 'AI Copilot unavailable'}
+            </div>
+          </div>
         )}
-        style={{
-          background: isOpen ? 'var(--surface-elevated)' : 'color-mix(in srgb, var(--accent) 16%, var(--surface-elevated))',
-          borderColor: isOpen ? 'var(--border)' : 'color-mix(in srgb, var(--accent) 40%, transparent)',
-          color: isOpen ? 'var(--text-primary)' : 'var(--accent)',
-          boxShadow: isOpen ? 'var(--shadow)' : 'var(--shadow-sm)',
-        }}
-      >
-        <AnimatePresence mode="wait" initial={false}>
-          {isOpen ? (
-            <motion.span
-              key="close"
-              initial={{ opacity: 0, rotate: -90, scale: 0.8 }}
-              animate={{ opacity: 1, rotate: 0, scale: 1 }}
-              exit={{ opacity: 0, rotate: 90, scale: 0.8 }}
-              transition={{ duration: 0.15 }}
-            >
-              <X className="w-6 h-6" />
-            </motion.span>
-          ) : (
-            <motion.span
-              key="open"
-              initial={{ opacity: 0, rotate: 90, scale: 0.8 }}
-              animate={{ opacity: 1, rotate: 0, scale: 1 }}
-              exit={{ opacity: 0, rotate: -90, scale: 0.8 }}
-              transition={{ duration: 0.15 }}
-              className="text-[26px] font-inter font-extrabold leading-none select-none"
-              style={{ color: 'var(--accent)' }}
-              aria-hidden
-            >
-              Q
-            </motion.span>
+
+        <motion.button
+          type="button"
+          onClick={copilotAllowed ? toggle : notifyIfRestricted}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          aria-label={isOpen ? 'Close Qaly Copilot' : 'Open Qaly Copilot'}
+          aria-expanded={isOpen}
+          className={cn(
+            'w-14 h-14 rounded-2xl flex items-center justify-center border transition-colors relative',
+            !copilotAllowed && 'cursor-not-allowed'
           )}
-        </AnimatePresence>
-      </motion.button>
+          style={{
+            background: isOpen
+              ? 'var(--surface-elevated)'
+              : copilotAllowed
+                ? 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, var(--surface-elevated)), color-mix(in srgb, var(--accent) 10%, var(--surface-elevated)))'
+                : 'var(--surface-elevated)',
+            borderColor: isOpen
+              ? 'var(--border)'
+              : copilotAllowed
+                ? 'color-mix(in srgb, var(--accent) 50%, transparent)'
+                : 'var(--border)',
+            color: copilotAllowed ? 'var(--accent)' : 'var(--text-muted)',
+            boxShadow: isOpen || !copilotAllowed
+              ? 'var(--shadow)'
+              : '0 4px 16px color-mix(in srgb, var(--accent) 30%, transparent), 0 1px 4px rgba(0,0,0,0.15)',
+            opacity: copilotAllowed ? 1 : 0.6,
+          }}
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            {isOpen ? (
+              <motion.span
+                key="close"
+                initial={{ opacity: 0, rotate: -90, scale: 0.8 }}
+                animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                exit={{ opacity: 0, rotate: 90, scale: 0.8 }}
+                transition={{ duration: 0.15 }}
+              >
+                <X className="w-6 h-6" />
+              </motion.span>
+            ) : (
+              <motion.span
+                key="open"
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                transition={{ duration: 0.18 }}
+                className="flex items-center justify-center"
+                aria-hidden
+              >
+                <PandaSVG
+                  state="IDLE"
+                  eyeOffset={{ x: 0, y: 0 }}
+                  headRotation={0}
+                  isBlinking={false}
+                  size={36}
+                  reducedMotion
+                />
+              </motion.span>
+            )}
+          </AnimatePresence>
+
+          {/* Lock badge overlay for no-permission state */}
+          {!copilotAllowed && (
+            <span
+              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center"
+              style={{
+                background: 'var(--surface-elevated)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              <Lock className="w-2.5 h-2.5" style={{ color: 'var(--text-muted)' }} />
+            </span>
+          )}
+        </motion.button>
+      </div>
 
       <AnimatePresence>
         {isOpen && (

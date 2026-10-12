@@ -160,7 +160,7 @@ export const Settings = () => {
                   Appearance
                 </h2>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Choose your preferred interface mode.
+                  Choose your preferred interface mode. You can also use the floating toggle in the bottom-right corner.
                 </p>
               </div>
             </div>

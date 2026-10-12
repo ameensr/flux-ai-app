@@ -3,8 +3,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { Sidebar } from './Sidebar'
 import { Footer } from './Footer'
 import { MaintenanceBanner } from '../ui/MaintenanceBanner'
-import { Menu, Sun, Moon } from 'lucide-react'
-import { useTheme } from '@/context/ThemeContext'
+import { Menu } from 'lucide-react'
 import { Logo } from '../ui/Logo'
 
 interface DashboardLayoutProps {
@@ -13,7 +12,6 @@ interface DashboardLayoutProps {
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const { isSidebarOpen, setSidebarOpen } = useAppStore()
-  const { isDark, toggleTheme } = useTheme()
 
   // Sidebar widths: expanded=240, collapsed=64, plus 12px left offset on desktop
   const marginLeft = isSidebarOpen ? 252 : 76
@@ -47,17 +45,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
           </button>
           <Logo size="sm" animate={false} />
         </div>
-
-        <button
-          onClick={toggleTheme}
-            className="p-2 rounded-lg pressable"
-          style={{ color: 'var(--text-secondary)' }}
-          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--hover)')}
-          onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-          aria-label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        >
-          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </button>
       </div>
 
       {/* Main column: content grows, branding footer stays at bottom */}

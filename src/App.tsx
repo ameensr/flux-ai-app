@@ -22,6 +22,7 @@ import { useAIPlatformStore } from '@/store/useAIPlatformStore'
 import { useToast } from '@/hooks/use-toast'
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog'
 import { PandaIdleNotification } from '@/components/LazyPanda'
+import { FloatingThemeToggle } from '@/components/ui/FloatingThemeToggle'
 
 // ── Idle timeout context ──────────────────────────────────────────────────────
 type RegisterOperationFn = (key: string) => () => void
@@ -347,6 +348,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
         <RequireFullNameGate />
       </Suspense>
       {children}
+      <FloatingThemeToggle />
       <Toaster />
       <AIRestrictedModal />
       <SessionExpiredToast />
