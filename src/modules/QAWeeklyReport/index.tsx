@@ -809,10 +809,10 @@ export const QAWeeklyReport: React.FC = () => {
           {/* Dropdown Configuration button (RBAC protected) — manages the
               Testing Status / Priority master dropdown lists used by the
               Support Log and Release Testing tables below. */}
-          {isAuthorizedToConfig && (
+          {isAuthorizedToConfig && form.projectId && (
             <button
-              onClick={() => navigate(ROUTES.qaReportDropdownConfig)}
-              title="Manage Testing Status / Priority dropdown values"
+              onClick={() => navigate(`${ROUTES.projectHub}/${form.projectId}/dropdown-config`)}
+              title="Manage dropdown values in Project Hub"
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-hover border border-border text-text-secondary hover:text-text-primary transition-all font-black uppercase tracking-wider"
             >
               <Settings className="w-3.5 h-3.5" />

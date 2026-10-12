@@ -10,6 +10,7 @@ import {
   fetchProductsFromProjectHub, fetchSupportIssues, saveSupportIssue,
   deleteSupportIssue as apiDeleteIssue, bulkDeleteSupportIssues as apiBulkDeleteIssues,
   toggleSupportIssueEstimationLock, fetchSupportHistory, fetchDropdownConfigurations,
+  fetchProjectScopedDropdownConfigs,
   saveDropdownConfigurations, fetchSupportTimeLogs, addSupportTimeLog, deleteSupportTimeLog, editSupportTimeLog,
   LOCAL_STORAGE_ISSUES_KEY
 } from './supportTrackerService'
@@ -97,8 +98,12 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
     try {
       set({ loading: true })
       const products = await fetchProductsFromProjectHub()
+      // Determine the selected project for scoped dropdown fetch
+      const selectedProductId = get().filters.selectedProductId
+      const scopedProjectId = selectedProductId !== 'all' ? selectedProductId : products[0]?.id
       const [timeLogs, history, dropdownConfigs] = await Promise.all([
-        fetchSupportTimeLogs(), fetchSupportHistory(), fetchDropdownConfigurations()
+        fetchSupportTimeLogs(), fetchSupportHistory(),
+        fetchProjectScopedDropdownConfigs(scopedProjectId)
       ])
       const issues = await fetchSupportIssues(products, timeLogs)
       set({ products, issues, history, dropdownConfigs, timeLogs, loading: false })
@@ -112,8 +117,11 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
     try {
       set({ isRefreshing: true })
       const products = await fetchProductsFromProjectHub()
+      const selectedProductId = get().filters.selectedProductId
+      const scopedProjectId = selectedProductId !== 'all' ? selectedProductId : products[0]?.id
       const [timeLogs, history, dropdownConfigs] = await Promise.all([
-        fetchSupportTimeLogs(), fetchSupportHistory(), fetchDropdownConfigurations()
+        fetchSupportTimeLogs(), fetchSupportHistory(),
+        fetchProjectScopedDropdownConfigs(scopedProjectId)
       ])
       const issues = await fetchSupportIssues(products, timeLogs)
       set({ products, issues, history, dropdownConfigs, timeLogs, isRefreshing: false })
@@ -125,7 +133,15 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
 
   setFilters: (newFilters) => set((state) => ({ filters: { ...state.filters, ...newFilters } })),
   resetFilters: () => set({ filters: DEFAULT_FILTERS }),
-  setSelectedProduct: (productId) => set((state) => ({ filters: { ...state.filters, selectedProductId: productId } })),
+  setSelectedProduct: (productId) => {
+    set((state) => ({ filters: { ...state.filters, selectedProductId: productId } }))
+    // Reload project-scoped dropdowns when the selected project changes
+    if (productId && productId !== 'all') {
+      fetchProjectScopedDropdownConfigs(productId).then(dropdownConfigs => {
+        set({ dropdownConfigs })
+      }).catch(err => console.warn('[SupportTrackerStore] setSelectedProduct dropdown reload error:', err))
+    }
+  },
   setDrillDownTarget: (target) => set({ drillDownTarget: target }),
 
   addOrUpdateIssue: async (issueInput, user) => {

@@ -1,10 +1,11 @@
 // src/modules/ReleaseTaskTracker/index.tsx
 
 import React, { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import {
-  Rocket, Plus, Sliders, History, Download, Upload, RefreshCw, Shield
+  Rocket, Plus, Settings2, History, Download, Upload, RefreshCw, Shield
 } from 'lucide-react'
+import { ROUTES } from '@/lib/routes'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/hooks/use-toast'
@@ -18,7 +19,6 @@ import { ViewReleaseTaskModal } from './components/ViewReleaseTaskModal'
 import { AddReleaseTimeLogModal } from './components/AddReleaseTimeLogModal'
 import { ReleaseTimeLogDrawer } from './components/ReleaseTimeLogDrawer'
 import { ReleaseAuditHistoryDrawer } from './components/ReleaseAuditHistoryDrawer'
-import { ReleaseConfigurableDropdownsModal } from './components/ReleaseConfigurableDropdownsModal'
 import { ReleaseExportImportModal } from './components/ReleaseExportImportModal'
 import { ReleasePermissionsInfoModal } from './components/ReleasePermissionsInfoModal'
 import type { ReleaseTask } from './types'
@@ -54,15 +54,17 @@ export function ReleaseTaskTracker() {
   const [targetDrawerTask, setTargetDrawerTask]       = useState<ReleaseTask | null>(null)
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false)
   const [targetHistoryTaskId, setTargetHistoryTaskId] = useState<string | null>(null)
-  const [isDropdownsOpen, setIsDropdownsOpen]         = useState(false)
   const [isExportOpen, setIsExportOpen]               = useState(false)
   const [isImportOpen, setIsImportOpen]               = useState(false)
   const [isPermsInfoOpen, setIsPermsInfoOpen]         = useState(false)
 
+  const navigate = useNavigate()
+
   const [searchParams] = useSearchParams()
   const {
     fetchInitialData, refreshData, loading, isRefreshing,
-    deleteTask, bulkDeleteTasks, tasks, setFilters, setSelectedProduct
+    deleteTask, bulkDeleteTasks, tasks, setFilters, setSelectedProduct,
+    filters, products
   } = useReleaseTrackerStore()
 
   // Fetch on mount. The store's loading flag prevents duplicate in-flight fetches.
@@ -205,17 +207,20 @@ export function ReleaseTaskTracker() {
             </button>
           )}
 
-          {permissionsLoaded && canConfigureDropdowns && (
-            <button
-              type="button"
-              onClick={() => setIsDropdownsOpen(true)}
-              title="Configure Dropdowns"
-              className="h-7.5 px-2 sm:px-2.5 rounded-lg border border-border/50 text-xs font-medium text-text-muted hover:text-purple-400 hover:bg-surface-elevated/80 transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <Sliders className="w-3.5 h-3.5 text-purple-400" />
-              <span className="hidden lg:inline">Dropdowns</span>
-            </button>
-          )}
+          {permissionsLoaded && canConfigureDropdowns && (() => {
+            const pid = filters.selectedProductId !== 'all' ? filters.selectedProductId : products[0]?.id
+            return pid ? (
+              <button
+                type="button"
+                onClick={() => navigate(`${ROUTES.projectHub}/${pid}/dropdown-config`)}
+                title="Configure Dropdowns (Project Hub)"
+                className="h-7.5 px-2 sm:px-2.5 rounded-lg border border-border/50 text-xs font-medium text-text-muted hover:text-purple-400 hover:bg-surface-elevated/80 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Settings2 className="w-3.5 h-3.5 text-purple-400" />
+                <span className="hidden lg:inline">Dropdowns</span>
+              </button>
+            ) : null
+          })()}
 
           {permissionsLoaded && canExport && (
             <button
@@ -332,7 +337,7 @@ export function ReleaseTaskTracker() {
         onClose={() => setIsHistoryDrawerOpen(false)}
       />
 
-      <ReleaseConfigurableDropdownsModal isOpen={isDropdownsOpen} onClose={() => setIsDropdownsOpen(false)} />
+
 
       <ReleaseExportImportModal key="release-export" isOpen={isExportOpen} initialTab="export" onClose={() => setIsExportOpen(false)} />
       <ReleaseExportImportModal key="release-import" isOpen={isImportOpen} initialTab="import" onClose={() => setIsImportOpen(false)} />

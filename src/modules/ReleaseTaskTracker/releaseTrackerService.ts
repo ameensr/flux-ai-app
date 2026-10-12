@@ -23,6 +23,7 @@ import {
   computeTotalEstimation
 } from './types'
 import * as XLSX from 'xlsx'
+import { fetchProjectDropdownsByCategory } from '@/modules/ProjectHub/projectDropdownService'
 
 export const LOCAL_STORAGE_TASKS_KEY = 'qaly_release_tracker_tasks_v1'
 export const LOCAL_STORAGE_HISTORY_KEY = 'qaly_release_tracker_history_v1'
@@ -1372,6 +1373,54 @@ export async function syncReleaseAssigneesFromProfiles(): Promise<ReleaseDropdow
     console.warn('[releaseTrackerService] syncReleaseAssigneesFromProfiles error:', err)
   }
   return DEFAULT_ASSIGNED_TO_OPTIONS
+}
+
+/**
+ * Fetch release dropdown configs scoped to a specific project.
+ * Uses centralized categories:
+ *   status       → task_status
+ *   qa_engineers → assigned_to
+ *   priority     → priority
+ * Falls back to the global release_task_dropdown_configs table.
+ */
+export async function fetchProjectScopedReleaseDropdownConfigs(projectId?: string): Promise<{
+  task_status: ReleaseDropdownOption[]
+  priority: ReleaseDropdownOption[]
+  assigned_to: ReleaseDropdownOption[]
+}> {
+  if (projectId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectId)) {
+    try {
+      const [statusRows, priorityRows, engineerRows] = await Promise.all([
+        fetchProjectDropdownsByCategory(projectId, 'status'),
+        fetchProjectDropdownsByCategory(projectId, 'priority'),
+        fetchProjectDropdownsByCategory(projectId, 'qa_engineers'),
+      ])
+
+      const toReleaseOption = (row: any, cat: 'task_status' | 'priority' | 'assigned_to'): ReleaseDropdownOption => ({
+        id: row.id,
+        category: cat,
+        label: row.label,
+        value: row.value,
+        color: row.color,
+        is_active: row.is_active,
+        sort_order: row.sort_order,
+      })
+
+      if (statusRows.length > 0 || priorityRows.length > 0) {
+        return {
+          // status category feeds task_status
+          task_status: statusRows.map(r => toReleaseOption(r, 'task_status')),
+          priority: priorityRows.map(r => toReleaseOption(r, 'priority')),
+          assigned_to: engineerRows.length > 0
+            ? engineerRows.map(r => toReleaseOption(r, 'assigned_to'))
+            : DEFAULT_ASSIGNED_TO_OPTIONS,
+        }
+      }
+    } catch (err) {
+      console.warn('[releaseTrackerService] fetchProjectScopedReleaseDropdownConfigs error:', err)
+    }
+  }
+  return fetchReleaseDropdownConfigs()
 }
 
 export async function fetchReleaseDropdownConfigs(): Promise<{

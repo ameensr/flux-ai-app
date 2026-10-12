@@ -3,8 +3,8 @@ import ReactDOM from 'react-dom'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useQAReportStore } from '../store'
 import type { SupportTicket } from '../types'
-import { useDailyReportStore } from '@/modules/DailyUpdateReport/store'
 import { useColumnConfigStore } from '@/modules/DailyUpdateReport/columnConfigStore'
+import { useDailyReportStore } from '@/modules/DailyUpdateReport/store'
 import { toast } from '@/hooks/use-toast'
 import { Plus, Trash2, Copy, Download, Upload, Search, Columns, Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -24,6 +24,7 @@ import {
   orderedVisibleColumns,
   visibilityMapFromSchema,
 } from '../qaReportColumnSchema'
+import { fetchProjectDropdownsByCategory } from '@/modules/ProjectHub/projectDropdownService'
 
 const newTicket = (): SupportTicket => ({
   id: crypto.randomUUID(), taskId: '', description: '', assignedQA: '',
@@ -35,7 +36,7 @@ const cell = 'px-3 py-2 border-b border-white/5'
 
 export const SupportLog: React.FC = () => {
   const { form, setForm } = useQAReportStore()
-  const { fetchReportRows, dropdownConfigs, fetchDropdownConfigs } = useDailyReportStore()
+  const { fetchReportRows } = useDailyReportStore()
   const { getColumns, fetchColumnConfigs } = useColumnConfigStore()
   const { isDark } = useTheme()
   const [search, setSearch] = useState('')
@@ -50,12 +51,25 @@ export const SupportLog: React.FC = () => {
   const { can } = usePermissions()
   const columnButtonRef = useRef<HTMLButtonElement>(null)
 
-  // Fetch dropdown configs on mount
+  // Project-scoped dropdown options from Project Hub centralized config
+  const [statusOptions, setStatusOptions] = useState<string[]>([])
+  const [priorityOptions, setPriorityOptions] = useState<string[]>([])
+
+  // Fetch project-scoped dropdowns whenever the selected project changes
   useEffect(() => {
-    if (dropdownConfigs.length === 0) {
-      fetchDropdownConfigs()
+    if (!form.projectId) {
+      setStatusOptions([])
+      setPriorityOptions([])
+      return
     }
-  }, [])
+    Promise.all([
+      fetchProjectDropdownsByCategory(form.projectId, 'status'),
+      fetchProjectDropdownsByCategory(form.projectId, 'priority'),
+    ]).then(([statusRows, priorityRows]) => {
+      setStatusOptions(statusRows.map(r => r.value))
+      setPriorityOptions(priorityRows.map(r => r.value))
+    }).catch(() => {})
+  }, [form.projectId])
 
   const tickets = form.supportTickets
 
@@ -91,17 +105,8 @@ export const SupportLog: React.FC = () => {
     }
   }, [showColumnMenu])
 
-  // Get status options from Daily Report configuration
-  const statusOptions = dropdownConfigs
-    .filter(c => c.category === 'testing_status' && c.is_active)
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map(c => c.value)
-
-  // Get priority options from Daily Report configuration
-  const priorityOptions = dropdownConfigs
-    .filter(c => c.category === 'priority' && c.is_active)
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map(c => c.value)
+  // Get status options: project-scoped only, no fallback
+  // Get priority options: project-scoped only, no fallback
 
   // Helper function to get priority color
   const getPriorityColor = (priority: string) => {
@@ -417,13 +422,16 @@ export const SupportLog: React.FC = () => {
                     return <td key={col.id} className={cell}><input className={sel} value={t.assignedQA} onChange={e => update(t.id, { assignedQA: e.target.value })} placeholder="Name" /></td>
                   }
                   if (col.id === 'status') {
-                    const fallbackStatuses = ['Open', 'In Progress', 'Resolved', 'Closed']
-                    const opts = statusOptions.length > 0 ? statusOptions : fallbackStatuses
-                    const statusOpts = t.status && !opts.includes(t.status) ? [t.status, ...opts] : opts
+                    const statusOpts = t.status && !statusOptions.includes(t.status)
+                      ? [t.status, ...statusOptions]
+                      : statusOptions
                     return (
                       <td key={col.id} className={cell}>
                         <select className={`${sel} field-input py-0.5 px-1 text-xs`} value={t.status} onChange={e => update(t.id, { status: e.target.value as any })}>
-                          {statusOpts.map(s => <option key={s} value={s}>{s}</option>)}
+                          {statusOpts.length > 0
+                            ? statusOpts.map(s => <option key={s} value={s}>{s}</option>)
+                            : <option value={t.status}>{t.status || '—'}</option>
+                          }
                         </select>
                       </td>
                     )
@@ -432,11 +440,10 @@ export const SupportLog: React.FC = () => {
                     return (
                       <td key={col.id} className={cell}>
                         <select className={`${sel} field-input py-0.5 px-1 text-xs ${getPriorityColor(t.priority)}`} value={t.priority} onChange={e => update(t.id, { priority: e.target.value as any })}>
-                          {priorityOptions.length > 0 ? (
-                            priorityOptions.map(p => <option key={p} value={p}>{p}</option>)
-                          ) : (
-                            ['Critical', 'High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)
-                          )}
+                          {priorityOptions.length > 0
+                            ? priorityOptions.map(p => <option key={p} value={p}>{p}</option>)
+                            : <option value={t.priority}>{t.priority || '—'}</option>
+                          }
                         </select>
                       </td>
                     )

@@ -1,11 +1,12 @@
 // src/modules/SupportIssueTracker/index.tsx
 
 import React, { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import {
-  LifeBuoy, Plus, Sliders, History, Download, Upload, RefreshCw, Shield,
+  LifeBuoy, Plus, Settings2, History, Download, Upload, RefreshCw, Shield,
   CheckCircle2, AlertTriangle, Layers
 } from 'lucide-react'
+import { ROUTES } from '@/lib/routes'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/hooks/use-toast'
@@ -15,7 +16,6 @@ import { useSupportTrackerStore } from './store'
 import { ManagerLiveDashboard } from './components/ManagerLiveDashboard'
 import { SupportIssueTable } from './components/SupportIssueTable'
 import { AddEditIssueModal } from './components/AddEditIssueModal'
-import { ConfigurableDropdownsModal } from './components/ConfigurableDropdownsModal'
 import { AuditHistoryDrawer } from './components/AuditHistoryDrawer'
 import { ExportImportModal } from './components/ExportImportModal'
 import { PermissionsInfoModal } from './components/PermissionsInfoModal'
@@ -47,7 +47,6 @@ export function SupportIssueTracker() {
   // Modal states
   const [isAddEditOpen, setIsAddEditOpen]         = useState(false)
   const [issueToEdit, setIssueToEdit]             = useState<SupportIssue | null>(null)
-  const [isDropdownsOpen, setIsDropdownsOpen]     = useState(false)
   const [isHistoryOpen, setIsHistoryOpen]         = useState(false)
   const [historyTargetId, setHistoryTargetId]     = useState<string | null>(null)
   const [isExportOpen, setIsExportOpen]           = useState(false)
@@ -58,9 +57,12 @@ export function SupportIssueTracker() {
   const [isTimeLogDrawerOpen, setIsTimeLogDrawerOpen] = useState(false)
   const [timeLogTarget, setTimeLogTarget]         = useState<SupportIssue | null>(null)
 
+  const navigate = useNavigate()
+
   const {
     fetchInitialData, refreshData, loading, isRefreshing,
-    deleteIssue, bulkDeleteIssues, issues, setFilters, setSelectedProduct
+    deleteIssue, bulkDeleteIssues, issues, setFilters, setSelectedProduct,
+    filters, products
   } = useSupportTrackerStore()
 
   // Fetch on mount. The store's loading flag prevents duplicate in-flight fetches.
@@ -207,17 +209,20 @@ export function SupportIssueTracker() {
             </button>
           )}
 
-          {permissionsLoaded && canConfigureDropdowns && (
-            <button
-              type="button"
-              onClick={() => setIsDropdownsOpen(true)}
-              title="Configure Dropdowns"
-              className="h-7.5 px-2 sm:px-2.5 rounded-lg border border-border/50 text-xs font-medium text-text-muted hover:text-purple-400 hover:bg-surface-elevated/80 transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <Sliders className="w-3.5 h-3.5 text-purple-400" />
-              <span className="hidden lg:inline">Dropdowns</span>
-            </button>
-          )}
+          {permissionsLoaded && canConfigureDropdowns && (() => {
+            const pid = filters.selectedProductId !== 'all' ? filters.selectedProductId : products[0]?.id
+            return pid ? (
+              <button
+                type="button"
+                onClick={() => navigate(`${ROUTES.projectHub}/${pid}/dropdown-config`)}
+                title="Configure Dropdowns (Project Hub)"
+                className="h-7.5 px-2 sm:px-2.5 rounded-lg border border-border/50 text-xs font-medium text-text-muted hover:text-purple-400 hover:bg-surface-elevated/80 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Settings2 className="w-3.5 h-3.5 text-purple-400" />
+                <span className="hidden lg:inline">Dropdowns</span>
+              </button>
+            ) : null
+          })()}
 
           {permissionsLoaded && canExport && (
             <button
@@ -317,7 +322,7 @@ export function SupportIssueTracker() {
         onAddHours={(issue: SupportIssue) => { setAddHoursTarget(issue); setIsAddHoursOpen(true) }}
       />
 
-      <ConfigurableDropdownsModal isOpen={isDropdownsOpen} onClose={() => setIsDropdownsOpen(false)} />
+
 
       <AuditHistoryDrawer isOpen={isHistoryOpen} targetIssueId={historyTargetId} onClose={() => setIsHistoryOpen(false)} />
 

@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Edit, Archive, Trash2, Users, Calendar, Tag, Clock, FolderKanban } from 'lucide-react'
+import { ArrowLeft, Edit, Archive, Trash2, Users, Calendar, Tag, Clock, FolderKanban, Settings2 } from 'lucide-react'
 import { ProjectDataArchive } from './components/ProjectDataArchive'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
@@ -37,6 +37,7 @@ export function ProjectDetail() {
   const canEdit = can('project-hub', 'can_edit')
   const canDelete = can('project-hub', 'can_delete')
   const canAssignMembers = can('project-hub', 'can_assign_members')
+  const canManageDropdownConfig = can('project-hub', 'can_manage_dropdown_config')
 
   useEffect(() => {
     if (projectId) {
@@ -195,6 +196,15 @@ export function ProjectDetail() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {canManageDropdownConfig && (
+            <button
+              onClick={() => navigate(`${ROUTES.projectHub}/${project.id}/dropdown-config`)}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-bold text-sm uppercase tracking-wider"
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              Dropdown Config
+            </button>
+          )}
           {canEdit && (
             <>
               <button

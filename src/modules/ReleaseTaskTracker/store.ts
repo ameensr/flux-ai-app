@@ -31,6 +31,7 @@ import {
   deleteReleaseTimeLog as apiDeleteTimeLog,
   editReleaseTimeLog as apiEditTimeLog,
   fetchReleaseDropdownConfigs,
+  fetchProjectScopedReleaseDropdownConfigs,
   saveReleaseDropdownConfigs as apiSaveDropdowns,
   LOCAL_STORAGE_TASKS_KEY
 } from './releaseTrackerService'
@@ -162,14 +163,18 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
         fetchActiveEmployees()
       ])
 
-      // 2. Fetch time logs, history, and dropdown configs
+      // 2. Determine scoped project for dropdown fetch
+      const selectedProductId = get().filters.selectedProductId
+      const scopedProjectId = selectedProductId !== 'all' ? selectedProductId : products[0]?.id
+
+      // 3. Fetch time logs, history, and dropdown configs
       const [timeLogs, history, dropdownConfigs] = await Promise.all([
         fetchReleaseTimeLogs(),
         fetchReleaseHistory(),
-        fetchReleaseDropdownConfigs()
+        fetchProjectScopedReleaseDropdownConfigs(scopedProjectId)
       ])
 
-      // 3. Fetch tasks with cumulative time logs
+      // 4. Fetch tasks with cumulative time logs
       const tasks = await fetchReleaseTasks(products, timeLogs)
 
       set({
@@ -194,10 +199,12 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
         fetchProductsFromProjectHub(),
         fetchActiveEmployees()
       ])
+      const selectedProductId = get().filters.selectedProductId
+      const scopedProjectId = selectedProductId !== 'all' ? selectedProductId : products[0]?.id
       const [timeLogs, history, dropdownConfigs] = await Promise.all([
         fetchReleaseTimeLogs(),
         fetchReleaseHistory(),
-        fetchReleaseDropdownConfigs()
+        fetchProjectScopedReleaseDropdownConfigs(scopedProjectId)
       ])
       const tasks = await fetchReleaseTasks(products, timeLogs)
 
@@ -230,6 +237,12 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
     set((state) => ({
       filters: { ...state.filters, selectedProductId: productId, selectedRelease: 'all' }
     }))
+    // Reload project-scoped dropdowns when the selected project changes
+    if (productId && productId !== 'all') {
+      fetchProjectScopedReleaseDropdownConfigs(productId).then(dropdownConfigs => {
+        set({ dropdownConfigs })
+      }).catch(err => console.warn('[ReleaseTrackerStore] setSelectedProduct dropdown reload error:', err))
+    }
   },
 
   setSelectedRelease: (release) => {

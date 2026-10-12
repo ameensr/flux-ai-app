@@ -13,6 +13,7 @@ import type {
 } from './types'
 import { DEFAULT_TESTING_STATUSES, DEFAULT_IS_QA_MISS_OPTIONS, DEFAULT_RETESTING_STATUS_OPTIONS } from './types'
 import * as XLSX from 'xlsx'
+import { fetchProjectDropdownsByCategory } from '@/modules/ProjectHub/projectDropdownService'
 
 export const LOCAL_STORAGE_ISSUES_KEY = 'qaly_support_tracker_issues_v2'
 export const LOCAL_STORAGE_HISTORY_KEY = 'qaly_support_tracker_history_v2'
@@ -930,6 +931,56 @@ export function logHistoryEvent(event: Omit<SupportIssueHistoryRecord, 'id' | 't
 }
 
 // ── Dropdown Configurations ───────────────────────────────────────────────────
+
+/**
+ * Fetch dropdown configurations for a specific project from the centralized
+ * project_dropdown_configs table using the 4 shared categories:
+ *   status       → testing_status + retesting_status
+ *   qa_engineers → testers
+ *   is_qa_miss   → is_qa_miss
+ * Falls back to the global support_issue_dropdown_configs table when no
+ * project-scoped rows exist.
+ */
+export async function fetchProjectScopedDropdownConfigs(projectId?: string): Promise<{
+  testing_status: SupportDropdownOption[]
+  testers: SupportDropdownOption[]
+  is_qa_miss: SupportDropdownOption[]
+  retesting_status: SupportDropdownOption[]
+}> {
+  if (projectId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectId)) {
+    try {
+      const [statusRows, engineerRows, qaMissRows] = await Promise.all([
+        fetchProjectDropdownsByCategory(projectId, 'status'),
+        fetchProjectDropdownsByCategory(projectId, 'qa_engineers'),
+        fetchProjectDropdownsByCategory(projectId, 'is_qa_miss'),
+      ])
+
+      const toSupportOption = (row: any, cat: SupportDropdownCategory): SupportDropdownOption => ({
+        id: row.id,
+        category: cat,
+        label: cat === 'tester' ? row.label.toUpperCase() : row.label,
+        value: cat === 'tester' ? row.value.toUpperCase() : row.value,
+        color: row.color,
+        is_active: row.is_active,
+        sort_order: row.sort_order,
+      })
+
+      if (statusRows.length > 0 || engineerRows.length > 0 || qaMissRows.length > 0) {
+        return {
+          // status category feeds both testing_status and retesting_status
+          testing_status: statusRows.map(r => toSupportOption(r, 'testing_status')),
+          retesting_status: statusRows.map(r => toSupportOption(r, 'retesting_status')),
+          testers: engineerRows.map(r => toSupportOption(r, 'tester')),
+          is_qa_miss: qaMissRows.map(r => toSupportOption(r, 'is_qa_miss')),
+        }
+      }
+    } catch (err) {
+      console.warn('[supportTrackerService] fetchProjectScopedDropdownConfigs error:', err)
+    }
+  }
+  // Fallback to global configs
+  return fetchDropdownConfigurations()
+}
 
 export async function fetchDropdownConfigurations(): Promise<{
   testing_status: SupportDropdownOption[]

@@ -25,6 +25,7 @@ import {
   orderedVisibleColumns,
   visibilityMapFromSchema,
 } from '../qaReportColumnSchema'
+import { fetchProjectDropdownsByCategory } from '@/modules/ProjectHub/projectDropdownService'
 
 const newItem = (): ReleaseItem => ({
   id: crypto.randomUUID(), taskId: '', featureName: '', assignee: '',
@@ -36,7 +37,7 @@ const cell = 'px-3 py-2 border-b border-white/5'
 
 export const ReleaseTable: React.FC = () => {
   const { form, setForm } = useQAReportStore()
-  const { fetchReportRows, dropdownConfigs, fetchDropdownConfigs } = useDailyReportStore()
+  const { fetchReportRows } = useDailyReportStore()
   const { getColumns, fetchColumnConfigs } = useColumnConfigStore()
   const { isDark } = useTheme()
   const [search, setSearch] = useState('')
@@ -50,12 +51,25 @@ export const ReleaseTable: React.FC = () => {
   const columnButtonRef = useRef<HTMLButtonElement>(null)
   const { can } = usePermissions()
 
-  // Fetch dropdown configs on mount
+  // Project-scoped dropdown options from Project Hub centralized config
+  const [statusOptions, setStatusOptions] = useState<string[]>([])
+  const [priorityOptions, setPriorityOptions] = useState<string[]>([])
+
+  // Fetch project-scoped dropdowns whenever the selected project changes
   useEffect(() => {
-    if (dropdownConfigs.length === 0) {
-      fetchDropdownConfigs()
+    if (!form.projectId) {
+      setStatusOptions([])
+      setPriorityOptions([])
+      return
     }
-  }, [])
+    Promise.all([
+      fetchProjectDropdownsByCategory(form.projectId, 'status'),
+      fetchProjectDropdownsByCategory(form.projectId, 'priority'),
+    ]).then(([statusRows, priorityRows]) => {
+      setStatusOptions(statusRows.map(r => r.value))
+      setPriorityOptions(priorityRows.map(r => r.value))
+    }).catch(() => {})
+  }, [form.projectId])
 
   const items = form.releaseItems
 
@@ -90,17 +104,8 @@ export const ReleaseTable: React.FC = () => {
     }
   }, [showColumnMenu])
 
-  // Get status options from Daily Report configuration (testing_status for release testing)
-  const statusOptions = dropdownConfigs
-    .filter(c => c.category === 'testing_status' && c.is_active)
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map(c => c.value)
-
-  // Get priority options from Daily Report configuration
-  const priorityOptions = dropdownConfigs
-    .filter(c => c.category === 'priority' && c.is_active)
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map(c => c.value)
+  // Get status options: project-scoped only, no fallback
+  // Get priority options: project-scoped only, no fallback
 
   // Helper function to get priority color
   const getPriorityColor = (priority: string) => {
@@ -438,11 +443,10 @@ export const ReleaseTable: React.FC = () => {
                     return (
                       <td key={col.id} className={cell}>
                         <select className={`${sel} field-input py-0.5 px-1 text-xs ${getStatusColor(item.status)}`} value={item.status} onChange={e => update(item.id, { status: e.target.value as any })}>
-                          {statusOptions.length > 0 ? (
-                            statusOptions.map(s => <option key={s} value={s}>{s}</option>)
-                          ) : (
-                            ['Not Started', 'In Progress', 'Pass', 'Fail', 'Blocked'].map(s => <option key={s}>{s}</option>)
-                          )}
+                          {statusOptions.length > 0
+                            ? statusOptions.map(s => <option key={s} value={s}>{s}</option>)
+                            : <option value={item.status}>{item.status || '—'}</option>
+                          }
                         </select>
                       </td>
                     )
@@ -451,11 +455,10 @@ export const ReleaseTable: React.FC = () => {
                     return (
                       <td key={col.id} className={cell}>
                         <select className={`${sel} field-input py-0.5 px-1 text-xs ${getPriorityColor(item.priority)}`} value={item.priority} onChange={e => update(item.id, { priority: e.target.value as any })}>
-                          {priorityOptions.length > 0 ? (
-                            priorityOptions.map(p => <option key={p} value={p}>{p}</option>)
-                          ) : (
-                            ['Critical', 'High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)
-                          )}
+                          {priorityOptions.length > 0
+                            ? priorityOptions.map(p => <option key={p} value={p}>{p}</option>)
+                            : <option value={item.priority}>{item.priority || '—'}</option>
+                          }
                         </select>
                       </td>
                     )

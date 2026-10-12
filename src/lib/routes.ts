@@ -68,6 +68,10 @@ export const ROUTES = {
   // QA Weekly Report Config
   qaReportConfig: '/qa-report/configuration', // Project Configurations (name/code/description/status)
   qaReportDropdownConfig: '/qa-report/dropdown-configuration', // Testing Status / Priority master dropdown lists
+
+  // Project Hub — Centralized Dropdown Configuration
+  // Route: /project-hub/:projectId/dropdown-config
+  projectDropdownConfig: '/project-hub/:projectId/dropdown-config',
 } as const
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES]
@@ -102,6 +106,7 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.bugStatus]: 'bug-status',
   [ROUTES.supportTracker]: 'support-tracker',
   [ROUTES.releaseTracker]: 'release-tracker',
+  // project dropdown config is nested under project-hub
 }
 
 /** Resolve RBAC module for a pathname (exact or nested, e.g. `/project-hub/:id`). */

@@ -34,6 +34,7 @@ export function useRegisterActiveOperation(): RegisterOperationFn {
 const Dashboard = lazy(() => import('@/pages/Dashboard').then(m => ({ default: m.Dashboard })))
 const ProjectHub = lazy(() => import('@/modules/ProjectHub').then(m => ({ default: m.ProjectHub })))
 const ProjectDetail = lazy(() => import('@/modules/ProjectHub/ProjectDetail').then(m => ({ default: m.ProjectDetail })))
+const ProjectDropdownConfig = lazy(() => import('@/modules/ProjectHub/components/ProjectDropdownConfig').then(m => ({ default: m.ProjectDropdownConfig })))
 const BugRefiner = lazy(() => import('@/modules/BugRefiner').then(m => ({ default: m.BugRefiner })))
 const TestCaseGenerator = lazy(() => import('@/modules/TestCaseGenerator').then(m => ({ default: m.TestCaseGenerator })))
 const WritingAssistant = lazy(() => import('@/modules/WritingAssistant').then(m => ({ default: m.WritingAssistant })))
@@ -397,6 +398,7 @@ export default function App() {
             <Route path={ROUTES.dashboard} element={<Dashboard />} />
             <Route path={ROUTES.projectHub} element={<ProjectHub />} />
             <Route path={`${ROUTES.projectHub}/:projectId`} element={<ProjectDetail />} />
+            <Route path={`${ROUTES.projectHub}/:projectId/dropdown-config`} element={<ProtectedRoute moduleKey="project-hub"><ProjectDropdownConfig /></ProtectedRoute>} />
             <Route path={ROUTES.bugRefiner} element={<BugRefiner />} />
             <Route path={ROUTES.testGenerator} element={<TestCaseGenerator />} />
             <Route path={ROUTES.writingAssistant} element={<WritingAssistant />} />

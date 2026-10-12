@@ -43,6 +43,8 @@ export type PermissionKey =
   | 'can_view_quick_details'
   // ── Project Data Archive ────────────────────────────────────────────────
   | 'can_archive_data'
+  // ── Project-Wise Dropdown Configuration ────────────────────────────────
+  | 'can_manage_dropdown_config'
 
 export interface ModulePermissionDefinition {
   moduleKey: string
@@ -263,6 +265,7 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
       'can_assign_members',
       'can_manage_roles',
       'can_archive_data',
+      'can_manage_dropdown_config',
     ],
     description: 'Project management and team collaboration'
   },
@@ -416,6 +419,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   can_edit_time_logs: 'Edit / Correct Logged Hours',
   can_view_quick_details: 'Project Pulse',
   can_archive_data: 'Archive Project Data',
+  can_manage_dropdown_config: 'Manage Project-Wise Dropdown Configuration',
 }
 
 /**
@@ -458,4 +462,5 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   can_edit_time_logs: 'Can correct previously logged time-log entries. Every correction is recorded in audit history with a mandatory reason.',
   can_view_quick_details: 'Can view the role-based Project Pulse health dashboard and AI risk summary on the main dashboard',
   can_archive_data: 'Can export project data to Excel and permanently delete archived records from the active database',
+  can_manage_dropdown_config: 'Can view, add, edit, and delete centralized dropdown configuration values for a project (Status, QA Engineers, Priority, Is QA Miss?)',
 }

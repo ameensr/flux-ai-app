@@ -35,7 +35,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
       can_configure_dropdowns: true, can_manage_permissions: true,
       can_lock_estimated_hours: true, can_unlock_estimated_hours: true, can_edit_estimated_hours: true, can_edit_time_logs: true,
     },
-    'project-hub': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_archive_data: true },
+    'project-hub': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_archive_data: true, can_manage_dropdown_config: true },
     admin: { can_view: true, can_create: true, can_edit: true, can_delete: true },
     'admin-hub': {
       can_view: true, can_create: true, can_edit: true, can_delete: true,
@@ -73,7 +73,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
       can_configure_dropdowns: true, can_manage_permissions: true,
       can_lock_estimated_hours: true, can_unlock_estimated_hours: true, can_edit_estimated_hours: true, can_edit_time_logs: true,
     },
-    'project-hub': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_archive_data: true },
+    'project-hub': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_archive_data: true, can_manage_dropdown_config: true },
     admin: { can_view: true, can_create: true, can_edit: true, can_delete: true },
     'admin-hub': {
       can_view: true, can_create: true, can_edit: true, can_delete: true,
@@ -141,7 +141,7 @@ export const FALLBACK_MAPS: Record<string, RolePermissionMap> = {
   },
   manager: {
     dashboard: { can_view: true, can_view_quick_details: true, can_create: true, can_edit: true, can_delete: true, can_export: true, can_generate_ai: true },
-    'project-hub': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_archive_data: true },
+    'project-hub': { can_view: true, can_create: true, can_edit: true, can_delete: true, can_archive_data: true, can_manage_dropdown_config: true },
     'support-tracker': {
       can_view: true, can_view_dashboard: true, can_create: true, can_edit: true,
       can_delete: true, can_export: true, can_import: true, can_view_history: true,
