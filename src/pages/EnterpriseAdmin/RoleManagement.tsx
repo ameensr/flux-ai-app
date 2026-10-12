@@ -501,17 +501,7 @@ export function RoleManagement() {
           : null,
       }))
 
-      let permsData: PermRow[] = permsRes.data ?? []
-      if (!permsData.some(p => p.permission_key === 'can_view_quick_details')) {
-        permsData = [
-          ...permsData,
-          {
-            id: 'perm-quick-details',
-            permission_key: 'can_view_quick_details',
-            permission_name: 'Project Pulse',
-          },
-        ]
-      }
+      const permsData: PermRow[] = permsRes.data ?? []
 
       const json: MatrixData = {
         roles: rawRoles,
