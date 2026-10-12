@@ -1,181 +1,43 @@
 // src/components/ai/AICopilot.tsx
-// Qaly Copilot — Triage-style terminal chat panel (light + dark theme safe)
+// Panda Copilot FAB — visible only when the user has can_view on hybrid-copilot module.
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Send, Terminal, Code, Cpu, RefreshCw, Lock } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { AIService } from '@/services/ai/ai-service'
-import { COPILOT_PROMPT } from '@/ai/prompts/copilotPrompt'
+import { X } from 'lucide-react'
 import { PandaSVG } from '@/components/LazyPanda/PandaSVG'
-import {
-  ADVANCED_AI_PERMISSION_DENIED,
-  AI_USER_RESTRICTED,
-  useAIAccess,
-} from '@/hooks/useAIAccess'
-
-interface Message { role: 'user' | 'assistant'; content: string }
-
-const QUICK_PROMPTS = [
-  { label: 'Fix Bug', icon: Terminal, prompt: 'Help me identify and fix the bug in my current context.' },
-  { label: 'Test cases', icon: Code, prompt: 'Generate test cases for the current feature.' },
-  { label: 'Risk Check', icon: Cpu, prompt: 'Identify potential risks and edge cases.' },
-]
-
-const WELCOME =
-  'Hello! I am your Qaly AI Engine Copilot. How can I help you with your QA tasks today?'
+import { PandaPanel } from '@/features/panda-copilot/components/PandaPanel'
+import { useAIAccess } from '@/hooks/useAIAccess'
 
 export const AICopilot = () => {
-  const { aiEnabled, configLoaded, userAllowed, canUseCopilot, getCopilotDenyReason, notifyIfRestricted } = useAIAccess()
-  const copilotAllowed = canUseCopilot()
-  const denyReason = getCopilotDenyReason()
-  // Restricted users stay interactive so the allowlist popup can appear.
-  const inputLocked = !copilotAllowed && userAllowed
-
+  const { canUseCopilot } = useAIAccess()
   const [isOpen, setIsOpen] = useState(false)
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: WELCOME },
-  ])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Don't render at all until config is loaded, or if AI is globally disabled
-  // and the user is not on the allowlist (no point showing the FAB)
-  if (!configLoaded || !aiEnabled || !userAllowed) return null
-
-  useEffect(() => {
-    if (isOpen) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isOpen, loading])
-
-  useEffect(() => {
-    if (!isOpen) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [isOpen])
-
-  const toggle = () => setIsOpen((prev) => !prev)
-
-  const send = async (text: string) => {
-    const trimmed = text.trim()
-    if (!trimmed || loading) return
-    if (!aiEnabled) {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'user', content: trimmed },
-        { role: 'assistant', content: '[FAIL] Centralised AI is disabled by an administrator.' },
-      ])
-      setInput('')
-      return
-    }
-    if (!userAllowed) {
-      notifyIfRestricted()
-      setMessages((prev) => [
-        ...prev,
-        { role: 'user', content: trimmed },
-        { role: 'assistant', content: `[FAIL] ${AI_USER_RESTRICTED}` },
-      ])
-      setInput('')
-      return
-    }
-    if (!copilotAllowed) {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'user', content: trimmed },
-        { role: 'assistant', content: `[FAIL] ${ADVANCED_AI_PERMISSION_DENIED}` },
-      ])
-      setInput('')
-      return
-    }
-
-    const updatedMessages: Message[] = [...messages, { role: 'user', content: trimmed }]
-    setMessages(updatedMessages)
-    setInput('')
-    setLoading(true)
-
-    try {
-      const historyWindow = updatedMessages.slice(-10)
-      const conversationPrompt = historyWindow
-        .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-        .join('\n\n')
-
-      const content = await AIService.callAI({
-        prompt: conversationPrompt,
-        options: {
-          systemPrompt:
-            COPILOT_PROMPT +
-            '\n\nYou are in a multi-turn conversation. The above shows the recent conversation history. Respond only to the latest User message while considering the full context.',
-          module: 'ai-copilot',
-        },
-      })
-      setMessages((prev) => [...prev, { role: 'assistant', content }])
-    } catch (err: any) {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: `[FAIL] ${err.message || 'Request failed'}` },
-      ])
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Only render when the hybrid-copilot permission is granted
+  if (!canUseCopilot()) return null
 
   return (
     <>
-      {/* FAB — toggles open/close */}
-      <div className="fixed bottom-6 right-6 z-[60] group">
-        {/* Tooltip for locked state */}
-        {!copilotAllowed && (
-          <div
-            className="absolute bottom-full right-0 mb-2 px-3 py-2 rounded-xl text-[11px] font-medium whitespace-nowrap pointer-events-none
-              opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-            style={{
-              background: 'var(--surface-elevated)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-secondary)',
-              boxShadow: 'var(--shadow)',
-            }}
-          >
-            <div className="flex items-center gap-1.5">
-              <Lock className="w-3 h-3 shrink-0" style={{ color: 'var(--accent)' }} />
-              {denyReason === 'permission'
-                ? 'Advanced AI permission required'
-                : denyReason === 'restricted'
-                  ? 'AI access restricted'
-                  : 'AI Copilot unavailable'}
-            </div>
-          </div>
-        )}
-
+      {/* FAB */}
+      <div className="fixed bottom-6 right-6 z-[60]">
         <motion.button
           type="button"
-          onClick={copilotAllowed ? toggle : notifyIfRestricted}
+          onClick={() => setIsOpen(prev => !prev)}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
-          aria-label={isOpen ? 'Close Qaly Copilot' : 'Open Qaly Copilot'}
+          aria-label={isOpen ? 'Close Panda Copilot' : 'Open Panda Copilot'}
           aria-expanded={isOpen}
-          className={cn(
-            'w-14 h-14 rounded-2xl flex items-center justify-center border transition-colors relative',
-            !copilotAllowed && 'cursor-not-allowed'
-          )}
+          className="w-14 h-14 rounded-2xl flex items-center justify-center border transition-colors relative"
           style={{
             background: isOpen
               ? 'var(--surface-elevated)'
-              : copilotAllowed
-                ? 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, var(--surface-elevated)), color-mix(in srgb, var(--accent) 10%, var(--surface-elevated)))'
-                : 'var(--surface-elevated)',
+              : 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, var(--surface-elevated)), color-mix(in srgb, var(--accent) 10%, var(--surface-elevated)))',
             borderColor: isOpen
               ? 'var(--border)'
-              : copilotAllowed
-                ? 'color-mix(in srgb, var(--accent) 50%, transparent)'
-                : 'var(--border)',
-            color: copilotAllowed ? 'var(--accent)' : 'var(--text-muted)',
-            boxShadow: isOpen || !copilotAllowed
+              : 'color-mix(in srgb, var(--accent) 50%, transparent)',
+            color: 'var(--accent)',
+            boxShadow: isOpen
               ? 'var(--shadow)'
               : '0 4px 16px color-mix(in srgb, var(--accent) 30%, transparent), 0 1px 4px rgba(0,0,0,0.15)',
-            opacity: copilotAllowed ? 1 : 0.6,
           }}
         >
           <AnimatePresence mode="wait" initial={false}>
@@ -210,22 +72,10 @@ export const AICopilot = () => {
               </motion.span>
             )}
           </AnimatePresence>
-
-          {/* Lock badge overlay for no-permission state */}
-          {!copilotAllowed && (
-            <span
-              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center"
-              style={{
-                background: 'var(--surface-elevated)',
-                border: '1px solid var(--border)',
-              }}
-            >
-              <Lock className="w-2.5 h-2.5" style={{ color: 'var(--text-muted)' }} />
-            </span>
-          )}
         </motion.button>
       </div>
 
+      {/* Panel */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -234,226 +84,9 @@ export const AICopilot = () => {
             exit={{ opacity: 0, scale: 0.96, y: 16 }}
             transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
             style={{ transformOrigin: '100% 100%' }}
-            className="fixed bottom-24 right-4 left-4 sm:left-auto sm:right-6 sm:w-[420px] h-[70vh] sm:h-[560px] z-[55]"
+            className="fixed bottom-24 right-4 left-4 sm:left-auto sm:right-6 sm:w-[440px] h-[75vh] sm:h-[600px] z-[55]"
           >
-            {/* Solid theme surfaces — no /opacity on CSS vars (breaks light mode) */}
-            <div
-              className="h-full flex flex-col font-mono text-xs md:text-sm rounded-2xl overflow-hidden border"
-              style={{
-                background: 'var(--modal-bg)',
-                borderColor: 'var(--border)',
-                boxShadow: 'var(--shadow)',
-                color: 'var(--text-primary)',
-              }}
-            >
-              {/* Header */}
-              <div
-                className="px-5 pt-5 pb-4 shrink-0 border-b"
-                style={{ borderColor: 'var(--divider)', background: 'var(--surface)' }}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <span className="font-bold tracking-tight">
-                      <span style={{ color: 'var(--accent)' }}>Copilot</span>
-                    </span>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className={cn(
-                        'w-1.5 h-1.5 rounded-full',
-                        copilotAllowed ? 'bg-green-600 dark:bg-green-400 animate-pulse' : 'bg-red-500',
-                      )} />
-                      <span
-                        className="text-[10px] font-bold uppercase tracking-[0.14em]"
-                        style={{ color: 'var(--text-muted)' }}
-                      >
-                        {!aiEnabled
-                          ? 'AI Disabled by Admin'
-                          : !userAllowed
-                            ? 'AI Restricted'
-                            : copilotAllowed
-                              ? 'Platform AI Online'
-                              : 'Advanced AI Locked'}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsOpen(false)}
-                    className="p-1.5 rounded-lg border transition-all"
-                    style={{
-                      color: 'var(--text-muted)',
-                      borderColor: 'transparent',
-                      background: 'transparent',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.color = 'var(--text-primary)'
-                      e.currentTarget.style.background = 'var(--hover)'
-                      e.currentTarget.style.borderColor = 'var(--border)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.color = 'var(--text-muted)'
-                      e.currentTarget.style.background = 'transparent'
-                      e.currentTarget.style.borderColor = 'transparent'
-                    }}
-                    aria-label="Close"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Messages */}
-              <div
-                className="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0"
-                style={{ background: 'var(--bg)' }}
-              >
-                {messages.map((msg, idx) => (
-                  <motion.div
-                    key={idx}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-1"
-                  >
-                    <p
-                      className="text-[10px] font-bold uppercase tracking-[0.12em]"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      {msg.role === 'user' ? '> user' : '> qaly'}
-                    </p>
-                    <div
-                      className="rounded-xl px-3.5 py-3 text-[12px] md:text-[13px] leading-relaxed whitespace-pre-wrap border"
-                      style={
-                        msg.role === 'user'
-                          ? {
-                              background: 'color-mix(in srgb, var(--accent) 12%, var(--surface))',
-                              borderColor: 'color-mix(in srgb, var(--accent) 28%, transparent)',
-                              color: 'var(--text-primary)',
-                            }
-                          : {
-                              background: 'var(--surface)',
-                              borderColor: 'var(--border)',
-                              color: 'var(--text-secondary)',
-                            }
-                      }
-                    >
-                      {msg.content}
-                    </div>
-                  </motion.div>
-                ))}
-
-                {loading && (
-                  <div className="space-y-1">
-                    <p
-                      className="text-[10px] font-bold uppercase tracking-[0.12em]"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      &gt; qaly
-                    </p>
-                    <div
-                      className="flex items-center gap-2 rounded-xl px-3.5 py-3 border"
-                      style={{
-                        background: 'var(--surface)',
-                        borderColor: 'var(--border)',
-                        color: 'var(--text-secondary)',
-                      }}
-                    >
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" style={{ color: 'var(--accent)' }} />
-                      <span>processing…</span>
-                      <motion.span
-                        animate={{ opacity: [1, 0] }}
-                        transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
-                        className="inline-block w-1.5 h-3"
-                        style={{ background: 'var(--text-secondary)' }}
-                      />
-                    </div>
-                  </div>
-                )}
-                <div ref={bottomRef} />
-              </div>
-
-              {/* Input */}
-              <div
-                className="px-5 py-4 shrink-0 border-t"
-                style={{ borderColor: 'var(--divider)', background: 'var(--surface)' }}
-              >
-                <div className="flex gap-1.5 mb-3">
-                  {QUICK_PROMPTS.map((qp) => (
-                    <button
-                      key={qp.label}
-                      type="button"
-                      onClick={() => send(qp.prompt)}
-                      disabled={loading || inputLocked}
-                      className="flex-1 py-1.5 rounded-lg border text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1 disabled:opacity-40"
-                      style={{
-                        borderColor: 'var(--border)',
-                        background: 'var(--input-bg)',
-                        color: 'var(--text-muted)',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (loading) return
-                        e.currentTarget.style.background = 'var(--hover)'
-                        e.currentTarget.style.color = 'var(--text-primary)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'var(--input-bg)'
-                        e.currentTarget.style.color = 'var(--text-muted)'
-                      }}
-                    >
-                      <qp.icon className="w-3 h-3" />
-                      {qp.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div
-                  className="flex items-center gap-2 rounded-xl border px-3 py-2.5 transition-all"
-                  style={{
-                    borderColor: 'var(--border)',
-                    background: 'var(--input-bg)',
-                  }}
-                >
-                  <span className="select-none shrink-0" style={{ color: 'var(--accent)' }}>
-                    &gt;
-                  </span>
-                  <input
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault()
-                        send(input)
-                      }
-                    }}
-                    placeholder={
-                      !aiEnabled
-                        ? 'AI disabled by admin…'
-                        : !userAllowed
-                          ? 'AI access restricted…'
-                          : !copilotAllowed
-                            ? 'Advanced AI permission required…'
-                            : 'ask anything…'
-                    }
-                    disabled={loading || inputLocked}
-                    className="flex-1 min-w-0 bg-transparent outline-none text-sm disabled:opacity-50 placeholder:opacity-60"
-                    style={{ color: 'var(--text-primary)' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => send(input)}
-                    disabled={loading || inputLocked || !input.trim()}
-                    className="p-1.5 rounded-lg border transition-all disabled:opacity-40"
-                    style={{
-                      background: 'color-mix(in srgb, var(--accent) 14%, transparent)',
-                      color: 'var(--accent)',
-                      borderColor: 'color-mix(in srgb, var(--accent) 35%, transparent)',
-                    }}
-                    aria-label="Send"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
+            <PandaPanel onClose={() => setIsOpen(false)} />
           </motion.div>
         )}
       </AnimatePresence>

@@ -54,9 +54,8 @@ export function useAIAccess() {
   const canAdvanced = (moduleKey: string) =>
     platformOk && can(moduleKey, 'can_use_advanced_ai')
 
-  /** Copilot: needs Centralised AI + allowlist + Advanced AI on any AI module */
-  const canUseCopilot = () =>
-    platformOk && ADVANCED_AI_MODULES.some((m) => can(m, 'can_use_advanced_ai'))
+  /** Copilot: needs can_view on the hybrid-copilot module */
+  const canUseCopilot = () => can('hybrid-copilot', 'can_view')
 
   const getGenerateDenyReason = (moduleKey: string): AIDenyReason => {
     if (!configLoaded || !aiEnabled) return 'disabled'
@@ -66,9 +65,7 @@ export function useAIAccess() {
   }
 
   const getCopilotDenyReason = (): AIDenyReason => {
-    if (!configLoaded || !aiEnabled) return 'disabled'
-    if (!userAllowed) return 'restricted'
-    if (!ADVANCED_AI_MODULES.some((m) => can(m, 'can_use_advanced_ai'))) return 'permission'
+    if (!can('hybrid-copilot', 'can_view')) return 'permission'
     return null
   }
 

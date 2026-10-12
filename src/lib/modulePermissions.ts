@@ -325,6 +325,17 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
     description: 'Enterprise QA & support issue tracking system with manager dashboard'
   },
 
+  // ── Hybrid Copilot ──────────────────────────────────────────────────────────
+
+  'hybrid-copilot': {
+    moduleKey: 'hybrid-copilot',
+    moduleName: 'Hybrid Co-Pilot',
+    supportedPermissions: [
+      'can_view',
+    ],
+    description: 'Panda AI Copilot — rule-based data assistant with optional AI intelligence'
+  },
+
   // ── Release Task Tracker ───────────────────────────────────────────────────
 
   'release-tracker': {
