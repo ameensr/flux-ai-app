@@ -2,6 +2,7 @@
 // Interactive 3D Card Popup for Task-Wise Status with Parent-wise breakdown
 
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, LayoutGrid, CheckCircle, AlertTriangle, FileSpreadsheet, Search, ChevronDown, ChevronUp } from 'lucide-react'
 import { useTheme } from '@/context/ThemeContext'
@@ -57,7 +58,7 @@ export function TaskWiseStatusModal({
     setExpandedParents(prev => ({ ...prev, [parent]: !prev[parent] }))
   }
 
-  return (
+  const modalContent = (
     <AnimatePresence>
       {isOpen && (
         <>
@@ -67,8 +68,11 @@ export function TaskWiseStatusModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[100]"
-            style={{ background: isDark ? 'rgba(0,0,0,0.55)' : 'rgba(15,23,42,0.35)' }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100]"
+            style={{
+              backdropFilter: 'blur(4px)',
+              WebkitBackdropFilter: 'blur(4px)'
+            }}
             onClick={onClose}
           />
 
@@ -347,6 +351,9 @@ export function TaskWiseStatusModal({
       )}
     </AnimatePresence>
   )
+
+  if (typeof document === 'undefined') return modalContent
+  return createPortal(modalContent, document.body)
 }
 
 function ValidationItem({ label, value, passed, isDark }: { label: string; value: string; passed: boolean; isDark: boolean }) {

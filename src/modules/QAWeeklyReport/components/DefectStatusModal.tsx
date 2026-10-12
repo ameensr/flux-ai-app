@@ -2,6 +2,7 @@
 // Interactive 3D Card Popup for Defect Status Breakdown with Release Bug Status details
 
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle, Clock, Ban, PauseCircle } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
@@ -102,7 +103,7 @@ export function DefectStatusModal({
   const uploadedAt = hasReleaseBugData ? releaseBugStatus.uploadedAt : hasTaskWiseData ? taskWiseStatus.uploadedAt : null
   const chartTheme = isDark ? 'dark' as const : 'light' as const
 
-  return (
+  const modalContent = (
     <AnimatePresence>
       {isOpen && (
         <>
@@ -112,8 +113,11 @@ export function DefectStatusModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[100]"
-            style={{ background: isDark ? 'rgba(0,0,0,0.55)' : 'rgba(15,23,42,0.35)' }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100]"
+            style={{
+              backdropFilter: 'blur(4px)',
+              WebkitBackdropFilter: 'blur(4px)'
+            }}
             onClick={onClose}
           />
 
@@ -436,6 +440,9 @@ export function DefectStatusModal({
       )}
     </AnimatePresence>
   )
+
+  if (typeof document === 'undefined') return modalContent
+  return createPortal(modalContent, document.body)
 }
 
 // Helper component for metric cards

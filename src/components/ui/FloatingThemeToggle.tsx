@@ -2,22 +2,27 @@
 import React from 'react'
 import { Sun, Moon } from 'lucide-react'
 import { useTheme } from '@/context/ThemeContext'
+import { useAIAccess } from '@/hooks/useAIAccess'
 
 export const FloatingThemeToggle: React.FC = () => {
   const { isDark, toggleTheme } = useTheme()
+  const { canUseCopilot } = useAIAccess()
+  const hasCopilot = canUseCopilot()
 
   return (
     <button
       onClick={toggleTheme}
       aria-label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
       title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-      className="fixed z-[59] pressable focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 print:hidden"
+      className="fixed z-[60] pressable focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 print:hidden cursor-pointer"
       style={{
         bottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))',
-        right: 'calc(5.5rem + env(safe-area-inset-right, 0px))',
+        right: hasCopilot
+          ? 'calc(7.25rem + env(safe-area-inset-right, 0px))'
+          : 'calc(1.5rem + env(safe-area-inset-right, 0px))',
         width: '44px',
         height: '44px',
-        borderRadius: '14px',
+        borderRadius: '12px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -27,6 +32,7 @@ export const FloatingThemeToggle: React.FC = () => {
         WebkitBackdropFilter: 'blur(12px)',
         boxShadow: 'var(--shadow-sm)',
         color: 'var(--text-secondary)',
+        transition: 'right 0.2s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease',
         // @ts-ignore
         '--tw-ring-color': 'var(--accent)',
         '--tw-ring-offset-color': 'var(--bg)',
@@ -49,3 +55,4 @@ export const FloatingThemeToggle: React.FC = () => {
     </button>
   )
 }
+

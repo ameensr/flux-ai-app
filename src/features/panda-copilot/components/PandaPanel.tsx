@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Send, RefreshCw, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLocation } from 'react-router-dom'
-import { PandaSVG } from '@/components/LazyPanda/PandaSVG'
 import { buildParsedQuery } from '../engine/queryRouter'
 import { getPandaAccessContext } from '../permissions/pandaAccessControl'
 import { getSupportIssues, getReleaseTasks, getQAReports, getProjects, getTodaysSummary, getMyTasks, searchAcrossModules, getIssueById } from '../services/pandaDataService'
@@ -270,13 +269,9 @@ export function PandaPanel({ onClose }: PandaPanelProps) {
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 shrink-0">
-              <PandaSVG state="IDLE" eyeOffset={{ x: 0, y: 0 }} headRotation={0} isBlinking={false} size={32} reducedMotion />
-            </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-[13px]" style={{ color: 'var(--accent)' }}>Panda Copilot</span>
-                <Sparkles className="w-3 h-3" style={{ color: 'var(--accent)' }} />
+                <span className="font-bold text-[14px]" style={{ color: 'var(--accent)' }}>QA Pilot</span>
               </div>
               <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                 Your project data, one conversation away.
@@ -285,11 +280,11 @@ export function PandaPanel({ onClose }: PandaPanelProps) {
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg border transition-all"
+            className="p-1.5 rounded-lg border transition-all cursor-pointer"
             style={{ color: 'var(--text-muted)', borderColor: 'transparent', background: 'transparent' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.borderColor = 'var(--border)' }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent' }}
-            aria-label="Close Panda Copilot"
+            aria-label="Close QA Pilot"
           >
             <X className="w-4 h-4" />
           </button>

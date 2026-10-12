@@ -1,7 +1,5 @@
-// src/modules/ProjectHub/components/ProjectMembersList.tsx
-// List of project members with role management
-
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Crown, Star, User, Eye, MoreVertical, Trash2, Users } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -17,13 +15,55 @@ interface ProjectMembersListProps {
   onUpdate: () => void
 }
 
+interface MenuPosition {
+  top?: number
+  bottom?: number
+  left: number
+  maxHeight: number
+}
+
 export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMembersListProps) {
   const { toast } = useToast()
   const { user } = useAppStore()
   const { can } = usePermissions()
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
+  const [menuPos, setMenuPos] = useState<MenuPosition | null>(null)
   const [loading, setLoading] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const confirm = useConfirm()
+
+  // Close dropdown on outside scroll, resize, or Escape key
+  useEffect(() => {
+    if (!activeMenu) return
+
+    const handleClose = () => {
+      setActiveMenu(null)
+      setMenuPos(null)
+    }
+
+    const handleScroll = (e: Event) => {
+      if (menuRef.current && menuRef.current.contains(e.target as Node)) {
+        return
+      }
+      handleClose()
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose()
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, true)
+    window.addEventListener('resize', handleClose)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true)
+      window.removeEventListener('resize', handleClose)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [activeMenu])
 
   const canManageRoles = can('project-hub', 'can_manage_roles')
   const canAssignMembers = can('project-hub', 'can_assign_members')
@@ -48,6 +88,7 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
 
   const handleChangeRole = async (memberId: string, newRole: ProjectRole, currentRole: ProjectRole) => {
     setActiveMenu(null)
+    setMenuPos(null)
 
     // Get current user's role in this project
     const currentUserMember = members.find(m => m.user_id === user?.id)
@@ -104,6 +145,7 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
 
   const handleRemoveMember = async (memberId: string, memberName: string, memberRole: ProjectRole) => {
     setActiveMenu(null)
+    setMenuPos(null)
 
     // Get current user's role in this project
     const currentUserMember = members.find(m => m.user_id === user?.id)
@@ -153,6 +195,48 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleToggleMenu = (e: React.MouseEvent<HTMLButtonElement>, memberId: string) => {
+    e.stopPropagation()
+    if (activeMenu === memberId) {
+      setActiveMenu(null)
+      setMenuPos(null)
+      return
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect()
+    const MENU_WIDTH = 280
+    const ESTIMATED_HEIGHT = 340
+    const spaceBelow = window.innerHeight - rect.bottom
+    const spaceAbove = rect.top
+
+    // Drop up if space below is limited and space above has more room
+    const dropUp = spaceBelow < 280 && spaceAbove > spaceBelow
+
+    // Position horizontally aligned to the right edge of the button
+    let left = rect.right - MENU_WIDTH
+    // Keep within viewport boundaries with 12px margin
+    if (left < 12) left = 12
+    if (left + MENU_WIDTH > window.innerWidth - 12) {
+      left = window.innerWidth - MENU_WIDTH - 12
+    }
+
+    if (dropUp) {
+      setMenuPos({
+        bottom: Math.max(8, window.innerHeight - rect.top + 6),
+        left,
+        maxHeight: Math.min(ESTIMATED_HEIGHT, Math.max(160, rect.top - 16))
+      })
+    } else {
+      setMenuPos({
+        top: Math.max(8, rect.bottom + 6),
+        left,
+        maxHeight: Math.min(ESTIMATED_HEIGHT, Math.max(160, spaceBelow - 16))
+      })
+    }
+
+    setActiveMenu(memberId)
   }
 
   if (members.length === 0) {
@@ -223,14 +307,11 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
               {canModify && (
                 <div className="relative shrink-0">
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setActiveMenu(isMenuOpen ? null : member.id)
-                    }}
-                    className="p-2 rounded-lg transition-all"
+                    onClick={(e) => handleToggleMenu(e, member.id)}
+                    className="p-2 rounded-lg transition-all cursor-pointer"
                     style={{
                       background: isMenuOpen ? 'var(--hover)' : 'transparent',
-                      color: 'var(--text-secondary)'
+                      color: isMenuOpen ? 'var(--text-primary)' : 'var(--text-secondary)'
                     }}
                     disabled={loading}
                     title="Manage member"
@@ -244,22 +325,31 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
         })}
       </div>
 
-      {/* Dropdown menu rendered at root level to avoid overflow issues */}
-      {activeMenu && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setActiveMenu(null)}
-        >
+      {/* Dropdown menu rendered in a portal to prevent container overflow clipping */}
+      {activeMenu && menuPos && createPortal(
+        <>
+          {/* Backdrop */}
           <div
-            className="w-64 rounded-xl shadow-2xl border overflow-hidden"
+            className="fixed inset-0 z-[9998]"
+            onClick={() => {
+              setActiveMenu(null)
+              setMenuPos(null)
+            }}
+          />
+
+          {/* Menu */}
+          <div
+            ref={menuRef}
+            className="w-72 rounded-xl shadow-2xl border overflow-hidden animate-in fade-in zoom-in-95 duration-150 z-[9999]"
             style={{
-              background: 'var(--surface)',
+              position: 'fixed',
+              top: menuPos.top !== undefined ? `${menuPos.top}px` : undefined,
+              bottom: menuPos.bottom !== undefined ? `${menuPos.bottom}px` : undefined,
+              left: `${menuPos.left}px`,
+              backgroundColor: 'var(--surface-elevated, var(--surface))',
               borderColor: 'var(--border)',
-              position: 'absolute',
-              right: '2rem',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              maxHeight: '80vh',
+              boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.4), 0 0 1px 1px var(--border)',
+              maxHeight: `${menuPos.maxHeight}px`,
               overflowY: 'auto'
             }}
             onClick={(e) => e.stopPropagation()}
@@ -274,10 +364,10 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
                   {canManageRoles && (
                     <div>
                       <div
-                        className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider border-b"
+                        className="px-4 py-2 text-xs font-bold uppercase tracking-wider border-b sticky top-0"
                         style={{
                           color: 'var(--text-muted)',
-                          background: 'var(--hover)',
+                          backgroundColor: 'var(--surface-elevated, var(--surface))',
                           borderColor: 'var(--divider)'
                         }}
                       >
@@ -296,7 +386,7 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
                                   handleChangeRole(member.id, role, member.project_role)
                                 }}
                                 disabled={loading}
-                                className="w-full px-4 py-3 text-left flex items-start gap-3 transition-all disabled:opacity-50 hover:bg-[var(--hover)]"
+                                className="w-full px-4 py-3 text-left flex items-start gap-3 transition-all disabled:opacity-50 hover:bg-[var(--hover)] cursor-pointer"
                                 style={{
                                   color: 'var(--text-primary)'
                                 }}
@@ -326,7 +416,7 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
                           handleRemoveMember(member.id, member.profile.full_name || member.profile.email, member.project_role)
                         }}
                         disabled={loading}
-                        className="w-full px-4 py-3 text-left flex items-center gap-2.5 text-red-500 disabled:opacity-50 transition-all font-medium text-sm hover:bg-red-500/10"
+                        className="w-full px-4 py-3 text-left flex items-center gap-2.5 text-red-500 hover:text-red-400 disabled:opacity-50 transition-all font-medium text-sm hover:bg-red-500/10 cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4" />
                         Remove from Project
@@ -337,7 +427,8 @@ export function ProjectMembersList({ members, projectId, onUpdate }: ProjectMemb
               )
             })()}
           </div>
-        </div>
+        </>,
+        document.body
       )}
     </>
   )

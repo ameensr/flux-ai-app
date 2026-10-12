@@ -1,12 +1,14 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Eye, EyeOff, Play, Download, Printer, FileText, LayoutGrid, Copy, X, Sun, Moon } from 'lucide-react'
+import { Eye, EyeOff, Play, Download, Printer, FileText, LayoutGrid, Copy, X, MousePointer, MousePointer2 } from 'lucide-react'
 
 type ThemeId = 'light' | 'dark'
 
 interface ReportActionBarProps {
   theme: ThemeId
-  onToggleTheme: () => void
+  cursorEnabled: boolean
+  onToggleCursor: () => void
+  onToggleTheme?: () => void
   clientMode: boolean
   onToggleClientMode: () => void
   onPresent: () => void
@@ -20,14 +22,14 @@ interface ReportActionBarProps {
 }
 
 /**
- * Consolidated action area for report-preview: theme toggle, view options (client
+ * Consolidated action area for report-preview: cursor toggle, view options (client
  * mode), Present mode, the Export menu (Print to PDF/Print Friendly/HTML/Markdown),
- * and Close. All handlers are passed through unchanged from the dashboard — this
- * component only organizes them visually.
+ * and Close.
  */
 export const ReportActionBar: React.FC<ReportActionBarProps> = ({
   theme,
-  onToggleTheme,
+  cursorEnabled,
+  onToggleCursor,
   clientMode,
   onToggleClientMode,
   onPresent,
@@ -41,34 +43,44 @@ export const ReportActionBar: React.FC<ReportActionBarProps> = ({
 }) => {
   return (
     <div className="flex items-center gap-2">
-      {/* Theme toggle */}
+      {/* Cursor toggle: switch between custom dot cursor and original system cursor */}
       <button
-        onClick={onToggleTheme}
-        title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-        className={`relative flex items-center justify-center w-8 h-8 rounded-xl border overflow-hidden transition-all ${theme === 'dark' ? 'bg-white/[0.04] border-white/[0.06] text-amber-300 hover:bg-white/[0.08]' : 'bg-black/[0.03] border-black/[0.06] text-amber-500 hover:bg-black/[0.05]'}`}
+        onClick={onToggleCursor}
+        title={cursorEnabled ? 'Switch to Original Cursor' : 'Enable Smooth Cursor'}
+        aria-label={cursorEnabled ? 'Switch to Original Cursor' : 'Enable Smooth Cursor'}
+        className={`relative flex items-center justify-center w-8 h-8 rounded-xl border overflow-hidden transition-all duration-200 ${
+          cursorEnabled
+            ? theme === 'dark'
+              ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.25)]'
+              : 'bg-blue-500/10 border-blue-500/25 text-blue-600 hover:bg-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.2)]'
+            : theme === 'dark'
+              ? 'bg-white/[0.04] border-white/[0.06] text-white/40 hover:text-white/80 hover:bg-white/[0.08]'
+              : 'bg-black/[0.03] border-black/[0.06] text-slate-400 hover:text-slate-700 hover:bg-black/[0.05]'
+        }`}
       >
         <AnimatePresence mode="wait" initial={false}>
-          {theme === 'dark' ? (
+          {cursorEnabled ? (
             <motion.span
-              key="moon"
-              initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+              key="custom-cursor"
+              initial={{ opacity: 0, rotate: -25, scale: 0.6 }}
               animate={{ opacity: 1, rotate: 0, scale: 1 }}
-              exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
-              transition={{ duration: 0.25, ease: 'easeInOut' }}
-              className="flex items-center justify-center"
+              exit={{ opacity: 0, rotate: 25, scale: 0.6 }}
+              transition={{ duration: 0.22, ease: 'easeInOut' }}
+              className="flex items-center justify-center relative"
             >
-              <Moon className="w-3.5 h-3.5" />
+              <MousePointer2 className="w-3.5 h-3.5" />
+              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.9)]" />
             </motion.span>
           ) : (
             <motion.span
-              key="sun"
-              initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+              key="system-cursor"
+              initial={{ opacity: 0, rotate: 25, scale: 0.6 }}
               animate={{ opacity: 1, rotate: 0, scale: 1 }}
-              exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
-              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              exit={{ opacity: 0, rotate: -25, scale: 0.6 }}
+              transition={{ duration: 0.22, ease: 'easeInOut' }}
               className="flex items-center justify-center"
             >
-              <Sun className="w-3.5 h-3.5" />
+              <MousePointer className="w-3.5 h-3.5" />
             </motion.span>
           )}
         </AnimatePresence>

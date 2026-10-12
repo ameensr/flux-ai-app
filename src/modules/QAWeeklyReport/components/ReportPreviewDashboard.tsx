@@ -20,6 +20,7 @@ import { ExecutiveKPISection } from './ExecutiveKPISection'
 import { ReportHero } from './report-preview/ReportHero'
 import { ReportNavigator, type ReportNavItem } from './report-preview/ReportNavigator'
 import { ReportActionBar } from './report-preview/ReportActionBar'
+import { SmoothDotCursor } from './report-preview/SmoothDotCursor'
 import { StatusBadge } from './report-preview/StatusBadge'
 import { ReportTableShell, reportTableHeadClass, reportTableRowClass } from './report-preview/ReportTableShell'
 import { ReportSkeleton } from './report-preview/ReportSkeleton'
@@ -357,6 +358,120 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
       color: ${theme === 'dark' ? '#ffffff' : '#0f172a'} !important;
     }
   }
+
+  /* ── Smooth Dot Cursor ──────────────────────────────────────────────────── */
+  .qaly-report-preview-scope.custom-cursor-active,
+  .qaly-report-preview-scope.custom-cursor-active * {
+    cursor: none !important;
+  }
+
+  .qaly-smooth-dot-cursor {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 999999;
+    pointer-events: none !important;
+    user-select: none;
+    contain: layout style;
+    will-change: transform, opacity;
+    transform: translate3d(-100px, -100px, 0) translate(-50%, -50%);
+    transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .qaly-smooth-dot-cursor .qaly-cursor-aura {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 26px;
+    height: 26px;
+    transform: translate(-50%, -50%) scale(0.8);
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0.35;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .qaly-smooth-dot-cursor[data-moving="true"] .qaly-cursor-aura {
+    transform: translate(-50%, -50%) scale(1.35);
+    opacity: 0.8;
+  }
+
+  .qaly-smooth-dot-cursor.theme-dark .qaly-cursor-aura {
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.55) 0%, rgba(37, 99, 235, 0.28) 42%, transparent 70%);
+    filter: blur(1.5px);
+  }
+
+  .qaly-smooth-dot-cursor.theme-dark .qaly-cursor-dot {
+    background: radial-gradient(circle at 35% 35%, #60a5fa 0%, #2563eb 65%, #1d4ed8 100%);
+    box-shadow:
+      0 0 6px 1.5px rgba(56, 189, 248, 0.7),
+      0 0 16px 3px rgba(37, 99, 235, 0.45),
+      0 2px 6px rgba(0, 0, 0, 0.7);
+  }
+
+  .qaly-smooth-dot-cursor.theme-dark[data-moving="true"] .qaly-cursor-dot {
+    box-shadow:
+      0 0 10px 2.5px rgba(96, 165, 250, 0.95),
+      0 0 24px 6px rgba(37, 99, 235, 0.7),
+      0 3px 10px rgba(0, 0, 0, 0.85);
+  }
+
+  .qaly-smooth-dot-cursor.theme-light .qaly-cursor-aura {
+    background: radial-gradient(circle, rgba(37, 99, 235, 0.42) 0%, rgba(30, 64, 175, 0.18) 45%, transparent 70%);
+    filter: blur(1.5px);
+  }
+
+  .qaly-smooth-dot-cursor.theme-light .qaly-cursor-dot {
+    background: radial-gradient(circle at 35% 35%, #38bdf8 0%, #2563eb 70%, #1e40af 100%);
+    box-shadow:
+      0 0 0 1.2px rgba(255, 255, 255, 0.95),
+      0 2px 7px rgba(30, 64, 175, 0.35),
+      0 0 12px rgba(56, 189, 248, 0.3);
+  }
+
+  .qaly-smooth-dot-cursor.theme-light[data-moving="true"] .qaly-cursor-dot {
+    box-shadow:
+      0 0 0 1.5px rgba(255, 255, 255, 1),
+      0 4px 14px rgba(30, 64, 175, 0.45),
+      0 0 18px rgba(37, 99, 235, 0.55);
+  }
+
+  .qaly-cursor-dot {
+    position: relative;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    pointer-events: none;
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.2s ease;
+  }
+
+  .qaly-smooth-dot-cursor[data-interactive="true"] .qaly-cursor-dot {
+    transform: scale(1.3);
+  }
+
+  .qaly-smooth-dot-cursor[data-interactive="true"] .qaly-cursor-aura {
+    transform: translate(-50%, -50%) scale(1.45);
+    opacity: 0.85;
+  }
+
+  .qaly-smooth-dot-cursor[data-pressed="true"] .qaly-cursor-dot {
+    transform: scale(0.85);
+  }
+
+  @media (pointer: coarse) {
+    .qaly-smooth-dot-cursor {
+      display: none !important;
+    }
+  }
+
+  @media print {
+    .qaly-smooth-dot-cursor {
+      display: none !important;
+    }
+  }
 `
 import {
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
@@ -673,6 +788,19 @@ const ReportPreviewDashboardContent: React.FC = () => {
   ]
   const { theme: globalTheme, toggleTheme } = useTheme()
   const theme = globalTheme === 'light' ? 'light' : 'dark'
+  const [smoothCursorEnabled, setSmoothCursorEnabled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    const saved = localStorage.getItem('qaly-report-smooth-cursor')
+    return saved !== null ? saved === 'true' : true
+  })
+
+  const toggleSmoothCursor = useCallback(() => {
+    setSmoothCursorEnabled(prev => {
+      const next = !prev
+      localStorage.setItem('qaly-report-smooth-cursor', String(next))
+      return next
+    })
+  }, [])
   // No longer user-toggleable (the "Motion" control was removed from the top bar) — ambient
   // background motion just follows whatever preference was last saved, defaulting to on.
   const enableParticles = localStorage.getItem('qaly-enable-particles') !== 'false'
@@ -1647,32 +1775,41 @@ Do not return markdown wraps, only raw JSON text.
   }
 
   if (!isLoaded && !showLaunchTriage) {
-    return <ReportSkeleton theme={theme} />
+    return (
+      <div className={`qaly-report-preview-scope relative min-h-screen ${smoothCursorEnabled ? 'custom-cursor-active' : ''}`}>
+        <SmoothDotCursor enabled={smoothCursorEnabled} theme={theme} />
+        <ReportSkeleton theme={theme} />
+      </div>
+    )
   }
 
   if (isLoaded && !data.weekStart) {
     return (
-      <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center font-montreal transition-colors duration-300 ${theme === 'dark' ? 'bg-[#070a13] text-white' : 'bg-[#f8fafc] text-slate-900'}`}>
-        <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 ${theme === 'dark' ? 'bg-white/5' : 'bg-black/5'}`}>
-          <FileText className="w-8 h-8 text-accent-gold" />
+      <div className={`qaly-report-preview-scope relative min-h-screen ${smoothCursorEnabled ? 'custom-cursor-active' : ''}`}>
+        <SmoothDotCursor enabled={smoothCursorEnabled} theme={theme} />
+        <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center font-montreal transition-colors duration-300 ${theme === 'dark' ? 'bg-[#070a13] text-white' : 'bg-[#f8fafc] text-slate-900'}`}>
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 ${theme === 'dark' ? 'bg-white/5' : 'bg-black/5'}`}>
+            <FileText className="w-8 h-8 text-accent-gold" />
+          </div>
+          <h1 className="text-2xl font-bold font-clash mb-2">No Saved Report Found</h1>
+          <p className={`text-sm max-w-sm mb-6 leading-relaxed ${theme === 'dark' ? 'text-white/45' : 'text-slate-500'}`}>
+            Create or save a report to launch the Executive Dashboard.
+          </p>
+          <button onClick={() => window.close()} className="px-6 py-2.5 bg-accent-gold text-black font-extrabold text-xs uppercase tracking-widest rounded-xl hover:bg-yellow-500 transition-colors">
+            Go Back to Form
+          </button>
         </div>
-        <h1 className="text-2xl font-bold font-clash mb-2">No Saved Report Found</h1>
-        <p className={`text-sm max-w-sm mb-6 leading-relaxed ${theme === 'dark' ? 'text-white/45' : 'text-slate-500'}`}>
-          Create or save a report to launch the Executive Dashboard.
-        </p>
-        <button onClick={() => window.close()} className="px-6 py-2.5 bg-accent-gold text-black font-extrabold text-xs uppercase tracking-widest rounded-xl hover:bg-yellow-500 transition-colors">
-          Go Back to Form
-        </button>
       </div>
     )
   }
 
   return (
-    <>
-    {(!isLoaded || !data.weekStart) && showLaunchTriage && (
-      <div className={`min-h-screen ${theme === 'dark' ? 'bg-[#070a13]' : 'bg-[#f8fafc]'}`} />
-    )}
-    {isLoaded && !!data.weekStart && (
+    <div className={`qaly-report-preview-scope relative min-h-screen ${smoothCursorEnabled ? 'custom-cursor-active' : ''}`}>
+      <SmoothDotCursor enabled={smoothCursorEnabled} theme={theme} />
+      {(!isLoaded || !data.weekStart) && showLaunchTriage && (
+        <div className={`min-h-screen ${theme === 'dark' ? 'bg-[#070a13]' : 'bg-[#f8fafc]'}`} />
+      )}
+      {isLoaded && !!data.weekStart && (
     <>
     {/*
       Reveal uses opacity/translate only — avoid filter/scale on this root.
@@ -1750,6 +1887,8 @@ Do not return markdown wraps, only raw JSON text.
 
               <ReportActionBar
                 theme={theme}
+                cursorEnabled={smoothCursorEnabled}
+                onToggleCursor={toggleSmoothCursor}
                 onToggleTheme={toggleTheme}
                 clientMode={clientMode}
                 onToggleClientMode={() => {
@@ -3824,7 +3963,7 @@ Do not return markdown wraps, only raw JSON text.
       projectName={data.projectName}
       onComplete={handleLaunchTriageComplete}
     />
-    </>
+    </div>
   )
 }
 
