@@ -21,14 +21,19 @@ import {
   logHistoryEvent
 } from '../supportTrackerService'
 import * as XLSX from 'xlsx'
+import type { RowIssue } from '@/modules/DailyUpdateReport/components/ValidationTooltip'
 
 interface Props {
   isOpen: boolean
   initialTab?: 'export' | 'import'
   onClose: () => void
+  onImportComplete?: (
+    issues: Map<string, RowIssue[]>,
+    summary: { total: number; clean: number; withIssues: number; totalIssues: number }
+  ) => void
 }
 
-export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Props) {
+export function ExportImportModal({ isOpen, initialTab = 'export', onClose, onImportComplete }: Props) {
   useBodyScrollLock(isOpen)
   const { toast } = useToast()
   const { user, profile } = useAppStore()
@@ -44,7 +49,6 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
     issues,
     addOrUpdateIssue
   } = useSupportTrackerStore()
-
   const isExport = initialTab === 'export'
   const filteredIssues = getFilteredIssues()
 
@@ -135,11 +139,14 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
         )
       )
 
+      const savedIssueIds: string[] = []
+
       for (const row of importPreview) {
         const dedupKey = `${String(row.description).trim().toLowerCase()}|${String(row.product_name).trim().toLowerCase()}`
         if (existingKeys.has(dedupKey)) { skippedCount++; continue }
         existingKeys.add(dedupKey)
-        await addOrUpdateIssue(row, currentUser)
+        const saved = await addOrUpdateIssue(row, currentUser)
+        savedIssueIds.push(saved.id)
         importedCount++
       }
 
@@ -158,6 +165,46 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
         : `Imported ${importedCount} support issues successfully.`
       setImportSummary(msg)
       toast({ title: 'Import Successful', description: msg })
+
+      // Build per-row issue indicators
+      if (onImportComplete) {
+        const issuesMap = new Map<string, RowIssue[]>()
+        const configuredProducts = products.map(p => p.name.toLowerCase())
+        const configuredStatuses = dropdownConfigs.testing_status.map(s => s.value.toLowerCase())
+        const configuredQaMiss = dropdownConfigs.is_qa_miss.map(s => s.value.toLowerCase())
+        const configuredRetest = [
+          ...dropdownConfigs.retesting_status.map(s => s.value.toLowerCase()),
+          ...['not required','pending','in retesting','passed','failed','blocked']
+        ]
+        let rowsWithIssues = 0
+        let totalIssues = 0
+        importPreview.forEach((row, idx) => {
+          if (!savedIssueIds[idx]) return
+          const rowIssues: RowIssue[] = []
+          const prodName = String(row.product_name || '').trim()
+          if (prodName && !configuredProducts.includes(prodName.toLowerCase())) {
+            rowIssues.push({ field: 'Product', value: prodName, reason: `"${prodName}" does not match any configured project.` })
+          }
+          const status = String(row.testing_status || '').trim()
+          if (status && configuredStatuses.length > 0 && !configuredStatuses.includes(status.toLowerCase())) {
+            rowIssues.push({ field: 'Status', value: status, reason: `"${status}" is not a configured testing status.` })
+          }
+          const qaMiss = String(row.is_qa_miss || '').trim()
+          if (qaMiss && configuredQaMiss.length > 0 && !configuredQaMiss.includes(qaMiss.toLowerCase())) {
+            rowIssues.push({ field: 'Is QA Miss?', value: qaMiss, reason: `"${qaMiss}" is not a configured value.` })
+          }
+          const retest = String(row.retesting_status || '').trim()
+          if (retest && !configuredRetest.includes(retest.toLowerCase())) {
+            rowIssues.push({ field: 'Retesting Status', value: retest, reason: `"${retest}" is not a configured retesting status.` })
+          }
+          if (rowIssues.length > 0) {
+            issuesMap.set(savedIssueIds[idx], rowIssues)
+            rowsWithIssues++
+            totalIssues += rowIssues.length
+          }
+        })
+        onImportComplete(issuesMap, { total: importedCount, clean: importedCount - rowsWithIssues, withIssues: rowsWithIssues, totalIssues })
+      }
       setImportFile(null)
       setImportPreview([])
       setImportErrors([])
@@ -263,7 +310,7 @@ export function ExportImportModal({ isOpen, initialTab = 'export', onClose }: Pr
             {!isExport && canImport && (
               <div className="space-y-4">
                 <p className="text-xs text-text-muted">
-                  Upload an Excel or CSV file containing columns: <strong>Product, Description, Received Date, Status</strong> and any optional fields.
+                  Upload an Excel or CSV file containing columns: <strong>Description, QA Engineer</strong> as required fields, plus any optional fields.
                 </p>
 
                 <button

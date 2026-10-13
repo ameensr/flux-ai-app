@@ -22,6 +22,7 @@ import { ReleaseAuditHistoryDrawer } from './components/ReleaseAuditHistoryDrawe
 import { ReleaseExportImportModal } from './components/ReleaseExportImportModal'
 import { ReleasePermissionsInfoModal } from './components/ReleasePermissionsInfoModal'
 import type { ReleaseTask } from './types'
+import type { RowIssue } from '@/modules/DailyUpdateReport/components/ValidationTooltip'
 
 export function ReleaseTaskTracker() {
   const { toast } = useToast()
@@ -57,13 +58,16 @@ export function ReleaseTaskTracker() {
   const [isExportOpen, setIsExportOpen]               = useState(false)
   const [isImportOpen, setIsImportOpen]               = useState(false)
   const [isPermsInfoOpen, setIsPermsInfoOpen]         = useState(false)
+  // Row-level import issue indicators — populated after a bulk import
+  const [rowImportIssues, setRowImportIssues]         = useState<Map<string, RowIssue[]>>(new Map())
+  const [importSummary, setImportSummary]             = useState<{ total: number; clean: number; withIssues: number; totalIssues: number } | null>(null)
 
   const navigate = useNavigate()
 
   const [searchParams] = useSearchParams()
   const {
     fetchInitialData, refreshData, loading, isRefreshing,
-    deleteTask, bulkDeleteTasks, tasks, setFilters, setSelectedProduct,
+    deleteTask, bulkDeleteTasks, bulkUpdateTasks, tasks, setFilters, setSelectedProduct,
     filters, products
   } = useReleaseTrackerStore()
 
@@ -304,6 +308,18 @@ export function ReleaseTaskTracker() {
           onViewTimeLogs={handleViewTimeLogs}
           onViewHistory={(task) => handleViewHistory(task.task_id)}
           onBulkDelete={handleBulkDelete}
+          onBulkUpdate={async (ids, field, value) => {
+            const result = await bulkUpdateTasks(ids, field, value, currentUser)
+            const fieldLabel = field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+            if (result.failed === 0) {
+              toast({ title: 'Bulk Update Complete', description: `Updated ${fieldLabel} for ${result.updated} ${result.updated === 1 ? 'record' : 'records'}.` })
+            } else if (result.updated > 0) {
+              toast({ variant: 'destructive', title: 'Partial Update', description: `Updated ${result.updated}, failed ${result.failed}.` })
+            } else {
+              toast({ variant: 'destructive', title: 'Update Failed', description: 'No records were updated.' })
+            }
+            return result
+          }}
         />
       </section>
 
@@ -339,8 +355,41 @@ export function ReleaseTaskTracker() {
 
 
 
+      {/* Import Summary Banner */}
+      {importSummary && (
+        <div className={`flex items-start justify-between gap-3 px-4 py-3 rounded-xl border text-xs ${
+          importSummary.withIssues > 0
+            ? 'bg-amber-500/[0.06] border-amber-500/25 text-amber-200'
+            : 'bg-emerald-500/[0.06] border-emerald-500/25 text-emerald-200'
+        }`}>
+          <div className="space-y-0.5">
+            <p className="font-bold">
+              {importSummary.withIssues > 0 ? '⚠ Import Completed with Issues' : '✓ Import Completed'}
+            </p>
+            <p className="text-[11px] opacity-80">
+              {importSummary.total} rows imported · {importSummary.clean} clean · {importSummary.withIssues} with issues · {importSummary.totalIssues} total issues
+            </p>
+            {importSummary.withIssues > 0 && (
+              <p className="text-[10px] opacity-60">Click the ⚠ icon on affected rows to view details. Data was imported as-is.</p>
+            )}
+          </div>
+          <button type="button" onClick={() => setImportSummary(null)} className="shrink-0 opacity-50 hover:opacity-100 transition-opacity mt-0.5 text-current">
+            ✕
+          </button>
+        </div>
+      )}
+
       <ReleaseExportImportModal key="release-export" isOpen={isExportOpen} initialTab="export" onClose={() => setIsExportOpen(false)} />
-      <ReleaseExportImportModal key="release-import" isOpen={isImportOpen} initialTab="import" onClose={() => setIsImportOpen(false)} />
+      <ReleaseExportImportModal
+        key="release-import"
+        isOpen={isImportOpen}
+        initialTab="import"
+        onClose={() => setIsImportOpen(false)}
+        onImportComplete={(issues, summary) => {
+          setRowImportIssues(issues)
+          setImportSummary(summary)
+        }}
+      />
 
       <ReleasePermissionsInfoModal isOpen={isPermsInfoOpen} onClose={() => setIsPermsInfoOpen(false)} />
     </div>

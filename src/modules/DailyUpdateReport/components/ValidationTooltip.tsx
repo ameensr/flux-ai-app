@@ -1,56 +1,59 @@
 // src/modules/DailyUpdateReport/components/ValidationTooltip.tsx
-// Hover-only validation error indicator for spreadsheet rows.
+// Click-based validation issue indicator for table rows.
 //
-// Renders a small "!" icon inline (zero layout impact), and only mounts the
-// error panel into a document.body portal while the icon is actually
-// hovered. Position is computed from the icon's live bounding rect and the
-// panel is `position: fixed`, so it always renders correctly aligned next to
-// the icon regardless of the table's horizontal scroll, sticky columns, or
-// row position — none of which a CSS-only `absolute` tooltip nested inside
-// an `overflow-x-auto` + `sticky` cell can guarantee (that nesting is what
-// caused the previous misalignment).
+// Renders a small amber warning icon with a count badge inline (zero layout
+// impact). On click, opens a compact popover listing all issues with field /
+// value / reason / suggestion detail. Uses a portal so it always renders above
+// sticky columns and overflow-x-auto containers regardless of scroll position.
 
 import React, { useRef, useState, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertCircle } from 'lucide-react'
+import { Info, X } from 'lucide-react'
 
-interface ValidationTooltipProps {
-  errors: string[]
+export interface RowIssue {
+  field: string
+  value?: string
+  reason: string
+  suggestion?: string
 }
 
-export const ValidationTooltip: React.FC<ValidationTooltipProps> = ({ errors }) => {
-  const [hovered, setHovered] = useState(false)
-  const [coords, setCoords] = useState<{ top: number; left: number; flip: boolean } | null>(null)
-  const iconRef = useRef<HTMLButtonElement>(null)
-  const hasErrors = errors.length > 0
+interface ValidationTooltipProps {
+  /** Legacy: plain string errors (shown as-is). */
+  errors?: string[]
+  /** Rich structured issues (preferred). */
+  issues?: RowIssue[]
+  /** Row number shown in the popover header (1-based). */
+  rowNumber?: number
+}
+
+export const ValidationTooltip: React.FC<ValidationTooltipProps> = ({ errors = [], issues, rowNumber }) => {
+  const [open, setOpen] = useState(false)
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
+  const iconRef  = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // Normalise: if rich issues provided use them, else convert plain errors
+  const richIssues: RowIssue[] = issues && issues.length > 0
+    ? issues
+    : errors.map(e => ({ field: '', reason: e }))
+
+  const hasIssues = richIssues.length > 0
 
   const updatePosition = () => {
     const rect = iconRef.current?.getBoundingClientRect()
     if (!rect) return
-    const panelWidth = 260
-    const wouldOverflowRight = rect.right + 8 + panelWidth > window.innerWidth
+    const panelWidth = 308
+    const wouldOverflowRight = rect.left + panelWidth > window.innerWidth - 12
     setCoords({
-      top: rect.top + rect.height / 2,
-      left: wouldOverflowRight ? rect.left - 8 : rect.right + 8,
-      flip: wouldOverflowRight,
+      top: rect.bottom + 6,
+      left: wouldOverflowRight ? Math.max(8, rect.right - panelWidth) : rect.left,
     })
   }
 
-  // ⚠️ This effect must always run on every render (never behind an early
-  // `return null` above it) — React requires the same hooks to fire in the
-  // same order on every render of a given component instance. Previously
-  // `if (errors.length === 0) return null` sat between the useState/useRef
-  // calls and this useLayoutEffect, so a row whose `errors` array toggled
-  // between empty and non-empty across re-renders (e.g. validation clearing
-  // after a field is fixed) skipped this hook on some renders and not
-  // others, throwing "Rendered fewer hooks than expected." The `hasErrors`
-  // guard now lives only inside the effect body and the final render, never
-  // before a hook call.
   useLayoutEffect(() => {
-    if (!hovered || !hasErrors) return
+    if (!open || !hasIssues) return
     updatePosition()
-    // Keep the tooltip glued to the icon if the table scrolls while hovered
     const handle = () => updatePosition()
     window.addEventListener('scroll', handle, true)
     window.addEventListener('resize', handle)
@@ -58,50 +61,128 @@ export const ValidationTooltip: React.FC<ValidationTooltipProps> = ({ errors }) 
       window.removeEventListener('scroll', handle, true)
       window.removeEventListener('resize', handle)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hovered, hasErrors])
+  }, [open, hasIssues])
 
-  if (!hasErrors) return null
+  // Close on outside click — but NOT when clicking inside the panel itself
+  useLayoutEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (
+        iconRef.current?.contains(target) ||
+        panelRef.current?.contains(target)
+      ) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  if (!hasIssues) return null
+
+  const count = richIssues.length
 
   return (
     <>
       <button
         ref={iconRef}
         type="button"
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        onFocus={() => setHovered(true)}
-        onBlur={() => setHovered(false)}
-        className="shrink-0 leading-none"
-        aria-label={`${errors.length} validation issue${errors.length === 1 ? '' : 's'}`}
+        onClick={(e) => { e.stopPropagation(); setOpen(v => !v) }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            e.stopPropagation()
+            setOpen(v => !v)
+          }
+          if (e.key === 'Escape') setOpen(false)
+        }}
+        className="relative shrink-0 leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 rounded"
+        aria-label={`${count} validation issue${count === 1 ? '' : 's'} — click to view`}
+        aria-expanded={open}
+        aria-haspopup="dialog"
       >
-        <AlertCircle className="w-4 h-4 text-red-500 animate-pulse cursor-help" />
+        <Info className="w-3.5 h-3.5 text-amber-400 hover:text-amber-300 transition-colors cursor-pointer" />
+        <span className="absolute -top-1.5 -right-1.5 min-w-[13px] h-[13px] px-0.5 rounded-full bg-amber-500 text-[8px] font-bold text-white flex items-center justify-center leading-none pointer-events-none">
+          {count > 9 ? '9+' : count}
+        </span>
       </button>
 
       {createPortal(
         <AnimatePresence>
-          {hovered && coords && (
+          {open && coords && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ duration: 0.12 }}
+              ref={panelRef}
+              role="dialog"
+              aria-label={`Validation issues${rowNumber ? ` — Row ${rowNumber}` : ''}`}
+              initial={{ opacity: 0, y: -4, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.97 }}
+              transition={{ duration: 0.13 }}
               style={{
                 position: 'fixed',
                 top: coords.top,
                 left: coords.left,
-                transform: `translate(${coords.flip ? '-100%' : '0'}, -50%)`,
-                width: 260,
+                width: 308,
                 zIndex: 9999,
               }}
-              className="pointer-events-none bg-red-950/95 border border-red-500/40 text-red-200 text-[10px] p-2.5 rounded-lg shadow-2xl backdrop-blur-md"
+              className="bg-[#1c1a14] border border-amber-500/30 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden"
+              onClick={e => e.stopPropagation()}
             >
-              <span className="font-bold block border-b border-red-500/20 pb-1 mb-1">
-                Validation Issue{errors.length === 1 ? '' : 's'}
-              </span>
-              {errors.map((err, i) => (
-                <span key={i} className="block mt-0.5 leading-normal">• {err}</span>
-              ))}
+              {/* Header */}
+              <div className="flex items-center justify-between px-3 py-2 border-b border-amber-500/20 bg-amber-500/[0.06]">
+                <div className="flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="text-[11px] font-bold text-amber-300">
+                    Validation Issues{rowNumber ? ` — Row ${rowNumber}` : ''}
+                  </span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    {count}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="p-0.5 rounded text-amber-500/60 hover:text-amber-300 transition-colors"
+                  aria-label="Close validation issues"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+
+              {/* Issue list */}
+              <div className="p-2.5 space-y-2 max-h-64 overflow-y-auto">
+                {richIssues.map((issue, i) => (
+                  <div key={i} className="rounded-lg bg-amber-500/[0.05] border border-amber-500/15 p-2 space-y-0.5">
+                    {issue.field && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[9px] uppercase tracking-wider font-bold text-amber-500/70">Field</span>
+                        <span className="text-[10px] font-semibold text-amber-200">{issue.field}</span>
+                        {issue.value !== undefined && issue.value !== '' && (
+                          <>
+                            <span className="text-amber-500/40 text-[9px]">·</span>
+                            <span
+                              className="text-[9px] font-mono text-amber-400/80 bg-amber-500/10 px-1 rounded truncate max-w-[110px]"
+                              title={issue.value}
+                            >
+                              "{issue.value}"
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    <p className="text-[10px] text-amber-200/90 leading-snug">⚠ {issue.reason}</p>
+                    {issue.suggestion && (
+                      <p className="text-[9px] text-amber-400/70 leading-snug italic">→ {issue.suggestion}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="px-3 py-1.5 border-t border-amber-500/15 bg-amber-500/[0.03]">
+                <p className="text-[9px] text-amber-500/50 leading-snug">
+                  Edit the row to resolve these issues. Other fields are unaffected.
+                </p>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>,

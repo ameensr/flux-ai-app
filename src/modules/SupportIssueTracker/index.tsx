@@ -22,6 +22,7 @@ import { PermissionsInfoModal } from './components/PermissionsInfoModal'
 import { AddTimeLogModal } from './components/AddTimeLogModal'
 import { TimeLogDrawer } from './components/TimeLogDrawer'
 import type { SupportIssue, SupportFilters } from './types'
+import type { RowIssue } from '@/modules/DailyUpdateReport/components/ValidationTooltip'
 
 export function SupportIssueTracker() {
   const { toast } = useToast()
@@ -52,6 +53,8 @@ export function SupportIssueTracker() {
   const [isExportOpen, setIsExportOpen]           = useState(false)
   const [isImportOpen, setIsImportOpen]           = useState(false)
   const [isPermsInfoOpen, setIsPermsInfoOpen]     = useState(false)
+  const [rowImportIssues, setRowImportIssues]     = useState<Map<string, RowIssue[]>>(new Map())
+  const [importSummary, setImportSummary]         = useState<{ total: number; clean: number; withIssues: number; totalIssues: number } | null>(null)
   const [isAddHoursOpen, setIsAddHoursOpen]       = useState(false)
   const [addHoursTarget, setAddHoursTarget]       = useState<SupportIssue | null>(null)
   const [isTimeLogDrawerOpen, setIsTimeLogDrawerOpen] = useState(false)
@@ -61,7 +64,7 @@ export function SupportIssueTracker() {
 
   const {
     fetchInitialData, refreshData, loading, isRefreshing,
-    deleteIssue, bulkDeleteIssues, issues, setFilters, setSelectedProduct,
+    deleteIssue, bulkDeleteIssues, bulkUpdateIssues, issues, setFilters, setSelectedProduct,
     filters, products
   } = useSupportTrackerStore()
 
@@ -305,6 +308,18 @@ export function SupportIssueTracker() {
           onLogHours={handleLogHours}
           onViewTimeLogs={handleViewTimeLogs}
           onBulkDelete={handleBulkDelete}
+          onBulkUpdate={async (ids, field, value) => {
+            const result = await bulkUpdateIssues(ids, field, value, currentUser)
+            const fieldLabel = field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+            if (result.failed === 0) {
+              toast({ title: 'Bulk Update Complete', description: `Updated ${fieldLabel} for ${result.updated} ${result.updated === 1 ? 'record' : 'records'}.` })
+            } else if (result.updated > 0) {
+              toast({ variant: 'destructive', title: 'Partial Update', description: `Updated ${result.updated}, failed ${result.failed}.` })
+            } else {
+              toast({ variant: 'destructive', title: 'Update Failed', description: 'No records were updated.' })
+            }
+            return result
+          }}
         />
       </section>
 
@@ -327,7 +342,31 @@ export function SupportIssueTracker() {
       <AuditHistoryDrawer isOpen={isHistoryOpen} targetIssueId={historyTargetId} onClose={() => setIsHistoryOpen(false)} />
 
       <ExportImportModal key="support-export" isOpen={isExportOpen} initialTab="export" onClose={() => setIsExportOpen(false)} />
-      <ExportImportModal key="support-import" isOpen={isImportOpen} initialTab="import" onClose={() => setIsImportOpen(false)} />
+      <ExportImportModal key="support-import" isOpen={isImportOpen} initialTab="import" onClose={() => setIsImportOpen(false)}
+        onImportComplete={(issues, summary) => {
+          setRowImportIssues(issues)
+          setImportSummary(summary)
+        }}
+      />
+
+      {importSummary && (
+        <div className={`flex items-start justify-between gap-3 px-4 py-3 rounded-xl border text-xs ${
+          importSummary.withIssues > 0
+            ? 'bg-amber-500/[0.06] border-amber-500/25 text-amber-200'
+            : 'bg-emerald-500/[0.06] border-emerald-500/25 text-emerald-200'
+        }`}>
+          <div className="space-y-0.5">
+            <p className="font-bold">{importSummary.withIssues > 0 ? '⚠ Import Completed with Issues' : '✓ Import Completed'}</p>
+            <p className="text-[11px] opacity-80">
+              {importSummary.total} rows imported · {importSummary.clean} clean · {importSummary.withIssues} with issues · {importSummary.totalIssues} total issues
+            </p>
+            {importSummary.withIssues > 0 && (
+              <p className="text-[10px] opacity-60">Click the ⚠ icon on affected rows to view details. Data was imported as-is.</p>
+            )}
+          </div>
+          <button type="button" onClick={() => setImportSummary(null)} className="shrink-0 opacity-50 hover:opacity-100 transition-opacity mt-0.5 text-current">✕</button>
+        </div>
+      )}
 
       <PermissionsInfoModal isOpen={isPermsInfoOpen} onClose={() => setIsPermsInfoOpen(false)} />
     </div>

@@ -180,17 +180,113 @@ export function parseCellRaw(col: ColumnConfig, raw: string | undefined | null):
     const options = (col.dropdown_options || []).map(o => o.label)
     if (options.length > 0) {
       const match = options.find(o => o.toLowerCase() === val.toLowerCase())
-      if (!match) {
-        return {
-          value: val,
-          error: `${col.display_name} '${val}' is not configured.`,
-        }
-      }
-      return { value: match }
+      // Non-blocking: preserve original value even when not configured.
+      // Callers use validateImportIssues() to surface the mismatch as a
+      // row-level issue indicator rather than blocking the import.
+      return { value: match ?? val }
     }
   }
 
   return { value: val }
+}
+
+// ── Rich import-issue validation ─────────────────────────────────────────────
+// Produces structured RowIssue objects for every cell that has a detectable
+// problem. Called AFTER the row has already been committed to state so the
+// import is never blocked — issues are surfaced as row-level indicators only.
+
+export interface ImportIssue {
+  field: string
+  value?: string
+  reason: string
+  suggestion?: string
+}
+
+/**
+ * Validate one imported row against the active column config and return a
+ * list of structured issues. Never throws; always returns an array (empty
+ * means the row is clean).
+ */
+export function validateImportIssues(
+  tableKey: DailyReportTableKey,
+  headers: string[],
+  rowData: string[],
+  columns: ColumnConfig[],
+): ImportIssue[] {
+  const issues: ImportIssue[] = []
+  const headerMap = buildHeaderColumnMap(columns)
+
+  headers.forEach((h, idx) => {
+    const col = headerMap.get(normalizeHeader(h))
+    if (!col) return
+    const raw = (rowData[idx] ?? '').toString().trim()
+    if (raw.startsWith("'")) {
+      // leading apostrophe — not an issue, just a text-force prefix
+    }
+    const val = raw.startsWith("'") ? raw.substring(1) : raw
+
+    // Required field empty
+    if (col.is_required && (val === '' || val === null || val === undefined)) {
+      issues.push({
+        field: col.display_name,
+        value: '',
+        reason: `${col.display_name} is required but was left empty.`,
+        suggestion: `Fill in a value for "${col.display_name}" to resolve this issue.`,
+      })
+      return
+    }
+
+    if (val === '') return // optional blank — not an issue
+
+    // Number / percentage
+    if (col.column_type === 'number' || col.column_type === 'percentage') {
+      if (isNaN(parseFloat(val))) {
+        issues.push({
+          field: col.display_name,
+          value: val,
+          reason: `Expected a number but got "${val}".`,
+          suggestion: 'Enter a valid numeric value (e.g. 2 or 1.5).',
+        })
+      }
+      return
+    }
+
+    // Date
+    if (col.column_type === 'date') {
+      const numVal = parseFloat(val)
+      const dateObj = (!isNaN(numVal) && numVal > 100 && numVal < 100000)
+        ? new Date(new Date(1899, 11, 30).getTime() + numVal * 86400000)
+        : new Date(val)
+      if (isNaN(dateObj.getTime())) {
+        issues.push({
+          field: col.display_name,
+          value: val,
+          reason: `"${val}" is not a valid date.`,
+          suggestion: 'Use YYYY-MM-DD format (e.g. 2026-10-07).',
+        })
+      }
+      return
+    }
+
+    // Option-based (dropdown / status / multiselect)
+    if (isOptionBasedType(col.column_type)) {
+      const options = (col.dropdown_options || []).map(o => o.label)
+      if (options.length > 0) {
+        const match = options.find(o => o.toLowerCase() === val.toLowerCase())
+        if (!match) {
+          issues.push({
+            field: col.display_name,
+            value: val,
+            reason: `"${val}" is not in the configured options for ${col.display_name}.`,
+            suggestion: `Configured values: ${options.slice(0, 5).join(', ')}${options.length > 5 ? ` (+${options.length - 5} more)` : ''}.`,
+          })
+        }
+      }
+      return
+    }
+  })
+
+  return issues
 }
 
 export function emptySupportSystemFields(): Record<string, any> {
@@ -266,8 +362,7 @@ export function parseImportRow(
     const col = headerMap.get(normalizeHeader(h))
     if (!col) return
     const raw = rowData[idx]
-    const { value, error } = parseCellRaw(col, raw)
-    if (error) errors.push(error)
+    const { value } = parseCellRaw(col, raw)
     // Project-cloned "system" columns are stored as is_system:false, but still
     // map to daily_* table columns — dual-write so DB row + custom store stay in sync.
     if (col.is_system || isKnownSystemKey(tableKey, col.internal_key)) {
@@ -278,7 +373,7 @@ export function parseImportRow(
     }
   })
 
-  // Required columns from active config
+  // Required columns from active config — flag as issue but do not block
   for (const col of columns) {
     if (!col.is_required) continue
     const val = (col.is_system || isKnownSystemKey(tableKey, col.internal_key))

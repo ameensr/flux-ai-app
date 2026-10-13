@@ -1433,12 +1433,12 @@ export function downloadSupportImportTemplate(products: ProjectWithMembers[]): v
     [''],
     ['COLUMN REFERENCE'],
     ['Column', 'Required', 'Format / Accepted Values', 'Notes'],
-    ['Product', 'YES', productList, 'Must exactly match a product name in Project Hub (case-insensitive).'],
+    ['Product', 'No', productList, 'Must exactly match a product name in Project Hub (case-insensitive). Defaults to first product if blank.'],
     ['Issue ID', 'No', 'e.g. SUP-1050', 'Auto-generated if left blank.'],
     ['Description', 'YES', 'Free text', 'Support issue description. Cannot be empty.'],
-    ['Received Date', 'YES', 'YYYY-MM-DD  e.g. 2026-10-07', 'Date the issue was received. Defaults to today if blank.'],
+    ['Received Date', 'No', 'YYYY-MM-DD  e.g. 2026-10-07', 'Date the issue was received. Defaults to today if blank.'],
     ['Received Time', 'No', 'HH:MM  e.g. 09:30', '24-hour format. Leave blank if unknown.'],
-    ['QA Engineer', 'No', 'e.g. AMEEN SR', 'Must match a configured tester name (case-insensitive). Defaults to Unassigned.'],
+    ['QA Engineer', 'YES', 'e.g. AMEEN SR', 'Must match a configured tester name (case-insensitive). Cannot be empty.'],
     ['Is QA Miss?', 'No', 'Yes | No | Under Review | Not Applicable', 'Defaults to Not Applicable.'],
     ['Test Case Count', 'No', 'Non-negative whole number  e.g. 5', 'Defaults to 0.'],
     ['Estimation (Hrs)', 'No', 'Non-negative decimal  e.g. 8 or 2.5', 'Defaults to 0. Actual hours are managed via Time Logs.'],
@@ -1485,13 +1485,17 @@ export function parseImportRow(
 
   const prodName = String(row['Product'] || row['product'] || '').trim()
   const desc = String(row['Description'] || row['Support Issue Description'] || row['description'] || '').trim()
+  const rawTesterCheck = String(row['QA Engineer'] || row["Who's Testing"] || row['Tester'] || '').trim()
 
-  if (!prodName) errors.push(`Row ${rowNum}: Product is missing.`)
   if (!desc) errors.push(`Row ${rowNum}: Description is missing.`)
+  if (!rawTesterCheck) errors.push(`Row ${rowNum}: QA Engineer is missing.`)
 
   const matchedProj = products.find(p => p.name.toLowerCase() === prodName.toLowerCase())
   if (prodName && !matchedProj) {
     errors.push(`Row ${rowNum}: Product '${prodName}' not found in Project Hub.`)
+  }
+  if (!prodName && !matchedProj) {
+    errors.push(`Row ${rowNum}: Product is missing. Please enter a valid product name.`)
   }
 
   // Validate testing status
@@ -1508,9 +1512,13 @@ export function parseImportRow(
     errors.push(`Row ${rowNum}: Is QA Miss? value '${rawQaMiss}' is not configured.`)
   }
 
-  // Validate retesting status
+  // Validate retesting status — also accept hardcoded defaults as fallback
+  // (project-scoped configs may not include retesting-specific values after migration 089)
   const rawRetestStatus = String(row['Retesting Status'] || row['retesting_status'] || 'Not Required').trim()
-  const validRetestStatuses = dropdownConfigs.retesting_status.map(s => s.value.toLowerCase())
+  const validRetestStatuses = [
+    ...dropdownConfigs.retesting_status.map(s => s.value.toLowerCase()),
+    ...DEFAULT_RETESTING_STATUS_OPTIONS.map(s => s.value.toLowerCase())
+  ]
   if (rawRetestStatus && !validRetestStatuses.includes(rawRetestStatus.toLowerCase())) {
     errors.push(`Row ${rowNum}: Retesting Status '${rawRetestStatus}' is not configured.`)
   }
@@ -1536,10 +1544,10 @@ export function parseImportRow(
     errors.push(`Row ${rowNum}: Retesting Estimation (Hrs) must be a non-negative number.`)
   }
 
-  const rawTester = String(row['QA Engineer'] || row["Who's Testing"] || row['Tester'] || 'Unassigned').trim()
+  const rawTester = rawTesterCheck || 'Unassigned'
 
   const parsed = {
-    project_id: matchedProj?.id || products[0]?.id || '',
+    project_id: matchedProj?.id || '',
     product_name: matchedProj?.name || prodName,
     issue_id: String(row['Issue ID'] || row['Support Issue ID'] || `SUP-${1025 + issues.length + idx}`).trim(),
     description: desc,

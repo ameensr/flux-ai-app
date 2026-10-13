@@ -45,6 +45,12 @@ interface SupportTrackerState {
   ) => Promise<SupportIssue>
   deleteIssue: (issueId: string, user: { name: string; id?: string }) => Promise<void>
   bulkDeleteIssues: (ids: string[], user: { name: string; id?: string }) => Promise<{ deleted: string[]; failed: Array<{ id: string; reason: string }> }>
+  bulkUpdateIssues: (
+    ids: string[],
+    field: string,
+    value: string,
+    user: { name: string; id?: string }
+  ) => Promise<{ updated: number; failed: number }>
   toggleEstimationLock: (issueId: string, shouldLock: boolean, user: { name: string; id?: string }) => Promise<SupportIssue>
   updateDropdowns: (configs: DropdownConfigs, user: { name: string; id?: string }) => Promise<void>
   logWorkHours: (
@@ -185,6 +191,33 @@ export const useSupportTrackerStore = create<SupportTrackerState>((set, get) => 
       set({ issues: nextIssues, history: hist })
     }
     return result
+  },
+
+  bulkUpdateIssues: async (ids, field, value, user) => {
+    const { issues } = get()
+    const NUMERIC_FIELDS = new Set(['estimated_hours', 'retesting_estimation_hrs', 'test_case_count', 'blocked_hours'])
+    const coerce = (f: string, v: string) => NUMERIC_FIELDS.has(f) ? (Number(v) || 0) : v
+    let updated = 0
+    let failed = 0
+    const updatedIssues = [...issues]
+
+    for (const id of ids) {
+      const idx = updatedIssues.findIndex(i => i.id === id)
+      if (idx === -1) { failed++; continue }
+      try {
+        const patch = { ...updatedIssues[idx], [field]: coerce(field, value) }
+        const saved = await saveSupportIssue(patch, user, updatedIssues)
+        updatedIssues[idx] = saved
+        updated++
+      } catch {
+        failed++
+      }
+    }
+
+    try { localStorage.setItem(LOCAL_STORAGE_ISSUES_KEY, JSON.stringify(updatedIssues)) } catch { /* ignore */ }
+    const hist = await fetchSupportHistory()
+    set({ issues: updatedIssues, history: hist })
+    return { updated, failed }
   },
 
   toggleEstimationLock: async (issueId, shouldLock, user) => {

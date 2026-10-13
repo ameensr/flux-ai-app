@@ -12,6 +12,10 @@ import { EstimationLockControl } from '@/components/qa-operations/EstimationLock
 import { useSupportTrackerStore } from '../store'
 import type { SupportIssue, EffortIndicatorState } from '../types'
 import { calculateEffort, DEFAULT_TESTING_STATUSES, DEFAULT_RETESTING_STATUS_OPTIONS } from '../types'
+import { ValidationTooltip } from '@/modules/DailyUpdateReport/components/ValidationTooltip'
+import { validateSupportIssue } from '@/hooks/useRowValidation'
+import { BulkEditToolbar } from '@/components/qa-operations/BulkEditToolbar'
+import type { BulkField } from '@/components/qa-operations/BulkEditToolbar'
 
 interface Props {
   onEditIssue: (issue: SupportIssue) => void
@@ -20,10 +24,11 @@ interface Props {
   onLogHours?: (issue: SupportIssue) => void
   onViewTimeLogs?: (issue: SupportIssue) => void
   onBulkDelete?: (ids: string[]) => void
+  onBulkUpdate?: (ids: string[], field: string, value: string) => Promise<{ updated: number; failed: number }>
 }
 
 export function SupportIssueTable({
-  onEditIssue, onDeleteIssue, onViewHistory, onLogHours, onViewTimeLogs, onBulkDelete
+  onEditIssue, onDeleteIssue, onViewHistory, onLogHours, onViewTimeLogs, onBulkDelete, onBulkUpdate
 }: Props) {
   const { toast } = useToast()
   const { user, profile } = useAppStore()
@@ -40,13 +45,64 @@ export function SupportIssueTable({
   const canUnlockEst = can('support-tracker', 'can_unlock_estimated_hours')
 
   const {
-    getFilteredIssues, filters, setFilters, dropdownConfigs,
+    getFilteredIssues, filters, setFilters, dropdownConfigs, products,
     drillDownTarget, setDrillDownTarget, getTimeLogsForIssue, toggleEstimationLock
   } = useSupportTrackerStore()
 
   const issues = getFilteredIssues()
 
+  // Build bulk-edit fields from live dropdown configs — all editable columns
+  const bulkFields = useMemo((): BulkField[] => [
+    {
+      key: 'description',
+      label: 'Description',
+      type: 'textarea',
+    },
+    {
+      key: 'testing_status',
+      label: 'Status',
+      type: 'dropdown',
+      options: (dropdownConfigs.testing_status.filter(s => s.is_active).length > 0
+        ? dropdownConfigs.testing_status.filter(s => s.is_active)
+        : DEFAULT_TESTING_STATUSES
+      ).map(s => ({ label: s.label, value: s.value }))
+    },
+    {
+      key: 'retesting_status',
+      label: 'Retesting Status',
+      type: 'dropdown',
+      options: (dropdownConfigs.retesting_status?.filter(s => s.is_active).length > 0
+        ? dropdownConfigs.retesting_status.filter(s => s.is_active)
+        : DEFAULT_RETESTING_STATUS_OPTIONS
+      ).map(s => ({ label: s.label, value: s.value }))
+    },
+    {
+      key: 'tester_name',
+      label: 'QA Engineer',
+      type: 'dropdown',
+      options: dropdownConfigs.testers.filter(t => t.is_active).map(t => ({ label: t.label, value: t.value }))
+    },
+    {
+      key: 'is_qa_miss',
+      label: 'Is QA Miss?',
+      type: 'dropdown',
+      options: dropdownConfigs.is_qa_miss.filter(m => m.is_active).map(m => ({ label: m.label, value: m.value }))
+    },
+    { key: 'received_date',           label: 'Received Date',        type: 'date' },
+    { key: 'received_time',           label: 'Received Time',        type: 'time' },
+    { key: 'start_date',              label: 'Start Date',           type: 'date' },
+    { key: 'planned_end_date',        label: 'Planned End Date',     type: 'date' },
+    { key: 'actual_end_date',         label: 'Actual End Date',      type: 'date' },
+    { key: 'estimated_hours',         label: 'Est. Hours',           type: 'number' },
+    { key: 'retesting_estimation_hrs',label: 'Retest Est. Hours',    type: 'number' },
+    { key: 'test_case_count',         label: 'Test Case Count',      type: 'number' },
+    { key: 'blocked_hours',           label: 'Blocked Hours',        type: 'number' },
+    { key: 'comments',                label: 'Comments',             type: 'textarea' },
+  ], [dropdownConfigs])
+
+  // Selection tracks IDs across all filtered rows (not just current page)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isBulkApplying, setIsBulkApplying] = useState(false)
   const prevIssueIdsRef = useRef<string>('')
   useEffect(() => {
     const key = issues.map(i => i.id).join(',')
@@ -78,10 +134,12 @@ export function SupportIssueTable({
 
   useEffect(() => { setCurrentPage(1) }, [issues.length])
 
+  const allFilteredIds = issues.map(i => i.id)
   const pageIds = paginatedIssues.map(i => i.id)
   const selectedOnPage = pageIds.filter(id => selectedIds.has(id))
   const allPageSelected = pageIds.length > 0 && selectedOnPage.length === pageIds.length
   const somePageSelected = selectedOnPage.length > 0 && !allPageSelected
+  const allFilteredSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => selectedIds.has(id))
 
   const toggleSelectAll = () => {
     if (allPageSelected) {
@@ -90,6 +148,7 @@ export function SupportIssueTable({
       setSelectedIds(prev => { const n = new Set(prev); pageIds.forEach(id => n.add(id)); return n })
     }
   }
+  const selectAllFiltered = () => setSelectedIds(new Set(allFilteredIds))
   const toggleRow = (id: string) => {
     setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
@@ -165,7 +224,8 @@ export function SupportIssueTable({
     )
   }
 
-  const colCount = canDelete ? 22 : 21
+  // checkbox col is always rendered (even without canDelete) to host the issue indicator
+  const colCount = 22
 
   return (
     <div id="support-issue-table-section" className="space-y-3.5">
@@ -180,20 +240,34 @@ export function SupportIssueTable({
         </div>
       )}
 
+      {selectedIds.size > 0 && (canEdit || canDelete) && (
+        <BulkEditToolbar
+          selectedCount={selectedIds.size}
+          totalFilteredCount={issues.length}
+          allFilteredSelected={allFilteredSelected}
+          fields={bulkFields}
+          isApplying={isBulkApplying}
+          onSelectAllFiltered={selectAllFiltered}
+          onClearSelection={() => setSelectedIds(new Set())}
+          onApply={async (field, value) => {
+            if (!onBulkUpdate) return
+            setIsBulkApplying(true)
+            try {
+              await onBulkUpdate([...selectedIds], field, value)
+              setSelectedIds(new Set())
+            } finally {
+              setIsBulkApplying(false)
+            }
+          }}
+        />
+      )}
+
       {canDelete && selectedIds.size > 0 && (
-        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs shadow-xs animate-in fade-in slide-in-from-top-1 duration-150">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-rose-400" />
-            <span className="text-rose-300 font-semibold">{selectedIds.size} {selectedIds.size === 1 ? 'issue' : 'issues'} selected</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setSelectedIds(new Set())}
-              className="h-7 px-3 rounded-lg border border-border/60 bg-surface/70 text-text-muted hover:text-text-primary text-xs transition-colors cursor-pointer">Deselect All</button>
-            <button type="button" onClick={() => onBulkDelete?.([...selectedIds])}
-              className="h-7 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95">
-              <Trash2 className="w-3.5 h-3.5" /><span>Delete Selected</span>
-            </button>
-          </div>
+        <div className="flex items-center justify-end gap-2">
+          <button type="button" onClick={() => onBulkDelete?.([...selectedIds])}
+            className="h-7 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95">
+            <Trash2 className="w-3.5 h-3.5" /><span>Delete Selected ({selectedIds.size})</span>
+          </button>
         </div>
       )}
 
@@ -231,14 +305,14 @@ export function SupportIssueTable({
           <table className="w-full min-w-[1760px] text-left text-xs border-collapse">
             <thead>
               <tr className="bg-surface-secondary/90 border-b border-border/60 text-[11px] uppercase tracking-wider text-text-muted font-semibold sticky top-0 z-10">
-                {canDelete && (
-                  <th className="py-3 px-3 text-center w-10">
+                <th className="py-3 px-3 text-center w-10 sticky left-0 z-20 bg-surface-secondary/90">
+                  {(canEdit || canDelete) && (
                     <input type="checkbox" checked={allPageSelected}
                       ref={el => { if (el) el.indeterminate = somePageSelected }}
                       onChange={toggleSelectAll}
                       className="w-3.5 h-3.5 rounded accent-rose-500 cursor-pointer" />
-                  </th>
-                )}
+                  )}
+                </th>
                 <th onClick={() => handleSort('sl_no')} className="py-3 px-3 text-center cursor-pointer hover:text-text-primary whitespace-nowrap group/th w-14">
                   <div className="flex items-center justify-center gap-1"><span>#</span>{renderSortIndicator('sl_no')}</div>
                 </th>
@@ -281,15 +355,22 @@ export function SupportIssueTable({
             <tbody className="divide-y divide-border/30 font-normal">
               {paginatedIssues.map((issue, index) => {
                 const autoSlNo = (currentPage - 1) * pageSize + index + 1
+                const liveIssues = validateSupportIssue(issue, dropdownConfigs, products)
                 return (
                   <tr key={issue.id}
                     className={`group transition-colors duration-150 cursor-default hover:bg-accent/[0.04] dark:hover:bg-accent/[0.08] ${selectedIds.has(issue.id) ? 'bg-rose-500/[0.06]' : ''}`}>
-                    {canDelete && (
-                      <td className="py-3 px-3 text-center align-middle" onClick={e => e.stopPropagation()}>
-                        <input type="checkbox" checked={selectedIds.has(issue.id)} onChange={() => toggleRow(issue.id)}
-                          className="w-3.5 h-3.5 rounded accent-rose-500 cursor-pointer" />
-                      </td>
-                    )}
+                    {/* Frozen checkbox + validation indicator column */}
+                    <td className="py-3 px-3 text-center align-middle sticky left-0 z-10 bg-surface/80 group-hover:bg-accent/[0.04]" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-1">
+                        {(canEdit || canDelete) && (
+                          <input type="checkbox" checked={selectedIds.has(issue.id)} onChange={() => toggleRow(issue.id)}
+                            className="w-3.5 h-3.5 rounded accent-rose-500 cursor-pointer" />
+                        )}
+                        {liveIssues.length > 0 && (
+                          <ValidationTooltip issues={liveIssues} rowNumber={autoSlNo} />
+                        )}
+                      </div>
+                    </td>
                     {/* 1. Sl. No. */}
                     <td className="py-3 px-3 text-center font-mono text-xs text-text-muted border-l-[3px] border-l-transparent group-hover:border-l-accent group-hover:text-accent font-medium transition-colors align-middle">{autoSlNo}</td>
                     {/* 2. Product */}

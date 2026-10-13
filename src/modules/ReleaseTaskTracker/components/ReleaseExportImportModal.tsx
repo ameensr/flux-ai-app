@@ -14,17 +14,24 @@ import { useAppStore } from '@/store/useAppStore'
 import { useReleaseTrackerStore } from '../store'
 import { exportReleaseTasksToExcel, exportReleaseTasksToCSV, generateNextTaskId, downloadReleaseImportTemplate } from '../releaseTrackerService'
 import * as XLSX from 'xlsx'
+import type { RowIssue } from '@/modules/DailyUpdateReport/components/ValidationTooltip'
 
 interface Props {
   isOpen: boolean
   initialTab?: 'export' | 'import'
   onClose: () => void
+  /** Called after a successful import with per-task issues and a summary. */
+  onImportComplete?: (
+    issues: Map<string, RowIssue[]>,
+    summary: { total: number; clean: number; withIssues: number; totalIssues: number }
+  ) => void
 }
 
 export function ReleaseExportImportModal({
   isOpen,
   initialTab = 'export',
-  onClose
+  onClose,
+  onImportComplete
 }: Props) {
   useBodyScrollLock(isOpen)
   const { toast } = useToast()
@@ -43,6 +50,7 @@ export function ReleaseExportImportModal({
 
   const [importing, setImporting] = useState(false)
   const [importSummary, setImportSummary] = useState<string | null>(null)
+  const [importErrors, setImportErrors] = useState<string[]>([])
 
   const filteredTasks = getFilteredTasks()
   const isExport = initialTab === 'export'
@@ -94,6 +102,7 @@ export function ReleaseExportImportModal({
 
       let importedCount = 0
       let skippedCount = 0
+      const validationErrors: string[] = []
       const actorName =
         (profile?.full_name as string) ||
         (user?.user_metadata?.full_name as string) ||
@@ -103,6 +112,22 @@ export function ReleaseExportImportModal({
       // Running snapshot — grows as we import so task_ids stay sequential
       let runningTasks = [...tasks]
 
+      // Validate mandatory fields first
+      jsonData.forEach((row: any, idx: number) => {
+        const rowNum = idx + 2
+        const desc = String(row['Task Description'] || row['Description'] || row['description'] || '').trim()
+        const engineer = String(row['QA Engineer'] || row["Who's Testing"] || row['Assigned To'] || '').trim()
+        if (!desc) validationErrors.push(`Row ${rowNum}: Task Description is missing.`)
+        if (!engineer) validationErrors.push(`Row ${rowNum}: QA Engineer is missing.`)
+      })
+
+      if (validationErrors.length > 0) {
+        setImportErrors(validationErrors)
+        setImporting(false)
+        e.target.value = ''
+        return
+      }
+
       // Dedup key: task_id (if present) OR description + release_version + product (case-insensitive)
       const existingTaskIds = new Set(tasks.map(t => t.task_id.trim().toLowerCase()))
       const existingKeys = new Set(
@@ -110,16 +135,18 @@ export function ReleaseExportImportModal({
           `${t.description.trim().toLowerCase()}|${t.release_version.trim().toLowerCase()}|${t.product_name.trim().toLowerCase()}`
         )
       )
+      // Track saved task IDs in import order for issue mapping
+      const savedTaskIds: string[] = []
 
       for (const row of jsonData) {
-        const prodName = row['Product'] || row['product'] || products[0]?.name || 'General Product'
-        const matchedProduct = products.find(
-          p => p.name.toLowerCase() === String(prodName).toLowerCase()
-        ) || products[0]
+        const prodName = String(row['Product'] || row['product'] || '').trim()
+        const matchedProduct = prodName
+          ? products.find(p => p.name.toLowerCase() === prodName.toLowerCase()) || null
+          : null
 
         const desc = String(row['Task Description'] || row['Description'] || row['description'] || 'Imported Task').trim()
         const rel = String(row['Release'] || row['release'] || 'Release 1.0').trim()
-        const prodNameResolved = (matchedProduct?.name || String(prodName)).trim()
+        const prodNameResolved = (matchedProduct?.name || prodName).trim()
 
         // Skip exact duplicates already in the store
         const rowTaskIdForDedup = String(row['Task ID'] || row['task_id'] || '').trim().toLowerCase()
@@ -172,14 +199,83 @@ export function ReleaseExportImportModal({
           { name: actorName, id: user?.id }
         )
         runningTasks = [...runningTasks, saved]
+        savedTaskIds.push(saved.id)
         importedCount++
       }
+
+      // Build per-task import issues
+      const issuesMap = new Map<string, RowIssue[]>()
+      const { dropdownConfigs } = useReleaseTrackerStore.getState()
+      const configuredStatuses = dropdownConfigs.task_status.map(s => s.value.toLowerCase())
+      const configuredPriorities = dropdownConfigs.priority.map(p => p.value.toLowerCase())
+      const configuredAssignees = dropdownConfigs.assigned_to.map(a => a.label.toLowerCase())
+      const configuredProducts = products.map(p => p.name.toLowerCase())
 
       const msg = skippedCount > 0
         ? `Imported ${importedCount} tasks. ${skippedCount} duplicate(s) skipped.`
         : `Successfully imported ${importedCount} release tasks!`
       setImportSummary(msg)
+      setImportErrors([])
       toast({ title: 'Import Complete', description: msg })
+
+      // Now validate each imported row for issues (non-blocking)
+      let totalIssues = 0
+      let rowsWithIssues = 0
+      jsonData.forEach((row: any, idx: number) => {
+        const rowIssues: RowIssue[] = []
+        const prodName = String(row['Product'] || row['product'] || '').trim()
+        const status = String(row['Task Status'] || row['Status'] || row['status'] || '').trim()
+        const priority = String(row['Priority'] || row['priority'] || '').trim()
+        const assignee = String(row['QA Engineer'] || row["Who's Testing"] || row['Assigned To'] || '').trim()
+
+        if (prodName && !configuredProducts.includes(prodName.toLowerCase())) {
+          rowIssues.push({
+            field: 'Product',
+            value: prodName,
+            reason: `"${prodName}" does not match any configured project.`,
+            suggestion: `Configured products: ${products.slice(0, 3).map(p => p.name).join(', ')}${products.length > 3 ? ` (+${products.length - 3} more)` : ''}.`,
+          })
+        }
+        if (status && configuredStatuses.length > 0 && !configuredStatuses.includes(status.toLowerCase())) {
+          rowIssues.push({
+            field: 'Task Status',
+            value: status,
+            reason: `"${status}" is not in the configured task statuses.`,
+            suggestion: `Configured: ${dropdownConfigs.task_status.slice(0, 4).map(s => s.value).join(', ')}.`,
+          })
+        }
+        if (priority && configuredPriorities.length > 0 && !configuredPriorities.includes(priority.toLowerCase())) {
+          rowIssues.push({
+            field: 'Priority',
+            value: priority,
+            reason: `"${priority}" is not in the configured priorities.`,
+            suggestion: `Configured: ${dropdownConfigs.priority.map(p => p.value).join(', ')}.`,
+          })
+        }
+        if (assignee && configuredAssignees.length > 0 && !configuredAssignees.includes(assignee.toLowerCase())) {
+          rowIssues.push({
+            field: 'QA Engineer',
+            value: assignee,
+            reason: `"${assignee}" is not in the configured team members.`,
+            suggestion: 'Check the configured QA Engineers in the dropdown settings.',
+          })
+        }
+
+        if (rowIssues.length > 0 && savedTaskIds[idx]) {
+          issuesMap.set(savedTaskIds[idx], rowIssues)
+          totalIssues += rowIssues.length
+          rowsWithIssues++
+        }
+      })
+
+      if (onImportComplete) {
+        onImportComplete(issuesMap, {
+          total: importedCount,
+          clean: importedCount - rowsWithIssues,
+          withIssues: rowsWithIssues,
+          totalIssues,
+        })
+      }
     } catch (err: any) {
       toast({
         variant: 'destructive',
@@ -276,7 +372,7 @@ export function ReleaseExportImportModal({
             {!isExport && canImport && (
               <div className="space-y-4">
                 <p className="text-xs text-text-muted">
-                  Upload an Excel or CSV file containing columns: <strong>Product, Release, Task Description, QA Engineer, Test Design Est, Data Prep Est, Functional Testing Est, Retesting Est, Task Status</strong>.
+                  Upload an Excel or CSV file. Required fields: <strong>Task Description, QA Engineer</strong>. Task ID is optional (auto-generated if blank).
                 </p>
 
                 <button
@@ -304,6 +400,23 @@ export function ReleaseExportImportModal({
                     className="hidden"
                   />
                 </label>
+
+                {importErrors.length > 0 && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 space-y-1 text-xs text-rose-300">
+                    <div className="font-bold flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4 text-rose-400" />
+                      <span>Validation Errors ({importErrors.length}):</span>
+                    </div>
+                    <ul className="list-disc pl-5 space-y-0.5 text-[11px]">
+                      {importErrors.slice(0, 5).map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                    {importErrors.length > 5 && (
+                      <span className="text-[10px] text-rose-400 block pt-1">+ {importErrors.length - 5} more errors</span>
+                    )}
+                  </div>
+                )}
 
                 {importSummary && (
                   <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 flex items-center gap-2">

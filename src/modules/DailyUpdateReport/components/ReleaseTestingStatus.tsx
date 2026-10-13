@@ -24,6 +24,8 @@ import {
   parseCsvLine,
   parseImportRow,
   sampleValueForColumn,
+  validateImportIssues,
+  type ImportIssue,
 } from '../importExportUtils'
 import { CellDisplay, CellEditor, defaultWidthForType } from './DynamicCell'
 import { CustomizeColumnsDrawer } from './CustomizeColumnsDrawer'
@@ -66,6 +68,8 @@ export const ReleaseTestingStatus: React.FC = () => {
   const [showDashboardMetrics, setShowDashboardMetrics] = useState(false)
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [importSummary, setImportSummary] = useState<{ total: number; clean: number; withIssues: number; totalIssues: number } | null>(null)
+  const [rowImportIssues, setRowImportIssues] = useState<Map<string, ImportIssue[]>>(new Map())
 
   // Cell inline editor state
   const [activeCell, setActiveCell] = useState<{ rowId: string; colId: string } | null>(null)
@@ -219,6 +223,8 @@ export const ReleaseTestingStatus: React.FC = () => {
 
   const commitImportedRows = async (
     parsed: ReturnType<typeof parseImportRow>[],
+    rawHeaders: string[],
+    rawDataRows: string[][],
   ) => {
     if (!parsed.length) return
 
@@ -249,12 +255,25 @@ export const ReleaseTestingStatus: React.FC = () => {
       }
     }
 
-    const errorCount = parsed.filter(p => p.errors.length > 0).length
-    if (errorCount > 0) {
-      alert(`Import completed with warnings: ${parsed.length - errorCount} rows clean, ${errorCount} row(s) have validation issues (highlighted). Custom and renamed columns were mapped from the file headers.`)
-    } else {
-      alert(`Successfully imported ${parsed.length} row(s) using the current column configuration.`)
-    }
+    // Compute rich import issues per row
+    const newIssuesMap = new Map<string, ImportIssue[]>(rowImportIssues)
+    let totalIssues = 0
+    let rowsWithIssues = 0
+    rawDataRows.forEach((rowData, i) => {
+      const issues = validateImportIssues('release', rawHeaders, rowData, COLUMNS)
+      if (issues.length > 0) {
+        newIssuesMap.set(targetRows[i]?.id ?? newRecords[i].id, issues)
+        totalIssues += issues.length
+        rowsWithIssues++
+      }
+    })
+    setRowImportIssues(newIssuesMap)
+    setImportSummary({
+      total: parsed.length,
+      clean: parsed.length - rowsWithIssues,
+      withIssues: rowsWithIssues,
+      totalIssues,
+    })
   }
 
   // Paste — positional onto currently visible columns (system + custom)
@@ -267,8 +286,9 @@ export const ReleaseTestingStatus: React.FC = () => {
 
     const pasteCols = columnsForPaste(COLUMNS)
     const headers = pasteCols.map(c => c.display_name)
-    const parsed = lines.map(line => parseImportRow('release', headers, line.split('\t'), COLUMNS))
-    await commitImportedRows(parsed)
+    const dataRows = lines.map(line => line.split('\t'))
+    const parsed = dataRows.map(row => parseImportRow('release', headers, row, COLUMNS))
+    await commitImportedRows(parsed, headers, dataRows)
   }
 
   const exportToCSV = () => {
@@ -385,7 +405,7 @@ export const ReleaseTestingStatus: React.FC = () => {
         return
       }
       const parsed = dataRows.map(row => parseImportRow('release', headers, row, COLUMNS))
-      await commitImportedRows(parsed)
+      await commitImportedRows(parsed, headers, dataRows)
     }
 
     if (fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
@@ -576,6 +596,30 @@ if (format === 'xlsx') {
 
   return (
     <GlassCard hoverEffect={false} className="flex flex-col gap-4 overflow-visible relative">
+
+      {/* Import Summary Banner */}
+      {importSummary && (
+        <div className={`flex items-start justify-between gap-3 px-4 py-3 rounded-xl border text-xs ${
+          importSummary.withIssues > 0
+            ? 'bg-amber-500/[0.06] border-amber-500/25 text-amber-200'
+            : 'bg-emerald-500/[0.06] border-emerald-500/25 text-emerald-200'
+        }`}>
+          <div className="space-y-0.5">
+            <p className="font-bold">
+              {importSummary.withIssues > 0 ? '⚠ Import Completed with Issues' : '✓ Import Completed'}
+            </p>
+            <p className="text-[11px] opacity-80">
+              {importSummary.total} rows imported · {importSummary.clean} clean · {importSummary.withIssues} with issues · {importSummary.totalIssues} total issues
+            </p>
+            {importSummary.withIssues > 0 && (
+              <p className="text-[10px] opacity-60">Click the ⚠ icon on affected rows to view details. Data was imported as-is.</p>
+            )}
+          </div>
+          <button type="button" onClick={() => setImportSummary(null)} className="shrink-0 opacity-50 hover:opacity-100 transition-opacity mt-0.5">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Active column preset indicator */}
       <div
@@ -907,7 +951,11 @@ if (format === 'xlsx') {
                           onChange={() => toggleSelectRow(row.id)}
                           className="rounded border-white/20 text-accent-gold focus:ring-2 focus:ring-accent-gold/50 focus:ring-offset-0 bg-white/5 cursor-pointer scale-110"
                         />
-                        <ValidationTooltip errors={allErrors} />
+                        <ValidationTooltip
+                          issues={rowImportIssues.get(row.id)}
+                          errors={allErrors}
+                          rowNumber={idx + 1}
+                        />
                       </div>
                       <span className="text-[10px] text-text-muted font-mono font-bold">{idx + 1}</span>
                     </div>

@@ -76,6 +76,12 @@ interface ReleaseTrackerState {
     ids: string[],
     currentUser: { name: string; id?: string }
   ) => Promise<{ deleted: string[]; failed: Array<{ id: string; reason: string }> }>
+  bulkUpdateTasks: (
+    ids: string[],
+    field: string,
+    value: string,
+    currentUser: { name: string; id?: string }
+  ) => Promise<{ updated: number; failed: number }>
   toggleEstimationLock: (
     taskId: string,
     shouldLock: boolean,
@@ -313,6 +319,33 @@ export const useReleaseTrackerStore = create<ReleaseTrackerState>((set, get) => 
     }
 
     return result
+  },
+
+  bulkUpdateTasks: async (ids, field, value, currentUser) => {
+    const { tasks, products, timeLogs } = get()
+    const NUMERIC_FIELDS = new Set(['test_design_est_hrs', 'data_prep_est_hrs', 'functional_testing_est_hrs', 'retesting_est_hrs'])
+    const coerce = (f: string, v: string) => NUMERIC_FIELDS.has(f) ? (Number(v) || 0) : v
+    let updated = 0
+    let failed = 0
+    const updatedTasks = [...tasks]
+
+    for (const id of ids) {
+      const idx = updatedTasks.findIndex(t => t.id === id)
+      if (idx === -1) { failed++; continue }
+      try {
+        const patch = { ...updatedTasks[idx], [field]: coerce(field, value) }
+        const saved = await apiSaveTask(patch, currentUser, updatedTasks, timeLogs)
+        updatedTasks[idx] = saved
+        updated++
+      } catch {
+        failed++
+      }
+    }
+
+    try { localStorage.setItem(LOCAL_STORAGE_TASKS_KEY, JSON.stringify(updatedTasks)) } catch { /* ignore */ }
+    const hist = await fetchReleaseHistory()
+    set({ tasks: updatedTasks, history: hist })
+    return { updated, failed }
   },
 
   toggleEstimationLock: async (taskId, shouldLock, currentUser) => {

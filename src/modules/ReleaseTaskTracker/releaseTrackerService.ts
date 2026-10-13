@@ -1837,6 +1837,7 @@ export function exportReleaseTasksToCSV(tasks: ReleaseTask[], filename?: string)
 export const RELEASE_IMPORT_HEADERS = [
   'Product',
   'Release',
+  'Task ID',
   'Task Description',
   'QA Engineer',
   'Priority',
@@ -1869,6 +1870,7 @@ export function downloadReleaseImportTemplate(products: ProjectWithMembers[]): v
   dataSheet['!cols'] = [
     { wch: 28 }, // Product
     { wch: 16 }, // Release
+    { wch: 14 }, // Task ID
     { wch: 50 }, // Task Description
     { wch: 20 }, // QA Engineer
     { wch: 12 }, // Priority
@@ -1901,10 +1903,11 @@ export function downloadReleaseImportTemplate(products: ProjectWithMembers[]): v
     [''],
     ['COLUMN REFERENCE'],
     ['Column', 'Required', 'Format / Accepted Values', 'Notes'],
-    ['Product', 'YES', productList, 'Must exactly match a product name in Project Hub (case-insensitive). Defaults to first product if blank.'],
-    ['Release', 'YES', 'e.g. Release 4.2', 'Free text release label. Defaults to Release 1.0 if blank.'],
+    ['Product', 'No', productList, 'Must exactly match a product name in Project Hub (case-insensitive). Defaults to first product if blank.'],
+    ['Release', 'No', 'e.g. Release 4.2', 'Free text release label. Defaults to Release 1.0 if blank.'],
+    ['Task ID', 'YES', 'e.g. REL-001', 'Must be in REL-NNN format. Auto-generated if blank or invalid.'],
     ['Task Description', 'YES', 'Free text', 'Detailed description of the release task. Cannot be empty.'],
-    ['QA Engineer', 'No', 'e.g. Ameen SR', 'Name of the assigned QA engineer. Defaults to Unassigned.'],
+    ['QA Engineer', 'YES', 'e.g. Ameen SR', 'Name of the assigned QA engineer. Cannot be empty.'],
     ['Priority', 'No', 'Critical | High | Medium | Low', 'Defaults to Medium.'],
     ['Task Status', 'No', 'Not Started | Assigned | In Progress | Blocked | In Review | Completed | Cancelled', 'Defaults to Not Started.'],
     ['Received Date/Time', 'No', 'YYYY-MM-DDTHH:MM  e.g. 2026-10-07T09:30', 'ISO datetime format. Leave blank if unknown.'],
@@ -1923,7 +1926,7 @@ export function downloadReleaseImportTemplate(products: ProjectWithMembers[]): v
     [''],
     ['IMPORTANT NOTES'],
     ['• Duplicate rows (same Description + Release + Product) are automatically skipped.'],
-    ['• Task IDs are generated sequentially — do not include a Task ID column.'],
+    ['• Task IDs in REL-NNN format are preserved; others are auto-generated sequentially.'],
     ['• Date format must be YYYY-MM-DD (e.g. 2026-10-07).'],
     ['• Received Date/Time must be ISO format YYYY-MM-DDTHH:MM (e.g. 2026-10-07T09:30).'],
     ['• Estimation columns accept decimals in 0.5 increments (e.g. 0.5, 1, 1.5, 2).'],
