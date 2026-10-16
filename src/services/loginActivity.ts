@@ -83,7 +83,7 @@ export async function logLoginEvent(
         .from('login_events')
         .delete()
         .eq('user_id', userId)
-        .not('id', 'in', `(${keepIds.join(',')})`)
+        .not('id', 'in', `(${keepIds.map((id) => `"${id}"`).join(',')})`)
     }
   } catch {
     // Non-critical — don't break auth flow if logging fails

@@ -45,7 +45,7 @@ export function formatPandaIdleMessage(
  * the feature is disabled without throwing errors or crashing the app.
  */
 export function getPandaIdleConfig(
-  env: Record<string, any> = import.meta.env
+  env: Record<string, string | boolean | undefined> = import.meta.env
 ): PandaIdleConfig {
   const rawEnabled = env.VITE_PANDA_IDLE_DETECTION
   const isDetectionExplicitlyTrue =

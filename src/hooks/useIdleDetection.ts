@@ -199,7 +199,7 @@ export function useIdleDetection(options?: UseIdleDetectionOptions): UseIdleDete
     return () => {
       clearCurrentTimer()
       ACTIVITY_EVENTS.forEach((eventName) => {
-        window.removeEventListener(eventName, handleUserActivity, { capture: true } as any)
+        window.removeEventListener(eventName, handleUserActivity, { capture: true })
       })
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
       window.removeEventListener('focus', handleVisibilityOrFocus)

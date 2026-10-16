@@ -77,7 +77,7 @@ interface DailyReportState {
 }
 
 // Debounce helper for database syncing
-let syncTimeout: any = null
+let syncTimeout: ReturnType<typeof setTimeout> | null = null
 
 // Monotonic counter guarding fetchReportRows against out-of-order network
 // responses. If two calls overlap (e.g. a stray extra caller races the
@@ -230,8 +230,8 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
 
       const isSuperAdmin = role === 'admin' || role === 'super_admin'
 
-      let data: any[] = []
-      let error: any = null
+      let data: { id: string; name: string; project_code: string }[] = []
+      let error: { message: string; details?: string; hint?: string } | null = null
 
       if (isSuperAdmin) {
         const response = await supabase
@@ -385,7 +385,17 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
     const isEdit = !!config.id && !config.id.startsWith('seed-') && !config.id.startsWith('local-')
 
     if (get().isDbAvailable && user) {
-      const payload: any = {
+      const payload: {
+        category: string
+        value: string
+        is_active: boolean
+        sort_order: number
+        updated_by: string
+        updated_at: string
+        id?: string
+        created_by?: string
+        created_at?: string
+      } = {
         category: config.category,
         value: config.value,
         is_active: config.is_active,
@@ -763,7 +773,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
       // - All rows get updated sort_order
 
       const supportPayload = get().supportRows.map((r, i) => {
-        const item: any = { ...r, sort_order: i + 1 }
+        const item: Record<string, unknown> & { id?: string } = { ...r, sort_order: i + 1 }
 
         // Preserve original user_id if it exists (maintain row ownership)
         if (!item.user_id) {
@@ -819,7 +829,7 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
       })
 
       const releasePayload = get().releaseRows.map((r, i) => {
-        const item: any = { ...r, sort_order: i + 1 }
+        const item: Record<string, unknown> & { id?: string } = { ...r, sort_order: i + 1 }
 
         // Preserve original user_id if it exists (maintain row ownership)
         if (!item.user_id) {
@@ -862,65 +872,62 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         return item
       })
 
-      const insertPromises: any[] = []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const insertPromises: Array<Promise<any>> = []
 
-      // ⚠️ CRITICAL FIX: Split into separate UPDATE and INSERT operations
-      // UPSERT with onConflict checks BOTH INSERT and UPDATE RLS policies
-      // This causes Members to fail when trying to update other users' rows
-      // because INSERT policy requires: auth.uid() = user_id
+      const existingSupportRows = supportPayload.filter(r => r.id && !(r.id as string).startsWith('temp-'))
+      const newSupportRows = supportPayload.filter(r => !r.id || (r.id as string).startsWith('temp-'))
 
-      // Separate existing rows (have real IDs) from new rows (temp IDs)
-      const existingSupportRows = supportPayload.filter(r => r.id && !r.id.startsWith('temp-'))
-      const newSupportRows = supportPayload.filter(r => !r.id || r.id.startsWith('temp-'))
-
-      const existingReleaseRows = releasePayload.filter(r => r.id && !r.id.startsWith('temp-'))
-      const newReleaseRows = releasePayload.filter(r => !r.id || r.id.startsWith('temp-'))
+      const existingReleaseRows = releasePayload.filter(r => r.id && !(r.id as string).startsWith('temp-'))
+      const newReleaseRows = releasePayload.filter(r => !r.id || (r.id as string).startsWith('temp-'))
 
       // UPDATE existing rows (will pass UPDATE policy)
       // ⚠️ CRITICAL: Use individual UPDATE operations, NOT UPSERT
       // UPSERT checks INSERT policy even with onConflict, causing RLS violations
       if (existingSupportRows.length > 0) {
-        // Batch update all existing rows
         const updatePromises = existingSupportRows.map(row =>
-          supabase
-            .from('daily_support_logs')
-            .update(row)
-            .eq('id', row.id)
-            .select()
-            .single()
+          Promise.resolve(
+            supabase
+              .from('daily_support_logs')
+              .update(row)
+              .eq('id', row.id as string)
+              .select()
+              .single()
+          )
         )
         insertPromises.push(Promise.all(updatePromises))
       }
 
       // INSERT new rows (will pass INSERT policy)
       if (newSupportRows.length > 0) {
-        // Remove temp IDs from new rows
         const cleanedNewSupport = newSupportRows.map(r => {
           const clean = { ...r }
-          if (clean.id && clean.id.startsWith('temp-')) {
+          if (typeof clean.id === 'string' && clean.id.startsWith('temp-')) {
             delete clean.id
           }
           return clean
         })
 
         insertPromises.push(
-          supabase
-            .from('daily_support_logs')
-            .insert(cleanedNewSupport)
-            .select()
+          Promise.resolve(
+            supabase
+              .from('daily_support_logs')
+              .insert(cleanedNewSupport)
+              .select()
+          )
         )
       }
 
-      // UPDATE existing release rows
-      // ⚠️ CRITICAL: Use individual UPDATE operations, NOT UPSERT
       if (existingReleaseRows.length > 0) {
         const updatePromises = existingReleaseRows.map(row =>
-          supabase
-            .from('daily_release_testing_status')
-            .update(row)
-            .eq('id', row.id)
-            .select()
-            .single()
+          Promise.resolve(
+            supabase
+              .from('daily_release_testing_status')
+              .update(row)
+              .eq('id', row.id as string)
+              .select()
+              .single()
+          )
         )
         insertPromises.push(Promise.all(updatePromises))
       }
@@ -929,67 +936,55 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
       if (newReleaseRows.length > 0) {
         const cleanedNewRelease = newReleaseRows.map(r => {
           const clean = { ...r }
-          if (clean.id && clean.id.startsWith('temp-')) {
+          if (typeof clean.id === 'string' && clean.id.startsWith('temp-')) {
             delete clean.id
           }
           return clean
         })
 
         insertPromises.push(
-          supabase
-            .from('daily_release_testing_status')
-            .insert(cleanedNewRelease)
-            .select()
+          Promise.resolve(
+            supabase
+              .from('daily_release_testing_status')
+              .insert(cleanedNewRelease)
+              .select()
+          )
         )
       }
 
       const results = await Promise.all(insertPromises)
-
-      // ⚠️ CRITICAL: Process results from split operations
-      // Results array order matches insertPromises order:
-      // [existingSupport, newSupport, existingRelease, newRelease] (if they exist)
 
       let hasErrors = false
       let resIdx = 0
 
       const stateUpdate: Partial<DailyReportState> = { syncing: false }
 
-      // Collect all synced support rows (from both UPDATE and INSERT operations)
       const syncedSupportRows: SupportLogRecord[] = []
 
-      // Process existing support rows UPDATE result
       if (existingSupportRows.length > 0) {
-        const res = results[resIdx++]
-        // res is now Promise.all result containing array of individual update results
+        const res = results[resIdx++] as { error?: unknown; data?: unknown }[] | null
         if (Array.isArray(res)) {
           const allData: SupportLogRecord[] = []
           let hasUpdateError = false
-
           res.forEach((singleRes, idx) => {
             if (singleRes.error) {
               console.error(`[DailyReportStore] Support row update failed (row ${idx}):`, singleRes.error)
-              console.error('[DailyReportStore] Failed row:', JSON.stringify(existingSupportRows[idx], null, 2))
               hasUpdateError = true
             } else if (singleRes.data) {
               allData.push(singleRes.data as SupportLogRecord)
             }
           })
-
-          if (hasUpdateError) {
-            hasErrors = true
-          } else {
-            syncedSupportRows.push(...allData)
-          }
+          if (hasUpdateError) hasErrors = true
+          else syncedSupportRows.push(...allData)
         }
       }
 
-      // Process new support rows INSERT result
       if (newSupportRows.length > 0) {
-        const res = results[resIdx++]
-        if (res.error) {
+        const res = results[resIdx++] as { error?: unknown; data?: unknown[] } | null
+        if (res?.error) {
           console.error('[DailyReportStore] New support logs insert failed:', res.error)
           hasErrors = true
-        } else if (res.data) {
+        } else if (res?.data) {
           syncedSupportRows.push(...(res.data as SupportLogRecord[]))
         }
       }
@@ -1007,42 +1002,32 @@ export const useDailyReportStore = create<DailyReportState>((set, get) => ({
         localStorage.setItem('flux-daily-support-rows', JSON.stringify([]))
       }
 
-      // Collect all synced release rows (from both UPDATE and INSERT operations)
       const syncedReleaseRows: ReleaseTestingRecord[] = []
 
-      // Process existing release rows UPDATE result
       if (existingReleaseRows.length > 0) {
-        const res = results[resIdx++]
-        // res is now Promise.all result containing array of individual update results
+        const res = results[resIdx++] as { error?: unknown; data?: unknown }[] | null
         if (Array.isArray(res)) {
           const allData: ReleaseTestingRecord[] = []
           let hasUpdateError = false
-
           res.forEach((singleRes, idx) => {
             if (singleRes.error) {
               console.error(`[DailyReportStore] Release row update failed (row ${idx}):`, singleRes.error)
-              console.error('[DailyReportStore] Failed row:', JSON.stringify(existingReleaseRows[idx], null, 2))
               hasUpdateError = true
             } else if (singleRes.data) {
               allData.push(singleRes.data as ReleaseTestingRecord)
             }
           })
-
-          if (hasUpdateError) {
-            hasErrors = true
-          } else {
-            syncedReleaseRows.push(...allData)
-          }
+          if (hasUpdateError) hasErrors = true
+          else syncedReleaseRows.push(...allData)
         }
       }
 
-      // Process new release rows INSERT result
       if (newReleaseRows.length > 0) {
-        const res = results[resIdx++]
-        if (res.error) {
+        const res = results[resIdx++] as { error?: unknown; data?: unknown[] } | null
+        if (res?.error) {
           console.error('[DailyReportStore] New release logs insert failed:', res.error)
           hasErrors = true
-        } else if (res.data) {
+        } else if (res?.data) {
           syncedReleaseRows.push(...(res.data as ReleaseTestingRecord[]))
         }
       }

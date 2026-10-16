@@ -35,4 +35,6 @@ __pycache__/
 .env
 .env.local
 .env.production
-backend/.env.env
+backend/.env
+backend/.env.local
+backend/.env.production

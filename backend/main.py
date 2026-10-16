@@ -9,6 +9,7 @@ AI via Groq → Gemini → Kimi (TokenRouter) fallback chain. Endpoints:
 Also: Gherkin, tone refine, PII, feedback.
 Auth: Supabase JWT validated on every request via verify_token().
 """
+import asyncio
 import json
 import time
 from contextlib import asynccontextmanager
@@ -123,8 +124,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "apikey"],
 )
 
 def get_pool() -> asyncpg.Pool:
@@ -137,7 +138,7 @@ def get_pool() -> asyncpg.Pool:
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
-async def verify_token(authorization: str = "") -> dict:
+async def verify_token(authorization: str = Header(default="")) -> dict:
     """Validate the access token via Supabase Auth (works with HS256 + new signing keys)."""
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
@@ -185,7 +186,8 @@ User = Annotated[dict, Depends(get_current_user)]
 _AI_CONFIG_ID = "00000000-0000-0000-0000-000000000001"
 _AI_CACHE_TTL_S = 5.0
 # Cache: (monotonic_ts, enabled, allowed_user_ids)
-_ai_config_cache: tuple[float, bool, list[str]] | None = None  # module-level, protected by single-threaded async
+_ai_config_cache: tuple[float, bool, list[str]] | None = None
+_ai_config_lock = asyncio.Lock()
 
 
 def _normalize_user_ids(raw_ids) -> list[str]:
@@ -286,18 +288,18 @@ async def require_ai_enabled(
     """Block LLM routes when Centralised AI is off or the user is not allowlisted."""
     global _ai_config_cache
     now = time.monotonic()
-    if _ai_config_cache and (now - _ai_config_cache[0]) < _AI_CACHE_TTL_S:
-        enabled, allowed_ids = _ai_config_cache[1], _ai_config_cache[2]
-    else:
-        read = await _read_ai_platform_config()
-        if read is None:
-            # Fail closed — never allow AI when allowlist/status cannot be verified.
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Unable to verify Centralised AI status.",
-            )
-        enabled, allowed_ids = read
-        _ai_config_cache = (now, enabled, allowed_ids)
+    async with _ai_config_lock:
+        if _ai_config_cache and (now - _ai_config_cache[0]) < _AI_CACHE_TTL_S:
+            enabled, allowed_ids = _ai_config_cache[1], _ai_config_cache[2]
+        else:
+            read = await _read_ai_platform_config()
+            if read is None:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Unable to verify Centralised AI status.",
+                )
+            enabled, allowed_ids = read
+            _ai_config_cache = (now, enabled, allowed_ids)
 
     if not enabled:
         raise HTTPException(

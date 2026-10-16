@@ -815,7 +815,7 @@ export const AuthPage = () => {
     } catch (error: unknown) {
       console.error('[AuthPage] Authentication failed:', error)
       pandaSend({ type: 'LOGIN_ERROR' })
-      const mapped = mapAuthError(error instanceof Error ? error instanceof Error ? error.message : String(error) : String(error) ?? '')
+      const mapped = mapAuthError(error instanceof Error ? error.message : String(error) ?? '')
       setFieldError({ [mapped.field]: mapped.text })
     } finally {
       setIsLoading(false)

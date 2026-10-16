@@ -1143,8 +1143,8 @@ export function UserManagement() {
     if (filterStatus) list = list.filter(u => u.status === filterStatus)
     if (filterDept) list = list.filter(u => u.department_id === filterDept)
     list.sort((a, b) => {
-      const av = (a as any)[sortKey] ?? ''
-      const bv = (b as any)[sortKey] ?? ''
+      const av = (a as unknown as Record<string, unknown>)[sortKey] ?? ''
+      const bv = (b as unknown as Record<string, unknown>)[sortKey] ?? ''
       return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
     })
     return list

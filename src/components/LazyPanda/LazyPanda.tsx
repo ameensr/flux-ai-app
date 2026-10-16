@@ -35,6 +35,13 @@ export const LazyPanda: React.FC<LazyPandaProps> = ({ isSignUp = false, onReady 
     onReady?.(send)
   }, [onReady, send])
 
+  // Cleanup click timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current)
+    }
+  }, [])
+
   const prefersReducedMotion = usePrefersReducedMotion()
 
   // Easter egg: click panda multiple times for fun reaction

@@ -27,9 +27,9 @@ function ActionBadge({ action }: { action: string }) {
   )
 }
 
-function ValueDiff({ old: oldVal, next: newVal }: { old: any; next: any }) {
+function ValueDiff({ old: oldVal, next: newVal }: { old: unknown; next: unknown }) {
   if (!oldVal && !newVal) return <span className="text-text-muted text-xs">—</span>
-  const fmt = (v: any) => typeof v === 'object' ? JSON.stringify(v) : String(v ?? '—')
+  const fmt = (v: unknown) => typeof v === 'object' ? JSON.stringify(v) : String(v ?? '—')
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="text-red-400 line-through opacity-70">{fmt(oldVal)}</span>

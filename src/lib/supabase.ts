@@ -1,7 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
+import { SESSION_START_KEY, MAX_SESSION_AGE_MS } from './idleConfig'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'YOUR_SUPABASE_URL'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY'
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('[supabase] VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set.')
+}
 
 export const SUPABASE_URL = supabaseUrl
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -12,12 +17,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 })
 
-// ── Absolute Session Timeout ──────────────────────────────────────────────────
-// Maximum session lifetime in milliseconds (default: 24 hours)
-export const MAX_SESSION_AGE_MS: number =
-  Number(import.meta.env.VITE_MAX_SESSION_AGE_MS) || 24 * 60 * 60 * 1000
-
-const SESSION_START_KEY = 'qaly-session-start'
+export { MAX_SESSION_AGE_MS }
 
 /** Record when a new session started */
 export function markSessionStart(): void {

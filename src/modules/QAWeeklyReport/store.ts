@@ -47,7 +47,7 @@ export const useQAReportStore = create<QAReportStore>()(
       form: defaultForm(),
       setForm: (patch) => set((s) => {
         const next = { ...s.form, ...patch }
-        try { localStorage.setItem('current-qa-report-data', JSON.stringify(next)) } catch(e) {}
+        try { localStorage.setItem('current-qa-report-data', JSON.stringify(next)) } catch { /* non-critical */ }
         return { form: next }
       }),
       resetForm: (projectId, projectName) => set(() => {
@@ -56,7 +56,7 @@ export const useQAReportStore = create<QAReportStore>()(
           projectId: projectId || '',
           projectName: projectName || ''
         }
-        try { localStorage.setItem('current-qa-report-data', JSON.stringify(resetData)) } catch(e) {}
+        try { localStorage.setItem('current-qa-report-data', JSON.stringify(resetData)) } catch { /* non-critical */ }
         return {
           form: resetData,
           generatedReport: ''
@@ -73,8 +73,8 @@ export const useQAReportStore = create<QAReportStore>()(
           const role = useAppStore.getState().role
           const isAdmin = role === 'admin' || role === 'super_admin'
 
-          let data: any[] | null = null
-          let error: any = null
+          let data: { id: string; name: string; project_code: string; description?: string; status: string; created_by: string; created_at: string; updated_at: string }[] | null = null
+          let error: { message: string } | null = null
 
           if (isAdmin) {
             let query = supabase
@@ -105,8 +105,8 @@ export const useQAReportStore = create<QAReportStore>()(
 
             const response = await query
             error = response.error
-            const byId = new Map<string, any>()
-            for (const row of (response.data || []) as any[]) {
+            const byId = new Map<string, { id: string; name: string; project_code: string; description?: string; status: string; created_by: string; created_at: string; updated_at: string }>()
+            for (const row of (response.data || []) as unknown as { projects: { id: string; name: string; project_code: string; description?: string; status: string; created_by: string; created_at: string; updated_at: string } }[]) {
               const p = row.projects
               if (p?.id) byId.set(p.id, p)
             }
@@ -142,14 +142,21 @@ export const useQAReportStore = create<QAReportStore>()(
         const user = useAppStore.getState().user
         if (!user) return
         try {
-          const payload = {
+          const payload: {
+            name: string
+            project_code: string
+            description: string | undefined
+            status: string
+            updated_at: string
+            created_by?: string
+            created_at?: string
+          } = {
             name: project.projectName,
             project_code: project.projectCode,
             description: project.description,
             status: project.status === 'Active' ? 'active' : 'archived',
-            updated_at: new Date().toISOString()
-          } as any
-
+            updated_at: new Date().toISOString(),
+          }
           if (project.id) {
             const { error } = await supabase
               .from('projects')

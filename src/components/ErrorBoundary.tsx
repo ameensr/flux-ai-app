@@ -21,7 +21,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (!this.state.hasError) return this.props.children
     if (this.props.fallback) return this.props.fallback
     // Redirect to the 404 "Something Went Wrong" page
-    window.location.href = ROUTES.qalyAiEngine404
+    // Use setTimeout to defer the navigation outside of the render cycle
+    setTimeout(() => { window.location.href = ROUTES.qalyAiEngine404 }, 0)
     return null
   }
 }

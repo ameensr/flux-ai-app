@@ -44,56 +44,28 @@ export function useLazyPanda(isSignUp = false): UseLazyPandaReturn {
   const ctxRef = useRef(ctx)
   ctxRef.current = ctx
 
-  // Debug: Log feature changes
-  useEffect(() => {
-    console.log('[LazyPanda] Features updated:', features)
-  }, [features])
-
   // ── Dispatch event — respects feature toggles ───────────────────────────────
   const send = useCallback((event: PandaEvent) => {
-    console.log('[LazyPanda] Event received:', event.type, 'Features:', features)
-
     setCtx(prev => {
-      // Gate events behind their feature toggles
       if (event.type === 'EMAIL_FOCUS' || event.type === 'EMAIL_BLUR' || event.type === 'EMAIL_TYPING') {
-        if (!features.emailTracking) {
-          console.log('[LazyPanda] Email event blocked - emailTracking disabled')
-          return prev
-        }
+        if (!features.emailTracking) return prev
       }
       if (event.type === 'PASSWORD_FOCUS' || event.type === 'PASSWORD_BLUR') {
-        if (!features.passwordCover) {
-          console.log('[LazyPanda] Password event blocked - passwordCover disabled')
-          return prev
-        }
+        if (!features.passwordCover) return prev
       }
       if (event.type === 'PASSWORD_SHOW_TOGGLE') {
-        if (!features.passwordPeek) {
-          console.log('[LazyPanda] Password peek blocked - passwordPeek disabled')
-          return prev
-        }
-        console.log('[LazyPanda] Password show toggle:', event.visible)
+        if (!features.passwordPeek) return prev
       }
-      if (event.type === 'LOGIN_START') {
-        if (!features.loadingAnimation) return prev
-      }
-      if (event.type === 'LOGIN_SUCCESS') {
-        if (!features.loginSuccess) return prev
-      }
-      if (event.type === 'LOGIN_ERROR') {
-        if (!features.loginFailure) return prev
-      }
-
-      const nextState = transition(prev, event)
-      console.log('[LazyPanda] State transition:', prev.state, '→', nextState.state)
-      return nextState
+      if (event.type === 'LOGIN_START' && !features.loadingAnimation) return prev
+      if (event.type === 'LOGIN_SUCCESS' && !features.loginSuccess) return prev
+      if (event.type === 'LOGIN_ERROR' && !features.loginFailure) return prev
+      return transition(prev, event)
     })
     lastActivityRef.current = Date.now()
   }, [features])
 
   // ── Cursor tracking (only when emailTracking + cursorTracking enabled) ───────
   useEffect(() => {
-    console.log('[LazyPanda] Cursor tracking effect - enabled:', features.cursorTracking, 'state:', ctxRef.current.state)
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!features.cursorTracking) return
@@ -144,25 +116,16 @@ export function useLazyPanda(isSignUp = false): UseLazyPandaReturn {
 
   // ── Walking animation cycle (only when walking enabled) ──────────────────────
   useEffect(() => {
-    if (!features.walking) {
-      console.log('[LazyPanda] Walking disabled')
-      return
-    }
+    if (!features.walking) return
 
-    console.log('[LazyPanda] Walking animation enabled')
     const walkCycle = setInterval(() => {
       const s = ctxRef.current.state
       const elapsed = Date.now() - lastActivityRef.current
 
-      // Only walk if idle for 3-5 seconds (not long enough to sleep)
       if (elapsed > 3000 && elapsed < DEFAULT_CONFIG.sleepTimeout - 2000) {
         if (s === 'IDLE' && Math.random() > 0.7) {
-          // 30% chance to start walking
-          console.log('[LazyPanda] Starting walk animation')
           setCtx(prev => ({ ...prev, state: 'WALKING', prevState: prev.state }))
         } else if (s === 'WALKING' && Math.random() > 0.6) {
-          // 40% chance to stop walking and return to idle
-          console.log('[LazyPanda] Stopping walk animation')
           setCtx(prev => ({ ...prev, state: 'IDLE', prevState: prev.state }))
         }
       }
