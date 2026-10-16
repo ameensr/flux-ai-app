@@ -1,0 +1,2 @@
+-- 048: placeholder — no migration was issued at this number.
+-- This file exists solely to keep the migration sequence contiguous.
