@@ -287,7 +287,7 @@ export const MaintenancePage: React.FC = () => {
             {/* Branding */}
             {config.show_branding && (
               <p className="mt-6 text-[10px] uppercase tracking-widest font-bold" style={{ color: 'var(--text-muted)' }}>
-                Qaly AI Engine
+                Qub AI Engine
               </p>
             )}
           </div>

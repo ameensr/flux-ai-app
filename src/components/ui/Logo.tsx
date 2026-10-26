@@ -11,11 +11,15 @@ interface LogoProps {
   mono?: boolean
   /** Force dark wordmark — for light backgrounds */
   dark?: boolean
+  /** Wordmark suffix after 'Q' (defaults to 'ub') */
+  suffix?: string
+  /** Subtitle descriptor (defaults to 'AI Engine') */
+  subtitle?: string
 }
 
-// ─── The Qaly Wordmark ────────────────────────────────────────────────────────
+// ─── The Qub Wordmark ────────────────────────────────────────────────────────
 // Single source of truth for app branding — this is the exact design used on
-// the Authentication page: a gradient "Q" + "aly" wordmark with a small
+// the Authentication page and Landing page: a gradient "Q" + "ub" wordmark with a small
 // gradient sparkle accent, plus a muted "AI ENGINE" subtext.
 //   • font-inter font-extrabold, tight tracking
 //   • gradient text (.text-gradient-q, driven by --q-gradient in index.css)
@@ -40,6 +44,8 @@ export const Logo: React.FC<LogoProps> = ({
   collapsed = false,
   mono = false,
   dark = false,
+  suffix = 'ub',
+  subtitle = 'AI Engine',
 }) => {
   const s = SIZE_MAP[size]
 
@@ -52,14 +58,17 @@ export const Logo: React.FC<LogoProps> = ({
     ? (dark ? 'rgba(17,24,39,0.5)' : 'rgba(255,255,255,0.55)')
     : 'var(--text-muted)'
 
+  const wordmarkText = `Q${suffix}`
+  const ariaLabel = subtitle ? `${wordmarkText} ${subtitle}` : wordmarkText
+
   return (
     <div
       className={cn('inline-flex items-baseline select-none', className)}
       style={{ gap: s.gap }}
       role="img"
-      aria-label="Qaly AI Engine"
+      aria-label={ariaLabel}
     >
-      {/* "Qaly" wordmark — gradient Q + sparkle, always visible */}
+      {/* "Qub" wordmark — gradient Q + sparkle, always visible */}
       <motion.div
         className="font-inter font-extrabold tracking-tighter inline-flex items-center shrink-0"
         style={{ fontSize: s.qaly, lineHeight: 1, color: qalyColor }}
@@ -70,7 +79,7 @@ export const Logo: React.FC<LogoProps> = ({
         <span className={mono ? undefined : 'text-gradient-q'}>Q</span>
         {!collapsed && (
           <>
-            aly
+            {suffix}
             <span className="logo-sparkle" style={{ width: s.sparkle, height: s.sparkle }} />
           </>
         )}
@@ -78,7 +87,7 @@ export const Logo: React.FC<LogoProps> = ({
 
       {/* "AI ENGINE" — refined secondary, hidden when collapsed */}
       <AnimatePresence>
-        {!collapsed && (
+        {!collapsed && subtitle && (
           <motion.span
             initial={{ opacity: 0, x: -6 }}
             animate={{ opacity: 1, x: 0 }}
@@ -87,7 +96,7 @@ export const Logo: React.FC<LogoProps> = ({
             className="font-inter font-medium uppercase whitespace-nowrap"
             style={{ fontSize: s.engine, letterSpacing: '0.14em', lineHeight: 1, color: engineColor }}
           >
-            AI Engine
+            {subtitle}
           </motion.span>
         )}
       </AnimatePresence>
@@ -119,9 +128,11 @@ export const QalyIcon: React.FC<{
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       role="img"
-      aria-label="Qaly AI Engine"
+      aria-label="Qub AI Engine"
     >
       Q
     </motion.span>
   )
 }
+
+export const QubIcon = QalyIcon

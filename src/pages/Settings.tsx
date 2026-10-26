@@ -247,7 +247,7 @@ export const Settings = () => {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
-                  Qaly Pro
+                  Qub.ai Pro
                 </h3>
                 <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                   Unlimited cloud history, collaborative workspaces, and priority AI access.

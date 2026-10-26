@@ -98,7 +98,7 @@ export function AuthFooter() {
 
       {/* Copyright */}
       <p className="text-[10px] tracking-wide" style={{ color: 'var(--text-muted)', opacity: 0.5 }}>
-        &copy; {year} Qaly AI Engine
+        &copy; {year} Qub AI Engine
       </p>
     </motion.footer>
   )

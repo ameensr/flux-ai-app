@@ -1,8 +1,9 @@
 export const BRAND = {
-  name:       'Qaly AI Engine',
-  shortName:  'Qaly',
+  name:       'Qub.ai',
+  fullName:   'Qub AI Engine',
+  shortName:  'Qub.ai',
   tagline:    'Test Smarter. Ship Faster.',
-  company:    'Qaly AI Engine',
-  copyright:  '© Qaly AI Engine',
+  company:    'Qub AI Engine',
+  copyright:  '© 2026 Qub AI Engine',
   storageKey: 'qaly-theme',
 } as const

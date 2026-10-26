@@ -19,10 +19,12 @@ import { SessionTimeoutWarning } from '@/components/ui/SessionTimeoutWarning'
 import { logLoginEvent } from '@/services/loginActivity'
 import { useMaintenanceStore } from '@/store/useMaintenanceStore'
 import { useAIPlatformStore } from '@/store/useAIPlatformStore'
+import { useAnnouncementStore } from '@/store/useAnnouncementStore'
 import { useToast } from '@/hooks/use-toast'
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog'
 import { PandaIdleNotification } from '@/components/LazyPanda'
 import { FloatingThemeToggle } from '@/components/ui/FloatingThemeToggle'
+import { QubRebrandingAnnouncement } from '@/components/announcements/QubRebrandingAnnouncement'
 
 // ── Idle timeout context ──────────────────────────────────────────────────────
 type RegisterOperationFn = (key: string) => () => void
@@ -201,6 +203,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
             supabase.rpc('get_my_profile'),
             useMaintenanceStore.getState().fetchConfig(),
             useAIPlatformStore.getState().fetchConfig(),
+            useAnnouncementStore.getState().fetchConfig(),
           ])
 
           if (rpcError) {
@@ -293,11 +296,15 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
     }
     checkInitialSession()
 
-    // Realtime: re-fetch maintenance / AI platform config whenever admin changes it
+    // Realtime: re-fetch maintenance / announcement / AI platform config whenever admin changes it
     const maintenanceChannel = supabase
       .channel('maintenance_config_changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'maintenance_config' }, () => {
         useMaintenanceStore.getState().fetchConfig()
+        useAnnouncementStore.getState().fetchConfig()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rebranding_announcement_config' }, () => {
+        useAnnouncementStore.getState().fetchConfig()
       })
       .subscribe()
 
@@ -353,6 +360,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       <AIRestrictedModal />
       <SessionExpiredToast />
       {isAuthenticated && <PandaIdleNotification />}
+      {isAuthenticated && <QubRebrandingAnnouncement />}
     </>
   )
 }

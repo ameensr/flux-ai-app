@@ -75,31 +75,31 @@ export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () =>
     <AnimatePresence>
       {isIdle && (
         <React.Fragment key="panda-idle-container">
-          {/* ── Subtle grayscale backdrop ── */}
+          {/* ── Soft colorful backdrop (on top of all screens) ── */}
           <motion.div
             key="panda-idle-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={prefersReducedMotion ? { duration: 0.15 } : { duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed inset-0 z-[70] cursor-pointer select-none"
+            className="fixed inset-0 z-[9998] cursor-pointer select-none"
             style={{
-              backdropFilter: 'grayscale(55%) blur(2.5px) brightness(0.93)',
-              WebkitBackdropFilter: 'grayscale(55%) blur(2.5px) brightness(0.93)',
-              background: 'radial-gradient(ellipse at center, rgba(11,16,32,0.15) 0%, rgba(5,8,20,0.42) 100%)',
+              backdropFilter: 'blur(3px) brightness(0.96)',
+              WebkitBackdropFilter: 'blur(3px) brightness(0.96)',
+              background: 'radial-gradient(ellipse at center, rgba(11,16,32,0.12) 0%, rgba(5,8,20,0.32) 100%)',
             }}
             onClick={resetIdle}
             aria-hidden="true"
           />
 
-          {/* ── Main card ── */}
+          {/* ── Main card (highest z-index in application) ── */}
           <motion.div
             key="panda-idle-card"
             initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.92 }}
             animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
             exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.94 }}
             transition={prefersReducedMotion ? { duration: 0.2 } : { duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className={`fixed ${positionClass} z-[75] flex flex-col items-center select-none pointer-events-auto`}
+            className={`fixed ${positionClass} z-[9999] flex flex-col items-center select-none pointer-events-auto`}
             role="status"
             aria-live="polite"
           >

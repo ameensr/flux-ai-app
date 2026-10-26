@@ -75,8 +75,8 @@ export async function fetchProductsFromProjectHub(): Promise<ProjectWithMembers[
   }
   return [
     {
-      id: '00000000-0000-4000-8000-000000000001', name: 'Qaly AI Engine Core',
-      project_code: 'QALY-CORE', description: 'Core AI Agentic Engine', status: 'active',
+      id: '00000000-0000-4000-8000-000000000001', name: 'Qub AI Engine Core',
+      project_code: 'QUB-CORE', description: 'Core AI Agentic Engine', status: 'active',
       start_date: '2026-01-01', target_end_date: '2026-12-31', actual_end_date: null,
       tags: ['AI'], metadata: {}, created_by: null,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),

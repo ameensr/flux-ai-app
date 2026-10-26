@@ -664,7 +664,7 @@ function MorphingHeading({ isLogin }: { isLogin: boolean }) {
           transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
           className="text-sm text-text-secondary font-montreal"
         >
-          {isLogin ? 'Sign in to Qaly AI Engine' : 'Join Qaly AI Engine'}
+          {isLogin ? 'Sign in to Qub.ai' : 'Join Qub.ai'}
         </motion.p>
       </AnimatePresence>
     </div>
@@ -875,7 +875,7 @@ export const AuthPage = () => {
               </div>
               <p className="text-xs text-text-muted font-montreal leading-relaxed">
                 We have sent a verification link to <strong className="text-text-primary">{signupSuccessEmail}</strong>.
-                Please click the link in the email to activate your account and start using Qaly AI Engine.
+                Please click the link in the email to activate your account and start using Qub.ai.
               </p>
               <div className="pt-4">
                 <FloatingButton
