@@ -9,10 +9,8 @@ import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import {
   Shield, Clock, AlertTriangle, CheckCircle2, Save,
-  Mail, Eye, EyeOff, Settings2, Users, Timer, Sparkles
+  Mail, Eye, EyeOff, Settings2, Users, Timer
 } from 'lucide-react'
-import { useAnnouncementStore } from '@/store/useAnnouncementStore'
-import { useAppStore } from '@/store/useAppStore'
 
 interface RoleOption {
   key: string
@@ -21,15 +19,6 @@ interface RoleOption {
 
 export function MaintenanceSettings() {
   const { config, fetchConfig, updateConfig, loading } = useMaintenanceStore()
-  const { role } = useAppStore()
-  const canEdit = role === 'admin' || role === 'super_admin'
-
-  const {
-    enabled: rebrandingEnabled,
-    setEnabled: setRebrandingEnabled,
-    isSaving: rebrandingSaving,
-    fetchConfig: fetchRebrandingConfig,
-  } = useAnnouncementStore()
   const [saving, setSaving] = useState(false)
   const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([])
 
@@ -71,37 +60,7 @@ export function MaintenanceSettings() {
 
   useEffect(() => {
     fetchConfig()
-    fetchRebrandingConfig()
   }, [])
-
-  const handleToggleRebranding = async () => {
-    if (!canEdit) {
-      toast({
-        variant: 'destructive',
-        title: 'Permission Denied',
-        description: 'Only authorized administrators can modify the rebranding announcement setting.',
-      })
-      return
-    }
-
-    const nextState = !rebrandingEnabled
-    try {
-      await setRebrandingEnabled(nextState)
-      toast({
-        variant: 'success',
-        title: nextState ? 'Rebranding Announcement Enabled' : 'Rebranding Announcement Disabled',
-        description: nextState
-          ? 'Eligible authenticated users will see the announcement after 60 seconds of active usage.'
-          : 'The rebranding announcement is now disabled.',
-      })
-    } catch (err: unknown) {
-      toast({
-        variant: 'destructive',
-        title: 'Failed to update setting',
-        description: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
 
   useEffect(() => {
     setEnabled(config.enabled)
@@ -203,85 +162,6 @@ export function MaintenanceSettings() {
               style={{ transform: enabled ? 'translateX(28px)' : 'translateX(0)' }}
             />
           </button>
-        </div>
-      </GlassCard>
-
-      {/* Qub.ai Rebranding Announcement Setting */}
-      <GlassCard hoverEffect={false}>
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className={cn(
-              'w-10 h-10 rounded-xl flex items-center justify-center transition-colors',
-              rebrandingEnabled
-                ? 'bg-[#7165F5]/10 border border-[#7165F5]/25 text-[#7165F5]'
-                : 'bg-white/5 border border-white/10 text-[var(--text-muted)]'
-            )}>
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div className="max-w-xl">
-              <div className="flex items-center gap-2.5">
-                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Qub.ai Rebranding Announcement
-                </h3>
-                <span className={cn(
-                  'text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border transition-colors',
-                  rebrandingEnabled
-                    ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                    : 'text-[var(--text-muted)] bg-white/5 border-white/10'
-                )}>
-                  {rebrandingEnabled ? 'Enabled' : 'Disabled'}
-                </span>
-              </div>
-              <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                Display a one-time announcement introducing the Qub.ai brand to eligible authenticated users after 60 seconds of active usage.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Preview Button */}
-            <button
-              type="button"
-              onClick={() => useAnnouncementStore.getState().previewPopup()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:opacity-90"
-              style={{
-                borderColor: 'var(--border)',
-                color: 'var(--text-secondary)',
-                backgroundColor: 'var(--hover)',
-              }}
-              title="Preview the announcement popup"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span>Preview</span>
-            </button>
-
-            {/* Single Toggle Switch */}
-            <button
-              type="button"
-              onClick={handleToggleRebranding}
-              disabled={rebrandingSaving || !canEdit}
-              className={cn(
-                'relative w-14 h-7 rounded-full shrink-0 transition-colors duration-300',
-                (!canEdit || rebrandingSaving) && 'opacity-60 cursor-not-allowed'
-              )}
-              style={{
-                background: rebrandingEnabled ? '#7165F5' : 'var(--hover)',
-                border: `1px solid ${rebrandingEnabled ? 'rgba(113,101,245,0.5)' : 'var(--border)'}`,
-              }}
-              role="switch"
-              aria-checked={rebrandingEnabled}
-              aria-label="Toggle Qub.ai Rebranding Announcement"
-            >
-              <span
-                className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 flex items-center justify-center"
-                style={{ transform: rebrandingEnabled ? 'translateX(28px)' : 'translateX(0)' }}
-              >
-                {rebrandingSaving && (
-                  <div className="w-3 h-3 border-2 border-[#7165F5]/30 border-t-[#7165F5] rounded-full animate-spin" />
-                )}
-              </span>
-            </button>
-          </div>
         </div>
       </GlassCard>
 

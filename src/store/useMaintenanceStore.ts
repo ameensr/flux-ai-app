@@ -19,7 +19,6 @@ export interface MaintenanceConfig {
   show_branding: boolean
   support_email: string
   custom_message: string | null
-  rebranding_announcement_enabled?: boolean
   updated_by: string | null
   updated_at: string
 }
@@ -37,7 +36,6 @@ const DEFAULT_CONFIG: MaintenanceConfig = {
   show_branding: true,
   support_email: 'support@company.com',
   custom_message: null,
-  rebranding_announcement_enabled: false,
   updated_by: null,
   updated_at: new Date().toISOString(),
 }
@@ -83,7 +81,6 @@ export const useMaintenanceStore = create<MaintenanceStore>((set, get) => ({
             show_branding: data.show_branding ?? true,
             support_email: data.support_email || DEFAULT_CONFIG.support_email,
             custom_message: data.custom_message,
-            rebranding_announcement_enabled: data.rebranding_announcement_enabled ?? false,
             updated_by: data.updated_by,
             updated_at: data.updated_at,
           },
