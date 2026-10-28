@@ -1,8 +1,6 @@
 // src/modules/ProjectPulse/projectPulseService.ts
 
 import { fetchProjects as fetchProjectHubProjects } from '@/modules/ProjectHub/projectService'
-import { fetchReleaseTasks } from '@/modules/ReleaseTaskTracker/releaseTrackerService'
-import { fetchSupportIssues } from '@/modules/SupportIssueTracker/supportTrackerService'
 import { AIService } from '@/services/ai/ai-service'
 import type { ProjectWithMembers } from '@/modules/ProjectHub/types'
 import type { ReleaseTask } from '@/modules/ReleaseTaskTracker/types'
@@ -468,25 +466,74 @@ export async function fetchAIRiskSummary(
 }
 
 /**
+ * Lightweight fetch for dashboard - only gets active/recent items with limits.
+ * This prevents loading thousands of records on dashboard load.
+ */
+async function fetchDashboardReleaseTasks(projectIds: string[]): Promise<ReleaseTask[]> {
+  if (projectIds.length === 0) return []
+  
+  try {
+    const { data, error } = await (await import('@/lib/supabase')).supabase
+      .from('release_tasks')
+      .select('*')
+      .eq('is_deleted', false)
+      .in('project_id', projectIds)
+      .in('task_status', ['Not Started', 'Assigned', 'In Progress', 'Blocked', 'In Review'])
+      .order('updated_at', { ascending: false })
+      .limit(200)
+    
+    if (error) throw error
+    return (data || []) as ReleaseTask[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchDashboardSupportIssues(projectIds: string[]): Promise<SupportIssue[]> {
+  if (projectIds.length === 0) return []
+  
+  try {
+    const { data, error } = await (await import('@/lib/supabase')).supabase
+      .from('support_issues')
+      .select('*')
+      .in('project_id', projectIds)
+      .in('testing_status', ['Not Started', 'Assigned', 'In Testing', 'Blocked', 'Retesting'])
+      .order('updated_at', { ascending: false })
+      .limit(200)
+    
+    if (error) throw error
+    return (data || []) as SupportIssue[]
+  } catch {
+    return []
+  }
+}
+
+/**
  * Main coordinator function to fetch and compute Project Pulse data.
+ * Optimized for dashboard - only fetches active/incomplete items.
  */
 export async function loadProjectPulseData(ctx: ScopeContext, canUseAI: boolean) {
-  // 1. Fetch from single authoritative sources
-  const [allProjects, allTasks, allIssues] = await Promise.all([
-    fetchProjectHubProjects().catch(() => []),
-    fetchReleaseTasks([]).catch(() => []),
-    fetchSupportIssues([]).catch(() => []),
+  // 1. Fetch projects first (needed for scoping)
+  const allProjects = await fetchProjectHubProjects().catch(() => [])
+  
+  // 2. Scope projects by role and membership
+  const scopedProjects = scopeProjects(allProjects, ctx)
+  const scopedProjectIds = scopedProjects.map(p => p.id).filter(Boolean)
+  
+  // 3. Fetch only active/incomplete tasks and issues (with limits)
+  const [allTasks, allIssues] = await Promise.all([
+    fetchDashboardReleaseTasks(scopedProjectIds),
+    fetchDashboardSupportIssues(scopedProjectIds),
   ])
 
-  // 2. Scope by role and membership
-  const scopedProjects = scopeProjects(allProjects, ctx)
+  // 4. Apply role-based scoping
   const scopedTasks = scopeReleaseTasks(allTasks, scopedProjects, ctx)
   const scopedIssues = scopeSupportIssues(allIssues, scopedProjects, ctx)
 
-  // 3. Compute counters
+  // 5. Compute counters
   const summary = calculateProjectPulseSummary(scopedProjects, scopedTasks, scopedIssues)
 
-  // 4. Generate AI Risk Summary
+  // 6. Generate AI Risk Summary
   const risks = await fetchAIRiskSummary(scopedProjects, scopedTasks, scopedIssues, canUseAI)
 
   return {

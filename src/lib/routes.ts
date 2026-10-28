@@ -65,9 +65,12 @@ export const ROUTES = {
   // Release Task Tracker Module
   releaseTracker: '/release-tracker',
 
+  // StoryPot Module
+  storyPot: '/story-pot',
+
   // QA Weekly Report Config
   qaReportConfig: '/qa-report/configuration', // Project Configurations (name/code/description/status)
-  qaReportDropdownConfig: '/qa-report/dropdown-configuration', // Testing Status / Priority master dropdown lists
+
 
   // Project Hub — Centralized Dropdown Configuration
   // Route: /project-hub/:projectId/dropdown-config
@@ -85,7 +88,7 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.writingAssistant]: 'writing-assistant',
   [ROUTES.qaReport]: 'qa-report',
   [ROUTES.qaReportConfig]: 'qa-report',
-  [ROUTES.qaReportDropdownConfig]: 'qa-report',
+
   [ROUTES.reportPreview]: 'qa-report',
   [ROUTES.settings]: 'settings',
   [ROUTES.adminAnnouncements]: 'admin',
@@ -106,6 +109,7 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.bugStatus]: 'bug-status',
   [ROUTES.supportTracker]: 'support-tracker',
   [ROUTES.releaseTracker]: 'release-tracker',
+  [ROUTES.storyPot]: 'story-pot',
   // project dropdown config is nested under project-hub
 }
 

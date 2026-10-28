@@ -104,6 +104,16 @@ export function AddEditReleaseTaskModal({
   useEffect(() => {
     if (!isOpen) { submitRef.current = false; return }
 
+    // Check for StoryPot prefill data
+    const prefillRaw = sessionStorage.getItem('storypot_prefill_release')
+    let prefillData: any = null
+    if (prefillRaw && !taskToEdit) {
+      try {
+        prefillData = JSON.parse(prefillRaw)
+        sessionStorage.removeItem('storypot_prefill_release')
+      } catch { /* ignore */ }
+    }
+
     if (taskToEdit) {
       setProjectId(taskToEdit.project_id || products[0]?.id || '')
       setReleaseVersion(taskToEdit.release_version || 'Release 1.0')
@@ -133,16 +143,16 @@ export function AddEditReleaseTaskModal({
         'Release 1.0'
 
       setProjectId(firstProject?.id || '')
-      setReleaseVersion(defaultRel)
+      setReleaseVersion(prefillData?.release_version || defaultRel)
       setTaskId(generateNextTaskId(tasks))
-      setDescription('')
-      setPriority('Medium')
-      setReceivedDateTime('')
+      setDescription(prefillData?.description || '')
+      setPriority(prefillData?.priority || 'Medium')
+      setReceivedDateTime(prefillData?.received_date_time || '')
       setStartDate(new Date().toISOString().split('T')[0])
       setActualEndDate('')
       const defaultAssignee = dropdownConfigs.assigned_to.find(a => a.is_active)
       setAssignedUserId(defaultAssignee?.value || '')
-      setAssignedName(defaultAssignee?.label || 'Unassigned')
+      setAssignedName(prefillData?.assigned_to_name || defaultAssignee?.label || 'Unassigned')
       setTestDesignEst(0)
       setDataPrepEst(0)
       setFunctionalTestingEst(8)
@@ -151,7 +161,7 @@ export function AddEditReleaseTaskModal({
       setLockedBy(null)
       setLockedAt(null)
       setTaskStatus('Not Started')
-      setComments('')
+      setComments(prefillData?.comments || '')
     }
     setErrors({})
     // eslint-disable-next-line react-hooks/exhaustive-deps

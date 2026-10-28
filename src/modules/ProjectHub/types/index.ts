@@ -4,6 +4,17 @@
 export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'archived'
 export type ProjectRole = 'owner' | 'lead' | 'member' | 'viewer'
 
+export interface OpenProjectConfig {
+  openproject_url?: string
+  openproject_api_key?: string
+  openproject_project_id?: string
+}
+
+export interface ProjectMetadata {
+  openproject?: OpenProjectConfig
+  [key: string]: unknown
+}
+
 export interface Project {
   id: string
   name: string
@@ -14,7 +25,7 @@ export interface Project {
   target_end_date: string | null
   actual_end_date: string | null
   tags: string[] | null
-  metadata: Record<string, any>
+  metadata: ProjectMetadata
   created_by: string | null
   created_at: string
   updated_at: string

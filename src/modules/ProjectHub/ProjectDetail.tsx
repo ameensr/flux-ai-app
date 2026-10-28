@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Edit, Archive, Trash2, Users, Calendar, Tag, Clock, FolderKanban, Settings2 } from 'lucide-react'
+import { ArrowLeft, Edit, Archive, Trash2, Users, Calendar, Tag, Clock, FolderKanban, Settings2, Link2 } from 'lucide-react'
 import { ProjectDataArchive } from './components/ProjectDataArchive'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
@@ -19,6 +19,8 @@ import { ProjectMembersList } from './components/ProjectMembersList'
 import { AddMemberModal } from './components/AddMemberModal'
 import { EditProjectModal } from './components/EditProjectModal'
 import { DeleteProjectModal } from './components/DeleteProjectModal'
+import { OpenProjectConfigModal } from './components/OpenProjectConfigModal'
+import { OpenProjectPanel } from './components/OpenProjectPanel'
 
 export function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -33,6 +35,7 @@ export function ProjectDetail() {
   const [showAddMember, setShowAddMember] = useState(false)
   const [showEditProject, setShowEditProject] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showOpenProjectConfig, setShowOpenProjectConfig] = useState(false)
 
   const canEdit = can('project-hub', 'can_edit')
   const canDelete = can('project-hub', 'can_delete')
@@ -196,6 +199,16 @@ export function ProjectDetail() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {canEdit && (
+            <button
+              onClick={() => setShowOpenProjectConfig(true)}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--text-primary)] hover:bg-[var(--hover)] transition-all font-bold text-sm uppercase tracking-wider"
+              title="Configure OpenProject Integration"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              OpenProject
+            </button>
+          )}
           {canManageDropdownConfig && (
             <button
               onClick={() => navigate(`${ROUTES.projectHub}/${project.id}/dropdown-config`)}
@@ -393,6 +406,12 @@ export function ProjectDetail() {
         />
       )}
 
+      {/* OpenProject Integration Panel */}
+      <OpenProjectPanel
+        project={project}
+        onConfigureClick={() => setShowOpenProjectConfig(true)}
+      />
+
       {/* Project Data Archive section */}
       <ProjectDataArchive project={project} />
 
@@ -415,6 +434,18 @@ export function ProjectDetail() {
           projectId={project.id}
           onClose={() => setShowDeleteModal(false)}
           onConfirm={handleDeleteConfirm}
+        />
+      )}
+
+      {/* OpenProject Config Modal */}
+      {showOpenProjectConfig && project && (
+        <OpenProjectConfigModal
+          project={project}
+          onClose={() => setShowOpenProjectConfig(false)}
+          onSuccess={() => {
+            setShowOpenProjectConfig(false)
+            loadProject()
+          }}
         />
       )}
     </div>

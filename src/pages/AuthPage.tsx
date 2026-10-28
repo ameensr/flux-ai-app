@@ -362,36 +362,48 @@ function FloatingParticles() {
   )
 }
 
-// ── Input Focus Particle Burst (NEW) ──────────────────────────────────────────
+// ── Input Focus Ring Pulse (smooth glow effect on focus) ──────────────────────
 
-function ParticleBurst({ x, y, active }: { x: number; y: number; active: boolean }) {
-  const particles = Array.from({ length: 12 }, (_, i) => ({
-    id: i,
-    angle: (i * 360) / 12,
-  }))
+function InputFocusRing({ inputRef, active, color = 'var(--accent)' }: { 
+  inputRef: React.RefObject<HTMLInputElement>; 
+  active: boolean;
+  color?: string;
+}) {
+  const [rect, setRect] = useState<DOMRect | null>(null)
 
-  if (!active) return null
+  useEffect(() => {
+    if (active && inputRef.current) {
+      setRect(inputRef.current.getBoundingClientRect())
+    }
+  }, [active, inputRef])
+
+  if (!active || !rect) return null
 
   return (
-    <div className="absolute pointer-events-none" style={{ left: x, top: y }}>
-      {particles.map((p) => (
-        <motion.div
-          key={p.id}
-          className="absolute w-1.5 h-1.5 rounded-full bg-accent"
-          initial={{ x: 0, y: 0, opacity: 1, scale: 0 }}
-          animate={{
-            x: Math.cos((p.angle * Math.PI) / 180) * 40,
-            y: Math.sin((p.angle * Math.PI) / 180) * 40,
-            opacity: 0,
-            scale: [0, 1, 0],
-          }}
-          transition={{
-            duration: 0.8,
-            ease: "easeOut",
-          }}
-        />
-      ))}
-    </div>
+    <motion.div
+      className="fixed pointer-events-none z-50"
+      style={{
+        left: rect.left - 4,
+        top: rect.top - 4,
+        width: rect.width + 8,
+        height: rect.height + 8,
+        borderRadius: 20,
+      }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ 
+        opacity: [0, 0.6, 0],
+        scale: [0.98, 1.02, 1.05],
+      }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+    >
+      <div 
+        className="w-full h-full rounded-[20px]"
+        style={{
+          background: `linear-gradient(135deg, ${color}40, ${color}20)`,
+          boxShadow: `0 0 20px ${color}30`,
+        }}
+      />
+    </motion.div>
   )
 }
 
@@ -726,7 +738,9 @@ export const AuthPage = () => {
   const [password, setPassword] = useState('')
   const [fieldError, setFieldError] = useState<{ email?: string; password?: string; general?: string }>({})
   const [focusedField, setFocusedField] = useState<string | null>(null)
-  const [particleBurst, setParticleBurst] = useState<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false })
+  const [focusTrigger, setFocusTrigger] = useState(0)
+  const emailInputRef = useRef<HTMLInputElement>(null)
+  const passwordInputRef = useRef<HTMLInputElement>(null)
 
   // Lazy Panda integration
   const pandaSendRef = useRef<((event: PandaEvent) => void) | null>(null)
@@ -759,14 +773,8 @@ export const AuthPage = () => {
 
   const clearErrors = () => setFieldError({})
 
-  const triggerParticleBurst = (e: React.FocusEvent<HTMLInputElement>) => {
-    const rect = e.target.getBoundingClientRect()
-    setParticleBurst({
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2,
-      active: true,
-    })
-    setTimeout(() => setParticleBurst(prev => ({ ...prev, active: false })), 100)
+  const triggerFocusEffect = () => {
+    setFocusTrigger(prev => prev + 1)
   }
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -907,8 +915,15 @@ export const AuthPage = () => {
       <FloatingParticles />
       <WaveAnimation />
 
-      {/* Particle burst effect */}
-      <ParticleBurst {...particleBurst} />
+      {/* Smooth focus ring effects */}
+      <AnimatePresence>
+        {focusedField === 'email' && (
+          <InputFocusRing key={`email-${focusTrigger}`} inputRef={emailInputRef} active={true} color="#6366f1" />
+        )}
+        {focusedField === 'password' && (
+          <InputFocusRing key={`password-${focusTrigger}`} inputRef={passwordInputRef} active={true} color="#8b5cf6" />
+        )}
+      </AnimatePresence>
 
       {/* 2-Column Layout: Assistant Panel (left half) + Auth Card (right half) */}
       <div className="relative z-10 h-full grid grid-cols-1 lg:grid-cols-2">
@@ -979,44 +994,91 @@ export const AuthPage = () => {
                       <div className="space-y-1.5">
                         <motion.div
                           className="relative group"
-                          whileTap={{ scale: 0.995 }}
+                          whileTap={{ scale: 0.998 }}
+                          animate={{
+                            y: focusedField === 'email' ? -2 : 0,
+                          }}
+                          transition={{ type: "spring", stiffness: 400, damping: 25 }}
                         >
-                          {/* Focus glow effect */}
-                          <AnimatePresence>
-                            {focusedField === 'email' && (
-                              <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="absolute -inset-1 rounded-2xl bg-accent/10 blur-md"
-                              />
-                            )}
-                          </AnimatePresence>
-                          <div className={cn(
-                            "absolute left-4 top-1/2 -translate-y-1/2 transition-all duration-300 z-10 pointer-events-none",
-                            fieldError.email ? "text-red-400" : focusedField === 'email' ? "text-accent scale-110" : "text-text-muted"
-                          )}>
+                          {/* Animated glow ring */}
+                          <motion.div
+                            className="absolute -inset-[2px] rounded-2xl pointer-events-none"
+                            style={{
+                              background: fieldError.email
+                                ? 'linear-gradient(135deg, #ef4444, #f87171, #ef4444)'
+                                : 'linear-gradient(135deg, var(--accent), #3b82f6, #8b5cf6, var(--accent))',
+                              backgroundSize: '300% 300%',
+                            }}
+                            initial={{ opacity: 0 }}
+                            animate={{
+                              opacity: focusedField === 'email' ? 0.8 : 0,
+                              backgroundPosition: focusedField === 'email' ? ['0% 50%', '100% 50%', '0% 50%'] : '0% 50%',
+                            }}
+                            transition={{
+                              opacity: { type: "spring", stiffness: 300, damping: 20 },
+                              backgroundPosition: { duration: 3, repeat: Infinity, ease: "linear" },
+                            }}
+                          />
+                          {/* Outer glow pulse */}
+                          <motion.div
+                            className="absolute -inset-2 rounded-3xl pointer-events-none"
+                            style={{
+                              background: fieldError.email
+                                ? 'radial-gradient(circle, rgba(239,68,68,0.3) 0%, transparent 70%)'
+                                : 'radial-gradient(circle, rgba(99,102,241,0.3) 0%, transparent 70%)',
+                              filter: 'blur(8px)',
+                            }}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{
+                              opacity: focusedField === 'email' ? [0.5, 0.8, 0.5] : 0,
+                              scale: focusedField === 'email' ? [0.95, 1.02, 0.95] : 0.8,
+                            }}
+                            transition={{
+                              opacity: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+                              scale: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+                            }}
+                          />
+                          {/* Icon with spring animation */}
+                          <motion.div
+                            className="absolute left-4 top-1/2 z-10 pointer-events-none"
+                            animate={{
+                              y: '-50%',
+                              scale: focusedField === 'email' ? 1.15 : 1,
+                              rotate: focusedField === 'email' ? [0, -10, 10, 0] : 0,
+                              color: fieldError.email ? '#f87171' : focusedField === 'email' ? 'var(--accent)' : '#6b7280',
+                            }}
+                            transition={{
+                              scale: { type: "spring", stiffness: 500, damping: 15 },
+                              rotate: { duration: 0.5, ease: "easeOut" },
+                              color: { duration: 0.2 },
+                            }}
+                          >
                             <Mail className="w-4 h-4" />
-                          </div>
-                          <input
+                          </motion.div>
+                          <motion.input
+                            ref={emailInputRef}
                             type="email"
                             placeholder="Email address"
                             value={email}
                             tabIndex={1}
                             autoComplete="email"
-                            onFocus={(e) => {
+                            onFocus={() => {
                               setFocusedField('email');
+                              triggerFocusEffect();
                               pandaSend({ type: 'EMAIL_FOCUS' });
-                              triggerParticleBurst(e);
                             }}
                             onBlur={() => { setFocusedField(null); pandaSend({ type: 'EMAIL_BLUR' }) }}
                             onChange={(e) => { setEmail(e.target.value); pandaSend({ type: 'EMAIL_TYPING' }); if (fieldError.email) clearErrors() }}
                             className={cn(
-                              "relative w-full bg-white/5 border rounded-2xl py-4 pl-12 pr-4 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-4 transition-all duration-300",
+                              "relative w-full bg-white/5 border rounded-2xl py-4 pl-12 pr-4 text-sm text-text-primary placeholder:text-text-muted focus:outline-none",
                               fieldError.email
-                                ? "border-red-500/50 focus:border-red-500/70 focus:ring-red-500/10"
-                                : "border-border focus:border-accent/50 focus:ring-accent/10"
+                                ? "border-red-500/50"
+                                : "border-border"
                             )}
+                            animate={{
+                              backgroundColor: focusedField === 'email' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.05)',
+                            }}
+                            transition={{ duration: 0.3 }}
                           />
                         </motion.div>
                         <AnimatePresence>
@@ -1038,43 +1100,91 @@ export const AuthPage = () => {
                       <div className="space-y-1.5">
                         <motion.div
                           className="relative group"
-                          whileTap={{ scale: 0.995 }}
+                          whileTap={{ scale: 0.998 }}
+                          animate={{
+                            y: focusedField === 'password' ? -2 : 0,
+                          }}
+                          transition={{ type: "spring", stiffness: 400, damping: 25 }}
                         >
-                          <AnimatePresence>
-                            {focusedField === 'password' && (
-                              <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="absolute -inset-1 rounded-2xl bg-accent/10 blur-md"
-                              />
-                            )}
-                          </AnimatePresence>
-                          <div className={cn(
-                            "absolute left-4 top-1/2 -translate-y-1/2 transition-all duration-300 z-10 pointer-events-none",
-                            fieldError.password ? "text-red-400" : focusedField === 'password' ? "text-accent scale-110" : "text-text-muted"
-                          )}>
+                          {/* Animated glow ring */}
+                          <motion.div
+                            className="absolute -inset-[2px] rounded-2xl pointer-events-none"
+                            style={{
+                              background: fieldError.password
+                                ? 'linear-gradient(135deg, #ef4444, #f87171, #ef4444)'
+                                : 'linear-gradient(135deg, #8b5cf6, #a855f7, #ec4899, #8b5cf6)',
+                              backgroundSize: '300% 300%',
+                            }}
+                            initial={{ opacity: 0 }}
+                            animate={{
+                              opacity: focusedField === 'password' ? 0.8 : 0,
+                              backgroundPosition: focusedField === 'password' ? ['0% 50%', '100% 50%', '0% 50%'] : '0% 50%',
+                            }}
+                            transition={{
+                              opacity: { type: "spring", stiffness: 300, damping: 20 },
+                              backgroundPosition: { duration: 3, repeat: Infinity, ease: "linear" },
+                            }}
+                          />
+                          {/* Outer glow pulse */}
+                          <motion.div
+                            className="absolute -inset-2 rounded-3xl pointer-events-none"
+                            style={{
+                              background: fieldError.password
+                                ? 'radial-gradient(circle, rgba(239,68,68,0.3) 0%, transparent 70%)'
+                                : 'radial-gradient(circle, rgba(139,92,246,0.3) 0%, transparent 70%)',
+                              filter: 'blur(8px)',
+                            }}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{
+                              opacity: focusedField === 'password' ? [0.5, 0.8, 0.5] : 0,
+                              scale: focusedField === 'password' ? [0.95, 1.02, 0.95] : 0.8,
+                            }}
+                            transition={{
+                              opacity: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+                              scale: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+                            }}
+                          />
+                          {/* Icon with spring animation */}
+                          <motion.div
+                            className="absolute left-4 top-1/2 z-10 pointer-events-none"
+                            animate={{
+                              y: '-50%',
+                              scale: focusedField === 'password' ? 1.15 : 1,
+                              rotate: focusedField === 'password' ? [0, -15, 15, -5, 0] : 0,
+                              color: fieldError.password ? '#f87171' : focusedField === 'password' ? '#8b5cf6' : '#6b7280',
+                            }}
+                            transition={{
+                              scale: { type: "spring", stiffness: 500, damping: 15 },
+                              rotate: { duration: 0.6, ease: "easeOut" },
+                              color: { duration: 0.2 },
+                            }}
+                          >
                             <Lock className="w-4 h-4" />
-                          </div>
-                          <input
+                          </motion.div>
+                          <motion.input
+                            ref={passwordInputRef}
                             type={showPassword ? "text" : "password"}
                             placeholder="Password"
                             value={password}
                             tabIndex={2}
                             autoComplete={isLogin ? "current-password" : "new-password"}
-                            onFocus={(e) => {
+                            onFocus={() => {
                               setFocusedField('password');
+                              triggerFocusEffect();
                               pandaSend({ type: 'PASSWORD_FOCUS' });
-                              triggerParticleBurst(e);
                             }}
                             onBlur={() => { setFocusedField(null); pandaSend({ type: 'PASSWORD_BLUR' }) }}
                             onChange={(e) => { setPassword(e.target.value); if (fieldError.password) clearErrors() }}
                             className={cn(
-                              "relative w-full bg-white/5 border rounded-2xl py-4 pl-12 pr-12 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-4 transition-all duration-300",
+                              "relative w-full bg-white/5 border rounded-2xl py-4 pl-12 pr-12 text-sm text-text-primary placeholder:text-text-muted focus:outline-none",
                               fieldError.password
-                                ? "border-red-500/50 focus:border-red-500/70 focus:ring-red-500/10"
-                                : "border-border focus:border-accent/50 focus:ring-accent/10"
+                                ? "border-red-500/50"
+                                : "border-border"
                             )}
+                            animate={{
+                              backgroundColor: focusedField === 'password' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.05)',
+                            }}
+                            transition={{ duration: 0.3 }}
                           />
                           <CreativePasswordToggle
                             showPassword={showPassword}

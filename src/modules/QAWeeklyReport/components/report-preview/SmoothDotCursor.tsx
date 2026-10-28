@@ -35,6 +35,26 @@ export const SmoothDotCursor: React.FC<SmoothDotCursorProps> = ({ enabled, theme
     const cursorEl = cursorRef.current
     if (!cursorEl) return
 
+    // Add global class to hide system cursor everywhere (including portals/modals)
+    document.documentElement.classList.add('qaly-custom-cursor-active')
+
+    // Inject global style into head to ensure it has highest priority
+    const styleId = 'qaly-custom-cursor-style'
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style')
+      style.id = styleId
+      style.textContent = `
+        html.qaly-custom-cursor-active,
+        html.qaly-custom-cursor-active body,
+        html.qaly-custom-cursor-active *,
+        html.qaly-custom-cursor-active *::before,
+        html.qaly-custom-cursor-active *::after {
+          cursor: none !important;
+        }
+      `
+      document.head.appendChild(style)
+    }
+
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     let targetX = -100
@@ -43,13 +63,17 @@ export const SmoothDotCursor: React.FC<SmoothDotCursorProps> = ({ enabled, theme
     let currentY = -100
     let lastX = -100
     let lastY = -100
+    let velocityX = 0
+    let velocityY = 0
     let isMoving = false
     let isVisible = false
     let stopTimeout: number | null = null
     let rafId: number | null = null
+    let lastTime = performance.now()
 
-    // Snappy, agile lerp factor: silky smooth without sluggish trailing
-    const LERP_FACTOR = prefersReducedMotion ? 1 : 0.36
+    // Smoother lerp with velocity-based adaptive smoothing
+    const BASE_LERP = prefersReducedMotion ? 1 : 0.18
+    const MAX_LERP = prefersReducedMotion ? 1 : 0.35
 
     const handlePointerMove = (e: PointerEvent) => {
       if (e.pointerType === 'touch') return
@@ -119,14 +143,31 @@ export const SmoothDotCursor: React.FC<SmoothDotCursorProps> = ({ enabled, theme
       cursorEl.style.opacity = '1'
     }
 
-    // Animation loop for fluid 60-144fps tracking
+    // Animation loop for fluid 60-144fps tracking with adaptive smoothing
     const updateCursor = () => {
+      const now = performance.now()
+      const dt = Math.min((now - lastTime) / 16.67, 2) // Normalize to ~60fps, cap at 2x
+      lastTime = now
+
       if (prefersReducedMotion) {
         currentX = targetX
         currentY = targetY
       } else {
-        currentX += (targetX - currentX) * LERP_FACTOR
-        currentY += (targetY - currentY) * LERP_FACTOR
+        // Calculate velocity for adaptive lerp
+        const dx = targetX - currentX
+        const dy = targetY - currentY
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        
+        // Adaptive lerp: faster when far, smoother when close
+        const adaptiveLerp = BASE_LERP + Math.min(distance / 200, 1) * (MAX_LERP - BASE_LERP)
+        const smoothedLerp = 1 - Math.pow(1 - adaptiveLerp, dt)
+        
+        // Apply velocity smoothing for extra fluidity
+        velocityX = velocityX * 0.7 + dx * smoothedLerp * 0.3
+        velocityY = velocityY * 0.7 + dy * smoothedLerp * 0.3
+        
+        currentX += dx * smoothedLerp + velocityX * 0.15
+        currentY += dy * smoothedLerp + velocityY * 0.15
       }
 
       cursorEl.style.transform = `translate3d(${currentX}px, ${currentY}px, 0) translate(-50%, -50%)`
@@ -151,6 +192,10 @@ export const SmoothDotCursor: React.FC<SmoothDotCursorProps> = ({ enabled, theme
       window.removeEventListener('pointerup', handlePointerUp)
       document.documentElement.removeEventListener('mouseleave', handleMouseLeave)
       document.documentElement.removeEventListener('mouseenter', handleMouseEnter)
+      // Remove global cursor hiding class and style
+      document.documentElement.classList.remove('qaly-custom-cursor-active')
+      const style = document.getElementById('qaly-custom-cursor-style')
+      if (style) style.remove()
     }
   }, [enabled])
 
@@ -161,11 +206,6 @@ export const SmoothDotCursor: React.FC<SmoothDotCursorProps> = ({ enabled, theme
   return createPortal(
     <>
       <style>{`
-        .qaly-report-preview-scope.custom-cursor-active,
-        .qaly-report-preview-scope.custom-cursor-active * {
-          cursor: none !important;
-        }
-
         .qaly-smooth-dot-cursor {
           position: fixed;
           top: 0;

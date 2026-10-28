@@ -63,6 +63,16 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
   useEffect(() => {
     if (!isOpen) { submitRef.current = false; return }
 
+    // Check for StoryPot prefill data
+    const prefillRaw = sessionStorage.getItem('storypot_prefill_support')
+    let prefillData: any = null
+    if (prefillRaw && !issueToEdit) {
+      try {
+        prefillData = JSON.parse(prefillRaw)
+        sessionStorage.removeItem('storypot_prefill_support')
+      } catch { /* ignore */ }
+    }
+
     if (issueToEdit) {
       setProjectId(issueToEdit.project_id || products[0]?.id || '')
       setIssueId(issueToEdit.issue_id || '')
@@ -97,23 +107,23 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
       const nextNum = 1024 + currentMax + 1
       setProjectId(products[0]?.id || '')
       setIssueId(`SUP-${nextNum}`)
-      setDescription('')
-      setReceivedDate(new Date().toISOString().split('T')[0])
-      setReceivedTime('')
-      setIsQaMiss('Not Applicable')
+      setDescription(prefillData?.description || '')
+      setReceivedDate(prefillData?.received_date || new Date().toISOString().split('T')[0])
+      setReceivedTime(prefillData?.received_time || '')
+      setIsQaMiss(prefillData?.is_qa_miss || 'Not Applicable')
       setTestCaseCount(0)
       setStartDate('')
       setPlannedEndDate('')
       setActualEndDate('')
-      setTesterName(dropdownConfigs.testers.find(t => t.is_active)?.value?.toUpperCase() || 'Unassigned')
+      setTesterName(prefillData?.tester_name?.toUpperCase() || dropdownConfigs.testers.find(t => t.is_active)?.value?.toUpperCase() || 'Unassigned')
       setEstimatedHours(0)
       setActualHours(0)
       setIsEstLocked(false)
       setLockedBy(null)
       setLockedAt(null)
       setBlockedHours(0)
-      setTestingStatus('Not Started')
-      setComments('')
+      setTestingStatus(prefillData?.testing_status || 'Not Started')
+      setComments(prefillData?.comments || '')
       setRetestingStatus('Not Required')
       setRetestingEstHrs(0)
     }

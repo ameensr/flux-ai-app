@@ -359,6 +359,20 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
     ],
     description: 'Enterprise QA & release task tracking system with manager dashboard and time logs'
   },
+
+  // ── StoryPot Module ─────────────────────────────────────────────────────────
+
+  'story-pot': {
+    moduleKey: 'story-pot',
+    moduleName: 'StoryPot',
+    supportedPermissions: [
+      'can_view',
+      'can_view_dashboard',
+      'can_export',
+      'can_import',
+    ],
+    description: 'View and manage OpenProject work packages across projects'
+  },
 }
 
 /**

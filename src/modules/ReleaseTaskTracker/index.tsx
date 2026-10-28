@@ -101,6 +101,23 @@ export function ReleaseTaskTracker() {
     }
   }, [searchParams, setFilters, setSelectedProduct])
 
+  // Handle StoryPot import
+  const [storyPotImportData, setStoryPotImportData] = useState<any[] | null>(null)
+  useEffect(() => {
+    if (searchParams.get('import') === 'storypot') {
+      const raw = sessionStorage.getItem('storypot_export_release')
+      if (raw) {
+        try {
+          const data = JSON.parse(raw)
+          if (Array.isArray(data) && data.length > 0) {
+            setStoryPotImportData(data)
+            sessionStorage.removeItem('storypot_export_release')
+          }
+        } catch { /* ignore */ }
+      }
+    }
+  }, [searchParams])
+
   const handleBulkDelete = async (ids: string[]) => {
     if (!canDelete) {
       toast({ variant: 'destructive', title: 'Permission Denied', description: 'You do not have permission to delete these records.' })
@@ -262,6 +279,52 @@ export function ReleaseTaskTracker() {
           )}
         </div>
       </div>
+
+      {/* ── StoryPot Import Panel ── */}
+      {storyPotImportData && storyPotImportData.length > 0 && (
+        <div className="rounded-xl border border-accent/30 bg-accent/5 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Rocket className="w-4 h-4 text-accent" />
+              <h3 className="text-sm font-semibold text-text-primary">StoryPot Import</h3>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent font-medium">
+                {storyPotImportData.length} {storyPotImportData.length === 1 ? 'item' : 'items'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStoryPotImportData(null)}
+              className="text-xs text-text-muted hover:text-text-primary"
+            >
+              Dismiss
+            </button>
+          </div>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {storyPotImportData.map((item, idx) => (
+              <div key={item.openproject_id || idx} className="flex items-center justify-between p-2.5 rounded-lg bg-surface border border-border/50">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-text-primary truncate">{item.description}</p>
+                  <p className="text-[11px] text-text-muted mt-0.5">
+                    OpenProject #{item.openproject_id} • {item.product_name || 'Unknown Product'} • {item.release_version || 'No Release'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTaskToEdit(null)
+                    sessionStorage.setItem('storypot_prefill_release', JSON.stringify(item))
+                    setIsAddEditOpen(true)
+                    setStoryPotImportData(prev => prev?.filter((_, i) => i !== idx) || null)
+                  }}
+                  className="ml-3 px-3 py-1.5 rounded-md text-xs font-medium bg-accent/20 text-accent hover:bg-accent/30 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Manager Dashboard ── */}
       {canViewDashboard ? (

@@ -82,7 +82,7 @@ export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () =>
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={prefersReducedMotion ? { duration: 0.15 } : { duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed inset-0 z-[70] cursor-pointer select-none"
+            className="fixed inset-0 z-[99999] cursor-pointer select-none"
             style={{
               backdropFilter: 'grayscale(55%) blur(2.5px) brightness(0.93)',
               WebkitBackdropFilter: 'grayscale(55%) blur(2.5px) brightness(0.93)',
@@ -99,7 +99,7 @@ export const PandaIdleNotification: React.FC<PandaIdleNotificationProps> = () =>
             animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
             exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.94 }}
             transition={prefersReducedMotion ? { duration: 0.2 } : { duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className={`fixed ${positionClass} z-[75] flex flex-col items-center select-none pointer-events-auto`}
+            className={`fixed ${positionClass} z-[100000] flex flex-col items-center select-none pointer-events-auto`}
             role="status"
             aria-live="polite"
           >

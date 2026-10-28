@@ -41,7 +41,7 @@ const TestCaseGenerator = lazy(() => import('@/modules/TestCaseGenerator').then(
 const WritingAssistant = lazy(() => import('@/modules/WritingAssistant').then(m => ({ default: m.WritingAssistant })))
 const QAWeeklyReport = lazy(() => import('@/modules/QAWeeklyReport').then(m => ({ default: m.QAWeeklyReport })))
 const QAReportConfig = lazy(() => import('@/modules/QAWeeklyReport/QAReportConfig').then(m => ({ default: m.QAReportConfig })))
-const QAReportDropdownConfig = lazy(() => import('@/modules/QAWeeklyReport/QAReportDropdownConfig').then(m => ({ default: m.QAReportDropdownConfig })))
+
 const ReportPreviewDashboard = lazy(() => import('@/modules/QAWeeklyReport/components/ReportPreviewDashboard').then(m => ({ default: m.ReportPreviewDashboard })))
 const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })))
 const AdminPanel = lazy(() => import('@/pages/AdminPanel').then(m => ({ default: m.AdminPanel })))
@@ -52,6 +52,7 @@ const RequireFullNameGate = lazy(() =>
 )
 const DailyUpdateReport = lazy(() => import('@/modules/DailyUpdateReport').then(m => ({ default: m.DailyUpdateReport })))
 const BugStatus = lazy(() => import('@/modules/BugStatus').then(m => ({ default: m.BugStatus })))
+const StoryPot = lazy(() => import('@/modules/StoryPot'))
 const SupportIssueTracker = lazy(() => import('@/modules/SupportIssueTracker').then(m => ({ default: m.SupportIssueTracker })))
 const ReleaseTaskTracker = lazy(() => import('@/modules/ReleaseTaskTracker').then(m => ({ default: m.ReleaseTaskTracker })))
 const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINews })))
@@ -407,12 +408,13 @@ export default function App() {
             <Route path={ROUTES.qaReport} element={<QAWeeklyReport />} />
             <Route path={ROUTES.dailyReport} element={<DailyUpdateReport />} />
             <Route path={ROUTES.bugStatus} element={<BugStatus />} />
+            <Route path={ROUTES.storyPot} element={<ProtectedRoute moduleKey="story-pot"><StoryPot /></ProtectedRoute>} />
             <Route path={ROUTES.supportTracker} element={<ProtectedRoute moduleKey="support-tracker"><SupportIssueTracker /></ProtectedRoute>} />
             <Route path="/support-issue-tracker" element={<Navigate to={ROUTES.supportTracker} replace />} />
             <Route path={ROUTES.releaseTracker} element={<ProtectedRoute moduleKey="release-tracker"><ReleaseTaskTracker /></ProtectedRoute>} />
             <Route path="/release-task-tracker" element={<Navigate to={ROUTES.releaseTracker} replace />} />
             <Route path={ROUTES.qaReportConfig} element={<QAReportConfig />} />
-            <Route path={ROUTES.qaReportDropdownConfig} element={<QAReportDropdownConfig />} />
+
             <Route path={ROUTES.aiNews} element={<AINews />} />
             <Route path={ROUTES.settings} element={<Settings />} />
             <Route path={ROUTES.admin} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
