@@ -82,6 +82,17 @@ function buildAuthHeader(apiKey: string): string {
   return `Basic ${btoa(`apikey:${apiKey}`)}`
 }
 
+// Check if we should use the proxy (production)
+function shouldUseProxy(): boolean {
+  return !import.meta.env.DEV
+}
+
+// Get the Supabase Edge Function URL for the proxy
+function getProxyUrl(): string {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
+  return `${supabaseUrl}/functions/v1/openproject-proxy`
+}
+
 function buildBaseUrl(url: string): string {
   const cleanUrl = url.replace(/\/$/, '')
   
@@ -93,6 +104,22 @@ function buildBaseUrl(url: string): string {
   return cleanUrl
 }
 
+// Make a proxied request to OpenProject API
+async function proxyFetch(
+  config: { openproject_url: string; openproject_api_key: string },
+  apiPath: string
+): Promise<Response> {
+  const proxyUrl = `${getProxyUrl()}?path=${encodeURIComponent(apiPath)}`
+  
+  return fetch(proxyUrl, {
+    headers: {
+      'x-openproject-url': config.openproject_url,
+      'x-openproject-api-key': config.openproject_api_key,
+      'Content-Type': 'application/json',
+    },
+  })
+}
+
 export async function testOpenProjectConnection(
   config: OpenProjectConfig
 ): Promise<{ success: boolean; message: string; user?: { name: string; email: string } }> {
@@ -102,9 +129,16 @@ export async function testOpenProjectConnection(
   }
 
   try {
-    const res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/users/me`, {
-      headers: { Authorization: buildAuthHeader(openproject_api_key) },
-    })
+    let res: Response
+    
+    if (shouldUseProxy()) {
+      res = await proxyFetch(config, '/api/v3/users/me')
+    } else {
+      res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/users/me`, {
+        headers: { Authorization: buildAuthHeader(openproject_api_key) },
+      })
+    }
+    
     if (!res.ok) {
       if (res.status === 401) return { success: false, message: 'Invalid API Key' }
       if (res.status === 403) return { success: false, message: 'Access forbidden. Check permissions.' }
@@ -116,7 +150,8 @@ export async function testOpenProjectConnection(
       message: `Connected as ${user.name || user.login}`,
       user: { name: user.name || user.login, email: user.email },
     }
-  } catch {
+  } catch (err) {
+    console.error('OpenProject connection error:', err)
     return { success: false, message: 'Failed to connect. Check the URL.' }
   }
 }
@@ -125,9 +160,14 @@ export async function fetchOpenProjectProjects(config: OpenProjectConfig): Promi
   const { openproject_url, openproject_api_key } = config
   if (!openproject_url || !openproject_api_key) return []
 
-  const res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/projects?pageSize=100`, {
-    headers: { Authorization: buildAuthHeader(openproject_api_key) },
-  })
+  let res: Response
+  if (shouldUseProxy()) {
+    res = await proxyFetch(config, '/api/v3/projects?pageSize=100')
+  } else {
+    res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/projects?pageSize=100`, {
+      headers: { Authorization: buildAuthHeader(openproject_api_key) },
+    })
+  }
   if (!res.ok) throw new Error('Failed to fetch projects')
   const data = await res.json()
   return data._embedded?.elements || []
@@ -179,13 +219,21 @@ export async function fetchWorkPackages(
     params.set('filters', JSON.stringify(Object.entries(apiFilters).map(([k, v]) => ({ [k]: v }))))
   }
 
-  const endpoint = openproject_project_id
-    ? `${baseUrl}/api/v3/projects/${openproject_project_id}/work_packages`
-    : `${baseUrl}/api/v3/work_packages`
+  const apiPath = openproject_project_id
+    ? `/api/v3/projects/${openproject_project_id}/work_packages?${params.toString()}`
+    : `/api/v3/work_packages?${params.toString()}`
 
-  const res = await fetch(`${endpoint}?${params.toString()}`, {
-    headers: { Authorization: buildAuthHeader(openproject_api_key) },
-  })
+  let res: Response
+  if (shouldUseProxy()) {
+    res = await proxyFetch(config, apiPath)
+  } else {
+    const endpoint = openproject_project_id
+      ? `${baseUrl}/api/v3/projects/${openproject_project_id}/work_packages`
+      : `${baseUrl}/api/v3/work_packages`
+    res = await fetch(`${endpoint}?${params.toString()}`, {
+      headers: { Authorization: buildAuthHeader(openproject_api_key) },
+    })
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '')
@@ -208,9 +256,14 @@ export async function fetchWorkPackageById(
   const { openproject_url, openproject_api_key } = config
   if (!openproject_url || !openproject_api_key) return null
 
-  const res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/work_packages/${workPackageId}`, {
-    headers: { Authorization: buildAuthHeader(openproject_api_key) },
-  })
+  let res: Response
+  if (shouldUseProxy()) {
+    res = await proxyFetch(config, `/api/v3/work_packages/${workPackageId}`)
+  } else {
+    res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/work_packages/${workPackageId}`, {
+      headers: { Authorization: buildAuthHeader(openproject_api_key) },
+    })
+  }
 
   if (!res.ok) {
     if (res.status === 404) return null
@@ -275,9 +328,14 @@ export async function fetchStatuses(config: OpenProjectConfig): Promise<{ id: nu
   const { openproject_url, openproject_api_key } = config
   if (!openproject_url || !openproject_api_key) return []
 
-  const res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/statuses`, {
-    headers: { Authorization: buildAuthHeader(openproject_api_key) },
-  })
+  let res: Response
+  if (shouldUseProxy()) {
+    res = await proxyFetch(config, '/api/v3/statuses')
+  } else {
+    res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/statuses`, {
+      headers: { Authorization: buildAuthHeader(openproject_api_key) },
+    })
+  }
   if (!res.ok) return []
 
   const data = await res.json()
@@ -291,9 +349,14 @@ export async function fetchTypes(config: OpenProjectConfig): Promise<{ id: numbe
   const { openproject_url, openproject_api_key } = config
   if (!openproject_url || !openproject_api_key) return []
 
-  const res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/types`, {
-    headers: { Authorization: buildAuthHeader(openproject_api_key) },
-  })
+  let res: Response
+  if (shouldUseProxy()) {
+    res = await proxyFetch(config, '/api/v3/types')
+  } else {
+    res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/types`, {
+      headers: { Authorization: buildAuthHeader(openproject_api_key) },
+    })
+  }
   if (!res.ok) return []
 
   const data = await res.json()
@@ -307,9 +370,14 @@ export async function fetchPriorities(config: OpenProjectConfig): Promise<{ id: 
   const { openproject_url, openproject_api_key } = config
   if (!openproject_url || !openproject_api_key) return []
 
-  const res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/priorities`, {
-    headers: { Authorization: buildAuthHeader(openproject_api_key) },
-  })
+  let res: Response
+  if (shouldUseProxy()) {
+    res = await proxyFetch(config, '/api/v3/priorities')
+  } else {
+    res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/priorities`, {
+      headers: { Authorization: buildAuthHeader(openproject_api_key) },
+    })
+  }
   if (!res.ok) return []
 
   const data = await res.json()
@@ -329,9 +397,14 @@ export async function fetchProjectMembers(
   const pid = projectId || openproject_project_id
   if (!pid) return []
 
-  const res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/projects/${pid}/memberships?pageSize=100`, {
-    headers: { Authorization: buildAuthHeader(openproject_api_key) },
-  })
+  let res: Response
+  if (shouldUseProxy()) {
+    res = await proxyFetch(config, `/api/v3/projects/${pid}/memberships?pageSize=100`)
+  } else {
+    res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/projects/${pid}/memberships?pageSize=100`, {
+      headers: { Authorization: buildAuthHeader(openproject_api_key) },
+    })
+  }
   if (!res.ok) return []
 
   const data = await res.json()
@@ -404,9 +477,14 @@ export async function fetchCustomFields(
   if (!openproject_url || !openproject_api_key) return []
 
   try {
-    const res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/custom_fields`, {
-      headers: { Authorization: buildAuthHeader(openproject_api_key) },
-    })
+    let res: Response
+    if (shouldUseProxy()) {
+      res = await proxyFetch(config, '/api/v3/custom_fields')
+    } else {
+      res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/custom_fields`, {
+        headers: { Authorization: buildAuthHeader(openproject_api_key) },
+      })
+    }
     if (!res.ok) return []
 
     const data = await res.json()
@@ -429,10 +507,15 @@ export async function fetchCustomFieldOptions(
   if (!openproject_url || !openproject_api_key) return []
 
   try {
-    const res = await fetch(
-      `${buildBaseUrl(openproject_url)}/api/v3/custom_fields/${customFieldId}/options`,
-      { headers: { Authorization: buildAuthHeader(openproject_api_key) } }
-    )
+    let res: Response
+    if (shouldUseProxy()) {
+      res = await proxyFetch(config, `/api/v3/custom_fields/${customFieldId}/options`)
+    } else {
+      res = await fetch(
+        `${buildBaseUrl(openproject_url)}/api/v3/custom_fields/${customFieldId}/options`,
+        { headers: { Authorization: buildAuthHeader(openproject_api_key) } }
+      )
+    }
     if (!res.ok) return []
 
     const data = await res.json()
@@ -483,9 +566,14 @@ async function fetchUserName(config: OpenProjectConfig, userHref: string): Promi
   
   try {
     // userHref is like "/api/v3/users/145"
-    const res = await fetch(`${buildBaseUrl(openproject_url)}${userHref}`, {
-      headers: { Authorization: buildAuthHeader(openproject_api_key) },
-    })
+    let res: Response
+    if (shouldUseProxy()) {
+      res = await proxyFetch(config, userHref)
+    } else {
+      res = await fetch(`${buildBaseUrl(openproject_url)}${userHref}`, {
+        headers: { Authorization: buildAuthHeader(openproject_api_key) },
+      })
+    }
     if (!res.ok) return 'Unknown'
     
     const user = await res.json()
@@ -505,10 +593,15 @@ export async function fetchWorkPackageActivities(
   if (!openproject_url || !openproject_api_key) return []
 
   try {
-    const res = await fetch(
-      `${buildBaseUrl(openproject_url)}/api/v3/work_packages/${workPackageId}/activities`,
-      { headers: { Authorization: buildAuthHeader(openproject_api_key) } }
-    )
+    let res: Response
+    if (shouldUseProxy()) {
+      res = await proxyFetch(config, `/api/v3/work_packages/${workPackageId}/activities`)
+    } else {
+      res = await fetch(
+        `${buildBaseUrl(openproject_url)}/api/v3/work_packages/${workPackageId}/activities`,
+        { headers: { Authorization: buildAuthHeader(openproject_api_key) } }
+      )
+    }
     if (!res.ok) return []
 
     const data = await res.json()
@@ -613,10 +706,15 @@ export async function debugWorkPackageActivities(
   if (!openproject_url || !openproject_api_key) return []
 
   try {
-    const res = await fetch(
-      `${buildBaseUrl(openproject_url)}/api/v3/work_packages/${workPackageId}/activities`,
-      { headers: { Authorization: buildAuthHeader(openproject_api_key) } }
-    )
+    let res: Response
+    if (shouldUseProxy()) {
+      res = await proxyFetch(config, `/api/v3/work_packages/${workPackageId}/activities`)
+    } else {
+      res = await fetch(
+        `${buildBaseUrl(openproject_url)}/api/v3/work_packages/${workPackageId}/activities`,
+        { headers: { Authorization: buildAuthHeader(openproject_api_key) } }
+      )
+    }
     if (!res.ok) return []
     const data = await res.json()
     const elements = data._embedded?.elements || []
