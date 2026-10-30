@@ -110,13 +110,18 @@ async function proxyFetch(
   apiPath: string
 ): Promise<Response> {
   const proxyUrl = `${getProxyUrl()}?path=${encodeURIComponent(apiPath)}`
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
   
   return fetch(proxyUrl, {
+    method: 'POST',
     headers: {
-      'x-openproject-url': config.openproject_url,
-      'x-openproject-api-key': config.openproject_api_key,
+      'Authorization': `Bearer ${supabaseAnonKey}`,
       'Content-Type': 'application/json',
     },
+    body: JSON.stringify({
+      openproject_url: config.openproject_url,
+      openproject_api_key: config.openproject_api_key,
+    }),
   })
 }
 

@@ -2,11 +2,12 @@
 // Proxy for OpenProject API to avoid CORS issues in production
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-openproject-url, x-openproject-api-key',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 }
 
 serve(async (req) => {
@@ -16,12 +17,14 @@ serve(async (req) => {
   }
 
   try {
-    const openprojectUrl = req.headers.get('x-openproject-url')
-    const openprojectApiKey = req.headers.get('x-openproject-api-key')
+    // Get credentials from POST body
+    const body = await req.json()
+    const openprojectUrl = body.openproject_url
+    const openprojectApiKey = body.openproject_api_key
 
     if (!openprojectUrl || !openprojectApiKey) {
       return new Response(
-        JSON.stringify({ error: 'Missing OpenProject URL or API Key headers' }),
+        JSON.stringify({ error: 'Missing OpenProject URL or API Key' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -33,17 +36,17 @@ serve(async (req) => {
     // Build the full OpenProject URL
     const targetUrl = `${openprojectUrl.replace(/\/$/, '')}${apiPath}`
     
-    // Build auth header
-    const authHeader = `Basic ${btoa(`apikey:${openprojectApiKey}`)}`
+    // Build auth header using Deno's base64 encoding
+    const credentials = new TextEncoder().encode(`apikey:${openprojectApiKey}`)
+    const authHeader = `Basic ${base64Encode(credentials)}`
 
     // Forward the request to OpenProject
     const response = await fetch(targetUrl, {
-      method: req.method,
+      method: 'GET',
       headers: {
         'Authorization': authHeader,
         'Content-Type': 'application/json',
       },
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? await req.text() : undefined,
     })
 
     const data = await response.text()
