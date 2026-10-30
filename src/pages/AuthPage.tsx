@@ -365,7 +365,7 @@ function FloatingParticles() {
 // ── Input Focus Ring Pulse (smooth glow effect on focus) ──────────────────────
 
 function InputFocusRing({ inputRef, active, color = 'var(--accent)' }: { 
-  inputRef: React.RefObject<HTMLInputElement>; 
+  inputRef: React.RefObject<HTMLInputElement | null>; 
   active: boolean;
   color?: string;
 }) {
