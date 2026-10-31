@@ -55,9 +55,11 @@ export interface WorkPackageFilters {
   type?: string[]
   priority?: string[]
   assignee?: string
+  customField9?: string // Release custom field - use option ID for API filtering
   updatedAfter?: string
   pageSize?: number
-  offset?: number
+  offset?: number // 1-based offset
+  page?: number // 1-based page number (alternative to offset)
   sortBy?: string
 }
 
@@ -190,9 +192,14 @@ export async function fetchWorkPackages(
   const baseUrl = buildBaseUrl(openproject_url)
   const params = new URLSearchParams()
 
-  // Pagination
+  // Pagination - use pageSize and offset
   params.set('pageSize', String(filters?.pageSize || 50))
-  if (filters?.offset) params.set('offset', String(filters.offset))
+  if (filters?.offset) {
+    params.set('offset', String(filters.offset))
+  }
+  if (filters?.page) {
+    params.set('page', String(filters.page))
+  }
 
   // Sorting
   if (filters?.sortBy) {
@@ -215,6 +222,10 @@ export async function fetchWorkPackages(
   }
   if (filters?.assignee) {
     apiFilters.assignee = { operator: '=', values: [filters.assignee] }
+  }
+  // Custom field filtering for Release (customField9) - use cf_X format with option ID
+  if (filters?.customField9) {
+    apiFilters['cf_9'] = { operator: '=', values: [filters.customField9] }
   }
   if (filters?.updatedAfter) {
     apiFilters.updatedAt = { operator: '>t-', values: [filters.updatedAfter] }
@@ -246,6 +257,7 @@ export async function fetchWorkPackages(
   }
 
   const data = await res.json()
+  
   return {
     items: data._embedded?.elements || [],
     total: data.total || 0,
@@ -423,13 +435,131 @@ export async function fetchProjectMembers(
     }))
 }
 
+// Fetch versions (releases) for a project
+export async function fetchVersions(
+  config: OpenProjectConfig,
+  projectId?: string | number
+): Promise<{ id: number; name: string }[]> {
+  const { openproject_url, openproject_api_key, openproject_project_id } = config
+  if (!openproject_url || !openproject_api_key) return []
+
+  const pid = projectId || openproject_project_id
+  if (!pid) return []
+
+  try {
+    let res: Response
+    if (shouldUseProxy()) {
+      res = await proxyFetch(config, `/api/v3/projects/${pid}/versions?pageSize=100`)
+    } else {
+      res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/projects/${pid}/versions?pageSize=100`, {
+        headers: { Authorization: buildAuthHeader(openproject_api_key) },
+      })
+    }
+    if (!res.ok) return []
+
+    const data = await res.json()
+    return (data._embedded?.elements || []).map((v: { id: number; name: string }) => ({
+      id: v.id,
+      name: v.name,
+    }))
+  } catch {
+    return []
+  }
+}
+
+// Cache for release field ID
+let releaseFieldId: number | null = null
+
+// Get the Release custom field ID (customField9 = field ID 9)
+export async function getReleaseFieldId(config: OpenProjectConfig): Promise<number | null> {
+  if (releaseFieldId !== null) return releaseFieldId
+  
+  try {
+    const customFields = await fetchCustomFields(config)
+    const releaseField = customFields.find(cf => 
+      cf.name.toLowerCase() === 'release' || 
+      cf.name.toLowerCase().includes('release')
+    )
+    if (releaseField) {
+      releaseFieldId = releaseField.id
+      return releaseField.id
+    }
+  } catch {
+    // Fallback to known field ID 9
+  }
+  return 9 // Default to customField9
+}
+
+// Fetch Release custom field options with their IDs (needed for API filtering)
+export async function fetchReleaseOptions(
+  config: OpenProjectConfig
+): Promise<{ id: number; name: string }[]> {
+  const { openproject_url, openproject_api_key, openproject_project_id } = config
+  if (!openproject_url || !openproject_api_key) return []
+
+  try {
+    // Try to get options from custom fields API first
+    const fieldId = await getReleaseFieldId(config)
+    if (fieldId) {
+      let res: Response
+      if (shouldUseProxy()) {
+        res = await proxyFetch(config, `/api/v3/custom_fields/${fieldId}/options`)
+      } else {
+        res = await fetch(
+          `${buildBaseUrl(openproject_url)}/api/v3/custom_fields/${fieldId}/options`,
+          { headers: { Authorization: buildAuthHeader(openproject_api_key) } }
+        )
+      }
+      if (res.ok) {
+        const data = await res.json()
+        const options = (data._embedded?.elements || []).map((opt: { id: number; value: string }) => ({
+          id: opt.id,
+          name: opt.value,
+        }))
+        if (options.length > 0) {
+          return options
+        }
+      }
+    }
+
+    // Fallback: Extract release values AND option IDs from work packages
+    // The href contains the option ID like "/api/v3/custom_options/123"
+    const { items } = await fetchWorkPackages(
+      { ...config, openproject_project_id },
+      { pageSize: 200 }
+    )
+    const releases = new Map<string, number>()
+    items.forEach(wp => {
+      const link = (wp._links as Record<string, { title?: string; href?: string }>)['customField9']
+      if (link?.title && link?.href) {
+        // Extract option ID from href like "/api/v3/custom_options/123"
+        const match = link.href.match(/\/(\d+)$/)
+        if (match) {
+          releases.set(link.title, parseInt(match[1]))
+        }
+      }
+    })
+    
+    const options = Array.from(releases.entries())
+      .map(([name, id]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    
+    return options
+  } catch (e) {
+    console.error('[OpenProject] Failed to fetch release options:', e)
+    return []
+  }
+}
+
 // Helper to format work package for display
 export function formatWorkPackage(wp: OpenProjectWorkPackage) {
   // Extract custom fields - OpenProject uses customFieldX naming
   const customFields: Record<string, string | null> = {}
   Object.keys(wp).forEach(key => {
     if (key.startsWith('customField') || key.startsWith('cf_')) {
-      customFields[key] = wp[key] as string | null
+      const val = wp[key]
+      // Convert to string if not null/undefined
+      customFields[key] = val != null ? String(val) : null
     }
   })
   
@@ -439,6 +569,59 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
       const link = (wp._links as Record<string, { title?: string }>)[key]
       if (link?.title) {
         customFields[key] = link.title
+      }
+    }
+  })
+  
+  // Find specific custom fields by checking all customField values
+  let testingStatus: string | null = null
+  let isQAMissed: string | null = null
+  let qaConfirmation: string | null = null
+  let receivedDate: string | null = null
+  let release: string | null = null
+  
+  // Check all custom fields for known field names
+  Object.entries(customFields).forEach(([key, value]) => {
+    if (!value || typeof value !== 'string') return
+    const valLower = value.toLowerCase()
+    // These are link-type fields, value would be the option title
+    if (valLower.includes('forwarded') || valLower.includes('not started') || valLower.includes('in progress') || valLower.includes('completed')) {
+      if (!testingStatus) testingStatus = value
+    }
+    if (valLower === 'yes' || valLower === 'no') {
+      // Could be isQAMissed - check if we already have one
+      if (!isQAMissed && key.includes('2')) isQAMissed = value
+    }
+  })
+  
+  // Fallback to numbered custom fields
+  testingStatus = testingStatus || customFields['customField1'] || customFields['cf_1'] || null
+  isQAMissed = isQAMissed || customFields['customField2'] || customFields['cf_2'] || null
+  qaConfirmation = qaConfirmation || customFields['customField3'] || customFields['cf_3'] || null
+  
+  // Look for Release custom field - customField9 contains release values like "UAT.30.10.2026"
+  Object.keys(wp._links || {}).forEach(key => {
+    if (key.startsWith('customField') || key.startsWith('cf_')) {
+      const link = (wp._links as Record<string, { title?: string; href?: string }>)[key]
+      if (link?.title) {
+        const title = link.title
+        
+        // customField9 is the Release field
+        if (key === 'customField9' || key === 'cf_9') {
+          release = title
+        }
+      }
+    }
+  })
+  
+  // Also check direct custom field values for dates (Received Date)
+  Object.keys(wp).forEach(key => {
+    if (key.startsWith('customField') || key.startsWith('cf_')) {
+      const value = wp[key]
+      // Date fields are stored as ISO date strings (YYYY-MM-DD)
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        // This is likely a date field - could be Received Date
+        if (!receivedDate) receivedDate = value
       }
     }
   })
@@ -455,6 +638,7 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
     project: wp._links.project?.title || '',
     author: wp._links.author?.title || '',
     version: wp._links.version?.title || null,
+    release: release || wp._links.version?.title || null, // Release custom field or fallback to version
     startDate: wp.startDate || null,
     dueDate: wp.dueDate || null,
     createdAt: wp.createdAt || null,
@@ -466,9 +650,10 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
     isOverdue: wp.dueDate ? wp.dueDate < new Date().toISOString().split('T')[0] && wp.percentageDone !== 100 : false,
     // Custom fields for QA
     customFields,
-    testingStatus: customFields['customField1'] || customFields['cf_1'] || null,
-    isQAMissed: customFields['customField2'] || customFields['cf_2'] || null,
-    qaConfirmation: customFields['customField3'] || customFields['cf_3'] || null,
+    testingStatus,
+    isQAMissed,
+    qaConfirmation,
+    receivedDate, // The "Received Date" custom field from OpenProject
   }
 }
 
@@ -668,38 +853,51 @@ export async function fetchWorkPackageActivities(
   }
 }
 
-// Find when Testing Status was changed to a specific value
+// Find when Testing Status was changed to "Forwarded to the Testing Team"
+// Returns the MOST RECENT forwarding event if forwarded multiple times
 export async function findTestingStatusChange(
   config: OpenProjectConfig,
   workPackageId: number | string,
   targetValue: string = 'Forwarded to the Testing Team'
 ): Promise<TestingStatusChange | null> {
   const activities = await fetchWorkPackageActivities(config, workPackageId)
-  const targetLower = targetValue.toLowerCase()
+  
+  let lastMatch: TestingStatusChange | null = null
 
   for (const activity of activities) {
     for (const detail of activity.details) {
-      // Check if this is a Testing Status field change
+      // Get the raw text and check various patterns
+      const raw = ((detail as { raw?: string }).raw || '').toLowerCase()
       const propLower = (detail.property || '').toLowerCase()
       const newValLower = (detail.newValue || '').toLowerCase()
       
-      // Match "Testing Status" field with target value
-      if (
-        propLower.includes('testing status') &&
-        (newValLower.includes('forwarded') || newValLower.includes(targetLower))
-      ) {
-        return {
+      // Check if this is a Testing Status change to "Forwarded to the Testing Team"
+      // Pattern 1: Property contains "testing" and new value contains "forwarded"
+      // Pattern 2: Raw text contains "testing status" and "forwarded"
+      const isTestingStatusChange = 
+        propLower.includes('testing') ||
+        raw.includes('testing status') ||
+        raw.includes('testing_status') ||
+        raw.includes('testingstatus')
+      
+      const isForwarded = 
+        newValLower.includes('forwarded') ||
+        raw.includes('forwarded to the testing') ||
+        raw.includes('forwarded to testing')
+      
+      if (isTestingStatusChange && isForwarded) {
+        lastMatch = {
           workPackageId: Number(workPackageId),
           changedAt: activity.createdAt,
           changedBy: activity.user.name,
           oldValue: detail.oldValue || null,
-          newValue: detail.newValue || '',
+          newValue: detail.newValue || targetValue,
         }
       }
     }
   }
 
-  return null
+  return lastMatch
 }
 
 // Debug: Fetch and log all activities for a work package
@@ -724,47 +922,32 @@ export async function debugWorkPackageActivities(
     const data = await res.json()
     const elements = data._embedded?.elements || []
     
-    console.log(`Activities for WP #${workPackageId}:`, elements)
-    
     // Search for Testing Status changes specifically
-    console.log('\n🔍 SEARCHING FOR TESTING STATUS CHANGES...')
     let found = false
+    const testingChanges: Array<{ activityId: number; date: string; user: string; raw: string }> = []
     
     elements.forEach((activity: { 
-      id: number; _type: string; createdAt: string; 
+      id: number; createdAt: string; 
       details?: Array<{ raw?: string }>;
       _links?: { user?: { title?: string } }
     }) => {
       if (activity.details && Array.isArray(activity.details)) {
         activity.details.forEach((detail: { raw?: string }) => {
-          const raw = detail.raw || ''
-          if (raw.toLowerCase().includes('testing status')) {
+          const raw = (detail.raw || '').toLowerCase()
+          if (raw.includes('testing status') || raw.includes('testing_status')) {
             found = true
-            console.log('\n✅ FOUND TESTING STATUS CHANGE!')
-            console.log('  Activity ID:', activity.id)
-            console.log('  Date:', activity.createdAt)
-            console.log('  User:', activity._links?.user?.title)
-            console.log('  Raw:', raw)
+            testingChanges.push({
+              activityId: activity.id,
+              date: activity.createdAt,
+              user: activity._links?.user?.title || 'Unknown',
+              raw: detail.raw || ''
+            })
           }
         })
       }
     })
     
-    if (!found) {
-      console.log('❌ No Testing Status changes found in this work package')
-      console.log('\nAll field changes found:')
-      elements.forEach((activity: { details?: Array<{ raw?: string }> }) => {
-        if (activity.details) {
-          activity.details.forEach((d: { raw?: string }) => {
-            if (d.raw && (d.raw.includes(' set to ') || d.raw.includes(' changed from '))) {
-              console.log('  -', d.raw)
-            }
-          })
-        }
-      })
-    }
-    
-    return elements
+    return testingChanges
   } catch (e) {
     console.error('Debug error:', e)
     return []
@@ -775,11 +958,12 @@ export async function debugWorkPackageActivities(
 export async function fetchTestingStatusChanges(
   config: OpenProjectConfig,
   workPackageIds: (number | string)[],
-  targetValue: string = 'Forwarded to the Testing Team'
+  targetValue: string = 'Forwarded to the Testing Team',
+  onProgress?: (current: number, found: number) => void
 ): Promise<Map<number, TestingStatusChange>> {
   const results = new Map<number, TestingStatusChange>()
-
-  // Fetch in parallel with higher concurrency for speed
+  
+  // Fetch in parallel with batching for speed
   const batchSize = 10
   for (let i = 0; i < workPackageIds.length; i += batchSize) {
     const batch = workPackageIds.slice(i, i + batchSize)
@@ -791,6 +975,10 @@ export async function fetchTestingStatusChanges(
         results.set(Number(batch[idx]), result)
       }
     })
+    
+    // Report progress
+    const processed = Math.min(i + batchSize, workPackageIds.length)
+    onProgress?.(processed, results.size)
   }
 
   return results

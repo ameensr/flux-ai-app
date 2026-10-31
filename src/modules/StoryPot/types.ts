@@ -12,6 +12,7 @@ export interface StoryPotWorkPackage {
   project: string
   author: string
   version: string | null
+  release: string | null // Release custom field from OpenProject
   startDate: string | null
   dueDate: string | null
   createdAt: string | null
@@ -26,9 +27,13 @@ export interface StoryPotWorkPackage {
   testingStatus: string | null
   isQAMissed: string | null
   qaConfirmation: string | null
-  // Testing Status change tracking
-  forwardedToTestingAt: string | null
-  forwardedToTestingBy: string | null
+  // Received Date from OpenProject custom field (NOT the actual transition date)
+  receivedDate: string | null
+  // Actual Testing Status transition data (from activity history)
+  forwardedToTestingAt: string | null // Actual timestamp when forwarded
+  forwardedToTestingBy: string | null // Person who changed the status
+  handoffVerified: boolean // Whether the handoff data is from verified activity history
+  handoffCount: number // Number of times forwarded (for multiple forwarding events)
 }
 
 export interface StoryPotFilters {
