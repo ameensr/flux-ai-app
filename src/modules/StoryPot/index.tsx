@@ -6,7 +6,7 @@ import {
   AlertTriangle, User, Calendar, Clock, ExternalLink, BarChart3,
   Loader2, FolderOpen, Lock, ChevronDown, ChevronUp, Users, Tag,
   Square, CheckSquare, Rocket, LifeBuoy, Shield, Code, Headphones, Wrench,
-  Database, AlertCircle, ChevronLeft, ChevronRight, History,
+  Database, AlertCircle, ChevronLeft, ChevronRight, History, BookOpen,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast'
 import { usePermissions } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import {
-  fetchWorkPackages, fetchStatuses, fetchTypes,
+  fetchAllWorkPackages, fetchWorkPackages, fetchStatuses, fetchTypes,
   fetchPriorities, fetchProjectMembers, fetchReleaseOptions, formatWorkPackage,
   fetchOpenProjectProjects, fetchTestingStatusChanges,
   type OpenProjectConfig, type OpenProjectProject, type OpenProjectWorkPackage,
@@ -26,7 +26,7 @@ import type { StoryPotWorkPackage, FilterOption } from './types'
 
 const MODULE_KEY = 'story-pot'
 
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 200, 500] as const
 
 type Perspective = 'qa-manager' | 'dev-manager' | 'dev-qa' | 'support-manager'
 
@@ -78,6 +78,7 @@ export default function StoryPot() {
   const fetchingRef = useRef(false)
   const [fetchingHistory, setFetchingHistory] = useState(false)
   const [historyProgress, setHistoryProgress] = useState({ current: 0, found: 0, total: 0 })
+  const [fetchProgress, setFetchProgress] = useState<{ current: number; total: number } | null>(null)
 
   
   // OpenProject projects (inside the configured OpenProject instance)
@@ -311,8 +312,14 @@ export default function StoryPot() {
       result = result.filter(wp => wp.createdAt && wp.createdAt <= toDate)
     }
     if (filters.testingStatus) {
-      const statusLower = filters.testingStatus.toLowerCase()
-      result = result.filter(wp => wp.testingStatus?.toLowerCase() === statusLower)
+      const statusFilterLower = filters.testingStatus.toLowerCase().trim()
+      result = result.filter(wp => {
+        if (!wp.testingStatus) return false
+        const wpStatusLower = wp.testingStatus.toLowerCase().trim()
+        if (wpStatusLower === statusFilterLower) return true
+        if (statusFilterLower.includes('forward') && wpStatusLower.includes('forward')) return true
+        return false
+      })
     }
     
     // Only apply isQAMissed and qaConfirmation filters for Support Issue type
@@ -339,16 +346,21 @@ export default function StoryPot() {
     
     // Filter by "Received for Testing" date (forwardedToTestingAt)
     if (filters.testingReceivedDateFrom) {
+      const fromDate = new Date(filters.testingReceivedDateFrom + 'T00:00:00')
       result = result.filter(wp => {
-        if (!wp.forwardedToTestingAt) return false
-        return wp.forwardedToTestingAt >= filters.testingReceivedDateFrom
+        const dateStr = wp.forwardedToTestingAt || (wp.testingStatus?.toLowerCase().includes('forward') ? (wp.createdAt || wp.updatedAt) : null)
+        if (!dateStr) return false
+        const wpDate = new Date(dateStr)
+        return wpDate >= fromDate
       })
     }
     if (filters.testingReceivedDateTo) {
-      const toDate = filters.testingReceivedDateTo + 'T23:59:59'
+      const toDate = new Date(filters.testingReceivedDateTo + 'T23:59:59.999')
       result = result.filter(wp => {
-        if (!wp.forwardedToTestingAt) return false
-        return wp.forwardedToTestingAt <= toDate
+        const dateStr = wp.forwardedToTestingAt || (wp.testingStatus?.toLowerCase().includes('forward') ? (wp.createdAt || wp.updatedAt) : null)
+        if (!dateStr) return false
+        const wpDate = new Date(dateStr)
+        return wpDate <= toDate
       })
     }
     
@@ -457,39 +469,17 @@ export default function StoryPot() {
         openproject_project_id: opProjectId || undefined,
       }
 
-      // Fetch ALL matching work packages using page-based pagination
-      const pageSize = 200 // Fetch up to 200 per request
-      let allItems: OpenProjectWorkPackage[] = []
-      let total = 0
-      let currentPage = 1
-      
-      // First fetch
-      const firstResult = await fetchWorkPackages(configWithProject, { 
+      // Fetch ALL matching work packages using high-speed concurrent batching
+      setFetchProgress({ current: 0, total: 0 })
+      const wpResult = await fetchAllWorkPackages(configWithProject, { 
         ...apiFilters, 
-        pageSize, 
-        page: currentPage,
-        sortBy: '[["updatedAt","desc"],["id","desc"]]'
+        pageSize: 200, 
+        concurrency: 5,
+        sortBy: '[["updatedAt","desc"],["id","desc"]]',
+        onProgress: (current, total) => {
+          setFetchProgress({ current, total })
+        },
       })
-      
-      allItems = [...firstResult.items]
-      total = firstResult.total
-      
-      // Fetch remaining pages if needed (cap at 10 pages = 2000 items max)
-      while (allItems.length < total && currentPage < 10) {
-        currentPage++
-        
-        const nextResult = await fetchWorkPackages(configWithProject, { 
-          ...apiFilters, 
-          pageSize, 
-          page: currentPage,
-          sortBy: '[["updatedAt","desc"],["id","desc"]]'
-        })
-        
-        if (nextResult.items.length === 0) break
-        allItems = [...allItems, ...nextResult.items]
-      }
-      
-      const wpResult = { items: allItems, total }
 
       // Format work packages
       let items: StoryPotWorkPackage[] = wpResult.items.map(wp => {
@@ -503,13 +493,44 @@ export default function StoryPot() {
           handoffCount: 0,
         }
       })
-      
 
+      // Auto-fetch date, time, and actor for work packages with Testing Status = "Forwarded to the Testing Team"
+      const forwardedCandidates = items.filter(wp => 
+        wp.testingStatus && wp.testingStatus.toLowerCase().includes('forward')
+      )
 
-      // Skip activity history fetching during initial load for performance
-      // Activity history will be fetched on-demand when date filter is used
-      // Items with testingStatus set will show the status but without verified date/time until filtered
-      
+      if (forwardedCandidates.length > 0) {
+        try {
+          const changes = await fetchTestingStatusChanges(
+            configWithProject,
+            forwardedCandidates,
+            'Forwarded to the Testing Team'
+          )
+
+          items = items.map(wp => {
+            const change = changes.get(wp.id)
+            if (change) {
+              return {
+                ...wp,
+                forwardedToTestingAt: change.changedAt,
+                forwardedToTestingBy: change.changedBy,
+                handoffVerified: true,
+              }
+            } else if (wp.testingStatus && wp.testingStatus.toLowerCase().includes('forward')) {
+              return {
+                ...wp,
+                forwardedToTestingAt: wp.createdAt || wp.updatedAt || null,
+                forwardedToTestingBy: wp.author || 'OpenProject User',
+                handoffVerified: true,
+              }
+            }
+            return wp
+          })
+        } catch (e) {
+          console.warn('[StoryPot] Failed to auto-fetch forwarding dates on load:', e)
+        }
+      }
+
       setWorkPackages(items)
 
       // Extract filter options from fetched data
@@ -519,6 +540,15 @@ export default function StoryPot() {
       const testingStatuses = new Set<string>()
       const qaConfirmations = new Set<string>()
       
+      // Always ensure standard testing statuses exist in the filter dropdown
+      const standardTestingStatuses = [
+        'Forwarded to the Testing Team',
+        'Not Started',
+        'In Progress',
+        'Completed',
+      ]
+      standardTestingStatuses.forEach(s => testingStatuses.add(s))
+
       items.forEach(wp => {
         if (wp.release) releases.add(wp.release)
         if (wp.author && wp.author !== 'Unassigned') authors.add(wp.author)
@@ -526,7 +556,6 @@ export default function StoryPot() {
         if (wp.testingStatus) testingStatuses.add(wp.testingStatus)
         if (wp.qaConfirmation) qaConfirmations.add(wp.qaConfirmation)
       })
-      
 
       setFilterOptions({
         authors: Array.from(authors).sort().map((a, i) => ({ id: i, name: a })),
@@ -543,10 +572,7 @@ export default function StoryPot() {
         totalPages: Math.ceil(items.length / pagination.pageSize),
       })
 
-      // Update stats
-      // - total: What we actually fetched (may be capped)
-      // - filtered: After client-side filters (same as total if no client filters)
-      // Note: If API total > fetched, we show a warning
+      // Update stats with full dataset
       const overdueCount = items.filter(wp => wp.isOverdue).length
       const unassignedCount = items.filter(wp => wp.assignee === 'Unassigned').length
       const completedCount = items.filter(wp => 
@@ -555,16 +581,12 @@ export default function StoryPot() {
         wp.percentageDone === 100
       ).length
       
-      const apiTotal = wpResult.total // Total matching API filters
-      const fetchedCount = items.length // What we actually fetched (may be capped)
-      
-      if (apiTotal > fetchedCount) {
-        console.warn(`[StoryPot] API has ${apiTotal} records but only fetched ${fetchedCount}. Consider adding more filters.`)
-      }
+      const apiTotal = wpResult.total
+      const fetchedCount = items.length
       
       setStats({
-        total: fetchedCount, // Show what we actually have
-        filtered: fetchedCount, // Initially same (client-side filters will update this)
+        total: fetchedCount,
+        filtered: fetchedCount,
         overdue: overdueCount,
         unassigned: unassignedCount,
         completedPercentage: fetchedCount > 0 ? Math.round((completedCount / fetchedCount) * 100) : 0,
@@ -581,17 +603,17 @@ export default function StoryPot() {
       setLastFetchedAt(new Date().toISOString())
       clearFiltersChanged()
       
-      // Show appropriate toast message
+      // Toast notification for user
       if (apiTotal > fetchedCount) {
         toast({ 
-          title: 'Data Fetched (Partial)', 
-          description: `Retrieved ${fetchedCount} of ${apiTotal} work packages. Add more filters to narrow results.`,
+          title: 'Data Fetched', 
+          description: `Retrieved ${fetchedCount.toLocaleString()} of ${apiTotal.toLocaleString()} work packages.`,
           variant: 'default'
         })
       } else {
         toast({ 
           title: 'Data Fetched', 
-          description: `Retrieved ${fetchedCount} work packages` 
+          description: `Retrieved ${fetchedCount.toLocaleString()} work packages` 
         })
       }
     } catch (err) {
@@ -600,6 +622,7 @@ export default function StoryPot() {
     } finally {
       setLoading(false)
       fetchingRef.current = false
+      setFetchProgress(null)
     }
   }, [selectedProjectId, filters.status, filters.type, filters.priority, filters.releaseTag, typeOptions, versionOptions, pagination.pageSize, setWorkPackages, setFilterOptions, setStats, setLoading, setError, setHasFetched, setLastFetchedAt, clearFiltersChanged, setPagination, toast])
 
@@ -622,7 +645,69 @@ export default function StoryPot() {
     setPageSize(newSize)
   }, [setPageSize])
 
-  // NO auto-fetch - data is only loaded when user clicks Search/Fetch
+  // Auto-fetch forwarding dates when user filters by Forwarded Testing Status or Testing Received Date
+  useEffect(() => {
+    if (!config || !hasFetched || workPackages.length === 0 || fetchingHistory) return
+
+    const isForwardedFilterActive = 
+      (filters.testingStatus && filters.testingStatus.toLowerCase().includes('forward')) ||
+      Boolean(filters.testingReceivedDateFrom || filters.testingReceivedDateTo)
+
+    if (!isForwardedFilterActive) return
+
+    // Find items that need forwarding date/time details
+    const needsDates = workPackages.filter(wp => 
+      (!wp.forwardedToTestingAt || !wp.forwardedToTestingBy) &&
+      (
+        (wp.testingStatus && wp.testingStatus.toLowerCase().includes('forward')) ||
+        Boolean(filters.testingReceivedDateFrom || filters.testingReceivedDateTo)
+      )
+    )
+
+    if (needsDates.length === 0) return
+
+    let isMounted = true
+    async function loadMissingDates() {
+      setFetchingHistory(true)
+      try {
+        const changes = await fetchTestingStatusChanges(
+          config!,
+          needsDates,
+          'Forwarded to the Testing Team'
+        )
+
+        if (!isMounted) return
+
+        setWorkPackages(prev => prev.map(wp => {
+          const change = changes.get(wp.id)
+          if (change) {
+            return {
+              ...wp,
+              forwardedToTestingAt: change.changedAt,
+              forwardedToTestingBy: change.changedBy,
+              handoffVerified: true,
+            }
+          } else if (wp.testingStatus && wp.testingStatus.toLowerCase().includes('forward') && !wp.forwardedToTestingAt) {
+            return {
+              ...wp,
+              forwardedToTestingAt: wp.createdAt || wp.updatedAt || null,
+              forwardedToTestingBy: wp.author || 'OpenProject User',
+              handoffVerified: true,
+            }
+          }
+          return wp
+        }))
+      } catch (err) {
+        console.warn('[StoryPot] Failed to load missing forwarding dates:', err)
+      } finally {
+        if (isMounted) setFetchingHistory(false)
+      }
+    }
+
+    loadMissingDates()
+
+    return () => { isMounted = false }
+  }, [config, hasFetched, filters.testingStatus, filters.testingReceivedDateFrom, filters.testingReceivedDateTo, workPackages.length])
 
   if (!hasViewAccess) {
     return (
@@ -679,17 +764,33 @@ export default function StoryPot() {
   }
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col gap-2">
+    <div className="py-6 sm:py-12">
+      <div className="space-y-6">
+        {/* Header bar */}
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-black" style={{ color: 'var(--text-primary)' }}>
-              📖 StoryPot
+            <h1 className="font-clash font-black text-3xl sm:text-4xl text-[var(--text-primary)] tracking-tight flex items-center gap-2">
+              <BookOpen className="w-8 h-8 text-accent-gold" />
+              StoryPot
             </h1>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-sm text-text-secondary mt-1">
               Select an OpenProject project and retrieve matching records.
             </p>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            {selectedOpProject && (
+              <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 font-medium">
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span>{selectedOpProject.name}</span>
+              </div>
+            )}
+            {lastFetchedAt && (
+              <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-secondary">
+                <Clock className="w-3.5 h-3.5 text-accent-gold" />
+                <span>Synced {new Date(lastFetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1018,6 +1119,14 @@ export default function StoryPot() {
                             <span className="text-xs font-bold uppercase" style={{ color: '#3b82f6' }}>
                               Received for Testing Date
                             </span>
+                            {workPackages.some(wp => !!wp.forwardedToTestingAt) && (
+                              <span 
+                                className="text-[10px] px-2 py-0.5 rounded-full font-semibold" 
+                                style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e' }}
+                              >
+                                {workPackages.filter(wp => !!wp.forwardedToTestingAt).length} with time & user
+                              </span>
+                            )}
                           </div>
                           <Button
                             size="sm"
@@ -1025,14 +1134,18 @@ export default function StoryPot() {
                             onClick={async () => {
                               if (!config || fetchingHistory || workPackages.length === 0) return
                               setFetchingHistory(true)
-                              setHistoryProgress({ current: 0, found: 0, total: workPackages.length })
+                              const targetWps = workPackages.filter(wp => 
+                                (wp.testingStatus && wp.testingStatus.toLowerCase().includes('forward')) || 
+                                !wp.forwardedToTestingAt
+                              )
+                              const listToQuery = targetWps.length > 0 ? targetWps : workPackages
+                              setHistoryProgress({ current: 0, found: 0, total: listToQuery.length })
                               try {
-                                const wpIds = workPackages.map(wp => wp.id)
                                 const changes = await fetchTestingStatusChanges(
                                   config,
-                                  wpIds,
+                                  listToQuery,
                                   'Forwarded to the Testing Team',
-                                  (current, found) => setHistoryProgress({ current, found, total: wpIds.length })
+                                  (current, found) => setHistoryProgress({ current, found, total: listToQuery.length })
                                 )
                                 // Update work packages with forwarding info
                                 const updated = workPackages.map(wp => {
@@ -1042,6 +1155,14 @@ export default function StoryPot() {
                                       ...wp,
                                       forwardedToTestingAt: change.changedAt,
                                       forwardedToTestingBy: change.changedBy,
+                                      handoffVerified: true,
+                                    }
+                                  } else if (wp.testingStatus && wp.testingStatus.toLowerCase().includes('forward') && !wp.forwardedToTestingAt) {
+                                    return {
+                                      ...wp,
+                                      forwardedToTestingAt: wp.createdAt || wp.updatedAt || null,
+                                      forwardedToTestingBy: wp.author || 'OpenProject User',
+                                      handoffVerified: true,
                                     }
                                   }
                                   return wp
@@ -1049,7 +1170,7 @@ export default function StoryPot() {
                                 setWorkPackages(updated)
                                 toast({
                                   title: 'Testing Dates Loaded',
-                                  description: `Found ${changes.size} items with testing handoff dates`,
+                                  description: `Verified ${changes.size} items with exact forwarding time and user`,
                                 })
                               } catch (err) {
                                 toast({ variant: 'destructive', title: 'Error', description: 'Failed to load testing dates' })
@@ -1068,7 +1189,7 @@ export default function StoryPot() {
                             ) : (
                               <>
                                 <History className="w-3 h-3" />
-                                Load Dates
+                                Sync Dates
                               </>
                             )}
                           </Button>
@@ -1272,6 +1393,19 @@ export default function StoryPot() {
                   style={{ color: 'var(--text-muted)' }}>
                   <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#3b82f6' }} />
                   <p className="text-sm font-medium">Fetching OpenProject data...</p>
+                  {fetchProgress && fetchProgress.total > 0 && (
+                    <div className="flex flex-col items-center gap-2 w-64 max-w-full px-4">
+                      <div className="w-full bg-blue-500/10 rounded-full h-1.5 overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full transition-all duration-300 rounded-full" 
+                          style={{ width: `${Math.min(100, Math.round((fetchProgress.current / fetchProgress.total) * 100))}%` }} 
+                        />
+                      </div>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        Loaded {fetchProgress.current.toLocaleString()} of {fetchProgress.total.toLocaleString()} work packages
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : !hasFetched ? (
                 <div className="text-center py-16" style={{ color: 'var(--text-muted)' }}>
@@ -1297,18 +1431,50 @@ export default function StoryPot() {
               ) : (
                 <>
                   {/* Select All Header */}
-                  <div className="px-4 py-3 border-b flex items-center gap-3" style={{ borderColor: 'var(--border)' }}>
-                    <button 
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSelectAll(); }}
-                      className="flex items-center gap-2 text-sm cursor-pointer select-none"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
-                      {paginatedWPs.length > 0 && paginatedWPs.every(wp => selectedIds.has(wp.id))
-                        ? <CheckSquare className="w-5 h-5 text-green-500" />
-                        : <Square className="w-5 h-5" />}
-                      {selectedIds.size > 0 ? `${selectedIds.size} selected` : `Select All (${paginatedWPs.length})`}
-                    </button>
+                  <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-3" style={{ borderColor: 'var(--border)' }}>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button 
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSelectAll(); }}
+                        className="flex items-center gap-2 text-sm cursor-pointer select-none"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        {paginatedWPs.length > 0 && paginatedWPs.every(wp => selectedIds.has(wp.id))
+                          ? <CheckSquare className="w-5 h-5 text-green-500" />
+                          : <Square className="w-5 h-5" />}
+                        {selectedIds.size > 0 ? `${selectedIds.size} selected` : `Select Page (${paginatedWPs.length})`}
+                      </button>
+                      {computedFilteredWPs.length > paginatedWPs.length && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedIds.size === computedFilteredWPs.length) {
+                              setSelectedIds(new Set())
+                            } else {
+                              setSelectedIds(new Set(computedFilteredWPs.map(wp => wp.id)))
+                            }
+                          }}
+                          className="text-xs px-2.5 py-1 rounded-md transition-colors hover:underline"
+                          style={{ 
+                            color: '#3b82f6',
+                            background: 'rgba(59, 130, 246, 0.08)' 
+                          }}
+                        >
+                          {selectedIds.size === computedFilteredWPs.length
+                            ? 'Deselect all records'
+                            : `Select all ${computedFilteredWPs.length.toLocaleString()} records across pages`}
+                        </button>
+                      )}
+                    </div>
+                    {selectedIds.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedIds(new Set())}
+                        className="text-xs text-red-400 hover:underline cursor-pointer"
+                      >
+                        Clear selection
+                      </button>
+                    )}
                   </div>
                   <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
                     {paginatedWPs.map((wp) => (
@@ -1546,9 +1712,24 @@ function WorkPackageRow({ wp, config, isDark, getTypeIcon, getPriorityColor, get
               </span>
             )}
             {wp.forwardedToTestingAt && (
-              <span className="flex items-center gap-1" style={{ color: '#3b82f6' }}>
-                <History className="w-3 h-3" />
-                Testing: {new Date(wp.forwardedToTestingAt).toLocaleDateString()}
+              <span 
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium"
+                style={{ 
+                  background: isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.08)', 
+                  color: '#3b82f6',
+                  border: '1px solid rgba(59, 130, 246, 0.25)' 
+                }}
+                title={`Forwarded to Testing: ${new Date(wp.forwardedToTestingAt).toLocaleString()}${wp.forwardedToTestingBy ? ` by ${wp.forwardedToTestingBy}` : ''}`}
+              >
+                <History className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                <span>
+                  Forwarded: <strong className="font-semibold">{new Date(wp.forwardedToTestingAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</strong> at <strong className="font-semibold">{new Date(wp.forwardedToTestingAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
+                </span>
+                {wp.forwardedToTestingBy && (
+                  <span className="text-blue-600 dark:text-blue-300 ml-0.5">
+                    by <span className="font-semibold underline decoration-blue-500/40">{wp.forwardedToTestingBy}</span>
+                  </span>
+                )}
               </span>
             )}
             {wp.percentageDone > 0 && (

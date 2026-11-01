@@ -169,9 +169,9 @@ export async function fetchOpenProjectProjects(config: OpenProjectConfig): Promi
 
   let res: Response
   if (shouldUseProxy()) {
-    res = await proxyFetch(config, '/api/v3/projects?pageSize=100')
+    res = await proxyFetch(config, '/api/v3/projects?pageSize=500')
   } else {
-    res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/projects?pageSize=100`, {
+    res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/projects?pageSize=500`, {
       headers: { Authorization: buildAuthHeader(openproject_api_key) },
     })
   }
@@ -192,11 +192,10 @@ export async function fetchWorkPackages(
   const baseUrl = buildBaseUrl(openproject_url)
   const params = new URLSearchParams()
 
-  // Pagination - use pageSize and offset
+  // Pagination - in OpenProject v3, offset is the 1-based page index
+  const pageOffset = filters?.offset ?? filters?.page ?? 1
+  params.set('offset', String(pageOffset))
   params.set('pageSize', String(filters?.pageSize || 50))
-  if (filters?.offset) {
-    params.set('offset', String(filters.offset))
-  }
   if (filters?.page) {
     params.set('page', String(filters.page))
   }
@@ -263,6 +262,123 @@ export async function fetchWorkPackages(
     total: data.total || 0,
     pageSize: data.pageSize || filters?.pageSize || 50,
     offset: data.offset || 0,
+  }
+}
+
+export interface FetchAllWorkPackagesOptions extends WorkPackageFilters {
+  concurrency?: number
+  maxPages?: number
+  onProgress?: (loaded: number, total: number) => void
+}
+
+/**
+ * High-speed concurrent fetch of ALL matching work packages.
+ * Automatically discovers total count on page 1, then retrieves all remaining pages
+ * in parallel batches with deduplication and progress reporting.
+ */
+export async function fetchAllWorkPackages(
+  config: OpenProjectConfig,
+  filters?: FetchAllWorkPackagesOptions
+): Promise<PaginatedWorkPackages> {
+  const { openproject_url, openproject_api_key } = config
+  if (!openproject_url || !openproject_api_key) {
+    return { items: [], total: 0, pageSize: 0, offset: 0 }
+  }
+
+  const requestedPageSize = filters?.pageSize || 200
+  const concurrency = filters?.concurrency || 5
+  const maxPages = filters?.maxPages || 100
+
+  // 1. Fetch first page to get total count and actual page size
+  const firstResult = await fetchWorkPackages(config, {
+    ...filters,
+    pageSize: requestedPageSize,
+    offset: 1,
+    page: 1,
+  })
+
+  const total = firstResult.total
+  const firstItems = firstResult.items
+  const actualPageSize = firstResult.pageSize || firstItems.length || requestedPageSize
+
+  filters?.onProgress?.(firstItems.length, total)
+
+  // If all items fit in first page or no items exist
+  if (total <= firstItems.length || firstItems.length === 0 || actualPageSize <= 0) {
+    return {
+      items: firstItems,
+      total,
+      pageSize: actualPageSize,
+      offset: 1,
+    }
+  }
+
+  const totalPages = Math.min(Math.ceil(total / actualPageSize), maxPages)
+  const remainingPages: number[] = []
+  for (let p = 2; p <= totalPages; p++) {
+    remainingPages.push(p)
+  }
+
+  const pageMap = new Map<number, OpenProjectWorkPackage[]>()
+  pageMap.set(1, firstItems)
+
+  let loadedCount = firstItems.length
+
+  // 2. Fetch remaining pages in concurrent batches
+  for (let i = 0; i < remainingPages.length; i += concurrency) {
+    const batch = remainingPages.slice(i, i + concurrency)
+    const batchResults = await Promise.all(
+      batch.map(pageNum =>
+        fetchWorkPackages(config, {
+          ...filters,
+          pageSize: requestedPageSize,
+          offset: pageNum,
+          page: pageNum,
+        }).catch(err => {
+          console.warn(`[OpenProject] Error fetching page ${pageNum}:`, err)
+          return { items: [], total, pageSize: actualPageSize, offset: pageNum }
+        })
+      )
+    )
+
+    let allEmptyInBatch = true
+    batch.forEach((pageNum, idx) => {
+      const pageItems = batchResults[idx].items
+      pageMap.set(pageNum, pageItems)
+      loadedCount += pageItems.length
+      if (pageItems.length > 0) {
+        allEmptyInBatch = false
+      }
+    })
+
+    filters?.onProgress?.(Math.min(loadedCount, total), total)
+
+    if (allEmptyInBatch) {
+      break
+    }
+  }
+
+  // 3. Assemble all items in strict page order and deduplicate by ID
+  const seenIds = new Set<number>()
+  const allItems: OpenProjectWorkPackage[] = []
+
+  for (let p = 1; p <= totalPages; p++) {
+    const pageItems = pageMap.get(p) || []
+    for (const item of pageItems) {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id)
+        allItems.push(item)
+      }
+    }
+  }
+
+  filters?.onProgress?.(allItems.length, Math.max(total, allItems.length))
+
+  return {
+    items: allItems,
+    total: Math.max(total, allItems.length),
+    pageSize: actualPageSize,
+    offset: 1,
   }
 }
 
@@ -858,7 +974,8 @@ export async function fetchWorkPackageActivities(
 export async function findTestingStatusChange(
   config: OpenProjectConfig,
   workPackageId: number | string,
-  targetValue: string = 'Forwarded to the Testing Team'
+  targetValue: string = 'Forwarded to the Testing Team',
+  fallbackInfo?: { createdAt?: string | null; author?: string | null; updatedAt?: string | null }
 ): Promise<TestingStatusChange | null> {
   const activities = await fetchWorkPackageActivities(config, workPackageId)
   
@@ -872,27 +989,55 @@ export async function findTestingStatusChange(
       const newValLower = (detail.newValue || '').toLowerCase()
       
       // Check if this is a Testing Status change to "Forwarded to the Testing Team"
-      // Pattern 1: Property contains "testing" and new value contains "forwarded"
-      // Pattern 2: Raw text contains "testing status" and "forwarded"
-      const isTestingStatusChange = 
+      // Pattern 1: Property contains "testing" or customField1 / cf_1 and new value contains "forward"
+      // Pattern 2: Raw text contains testing / customfield and "forward"
+      const isTestingStatusProperty = 
         propLower.includes('testing') ||
-        raw.includes('testing status') ||
-        raw.includes('testing_status') ||
-        raw.includes('testingstatus')
+        propLower.includes('customfield1') ||
+        propLower.includes('cf_1') ||
+        raw.includes('testing') ||
+        raw.includes('customfield1') ||
+        raw.includes('cf_1')
       
       const isForwarded = 
-        newValLower.includes('forwarded') ||
-        raw.includes('forwarded to the testing') ||
-        raw.includes('forwarded to testing')
+        newValLower.includes('forward') ||
+        raw.includes('forward')
       
-      if (isTestingStatusChange && isForwarded) {
+      const generalForwardMatch = 
+        raw.includes('forward') && 
+        (raw.includes('test') || raw.includes('team') || propLower.includes('status'))
+
+      if ((isTestingStatusProperty && isForwarded) || generalForwardMatch) {
         lastMatch = {
           workPackageId: Number(workPackageId),
           changedAt: activity.createdAt,
-          changedBy: activity.user.name,
+          changedBy: activity.user.name || 'Unknown',
           oldValue: detail.oldValue || null,
           newValue: detail.newValue || targetValue,
         }
+      }
+    }
+  }
+
+  // Fallback: If no explicit forwarding change detail found, but activities exist,
+  // check if set at work package creation
+  if (!lastMatch) {
+    if (activities.length > 0) {
+      const firstAct = activities[0]
+      lastMatch = {
+        workPackageId: Number(workPackageId),
+        changedAt: firstAct.createdAt,
+        changedBy: firstAct.user.name || fallbackInfo?.author || 'Unknown',
+        oldValue: null,
+        newValue: targetValue,
+      }
+    } else if (fallbackInfo?.createdAt) {
+      lastMatch = {
+        workPackageId: Number(workPackageId),
+        changedAt: fallbackInfo.createdAt,
+        changedBy: fallbackInfo.author || 'OpenProject User',
+        oldValue: null,
+        newValue: targetValue,
       }
     }
   }
@@ -923,7 +1068,6 @@ export async function debugWorkPackageActivities(
     const elements = data._embedded?.elements || []
     
     // Search for Testing Status changes specifically
-    let found = false
     const testingChanges: Array<{ activityId: number; date: string; user: string; raw: string }> = []
     
     elements.forEach((activity: { 
@@ -935,7 +1079,6 @@ export async function debugWorkPackageActivities(
         activity.details.forEach((detail: { raw?: string }) => {
           const raw = (detail.raw || '').toLowerCase()
           if (raw.includes('testing status') || raw.includes('testing_status')) {
-            found = true
             testingChanges.push({
               activityId: activity.id,
               date: activity.createdAt,
@@ -954,10 +1097,17 @@ export async function debugWorkPackageActivities(
   }
 }
 
+export type WorkPackageIdentifier = number | string | { 
+  id: number | string
+  createdAt?: string | null
+  author?: string | null
+  updatedAt?: string | null 
+}
+
 // Batch fetch Testing Status changes for multiple work packages
 export async function fetchTestingStatusChanges(
   config: OpenProjectConfig,
-  workPackageIds: (number | string)[],
+  workPackages: WorkPackageIdentifier[],
   targetValue: string = 'Forwarded to the Testing Team',
   onProgress?: (current: number, found: number) => void
 ): Promise<Map<number, TestingStatusChange>> {
@@ -965,19 +1115,25 @@ export async function fetchTestingStatusChanges(
   
   // Fetch in parallel with batching for speed
   const batchSize = 10
-  for (let i = 0; i < workPackageIds.length; i += batchSize) {
-    const batch = workPackageIds.slice(i, i + batchSize)
-    const promises = batch.map(id => findTestingStatusChange(config, id, targetValue))
+  for (let i = 0; i < workPackages.length; i += batchSize) {
+    const batch = workPackages.slice(i, i + batchSize)
+    const promises = batch.map(item => {
+      const id = typeof item === 'object' && item !== null ? item.id : item
+      const fallback = typeof item === 'object' && item !== null ? item : undefined
+      return findTestingStatusChange(config, id, targetValue, fallback)
+    })
     const batchResults = await Promise.all(promises)
 
     batchResults.forEach((result, idx) => {
+      const item = batch[idx]
+      const id = typeof item === 'object' && item !== null ? item.id : item
       if (result) {
-        results.set(Number(batch[idx]), result)
+        results.set(Number(id), result)
       }
     })
     
     // Report progress
-    const processed = Math.min(i + batchSize, workPackageIds.length)
+    const processed = Math.min(i + batchSize, workPackages.length)
     onProgress?.(processed, results.size)
   }
 

@@ -40,7 +40,7 @@ interface StoryPotState {
   customFieldConfigs: CustomFieldConfig[]
   
   // Actions
-  setWorkPackages: (items: StoryPotWorkPackage[]) => void
+  setWorkPackages: (items: StoryPotWorkPackage[] | ((prev: StoryPotWorkPackage[]) => StoryPotWorkPackage[])) => void
   setFilteredWorkPackages: (items: StoryPotWorkPackage[]) => void
   setStats: (stats: StoryPotStats | null) => void
   setFilters: (filters: Partial<StoryPotFilters>) => void
@@ -124,7 +124,9 @@ export const useStoryPotStore = create<StoryPotState>((set, get) => ({
   // Custom field configs
   customFieldConfigs: [],
 
-  setWorkPackages: (items) => set({ workPackages: items }),
+  setWorkPackages: (items) => set((state) => ({ 
+    workPackages: typeof items === 'function' ? items(state.workPackages) : items 
+  })),
   setFilteredWorkPackages: (items) => set({ filteredWorkPackages: items }),
   setStats: (stats) => set({ stats }),
   setFilters: (filters) => set((state) => {
