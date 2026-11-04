@@ -74,7 +74,11 @@ export function SyncButton({
         <div className="flex items-center gap-1.5 text-xs text-green-500">
           <CheckCircle2 className="w-3.5 h-3.5" />
           <span>
-            Synced {new Date(lastSyncAt).toLocaleTimeString([], { 
+            Synced {new Date(lastSyncAt).toLocaleDateString([], { 
+              day: '2-digit', 
+              month: 'short',
+              year: 'numeric'
+            })} {new Date(lastSyncAt).toLocaleTimeString([], { 
               hour: '2-digit', 
               minute: '2-digit' 
             })}

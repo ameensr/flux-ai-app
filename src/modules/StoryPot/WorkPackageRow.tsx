@@ -11,7 +11,8 @@ interface WorkPackageRowProps {
   openprojectUrl: string
   isDark: boolean
   isSelected: boolean
-  onToggleSelect: (id: number, e: React.MouseEvent) => void
+  onToggleSelect?: (id: number, e: React.MouseEvent) => void
+  showCheckbox?: boolean
 }
 
 const getTypeIcon = (type: string) => {
@@ -43,7 +44,8 @@ export function WorkPackageRow({
   openprojectUrl,
   isDark,
   isSelected,
-  onToggleSelect
+  onToggleSelect,
+  showCheckbox = true
 }: WorkPackageRowProps) {
   return (
     <div
@@ -54,17 +56,19 @@ export function WorkPackageRow({
           : undefined
       }}
     >
-      {/* Checkbox */}
-      <button
-        type="button"
-        onClick={(e) => onToggleSelect(wp.id, e)}
-        className="mt-1 shrink-0 p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
-      >
-        {isSelected
-          ? <CheckSquare className="w-5 h-5 text-green-500" />
-          : <Square className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
-        }
-      </button>
+      {/* Checkbox - only show if user has export permission */}
+      {showCheckbox && onToggleSelect && (
+        <button
+          type="button"
+          onClick={(e) => onToggleSelect(wp.id, e)}
+          className="mt-1 shrink-0 p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
+        >
+          {isSelected
+            ? <CheckSquare className="w-5 h-5 text-green-500" />
+            : <Square className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
+          }
+        </button>
+      )}
 
       {/* Content */}
       <a

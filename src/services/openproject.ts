@@ -167,17 +167,36 @@ export async function fetchOpenProjectProjects(config: OpenProjectConfig): Promi
   const { openproject_url, openproject_api_key } = config
   if (!openproject_url || !openproject_api_key) return []
 
-  let res: Response
-  if (shouldUseProxy()) {
-    res = await proxyFetch(config, '/api/v3/projects?pageSize=500')
-  } else {
-    res = await fetch(`${buildBaseUrl(openproject_url)}/api/v3/projects?pageSize=500`, {
-      headers: { Authorization: buildAuthHeader(openproject_api_key) },
-    })
+  const allProjects: OpenProjectProject[] = []
+  let offset = 1
+  const pageSize = 100
+  let hasMore = true
+
+  while (hasMore) {
+    let res: Response
+    const apiPath = `/api/v3/projects?pageSize=${pageSize}&offset=${offset}`
+    
+    if (shouldUseProxy()) {
+      res = await proxyFetch(config, apiPath)
+    } else {
+      res = await fetch(`${buildBaseUrl(openproject_url)}${apiPath}`, {
+        headers: { Authorization: buildAuthHeader(openproject_api_key) },
+      })
+    }
+    
+    if (!res.ok) throw new Error('Failed to fetch projects')
+    
+    const data = await res.json()
+    const projects = data._embedded?.elements || []
+    allProjects.push(...projects)
+    
+    // Check if there are more pages
+    const total = data.total || 0
+    hasMore = allProjects.length < total && projects.length > 0
+    offset++
   }
-  if (!res.ok) throw new Error('Failed to fetch projects')
-  const data = await res.json()
-  return data._embedded?.elements || []
+
+  return allProjects
 }
 
 export async function fetchWorkPackages(
@@ -671,6 +690,8 @@ export async function fetchReleaseOptions(
 export function formatWorkPackage(wp: OpenProjectWorkPackage) {
   // Extract custom fields - OpenProject uses customFieldX naming
   const customFields: Record<string, string | null> = {}
+  
+  // First collect from direct properties
   Object.keys(wp).forEach(key => {
     if (key.startsWith('customField') || key.startsWith('cf_')) {
       const val = wp[key]
@@ -679,10 +700,10 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
     }
   })
   
-  // Also check _links for custom field references
+  // Then collect from _links (this is where list-type custom fields are stored)
   Object.keys(wp._links || {}).forEach(key => {
     if (key.startsWith('customField') || key.startsWith('cf_')) {
-      const link = (wp._links as Record<string, { title?: string }>)[key]
+      const link = (wp._links as Record<string, { title?: string; href?: string }>)[key]
       if (link?.title) {
         customFields[key] = link.title
       }
@@ -696,37 +717,70 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
   let receivedDate: string | null = null
   let release: string | null = null
   
-  // Check all custom fields for known field names
-  Object.entries(customFields).forEach(([key, value]) => {
-    if (!value || typeof value !== 'string') return
-    const valLower = value.toLowerCase()
-    // These are link-type fields, value would be the option title
-    if (valLower.includes('forwarded') || valLower.includes('not started') || valLower.includes('in progress') || valLower.includes('completed')) {
-      if (!testingStatus) testingStatus = value
-    }
-    if (valLower === 'yes' || valLower === 'no') {
-      // Could be isQAMissed - check if we already have one
-      if (!isQAMissed && key.includes('2')) isQAMissed = value
-    }
-  })
-  
-  // Fallback to numbered custom fields
-  testingStatus = testingStatus || customFields['customField1'] || customFields['cf_1'] || null
-  isQAMissed = isQAMissed || customFields['customField2'] || customFields['cf_2'] || null
-  qaConfirmation = qaConfirmation || customFields['customField3'] || customFields['cf_3'] || null
-  
-  // Look for Release custom field - customField9 contains release values like "UAT.30.10.2026"
+  // First, check _links for custom field references (most reliable for list-type fields)
   Object.keys(wp._links || {}).forEach(key => {
     if (key.startsWith('customField') || key.startsWith('cf_')) {
       const link = (wp._links as Record<string, { title?: string; href?: string }>)[key]
       if (link?.title) {
         const title = link.title
+        const titleLower = title.toLowerCase()
         
-        // customField9 is the Release field
+        // customField14 is Testing Status (based on actual data)
+        if (key === 'customField14' || key === 'cf_14') {
+          testingStatus = title
+        }
+        
+        // customField9 is Release
         if (key === 'customField9' || key === 'cf_9') {
           release = title
         }
+        
+        // Fallback detection by value patterns if not already set
+        if (!testingStatus) {
+          if (
+            titleLower.includes('forward') ||
+            titleLower.includes('not started') ||
+            titleLower.includes('in progress') ||
+            titleLower.includes('completed') ||
+            titleLower.includes('testing') ||
+            titleLower.includes('ready for') ||
+            titleLower.includes('blocked')
+          ) {
+            testingStatus = title
+          }
+        }
+        
+        // Detect Is QA Missed (Yes/No values)
+        if (titleLower === 'yes' || titleLower === 'no') {
+          if (!isQAMissed) isQAMissed = title
+        }
       }
+    }
+  })
+  
+  // Check direct custom field values as fallback
+  Object.entries(customFields).forEach(([key, value]) => {
+    if (!value || typeof value !== 'string') return
+    const valLower = value.toLowerCase()
+    
+    // Detect Testing Status by value patterns
+    if (!testingStatus) {
+      if (
+        valLower.includes('forward') ||
+        valLower.includes('not started') ||
+        valLower.includes('in progress') ||
+        valLower.includes('completed') ||
+        valLower.includes('testing') ||
+        valLower.includes('ready for') ||
+        valLower.includes('blocked')
+      ) {
+        testingStatus = value
+      }
+    }
+    
+    // Detect Is QA Missed
+    if (valLower === 'yes' || valLower === 'no') {
+      if (!isQAMissed && key.includes('2')) isQAMissed = value
     }
   })
   
@@ -969,80 +1023,94 @@ export async function fetchWorkPackageActivities(
   }
 }
 
-// Find when Testing Status was changed to "Forwarded to the Testing Team"
-// Returns the MOST RECENT forwarding event if forwarded multiple times
+// Find when Testing Status custom field was changed to "Forwarded to the Testing Team"
+// IMPORTANT: This ONLY looks at the "Testing Status" custom field (customField14),
+// NOT the standard OpenProject "Status" field.
+// Returns the FIRST occurrence when forwarded multiple times (rule 4: use first)
+// Returns null if Testing Status was never set to that value (no fallbacks)
 export async function findTestingStatusChange(
   config: OpenProjectConfig,
   workPackageId: number | string,
   targetValue: string = 'Forwarded to the Testing Team',
-  fallbackInfo?: { createdAt?: string | null; author?: string | null; updatedAt?: string | null }
+  _fallbackInfo?: { createdAt?: string | null; author?: string | null; updatedAt?: string | null }
 ): Promise<TestingStatusChange | null> {
   const activities = await fetchWorkPackageActivities(config, workPackageId)
   
-  let lastMatch: TestingStatusChange | null = null
+  // Collect all matches to find the FIRST occurrence
+  const matches: TestingStatusChange[] = []
 
   for (const activity of activities) {
     for (const detail of activity.details) {
-      // Get the raw text and check various patterns
-      const raw = ((detail as { raw?: string }).raw || '').toLowerCase()
+      // Get the raw text for pattern matching
+      const raw = ((detail as { raw?: string }).raw || '')
+      const rawLower = raw.toLowerCase()
       const propLower = (detail.property || '').toLowerCase()
       const newValLower = (detail.newValue || '').toLowerCase()
       
-      // Check if this is a Testing Status change to "Forwarded to the Testing Team"
-      // Pattern 1: Property contains "testing" or customField1 / cf_1 and new value contains "forward"
-      // Pattern 2: Raw text contains testing / customfield and "forward"
-      const isTestingStatusProperty = 
-        propLower.includes('testing') ||
-        propLower.includes('customfield1') ||
-        propLower.includes('cf_1') ||
-        raw.includes('testing') ||
-        raw.includes('customfield1') ||
-        raw.includes('cf_1')
+      // ONLY match on "Testing Status" custom field changes
+      // Patterns to match:
+      // 1. Property explicitly mentions "testing status" (the custom field name)
+      // 2. Property is customField14 or cf_14 (the Testing Status field ID)
+      // 3. Raw text contains "testing status" (the field name in activity log)
+      //
+      // EXPLICITLY EXCLUDE:
+      // - Standard "Status" field changes (e.g., "Status changed from X to Y")
+      // - Any change where property is just "status" without "testing"
       
-      const isForwarded = 
-        newValLower.includes('forward') ||
-        raw.includes('forward')
+      const isTestingStatusCustomField = 
+        // Match "Testing Status" as the property name
+        propLower === 'testing status' ||
+        propLower.includes('testing status') ||
+        // Match customField14 (the Testing Status field)
+        propLower === 'customfield14' ||
+        propLower === 'cf_14' ||
+        propLower.includes('customfield14') ||
+        propLower.includes('cf_14') ||
+        // Match in raw text: "Testing Status set to" or "Testing Status changed"
+        rawLower.includes('testing status set to') ||
+        rawLower.includes('testing status changed') ||
+        // Match customField14 in raw text
+        rawLower.includes('customfield14') ||
+        rawLower.includes('cf_14')
       
-      const generalForwardMatch = 
-        raw.includes('forward') && 
-        (raw.includes('test') || raw.includes('team') || propLower.includes('status'))
-
-      if ((isTestingStatusProperty && isForwarded) || generalForwardMatch) {
-        lastMatch = {
+      // EXCLUDE standard Status field - if property is just "status" without "testing", skip it
+      const isStandardStatusField = 
+        (propLower === 'status' || rawLower.startsWith('status ')) &&
+        !propLower.includes('testing') &&
+        !rawLower.includes('testing status')
+      
+      if (isStandardStatusField) {
+        // This is a standard Status field change, not Testing Status - skip it
+        continue
+      }
+      
+      // Check if the NEW value is "Forwarded to the Testing Team"
+      const isForwardedToTesting = 
+        newValLower.includes('forwarded to the testing team') ||
+        (rawLower.includes('testing status') && rawLower.includes('forwarded to the testing team'))
+      
+      if (isTestingStatusCustomField && isForwardedToTesting) {
+        matches.push({
           workPackageId: Number(workPackageId),
           changedAt: activity.createdAt,
           changedBy: activity.user.name || 'Unknown',
           oldValue: detail.oldValue || null,
           newValue: detail.newValue || targetValue,
-        }
+        })
       }
     }
   }
 
-  // Fallback: If no explicit forwarding change detail found, but activities exist,
-  // check if set at work package creation
-  if (!lastMatch) {
-    if (activities.length > 0) {
-      const firstAct = activities[0]
-      lastMatch = {
-        workPackageId: Number(workPackageId),
-        changedAt: firstAct.createdAt,
-        changedBy: firstAct.user.name || fallbackInfo?.author || 'Unknown',
-        oldValue: null,
-        newValue: targetValue,
-      }
-    } else if (fallbackInfo?.createdAt) {
-      lastMatch = {
-        workPackageId: Number(workPackageId),
-        changedAt: fallbackInfo.createdAt,
-        changedBy: fallbackInfo.author || 'OpenProject User',
-        oldValue: null,
-        newValue: targetValue,
-      }
-    }
+  // Return the FIRST occurrence (earliest date) - rule 4
+  if (matches.length > 0) {
+    // Sort by date ascending and return the first one
+    matches.sort((a, b) => new Date(a.changedAt).getTime() - new Date(b.changedAt).getTime())
+    return matches[0]
   }
 
-  return lastMatch
+  // NO FALLBACKS: If Testing Status was never set to "Forwarded to the Testing Team",
+  // return null. Do not use ticket author, updatedAt, or creation date.
+  return null
 }
 
 // Debug: Fetch and log all activities for a work package

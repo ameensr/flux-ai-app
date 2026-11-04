@@ -156,10 +156,71 @@ export async function syncWorkPackagesToCache(
           message: `Processing: ${idx} / ${workPackages.length}`
         })
       }
-      return formatWorkPackage(wp)
+      const formatted = formatWorkPackage(wp)
+      
+      // Debug: Log first 10 items to find one with "Forward" in any custom field
+      if (idx < 10) {
+        const customFieldsWithValues: Record<string, string> = {}
+        Object.entries(wp._links || {}).forEach(([key, value]) => {
+          if (key.startsWith('customField') || key.startsWith('cf_')) {
+            const link = value as { title?: string; href?: string }
+            if (link?.title) {
+              customFieldsWithValues[key] = link.title
+            }
+          }
+        })
+        // Check if any value contains "forward"
+        const hasForward = Object.values(customFieldsWithValues).some(v => 
+          v.toLowerCase().includes('forward')
+        )
+        if (hasForward || idx === 0) {
+          console.log(`[StoryPot Sync] WP #${formatted.id} Custom Fields:`, customFieldsWithValues)
+        }
+      }
+      
+      return formatted
+    })
+    
+    // Log summary of all unique custom field values found
+    const allTestingStatuses = new Set<string>()
+    formattedWPs.forEach(wp => {
+      if (wp.testingStatus) allTestingStatuses.add(wp.testingStatus)
+    })
+    console.log('[StoryPot Sync] All unique testingStatus values found:', Array.from(allTestingStatuses))
+    
+    // Also collect all unique values from each custom field to identify Testing Status field
+    const customFieldValues: Record<string, Set<string>> = {}
+    workPackages.slice(0, 50).forEach(wp => {
+      Object.entries(wp._links || {}).forEach(([key, value]) => {
+        if (key.startsWith('customField')) {
+          const link = value as { title?: string }
+          if (link?.title) {
+            if (!customFieldValues[key]) customFieldValues[key] = new Set()
+            customFieldValues[key].add(link.title)
+          }
+        }
+      })
+    })
+    console.log('[StoryPot Sync] Custom field unique values (first 50 WPs):')
+    Object.entries(customFieldValues).forEach(([field, values]) => {
+      console.log(`  ${field}:`, Array.from(values).slice(0, 10))
     })
 
-    // Phase 3: Fetch activity history for items with "Forwarded" testing status
+    // Phase 3: For items WITH a testing status, use updatedAt as forwarding date
+    // (since this project doesn't have "Forwarded to Testing Team" status)
+    const itemsWithTestingStatus = formattedWPs.filter(wp => wp.testingStatus)
+    
+    console.log(`[StoryPot Sync] Items with testingStatus: ${itemsWithTestingStatus.length} / ${formattedWPs.length}`)
+
+    onProgress?.({
+      phase: 'syncing-activities',
+      current: 0,
+      total: itemsWithTestingStatus.length,
+      message: `Processing ${itemsWithTestingStatus.length} items with testing status...`
+    })
+
+    // For items with testing status, we'll use updatedAt as the forwarding date
+    // Activity history fetch is optional - only for items with "forward" in status
     const forwardedCandidates = formattedWPs.filter(wp =>
       wp.testingStatus && wp.testingStatus.toLowerCase().includes('forward')
     )
@@ -211,7 +272,6 @@ export async function syncWorkPackagesToCache(
 
     const cacheData = formattedWPs.map(wp => {
       const activity = activityMap.get(wp.id)
-      const isForwarded = wp.testingStatus?.toLowerCase().includes('forward')
       
       // Compute is_overdue
       const today = new Date().toISOString().split('T')[0]
@@ -220,6 +280,23 @@ export async function syncWorkPackagesToCache(
           !['closed', 'done', 'rejected'].some(s => wp.status.toLowerCase().includes(s)) &&
           (wp.percentageDone || 0) < 100
         : false
+      
+      // Determine forwarding date and user:
+      // ONLY use activity data from the journal where Testing Status was set to
+      // "Forwarded to the Testing Team". NO FALLBACKS.
+      // - If activity exists: use the journal entry's date and user
+      // - If no activity: forwarded_to_testing_at and forwarded_to_testing_by remain null
+      //   (ticket will be excluded from "Received for Testing Date" filter)
+      let forwardedAt: string | null = null
+      let forwardedBy: string | null = null
+      
+      if (activity?.changedAt) {
+        forwardedAt = activity.changedAt
+        forwardedBy = activity.changedBy
+      }
+      // NO FALLBACK: Do not use updatedAt, createdAt, or author as fallback
+      // If Testing Status was never set to "Forwarded to the Testing Team" in the journal,
+      // the ticket should not have forwarding info and should be excluded from date filter
       
       return {
         id: wp.id,
@@ -238,11 +315,8 @@ export async function syncWorkPackagesToCache(
         testing_status: wp.testingStatus || null,
         is_qa_missed: wp.isQAMissed || null,
         qa_confirmation: wp.qaConfirmation || null,
-        // Use activity data if available, otherwise fallback for forwarded items
-        forwarded_to_testing_at: activity?.changedAt || 
-          (isForwarded ? (wp.updatedAt || wp.createdAt) : null),
-        forwarded_to_testing_by: activity?.changedBy || 
-          (isForwarded ? (wp.author || 'Unknown') : null),
+        forwarded_to_testing_at: forwardedAt,
+        forwarded_to_testing_by: forwardedBy,
         handoff_verified: !!activity,
         handoff_count: activity ? 1 : 0,
         start_date: wp.startDate || null,
@@ -258,6 +332,16 @@ export async function syncWorkPackagesToCache(
         last_synced_at: new Date().toISOString(),
       }
     })
+    
+    // Debug: Show sample of forwarding dates
+    const withDates = cacheData.filter(d => d.forwarded_to_testing_at)
+    console.log(`[StoryPot Sync] Items with forwarding dates: ${withDates.length}`)
+    if (withDates.length > 0) {
+      console.log('[StoryPot Sync] Sample forwarding dates:')
+      withDates.slice(0, 5).forEach(d => {
+        console.log(`  WP #${d.id}: testing_status="${d.testing_status}", forwarded_at="${d.forwarded_to_testing_at}"`)
+      })
+    }
 
     // Batch upsert to Supabase (in chunks of 500)
     const BATCH_SIZE = 500
@@ -289,25 +373,26 @@ export async function syncWorkPackagesToCache(
     }
 
     // Update sync status
+    const itemsWithForwardingDate = cacheData.filter(d => d.forwarded_to_testing_at).length
     await updateSyncStatus(projectId, opProjectId || null, {
       last_full_sync_at: new Date().toISOString(),
       last_sync_status: errors.length > 0 ? 'completed_with_errors' : 'completed',
       last_sync_error: errors.length > 0 ? errors.join('; ') : null,
       total_work_packages: savedCount,
-      work_packages_with_forwarding_date: activityMap.size
+      work_packages_with_forwarding_date: itemsWithForwardingDate
     })
 
     onProgress?.({
       phase: 'complete',
       current: savedCount,
       total: savedCount,
-      message: `Sync complete! ${savedCount} work packages cached, ${activityMap.size} with forwarding dates.`
+      message: `Sync complete! ${savedCount} work packages cached, ${itemsWithForwardingDate} with testing dates.`
     })
 
     return {
       success: true,
       totalSynced: savedCount,
-      withForwardingDate: activityMap.size,
+      withForwardingDate: itemsWithForwardingDate,
       errors,
       duration: Date.now() - startTime
     }
@@ -361,6 +446,12 @@ export async function queryCachedWorkPackages(
     offset = 0
   } = filters
 
+  // Debug: Log active filters
+  const activeFilters = Object.entries(filters).filter(([k, v]) => v && k !== 'projectId' && k !== 'limit' && k !== 'offset')
+  if (activeFilters.length > 0) {
+    console.log('[StoryPot Query] Active filters:', Object.fromEntries(activeFilters))
+  }
+
   // Build query
   let query = supabase
     .from('openproject_work_packages_cache')
@@ -373,8 +464,11 @@ export async function queryCachedWorkPackages(
   }
 
   // PRIME FEATURE: Filter by forwarded to testing date
+  // Only show items where Testing Status was set to "Forwarded to the Testing Team"
+  // in the journal, within the specified date range.
+  // Items without a verified forwarding date are excluded.
   if (forwardedFrom) {
-    query = query.gte('forwarded_to_testing_at', forwardedFrom)
+    query = query.gte('forwarded_to_testing_at', forwardedFrom + 'T00:00:00.000Z')
   }
   if (forwardedTo) {
     query = query.lte('forwarded_to_testing_at', forwardedTo + 'T23:59:59.999Z')
@@ -400,19 +494,19 @@ export async function queryCachedWorkPackages(
     query = query.eq('priority', priority)
   }
 
-  // Testing status filter (partial match)
+  // Testing status filter (exact match from dropdown)
   if (testingStatus) {
-    query = query.ilike('testing_status', `%${testingStatus}%`)
+    query = query.eq('testing_status', testingStatus)
   }
 
-  // Author filter (partial match)
+  // Author filter (exact match from dropdown)
   if (author) {
-    query = query.ilike('author', `%${author}%`)
+    query = query.eq('author', author)
   }
 
-  // Assignee filter (partial match)
+  // Assignee filter (exact match from dropdown)
   if (assignee) {
-    query = query.ilike('assignee', `%${assignee}%`)
+    query = query.eq('assignee', assignee)
   }
 
   // Search filter (subject or ID)
@@ -432,6 +526,9 @@ export async function queryCachedWorkPackages(
     console.error('[StoryPot Cache] Query error:', error)
     throw new Error(`Failed to query cache: ${error.message}`)
   }
+
+  // Debug: Log result count
+  console.log(`[StoryPot Query] Found ${count} items (showing ${data?.length || 0})`)
 
   return {
     items: (data || []) as CachedWorkPackage[],

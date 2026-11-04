@@ -38,8 +38,11 @@ export default function CachedStoryPot() {
   const { canView, can } = usePermissions()
   const navigate = useNavigate()
 
+  // Permission checks
   const hasViewAccess = canView(MODULE_KEY)
   const canViewDashboard = can(MODULE_KEY, 'can_view_dashboard')
+  const canExport = can(MODULE_KEY, 'can_export')
+  const canImport = can(MODULE_KEY, 'can_import') // Sync data from OpenProject
 
   // Project selection state
   const [projects, setProjects] = useState<Project[]>([])
@@ -380,17 +383,19 @@ export default function CachedStoryPot() {
                 </div>
               )}
 
-              {/* Sync Button */}
-              <div className="flex items-end">
-                <SyncButton
-                  onSync={handleSync}
-                  isSyncing={cache.isSyncing}
-                  syncProgress={cache.syncProgress}
-                  lastSyncAt={cache.syncStatus?.lastSyncAt || null}
-                  hasData={cache.hasData}
-                  disabled={!config}
-                />
-              </div>
+              {/* Sync Button - only show if user has can_import permission */}
+              {canImport && (
+                <div className="flex items-end">
+                  <SyncButton
+                    onSync={handleSync}
+                    isSyncing={cache.isSyncing}
+                    syncProgress={cache.syncProgress}
+                    lastSyncAt={cache.syncStatus?.lastSyncAt || null}
+                    hasData={cache.hasData}
+                    disabled={!config}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Sync Progress */}
@@ -398,8 +403,8 @@ export default function CachedStoryPot() {
               <SyncProgressBar progress={cache.syncProgress} />
             )}
 
-            {/* Filters - only show when we have data */}
-            {cache.hasData && (
+            {/* Filters - show when config exists (even before first sync) */}
+            {config && (
               <CachedFilters
                 filters={cache.filters}
                 setFilters={cache.setFilters}
@@ -416,7 +421,7 @@ export default function CachedStoryPot() {
         </div>
 
         {/* Stats */}
-        {canViewDashboard && cache.hasData && (
+        {canViewDashboard && cache.stats && cache.stats.total > 0 && (
           <StatsCards
             stats={cache.stats || undefined}
             filteredCount={cache.totalCount}
@@ -448,21 +453,23 @@ export default function CachedStoryPot() {
             </div>
           ) : (
             <>
-              {/* Select All Header */}
-              <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
-                <button onClick={toggleSelectAll} className="flex items-center gap-2 text-sm">
-                  {cache.workPackages.every(wp => selectedIds.has(wp.id))
-                    ? <CheckSquare className="w-5 h-5 text-green-500" />
-                    : <Square className="w-5 h-5" />
-                  }
-                  {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select All'}
-                </button>
-                {selectedIds.size > 0 && (
-                  <button onClick={() => setSelectedIds(new Set())} className="text-xs text-red-400">
-                    Clear
+              {/* Select All Header - only show if user can export */}
+              {canExport && (
+                <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+                  <button onClick={toggleSelectAll} className="flex items-center gap-2 text-sm">
+                    {cache.workPackages.every(wp => selectedIds.has(wp.id))
+                      ? <CheckSquare className="w-5 h-5 text-green-500" />
+                      : <Square className="w-5 h-5" />
+                    }
+                    {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select All'}
                   </button>
-                )}
-              </div>
+                  {selectedIds.size > 0 && (
+                    <button onClick={() => setSelectedIds(new Set())} className="text-xs text-red-400">
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Work Package Rows */}
               <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
@@ -473,7 +480,8 @@ export default function CachedStoryPot() {
                     openprojectUrl={config.openproject_url}
                     isDark={isDark}
                     isSelected={selectedIds.has(wp.id)}
-                    onToggleSelect={toggleSelect}
+                    onToggleSelect={canExport ? toggleSelect : undefined}
+                    showCheckbox={canExport}
                   />
                 ))}
               </div>
@@ -492,8 +500,8 @@ export default function CachedStoryPot() {
           )}
         </GlassCard>
 
-        {/* Floating Action Bar */}
-        {selectedIds.size > 0 && (
+        {/* Floating Action Bar - only show if user can export */}
+        {canExport && selectedIds.size > 0 && (
           <motion.div
             initial={{ y: 60, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}

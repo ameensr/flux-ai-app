@@ -9,7 +9,6 @@ import {
   getSyncStatus,
   getCachedFilterOptions,
   clearCache,
-  isCacheFresh,
   type SyncProgress,
   type SyncResult,
   type StoryPotQueryFilters,
@@ -72,24 +71,6 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
   const [isSyncing, setIsSyncing] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
-  // Build query filters
-  const queryFilters = useMemo<StoryPotQueryFilters>(() => ({
-    projectId,
-    opProjectId: opProjectId || undefined,
-    forwardedFrom: filters.forwardedFrom || undefined,
-    forwardedTo: filters.forwardedTo || undefined,
-    type: filters.type || undefined,
-    status: filters.status || undefined,
-    priority: filters.priority || undefined,
-    releaseTag: filters.releaseTag || undefined,
-    testingStatus: filters.testingStatus || undefined,
-    author: filters.author || undefined,
-    assignee: filters.assignee || undefined,
-    search: filters.search || undefined,
-    limit: pageSize,
-    offset: (page - 1) * pageSize,
-  }), [projectId, opProjectId, filters, page, pageSize])
-
   // Load sync status
   const loadSyncStatus = useCallback(async () => {
     if (!projectId) return
@@ -123,13 +104,32 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
     }
   }, [projectId, opProjectId])
 
-  // Query work packages
+  // Query work packages - use queryFilters directly in the function
   const loadWorkPackages = useCallback(async () => {
     if (!projectId) return
+    
+    // Build filters inline to avoid stale closure
+    const currentFilters: StoryPotQueryFilters = {
+      projectId,
+      opProjectId: opProjectId || undefined,
+      forwardedFrom: filters.forwardedFrom || undefined,
+      forwardedTo: filters.forwardedTo || undefined,
+      type: filters.type || undefined,
+      status: filters.status || undefined,
+      priority: filters.priority || undefined,
+      releaseTag: filters.releaseTag || undefined,
+      testingStatus: filters.testingStatus || undefined,
+      author: filters.author || undefined,
+      assignee: filters.assignee || undefined,
+      search: filters.search || undefined,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    }
+    
     setIsLoading(true)
     setError(null)
     try {
-      const result = await queryCachedWorkPackages(queryFilters)
+      const result = await queryCachedWorkPackages(currentFilters)
       setWorkPackages(result.items)
       setTotalCount(result.total)
     } catch (e) {
@@ -138,30 +138,29 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
     } finally {
       setIsLoading(false)
     }
-  }, [projectId, queryFilters])
+  }, [projectId, opProjectId, filters, page, pageSize])
 
-  // Initial load and reload on filter/page changes
+  // Initial load when sync status is available
   useEffect(() => {
     if (enabled && projectId) {
       loadSyncStatus()
     }
   }, [enabled, projectId, opProjectId, loadSyncStatus])
 
-  // Load data when sync status indicates we have data
+  // Load filter options and stats when sync status indicates we have data
   useEffect(() => {
     if (enabled && projectId && syncStatus?.lastSyncAt) {
-      loadWorkPackages()
       loadFilterOptions()
       loadStats()
     }
-  }, [enabled, projectId, syncStatus?.lastSyncAt, loadWorkPackages, loadFilterOptions, loadStats])
+  }, [enabled, projectId, syncStatus?.lastSyncAt, loadFilterOptions, loadStats])
 
   // Reload work packages when filters or pagination changes
   useEffect(() => {
     if (enabled && projectId && syncStatus?.lastSyncAt) {
       loadWorkPackages()
     }
-  }, [queryFilters])
+  }, [enabled, projectId, syncStatus?.lastSyncAt, loadWorkPackages])
 
   // Sync function
   const sync = useCallback(async () => {

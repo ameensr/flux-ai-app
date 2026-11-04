@@ -3593,6 +3593,181 @@ BEGIN
 END $$;
 
 
+-- ══════════════════════════════════════════════════════════════════════════════
+-- SECTION: StoryPot Cache Tables (source: 091_storypot_cache.sql, 092_fix_storypot_rls.sql)
+-- ══════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS openproject_work_packages_cache (
+  id BIGINT PRIMARY KEY,
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  op_project_id INTEGER,
+  op_project_name TEXT,
+  subject TEXT NOT NULL,
+  description TEXT,
+  type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  priority TEXT NOT NULL DEFAULT 'Normal',
+  author TEXT,
+  assignee TEXT,
+  responsible TEXT,
+  release_tag TEXT,
+  testing_status TEXT,
+  is_qa_missed TEXT,
+  qa_confirmation TEXT,
+  forwarded_to_testing_at TIMESTAMPTZ,
+  forwarded_to_testing_by TEXT,
+  handoff_verified BOOLEAN DEFAULT FALSE,
+  handoff_count INTEGER DEFAULT 0,
+  start_date DATE,
+  due_date DATE,
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ,
+  percentage_done INTEGER DEFAULT 0,
+  estimated_time TEXT,
+  spent_time TEXT,
+  story_points INTEGER,
+  is_overdue BOOLEAN DEFAULT FALSE,
+  version_name TEXT,
+  raw_data JSONB,
+  last_synced_at TIMESTAMPTZ DEFAULT NOW(),
+  sync_source TEXT DEFAULT 'manual'
+);
+
+CREATE INDEX IF NOT EXISTS idx_wp_cache_forwarded_date ON openproject_work_packages_cache(forwarded_to_testing_at DESC NULLS LAST) WHERE forwarded_to_testing_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_wp_cache_project_forwarded ON openproject_work_packages_cache(project_id, forwarded_to_testing_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_wp_cache_type ON openproject_work_packages_cache(type);
+CREATE INDEX IF NOT EXISTS idx_wp_cache_bug_release ON openproject_work_packages_cache(release_tag) WHERE type = 'Bug' AND release_tag IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_wp_cache_projects ON openproject_work_packages_cache(project_id, op_project_id);
+CREATE INDEX IF NOT EXISTS idx_wp_cache_testing_status ON openproject_work_packages_cache(testing_status);
+CREATE INDEX IF NOT EXISTS idx_wp_cache_status ON openproject_work_packages_cache(status);
+CREATE INDEX IF NOT EXISTS idx_wp_cache_priority ON openproject_work_packages_cache(priority);
+CREATE INDEX IF NOT EXISTS idx_wp_cache_author ON openproject_work_packages_cache(author);
+CREATE INDEX IF NOT EXISTS idx_wp_cache_assignee ON openproject_work_packages_cache(assignee);
+CREATE INDEX IF NOT EXISTS idx_wp_cache_due_date ON openproject_work_packages_cache(due_date) WHERE due_date IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_wp_cache_subject_search ON openproject_work_packages_cache USING gin(to_tsvector('english', subject));
+CREATE INDEX IF NOT EXISTS idx_wp_cache_last_synced ON openproject_work_packages_cache(last_synced_at);
+
+CREATE TABLE IF NOT EXISTS openproject_sync_status (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  op_project_id INTEGER,
+  last_full_sync_at TIMESTAMPTZ,
+  last_incremental_sync_at TIMESTAMPTZ,
+  last_sync_status TEXT DEFAULT 'pending',
+  last_sync_error TEXT,
+  total_work_packages INTEGER DEFAULT 0,
+  work_packages_with_forwarding_date INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(project_id, op_project_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_status_project ON openproject_sync_status(project_id);
+
+ALTER TABLE openproject_work_packages_cache ENABLE ROW LEVEL SECURITY;
+ALTER TABLE openproject_sync_status ENABLE ROW LEVEL SECURITY;
+
+-- SELECT policies with admin/manager bypass (092_fix_storypot_rls.sql)
+CREATE POLICY "Users can view cached work packages for their projects"
+  ON openproject_work_packages_cache FOR SELECT USING (
+    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'super_admin', 'manager'))
+    OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = openproject_work_packages_cache.project_id AND pm.user_id = auth.uid())
+  );
+
+CREATE POLICY "Admins can manage cached work packages"
+  ON openproject_work_packages_cache FOR ALL USING (
+    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'super_admin', 'manager'))
+    OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = openproject_work_packages_cache.project_id AND pm.user_id = auth.uid() AND pm.project_role IN ('owner', 'lead'))
+  );
+
+CREATE POLICY "Users can view sync status for their projects"
+  ON openproject_sync_status FOR SELECT USING (
+    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'super_admin', 'manager'))
+    OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = openproject_sync_status.project_id AND pm.user_id = auth.uid())
+  );
+
+CREATE POLICY "Admins can manage sync status"
+  ON openproject_sync_status FOR ALL USING (
+    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'super_admin', 'manager'))
+  );
+
+CREATE OR REPLACE FUNCTION get_storypot_work_packages(
+  p_project_id UUID, p_op_project_id INTEGER DEFAULT NULL, p_forwarded_from TIMESTAMPTZ DEFAULT NULL,
+  p_forwarded_to TIMESTAMPTZ DEFAULT NULL, p_type TEXT DEFAULT NULL, p_status TEXT DEFAULT NULL,
+  p_priority TEXT DEFAULT NULL, p_release_tag TEXT DEFAULT NULL, p_testing_status TEXT DEFAULT NULL,
+  p_author TEXT DEFAULT NULL, p_assignee TEXT DEFAULT NULL, p_search TEXT DEFAULT NULL,
+  p_limit INTEGER DEFAULT 100, p_offset INTEGER DEFAULT 0
+)
+RETURNS TABLE (
+  id BIGINT, subject TEXT, description TEXT, type TEXT, status TEXT, priority TEXT, author TEXT,
+  assignee TEXT, release_tag TEXT, testing_status TEXT, is_qa_missed TEXT, qa_confirmation TEXT,
+  forwarded_to_testing_at TIMESTAMPTZ, forwarded_to_testing_by TEXT, created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ, due_date DATE, is_overdue BOOLEAN, percentage_done INTEGER,
+  op_project_name TEXT, total_count BIGINT
+)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_total BIGINT;
+BEGIN
+  SELECT COUNT(*) INTO v_total FROM openproject_work_packages_cache c
+  WHERE c.project_id = p_project_id
+    AND (p_op_project_id IS NULL OR c.op_project_id = p_op_project_id)
+    AND (p_forwarded_from IS NULL OR c.forwarded_to_testing_at >= p_forwarded_from)
+    AND (p_forwarded_to IS NULL OR c.forwarded_to_testing_at <= p_forwarded_to)
+    AND (p_type IS NULL OR c.type = p_type) AND (p_status IS NULL OR c.status = p_status)
+    AND (p_priority IS NULL OR c.priority = p_priority) AND (p_release_tag IS NULL OR c.release_tag = p_release_tag)
+    AND (p_testing_status IS NULL OR c.testing_status ILIKE '%' || p_testing_status || '%')
+    AND (p_author IS NULL OR c.author ILIKE '%' || p_author || '%')
+    AND (p_assignee IS NULL OR c.assignee ILIKE '%' || p_assignee || '%')
+    AND (p_search IS NULL OR (c.subject ILIKE '%' || p_search || '%' OR c.id::TEXT = p_search));
+
+  RETURN QUERY SELECT c.id, c.subject, c.description, c.type, c.status, c.priority, c.author, c.assignee,
+    c.release_tag, c.testing_status, c.is_qa_missed, c.qa_confirmation, c.forwarded_to_testing_at,
+    c.forwarded_to_testing_by, c.created_at, c.updated_at, c.due_date,
+    (c.due_date IS NOT NULL AND c.due_date < CURRENT_DATE AND c.status NOT IN ('Closed', 'Done', 'Rejected') AND c.percentage_done < 100),
+    c.percentage_done, c.op_project_name, v_total
+  FROM openproject_work_packages_cache c
+  WHERE c.project_id = p_project_id
+    AND (p_op_project_id IS NULL OR c.op_project_id = p_op_project_id)
+    AND (p_forwarded_from IS NULL OR c.forwarded_to_testing_at >= p_forwarded_from)
+    AND (p_forwarded_to IS NULL OR c.forwarded_to_testing_at <= p_forwarded_to)
+    AND (p_type IS NULL OR c.type = p_type) AND (p_status IS NULL OR c.status = p_status)
+    AND (p_priority IS NULL OR c.priority = p_priority) AND (p_release_tag IS NULL OR c.release_tag = p_release_tag)
+    AND (p_testing_status IS NULL OR c.testing_status ILIKE '%' || p_testing_status || '%')
+    AND (p_author IS NULL OR c.author ILIKE '%' || p_author || '%')
+    AND (p_assignee IS NULL OR c.assignee ILIKE '%' || p_assignee || '%')
+    AND (p_search IS NULL OR (c.subject ILIKE '%' || p_search || '%' OR c.id::TEXT = p_search))
+  ORDER BY c.forwarded_to_testing_at DESC NULLS LAST, c.updated_at DESC LIMIT p_limit OFFSET p_offset;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_storypot_stats(p_project_id UUID, p_op_project_id INTEGER DEFAULT NULL)
+RETURNS TABLE (
+  total_count BIGINT, with_forwarding_date BIGINT, overdue_count BIGINT, unassigned_count BIGINT,
+  by_status JSONB, by_type JSONB, by_priority JSONB, by_testing_status JSONB
+)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  RETURN QUERY SELECT COUNT(*)::BIGINT,
+    COUNT(*) FILTER (WHERE c.forwarded_to_testing_at IS NOT NULL)::BIGINT,
+    COUNT(*) FILTER (WHERE c.due_date IS NOT NULL AND c.due_date < CURRENT_DATE AND c.status NOT IN ('Closed', 'Done', 'Rejected') AND c.percentage_done < 100)::BIGINT,
+    COUNT(*) FILTER (WHERE c.assignee IS NULL OR c.assignee = 'Unassigned')::BIGINT,
+    COALESCE(jsonb_object_agg(c.status, status_count) FILTER (WHERE c.status IS NOT NULL), '{}'::JSONB),
+    COALESCE(jsonb_object_agg(c.type, type_count) FILTER (WHERE c.type IS NOT NULL), '{}'::JSONB),
+    COALESCE(jsonb_object_agg(c.priority, priority_count) FILTER (WHERE c.priority IS NOT NULL), '{}'::JSONB),
+    COALESCE(jsonb_object_agg(c.testing_status, ts_count) FILTER (WHERE c.testing_status IS NOT NULL), '{}'::JSONB)
+  FROM (SELECT status, type, priority, testing_status, due_date, percentage_done, assignee, forwarded_to_testing_at,
+    COUNT(*) OVER (PARTITION BY status) as status_count, COUNT(*) OVER (PARTITION BY type) as type_count,
+    COUNT(*) OVER (PARTITION BY priority) as priority_count, COUNT(*) OVER (PARTITION BY testing_status) as ts_count
+    FROM openproject_work_packages_cache WHERE project_id = p_project_id AND (p_op_project_id IS NULL OR op_project_id = p_op_project_id)) c;
+END;
+$$;
+
+GRANT SELECT ON openproject_work_packages_cache TO authenticated;
+GRANT SELECT ON openproject_sync_status TO authenticated;
+GRANT EXECUTE ON FUNCTION get_storypot_work_packages TO authenticated;
+GRANT EXECUTE ON FUNCTION get_storypot_stats TO authenticated;
+
+
 -- ============================================================================
 -- END OF combined_qaly_schema.sql
 -- ============================================================================

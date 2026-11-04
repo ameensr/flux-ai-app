@@ -366,10 +366,10 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
     moduleKey: 'story-pot',
     moduleName: 'StoryPot',
     supportedPermissions: [
-      'can_view',
-      'can_view_dashboard',
-      'can_export',
-      'can_import',
+      'can_view',           // View the module and work packages list
+      'can_view_dashboard', // View stats cards/dashboard
+      'can_export',         // Export to Release/Support Tracker
+      'can_import',         // Sync data from OpenProject
     ],
     description: 'View and manage OpenProject work packages across projects'
   },
