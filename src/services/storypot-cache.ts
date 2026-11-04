@@ -8,6 +8,7 @@ import {
   formatWorkPackage,
   type OpenProjectConfig,
   type OpenProjectWorkPackage,
+  type FormattedWorkPackage,
 } from './openproject'
 
 // Types for cached work packages
@@ -147,7 +148,7 @@ export async function syncWorkPackagesToCache(
       message: 'Processing work packages...'
     })
 
-    const formattedWPs = workPackages.map((wp, idx) => {
+    const formattedWPs: FormattedWorkPackage[] = workPackages.map((wp, idx) => {
       if (idx % 100 === 0) {
         onProgress?.({
           phase: 'processing',
@@ -170,7 +171,8 @@ export async function syncWorkPackagesToCache(
           }
         })
         // Check if any value contains "forward"
-        const hasForward = Object.values(customFieldsWithValues).some(v => 
+        const fieldValues = Object.values(customFieldsWithValues) as string[]
+        const hasForward = fieldValues.some(v => 
           v.toLowerCase().includes('forward')
         )
         if (hasForward || idx === 0) {
@@ -221,9 +223,10 @@ export async function syncWorkPackagesToCache(
 
     // For items with testing status, we'll use updatedAt as the forwarding date
     // Activity history fetch is optional - only for items with "forward" in status
-    const forwardedCandidates = formattedWPs.filter(wp =>
-      wp.testingStatus && wp.testingStatus.toLowerCase().includes('forward')
-    )
+    const forwardedCandidates = formattedWPs.filter(wp => {
+      const ts = wp.testingStatus as string | null
+      return ts && ts.toLowerCase().includes('forward')
+    })
 
     onProgress?.({
       phase: 'syncing-activities',
