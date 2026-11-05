@@ -422,13 +422,14 @@ export default function CachedStoryPot() {
         </div>
 
         {/* Stats */}
-        {canViewDashboard && cache.stats && cache.stats.total > 0 && (
-        <StatsCards
+        {cache.stats && cache.stats.total > 0 && (
+          <StatsCards
             stats={cache.stats || undefined}
             filteredByTestingStatus={cache.filteredByTestingStatus}
             filteredCount={cache.totalCount}
             activeFilterCount={cache.activeFilterCount}
             isDark={isDark}
+            showStatCards={canViewDashboard}
           />
         )}
 

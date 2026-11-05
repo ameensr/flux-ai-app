@@ -20,6 +20,7 @@ interface StatsCardsProps {
   filteredCount: number
   activeFilterCount: number
   isDark: boolean
+  showStatCards?: boolean
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -36,7 +37,7 @@ function color(status: string, idx: number) {
   return STATUS_COLORS[status] ?? FALLBACK[idx % FALLBACK.length]
 }
 
-export function StatsCards({ stats, filteredByTestingStatus, filteredCount, activeFilterCount }: StatsCardsProps) {
+export function StatsCards({ stats, filteredByTestingStatus, filteredCount, activeFilterCount, showStatCards = true }: StatsCardsProps) {
   if (!stats) return null
 
   const displayTotal = activeFilterCount > 0 ? filteredCount : stats.total
@@ -50,13 +51,12 @@ export function StatsCards({ stats, filteredByTestingStatus, filteredCount, acti
   return (
     <div className="space-y-3">
 
-      {/* ── Testing Status strip ───────────────────────────────────────────── */}
+      {/* ── Testing Status strip — visible to all users ────────────────────── */}
       {entries.length > 0 && (
         <div
           className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl"
           style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}
         >
-          {/* Label */}
           <span
             className="text-[10px] font-bold uppercase tracking-[0.13em] shrink-0"
             style={{ color: 'var(--text-muted)' }}
@@ -64,7 +64,6 @@ export function StatsCards({ stats, filteredByTestingStatus, filteredCount, acti
             Testing Status
           </span>
 
-          {/* Thin bar */}
           <div
             className="flex-1 h-1.5 rounded-full overflow-hidden flex min-w-0"
             style={{ background: 'var(--hover)' }}
@@ -79,7 +78,6 @@ export function StatsCards({ stats, filteredByTestingStatus, filteredCount, acti
             ))}
           </div>
 
-          {/* Chips */}
           <div className="flex items-center gap-1.5 flex-wrap shrink-0">
             {entries.map(([status, count], idx) => (
               <span
@@ -100,47 +98,49 @@ export function StatsCards({ stats, filteredByTestingStatus, filteredCount, acti
         </div>
       )}
 
-      {/* ── Stat Cards ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Total / Filtered */}
-        <GlassCard className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#3b82f620', color: '#3b82f6' }}>
-              <BarChart3 className="w-4 h-4" />
+      {/* ── Stat Cards — only for users with can_view_dashboard ───────────── */}
+      {showStatCards && (
+        <div className="grid grid-cols-2 gap-4">
+          {/* Total / Filtered */}
+          <GlassCard className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#3b82f620', color: '#3b82f6' }}>
+                <BarChart3 className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-2xl font-black" style={{ color: 'var(--text-primary)' }}>{displayTotal.toLocaleString()}</p>
+                <p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>
+                  {activeFilterCount > 0 ? 'Filtered' : 'Total'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-2xl font-black" style={{ color: 'var(--text-primary)' }}>{displayTotal.toLocaleString()}</p>
-              <p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>
-                {activeFilterCount > 0 ? 'Filtered' : 'Total'}
-              </p>
-            </div>
-          </div>
-        </GlassCard>
+          </GlassCard>
 
-        {/* QA Missed */}
-        <GlassCard className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#ef444420', color: '#ef4444' }}>
-              <ShieldAlert className="w-4 h-4" />
+          {/* QA Missed */}
+          <GlassCard className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#ef444420', color: '#ef4444' }}>
+                <ShieldAlert className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-2xl font-black" style={{ color: 'var(--text-primary)' }}>{qaMissedYes.toLocaleString()}</p>
+                <p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>QA Missed</p>
+                {qaMissedTotal > 0 && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#ef4444' }}>
+                      <ShieldAlert className="w-2.5 h-2.5" /> {qaMissedYes}
+                    </span>
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>/</span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#22c55e' }}>
+                      <ShieldCheck className="w-2.5 h-2.5" /> {qaMissedNo}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-2xl font-black" style={{ color: 'var(--text-primary)' }}>{qaMissedYes.toLocaleString()}</p>
-              <p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>QA Missed</p>
-              {qaMissedTotal > 0 && (
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#ef4444' }}>
-                    <ShieldAlert className="w-2.5 h-2.5" /> {qaMissedYes}
-                  </span>
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>/</span>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#22c55e' }}>
-                    <ShieldCheck className="w-2.5 h-2.5" /> {qaMissedNo}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        </GlassCard>
-      </div>
+          </GlassCard>
+        </div>
+      )}
     </div>
   )
 }
