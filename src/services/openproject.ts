@@ -737,6 +737,16 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
         if (key === 'customField9' || key === 'cf_9') {
           release = title
         }
+
+        // customField2 is Is QA Missed
+        if (key === 'customField2' || key === 'cf_2') {
+          isQAMissed = title
+        }
+
+        // customField3 is QA Confirmation
+        if (key === 'customField3' || key === 'cf_3') {
+          qaConfirmation = title
+        }
         
         // Fallback detection by value patterns if not already set
         if (!testingStatus) {
@@ -751,11 +761,6 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
           ) {
             testingStatus = title
           }
-        }
-        
-        // Detect Is QA Missed (Yes/No values)
-        if (titleLower === 'yes' || titleLower === 'no') {
-          if (!isQAMissed) isQAMissed = title
         }
       }
     }
@@ -781,10 +786,7 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
       }
     }
     
-    // Detect Is QA Missed
-    if (valLower === 'yes' || valLower === 'no') {
-      if (!isQAMissed && key.includes('2')) isQAMissed = value
-    }
+
   })
   
   // Also check direct custom field values for dates (Received Date)
