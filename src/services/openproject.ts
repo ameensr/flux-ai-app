@@ -168,14 +168,13 @@ export async function fetchOpenProjectProjects(config: OpenProjectConfig): Promi
   if (!openproject_url || !openproject_api_key) return []
 
   const allProjects: OpenProjectProject[] = []
-  let offset = 1
+  let page = 1
   const pageSize = 100
-  let hasMore = true
 
-  while (hasMore) {
+  while (true) {
     let res: Response
-    const apiPath = `/api/v3/projects?pageSize=${pageSize}&offset=${offset}`
-    
+    const apiPath = `/api/v3/projects?pageSize=${pageSize}&offset=${page}&sortBy=[["name","asc"]]`
+
     if (shouldUseProxy()) {
       res = await proxyFetch(config, apiPath)
     } else {
@@ -183,17 +182,21 @@ export async function fetchOpenProjectProjects(config: OpenProjectConfig): Promi
         headers: { Authorization: buildAuthHeader(openproject_api_key) },
       })
     }
-    
-    if (!res.ok) throw new Error('Failed to fetch projects')
-    
+
+    if (!res.ok) throw new Error(`Failed to fetch projects (page ${page}): ${res.status}`)
+
     const data = await res.json()
-    const projects = data._embedded?.elements || []
+    const projects: OpenProjectProject[] = data._embedded?.elements || []
+
     allProjects.push(...projects)
-    
-    // Check if there are more pages
-    const total = data.total || 0
-    hasMore = allProjects.length < total && projects.length > 0
-    offset++
+
+    const total: number = data.total ?? 0
+    console.log(`[fetchOpenProjectProjects] page=${page} got=${projects.length} total=${total} accumulated=${allProjects.length}`)
+
+    // Stop when we have all projects or the page returned nothing
+    if (projects.length === 0 || allProjects.length >= total) break
+
+    page++
   }
 
   return allProjects
@@ -973,25 +976,49 @@ export async function fetchWorkPackageActivities(
       comment?: { raw: string }
       createdAt: string
       _links?: { user?: { title?: string; href?: string } }
-      details?: Array<{ format?: string; raw?: string; html?: string }>
+      details?: Array<{
+        format?: string
+        raw?: string
+        html?: string
+        // OpenProject v3 structured detail fields
+        property?: string
+        propertyName?: string
+        oldValue?: string
+        newValue?: string
+      }>
     }) => {
-      // Parse details from raw text format
+      // Parse details — OpenProject v3 journal API returns BOTH:
+      //   1. Structured fields: property, propertyName, oldValue, newValue
+      //   2. Raw text: "Testing Status changed from X to Y"
+      // Prefer structured fields; fall back to raw text parsing.
       const parsedDetails = (activity.details || []).map(d => {
+        // --- Structured fields (most reliable) ---
+        if (d.property || d.propertyName) {
+          return {
+            property: d.propertyName || d.property || '',
+            propertyName: d.propertyName || d.property || '',
+            oldValue: d.oldValue || '',
+            newValue: d.newValue || '',
+            raw: d.raw || ''
+          }
+        }
+
+        // --- Raw text fallback ---
         const raw = d.raw || ''
         let property = ''
         let oldValue = ''
         let newValue = ''
 
-        const changedMatch = raw.match(/^(.+?) changed from (.+?) to (.+)$/i)
+        const changedMatch = raw.match(/^(.+?)\s+changed from\s+(.+?)\s+to\s+(.+)$/i)
         if (changedMatch) {
-          property = changedMatch[1]
-          oldValue = changedMatch[2]
-          newValue = changedMatch[3]
+          property = changedMatch[1].trim()
+          oldValue = changedMatch[2].trim()
+          newValue = changedMatch[3].trim()
         } else {
-          const setMatch = raw.match(/^(.+?) set to (.+)$/i)
+          const setMatch = raw.match(/^(.+?)\s+set to\s+(.+)$/i)
           if (setMatch) {
-            property = setMatch[1]
-            newValue = setMatch[2]
+            property = setMatch[1].trim()
+            newValue = setMatch[2].trim()
           }
         }
 
@@ -1039,6 +1066,9 @@ export async function findTestingStatusChange(
   // Collect all matches to find the FIRST occurrence
   const matches: TestingStatusChange[] = []
 
+  // Debug: Log all activities for this work package to understand the format
+  let debugLogged = false
+
   for (const activity of activities) {
     for (const detail of activity.details) {
       // Get the raw text for pattern matching
@@ -1046,6 +1076,19 @@ export async function findTestingStatusChange(
       const rawLower = raw.toLowerCase()
       const propLower = (detail.property || '').toLowerCase()
       const newValLower = (detail.newValue || '').toLowerCase()
+      
+      // Debug: Log details that mention "testing" or "forward" to understand the format
+      if (!debugLogged && (rawLower.includes('testing') || rawLower.includes('forward'))) {
+        console.log(`[findTestingStatusChange] WP #${workPackageId} activity detail:`, {
+          raw,
+          property: detail.property,
+          newValue: detail.newValue,
+          oldValue: detail.oldValue,
+          activityDate: activity.createdAt,
+          user: activity.user.name
+        })
+        debugLogged = true
+      }
       
       // ONLY match on "Testing Status" custom field changes
       // Patterns to match:
@@ -1068,7 +1111,7 @@ export async function findTestingStatusChange(
         propLower.includes('cf_14') ||
         // Match in raw text: "Testing Status set to" or "Testing Status changed"
         rawLower.includes('testing status set to') ||
-        rawLower.includes('testing status changed') ||
+        rawLower.includes('testing status changed from') ||
         // Match customField14 in raw text
         rawLower.includes('customfield14') ||
         rawLower.includes('cf_14')
@@ -1085,11 +1128,17 @@ export async function findTestingStatusChange(
       }
       
       // Check if the NEW value is "Forwarded to the Testing Team"
+      // Also check the raw text directly for the target value
       const isForwardedToTesting = 
         newValLower.includes('forwarded to the testing team') ||
         (rawLower.includes('testing status') && rawLower.includes('forwarded to the testing team'))
       
       if (isTestingStatusCustomField && isForwardedToTesting) {
+        console.log(`[findTestingStatusChange] WP #${workPackageId} MATCHED:`, {
+          date: activity.createdAt,
+          user: activity.user.name,
+          raw
+        })
         matches.push({
           workPackageId: Number(workPackageId),
           changedAt: activity.createdAt,

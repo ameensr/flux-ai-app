@@ -108,6 +108,10 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
   const loadWorkPackages = useCallback(async () => {
     if (!projectId) return
     
+    // When a date filter is active, fetch ALL matching rows (no pagination limit)
+    // so the user sees every ticket that matches, not just the first page
+    const isDateFiltered = !!(filters.forwardedFrom || filters.forwardedTo)
+
     // Build filters inline to avoid stale closure
     const currentFilters: StoryPotQueryFilters = {
       projectId,
@@ -124,6 +128,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
       search: filters.search || undefined,
       limit: pageSize,
       offset: (page - 1) * pageSize,
+      noLimit: isDateFiltered,
     }
     
     setIsLoading(true)

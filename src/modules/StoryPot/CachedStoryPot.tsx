@@ -116,7 +116,8 @@ export default function CachedStoryPot() {
       try {
         const projects = await fetchOpenProjectProjects(config!)
         setOpProjects(projects)
-      } catch {
+      } catch (err) {
+        console.error('[CachedStoryPot] Failed to load OpenProject projects:', err)
         setOpProjects([])
       } finally {
         setLoadingOpProjects(false)

@@ -76,6 +76,7 @@ export interface StoryPotQueryFilters {
   search?: string | null
   limit?: number
   offset?: number
+  noLimit?: boolean  // when true, fetch all matching rows (ignores limit/offset)
 }
 
 export interface StoryPotQueryResult {
@@ -208,8 +209,9 @@ export async function syncWorkPackagesToCache(
       console.log(`  ${field}:`, Array.from(values).slice(0, 10))
     })
 
-    // Phase 3: For items WITH a testing status, use updatedAt as forwarding date
-    // (since this project doesn't have "Forwarded to Testing Team" status)
+    // Phase 3: Fetch activity history for items with Testing Status
+    // We need to check ALL items with a testing status value, not just those currently
+    // set to "Forwarded", because the Testing Status might have been changed after forwarding
     const itemsWithTestingStatus = formattedWPs.filter(wp => wp.testingStatus)
     
     console.log(`[StoryPot Sync] Items with testingStatus: ${itemsWithTestingStatus.length} / ${formattedWPs.length}`)
@@ -221,23 +223,27 @@ export async function syncWorkPackagesToCache(
       message: `Processing ${itemsWithTestingStatus.length} items with testing status...`
     })
 
-    // For items with testing status, we'll use updatedAt as the forwarding date
-    // Activity history fetch is optional - only for items with "forward" in status
-    const forwardedCandidates = formattedWPs.filter(wp => {
-      const ts = wp.testingStatus as string | null
-      return ts && ts.toLowerCase().includes('forward')
-    })
+    // Fetch activity history for ALL items with a testing status
+    // This ensures we catch items that were forwarded but later changed to another status
+    const forwardedCandidates = itemsWithTestingStatus
 
     onProgress?.({
       phase: 'syncing-activities',
       current: 0,
       total: forwardedCandidates.length,
-      message: `Fetching activity history for ${forwardedCandidates.length} forwarded items...`
+      message: `Fetching activity history for ${forwardedCandidates.length} items...`
     })
 
     let activityMap = new Map<number, { changedAt: string; changedBy: string }>()
     
     if (forwardedCandidates.length > 0) {
+      console.log(`[StoryPot Sync] Fetching activity history for ${forwardedCandidates.length} candidates with Testing Status`)
+      console.log('[StoryPot Sync] Sample candidates:', forwardedCandidates.slice(0, 3).map(wp => ({
+        id: wp.id,
+        testingStatus: wp.testingStatus,
+        subject: wp.subject?.substring(0, 50)
+      })))
+      
       try {
         const candidatesWithFallback = forwardedCandidates.map(wp => ({
           id: wp.id,
@@ -259,6 +265,16 @@ export async function syncWorkPackagesToCache(
             })
           }
         )
+        
+        console.log(`[StoryPot Sync] Activity fetch complete. Found ${activityMap.size} items with verified Testing Status change dates`)
+        if (activityMap.size > 0) {
+          const sample = Array.from(activityMap.entries()).slice(0, 3)
+          console.log('[StoryPot Sync] Sample activity results:', sample.map(([id, data]) => ({
+            wpId: id,
+            changedAt: data.changedAt,
+            changedBy: data.changedBy
+          })))
+        }
       } catch (e) {
         console.warn('[StoryPot Cache] Failed to fetch activity history:', e)
         errors.push(`Activity history fetch failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
@@ -446,7 +462,8 @@ export async function queryCachedWorkPackages(
     assignee,
     search,
     limit = 50,
-    offset = 0
+    offset = 0,
+    noLimit = false,
   } = filters
 
   // Debug: Log active filters
@@ -467,15 +484,28 @@ export async function queryCachedWorkPackages(
   }
 
   // PRIME FEATURE: Filter by forwarded to testing date
-  // Only show items where Testing Status was set to "Forwarded to the Testing Team"
-  // in the journal, within the specified date range.
-  // Items without a verified forwarding date are excluded.
+  // forwarded_to_testing_at is stored in UTC. The user picks a local date (IST = UTC+5:30).
+  // To include ALL tickets forwarded on that local date regardless of time,
+  // we shift the window by -5h30m on the lower bound and +18h30m on the upper bound
+  // so the full IST day (00:00–23:59 IST) is covered in UTC.
+  // IST 00:00 = UTC 2026-11-02T18:30:00Z  (previous UTC day)
+  // IST 23:59 = UTC 2026-11-03T18:29:59Z
   if (forwardedFrom) {
-    query = query.gte('forwarded_to_testing_at', forwardedFrom + 'T00:00:00.000Z')
+    // Subtract 5h30m (IST offset) to get the UTC start of that IST day
+    const fromDate = new Date(forwardedFrom + 'T00:00:00+05:30')
+    query = query.gte('forwarded_to_testing_at', fromDate.toISOString())
   }
   if (forwardedTo) {
-    query = query.lte('forwarded_to_testing_at', forwardedTo + 'T23:59:59.999Z')
+    // End of IST day = next day 00:00 IST minus 1ms, converted to UTC
+    const toDate = new Date(forwardedTo + 'T23:59:59+05:30')
+    query = query.lte('forwarded_to_testing_at', toDate.toISOString())
   }
+
+  // Use the explicit testingStatus filter only — do NOT auto-inject a testing_status
+  // constraint when a date range is active. A ticket's forwarded_to_testing_at is
+  // recorded at the moment of the transition and is independent of the current
+  // testing_status value (which may have changed since then).
+  const effectiveTestingStatus = testingStatus || null
 
   // Type filter
   if (type) {
@@ -497,9 +527,9 @@ export async function queryCachedWorkPackages(
     query = query.eq('priority', priority)
   }
 
-  // Testing status filter (exact match from dropdown)
-  if (testingStatus) {
-    query = query.eq('testing_status', testingStatus)
+  // Testing status filter — exact match, case-insensitive via ilike with no wildcards
+  if (effectiveTestingStatus) {
+    query = query.ilike('testing_status', effectiveTestingStatus)
   }
 
   // Author filter (exact match from dropdown)
@@ -517,11 +547,15 @@ export async function queryCachedWorkPackages(
     query = query.or(`subject.ilike.%${search}%,id.eq.${parseInt(search) || 0}`)
   }
 
-  // Ordering: Forwarded date first (most recent), then updated date
+  // Ordering: Forwarded date ascending, then updated date
   query = query
-    .order('forwarded_to_testing_at', { ascending: false, nullsFirst: false })
+    .order('forwarded_to_testing_at', { ascending: true, nullsFirst: false })
     .order('updated_at', { ascending: false })
-    .range(offset, offset + limit - 1)
+
+  // Pagination — skip when noLimit is true (e.g. date-filtered full export)
+  if (!noLimit) {
+    query = query.range(offset, offset + limit - 1)
+  }
 
   const { data, error, count } = await query
 
@@ -536,7 +570,7 @@ export async function queryCachedWorkPackages(
   return {
     items: (data || []) as CachedWorkPackage[],
     total: count || 0,
-    hasMore: (count || 0) > offset + limit
+    hasMore: noLimit ? false : (count || 0) > offset + limit
   }
 }
 
