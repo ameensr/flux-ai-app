@@ -716,11 +716,16 @@ export async function getSyncStatus(
     query = query.is('op_project_id', null)
   }
 
-  const { data, error } = await query.single()
+  // Use maybeSingle + manual sort instead of .single() so duplicate rows
+  // (from the old broken upsert) don't throw PGRST116 and return null.
+  const { data: rows, error } = await query.order('updated_at', { ascending: false })
 
-  if (error || !data) {
+  if (error || !rows || rows.length === 0) {
     return null
   }
+
+  // Pick the most recently updated row (first after DESC sort)
+  const data = rows[0]
 
   return {
     lastSyncAt: data.last_full_sync_at || data.last_incremental_sync_at,

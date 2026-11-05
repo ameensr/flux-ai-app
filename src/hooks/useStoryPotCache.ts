@@ -210,12 +210,19 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
         (progress) => setSyncProgress(progress)
       )
       
-      // Reload everything after sync
-      await loadSyncStatus()
-      await loadWorkPackages()
-      await loadFilterOptions()
-      await loadStats()
-      await loadFilteredTestingStatus()
+      // Reload sync status first, then update syncStatus state directly so
+      // the new lastSyncAt is immediately reflected in the UI without waiting
+      // for useEffect dependency chains to re-fire.
+      const newStatus = await getSyncStatus(projectId, opProjectId)
+      setSyncStatus(newStatus)
+
+      // Reload data with fresh calls (not stale-closure callbacks)
+      await Promise.all([
+        loadWorkPackages(),
+        loadFilterOptions(),
+        loadStats(),
+        loadFilteredTestingStatus(),
+      ])
     } catch (e) {
       console.error('Sync failed:', e)
       setError(e instanceof Error ? e : new Error('Sync failed'))
@@ -223,7 +230,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
       setIsSyncing(false)
       setSyncProgress(null)
     }
-  }, [config, projectId, opProjectId, opProjectName, loadSyncStatus, loadWorkPackages, loadFilterOptions, loadStats])
+  }, [config, projectId, opProjectId, opProjectName, loadWorkPackages, loadFilterOptions, loadStats, loadFilteredTestingStatus])
 
   // Clear cache function
   const clearCacheData = useCallback(async () => {
