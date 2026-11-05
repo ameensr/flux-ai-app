@@ -746,19 +746,38 @@ async function updateSyncStatus(
     work_packages_with_forwarding_date?: number
   }
 ): Promise<void> {
-  const { error } = await supabase
+  // Postgres NULL != NULL in UNIQUE constraints, so upsert with onConflict never
+  // matches when op_project_id is NULL — it inserts a new row every time.
+  // Fix: explicitly find the existing row and UPDATE by PK, or INSERT if missing.
+  let existingQuery = supabase
     .from('openproject_sync_status')
-    .upsert({
-      project_id: projectId,
-      op_project_id: opProjectId,
-      ...updates,
-      updated_at: new Date().toISOString()
-    }, {
-      onConflict: 'project_id,op_project_id'
-    })
+    .select('id')
+    .eq('project_id', projectId)
 
-  if (error) {
-    console.error('[StoryPot Cache] Failed to update sync status:', error)
+  if (opProjectId !== null && opProjectId !== undefined) {
+    existingQuery = existingQuery.eq('op_project_id', opProjectId)
+  } else {
+    existingQuery = existingQuery.is('op_project_id', null)
+  }
+
+  const { data: existing } = await existingQuery.maybeSingle()
+
+  if (existing?.id) {
+    const { error } = await supabase
+      .from('openproject_sync_status')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', existing.id)
+    if (error) console.error('[StoryPot Cache] Failed to update sync status:', error)
+  } else {
+    const { error } = await supabase
+      .from('openproject_sync_status')
+      .insert({
+        project_id: projectId,
+        op_project_id: opProjectId,
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+    if (error) console.error('[StoryPot Cache] Failed to insert sync status:', error)
   }
 }
 
