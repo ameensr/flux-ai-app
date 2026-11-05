@@ -8,6 +8,7 @@ import {
   getCachedStats,
   getSyncStatus,
   getCachedFilterOptions,
+  getFilteredTestingStatusCounts,
   clearCache,
   type SyncProgress,
   type SyncResult,
@@ -63,6 +64,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
   const [workPackages, setWorkPackages] = useState<CachedWorkPackage[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [stats, setStats] = useState<Awaited<ReturnType<typeof getCachedStats>> | null>(null)
+  const [filteredByTestingStatus, setFilteredByTestingStatus] = useState<Record<string, number>>({})
   const [filterOptions, setFilterOptions] = useState<Awaited<ReturnType<typeof getCachedFilterOptions>> | null>(null)
   const [syncStatus, setSyncStatus] = useState<Awaited<ReturnType<typeof getSyncStatus>> | null>(null)
   
@@ -103,6 +105,30 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
       console.error('Failed to load stats:', e)
     }
   }, [projectId, opProjectId])
+
+  // Load filtered testing status counts (respects active filters)
+  const loadFilteredTestingStatus = useCallback(async () => {
+    if (!projectId) return
+    try {
+      const counts = await getFilteredTestingStatusCounts({
+        projectId,
+        opProjectId: opProjectId || undefined,
+        forwardedFrom: filters.forwardedFrom || undefined,
+        forwardedTo: filters.forwardedTo || undefined,
+        type: filters.type || undefined,
+        status: filters.status || undefined,
+        priority: filters.priority || undefined,
+        releaseTag: filters.releaseTag || undefined,
+        testingStatus: filters.testingStatus || undefined,
+        author: filters.author || undefined,
+        assignee: filters.assignee || undefined,
+        search: filters.search || undefined,
+      })
+      setFilteredByTestingStatus(counts)
+    } catch (e) {
+      console.error('Failed to load filtered testing status counts:', e)
+    }
+  }, [projectId, opProjectId, filters])
 
   // Query work packages - use queryFilters directly in the function
   const loadWorkPackages = useCallback(async () => {
@@ -164,8 +190,9 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
   useEffect(() => {
     if (enabled && projectId && syncStatus?.lastSyncAt) {
       loadWorkPackages()
+      loadFilteredTestingStatus()
     }
-  }, [enabled, projectId, syncStatus?.lastSyncAt, loadWorkPackages])
+  }, [enabled, projectId, syncStatus?.lastSyncAt, loadWorkPackages, loadFilteredTestingStatus])
 
   // Sync function
   const sync = useCallback(async () => {
@@ -188,6 +215,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
       await loadWorkPackages()
       await loadFilterOptions()
       await loadStats()
+      await loadFilteredTestingStatus()
     } catch (e) {
       console.error('Sync failed:', e)
       setError(e instanceof Error ? e : new Error('Sync failed'))
@@ -251,6 +279,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
     workPackages,
     totalCount,
     stats,
+    filteredByTestingStatus,
     filterOptions,
     syncStatus,
 

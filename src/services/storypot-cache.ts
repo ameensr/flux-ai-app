@@ -589,10 +589,12 @@ export async function getCachedStats(
   byType: Record<string, number>
   byPriority: Record<string, number>
   byTestingStatus: Record<string, number>
+  qaMissedYes: number
+  qaMissedNo: number
 }> {
   let query = supabase
     .from('openproject_work_packages_cache')
-    .select('status, type, priority, testing_status, is_overdue, assignee, forwarded_to_testing_at')
+    .select('status, type, priority, testing_status, is_overdue, assignee, forwarded_to_testing_at, is_qa_missed')
     .eq('project_id', projectId)
 
   if (opProjectId) {
@@ -616,36 +618,20 @@ export async function getCachedStats(
   let overdue = 0
   let unassigned = 0
   let withForwardingDate = 0
+  let qaMissedYes = 0
+  let qaMissedNo = 0
 
   items.forEach(item => {
-    // Count by status
-    if (item.status) {
-      byStatus[item.status] = (byStatus[item.status] || 0) + 1
-    }
-    // Count by type
-    if (item.type) {
-      byType[item.type] = (byType[item.type] || 0) + 1
-    }
-    // Count by priority
-    if (item.priority) {
-      byPriority[item.priority] = (byPriority[item.priority] || 0) + 1
-    }
-    // Count by testing status
-    if (item.testing_status) {
-      byTestingStatus[item.testing_status] = (byTestingStatus[item.testing_status] || 0) + 1
-    }
-    // Count overdue
-    if (item.is_overdue) {
-      overdue++
-    }
-    // Count unassigned
-    if (!item.assignee || item.assignee === 'Unassigned') {
-      unassigned++
-    }
-    // Count with forwarding date
-    if (item.forwarded_to_testing_at) {
-      withForwardingDate++
-    }
+    if (item.status) byStatus[item.status] = (byStatus[item.status] || 0) + 1
+    if (item.type) byType[item.type] = (byType[item.type] || 0) + 1
+    if (item.priority) byPriority[item.priority] = (byPriority[item.priority] || 0) + 1
+    if (item.testing_status) byTestingStatus[item.testing_status] = (byTestingStatus[item.testing_status] || 0) + 1
+    if (item.is_overdue) overdue++
+    if (!item.assignee || item.assignee === 'Unassigned') unassigned++
+    if (item.forwarded_to_testing_at) withForwardingDate++
+    const qaMissed = (item as any).is_qa_missed
+    if (qaMissed?.toLowerCase() === 'yes') qaMissedYes++
+    else if (qaMissed?.toLowerCase() === 'no') qaMissedNo++
   })
 
   return {
@@ -656,13 +642,59 @@ export async function getCachedStats(
     byStatus,
     byType,
     byPriority,
-    byTestingStatus
+    byTestingStatus,
+    qaMissedYes,
+    qaMissedNo,
   }
 }
 
 /**
  * Get sync status for a project
  */
+/**
+ * Get testing_status counts for the currently filtered result set.
+ * Applies the same filters as queryCachedWorkPackages but fetches all rows (no pagination).
+ */
+export async function getFilteredTestingStatusCounts(
+  filters: Omit<StoryPotQueryFilters, 'limit' | 'offset' | 'noLimit'>
+): Promise<Record<string, number>> {
+  let query = supabase
+    .from('openproject_work_packages_cache')
+    .select('testing_status')
+    .eq('project_id', filters.projectId)
+
+  if (filters.opProjectId) query = query.eq('op_project_id', filters.opProjectId)
+  if (filters.forwardedFrom) {
+    const fromDate = new Date(filters.forwardedFrom + 'T00:00:00+05:30')
+    query = query.gte('forwarded_to_testing_at', fromDate.toISOString())
+  }
+  if (filters.forwardedTo) {
+    const toDate = new Date(filters.forwardedTo + 'T23:59:59+05:30')
+    query = query.lte('forwarded_to_testing_at', toDate.toISOString())
+  }
+  if (filters.type) query = query.eq('type', filters.type)
+  if (filters.releaseTag) query = query.eq('release_tag', filters.releaseTag)
+  if (filters.status) query = query.eq('status', filters.status)
+  if (filters.priority) query = query.eq('priority', filters.priority)
+  if (filters.testingStatus) query = query.ilike('testing_status', filters.testingStatus)
+  if (filters.author) query = query.eq('author', filters.author)
+  if (filters.assignee) query = query.eq('assignee', filters.assignee)
+  if (filters.search) {
+    query = query.or(`subject.ilike.%${filters.search}%,id.eq.${parseInt(filters.search) || 0}`)
+  }
+
+  const { data, error } = await query
+  if (error) throw new Error(`Failed to get filtered testing status counts: ${error.message}`)
+
+  const counts: Record<string, number> = {}
+  for (const item of data || []) {
+    if (item.testing_status) {
+      counts[item.testing_status] = (counts[item.testing_status] || 0) + 1
+    }
+  }
+  return counts
+}
+
 export async function getSyncStatus(
   projectId: string,
   opProjectId?: number | null
