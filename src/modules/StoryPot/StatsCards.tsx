@@ -1,6 +1,6 @@
 // src/modules/StoryPot/StatsCards.tsx
 import React from 'react'
-import { BarChart3, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { BarChart3, ShieldAlert, ShieldCheck, HelpCircle } from 'lucide-react'
 import { GlassCard } from '@/components/ui/GlassCard'
 
 interface StatsCardsProps {
@@ -15,8 +15,11 @@ interface StatsCardsProps {
     byTestingStatus: Record<string, number>
     qaMissedYes?: number
     qaMissedNo?: number
+    qaMissedUnknown?: number
   } | undefined
   filteredByTestingStatus: Record<string, number>
+  // Filter-aware QA Missed counts (from getFilteredQaMissedCounts)
+  filteredQaMissed?: { yes: number; no: number; unknown: number; total: number }
   filteredCount: number
   activeFilterCount: number
   isDark: boolean
@@ -37,16 +40,33 @@ function color(status: string, idx: number) {
   return STATUS_COLORS[status] ?? FALLBACK[idx % FALLBACK.length]
 }
 
-export function StatsCards({ stats, filteredByTestingStatus, filteredCount, activeFilterCount, showStatCards = true }: StatsCardsProps) {
+export function StatsCards({
+  stats,
+  filteredByTestingStatus,
+  filteredQaMissed,
+  filteredCount,
+  activeFilterCount,
+  showStatCards = true,
+}: StatsCardsProps) {
   if (!stats) return null
 
   const displayTotal = activeFilterCount > 0 ? filteredCount : stats.total
+
+  // Testing Status bar: use filtered counts when any filter is active
   const barSource = activeFilterCount > 0 ? filteredByTestingStatus : stats.byTestingStatus
   const entries = Object.entries(barSource).sort((a, b) => b[1] - a[1])
   const barTotal = entries.reduce((s, [, c]) => s + c, 0) || 1
-  const qaMissedYes = stats.qaMissedYes ?? 0
-  const qaMissedNo = stats.qaMissedNo ?? 0
-  const qaMissedTotal = qaMissedYes + qaMissedNo
+
+  // QA Missed: use filter-aware counts when filters are active, fall back to global stats
+  const qaMissedYes = activeFilterCount > 0
+    ? (filteredQaMissed?.yes ?? 0)
+    : (stats.qaMissedYes ?? 0)
+  const qaMissedNo = activeFilterCount > 0
+    ? (filteredQaMissed?.no ?? 0)
+    : (stats.qaMissedNo ?? 0)
+  const qaMissedUnknown = activeFilterCount > 0
+    ? (filteredQaMissed?.unknown ?? 0)
+    : (stats.qaMissedUnknown ?? 0)
 
   return (
     <div className="space-y-3">
@@ -73,7 +93,7 @@ export function StatsCards({ stats, filteredByTestingStatus, filteredCount, acti
                 key={status}
                 className="h-full transition-all duration-300"
                 style={{ width: `${(count / barTotal) * 100}%`, backgroundColor: color(status, idx) }}
-                title={`${status}: ${count}`}
+                title={`${status}: ${count} (${Math.round((count / barTotal) * 100)}%)`}
               />
             ))}
           </div>
@@ -84,7 +104,7 @@ export function StatsCards({ stats, filteredByTestingStatus, filteredCount, acti
                 key={status}
                 className="inline-flex items-center gap-1 text-[10px] font-medium whitespace-nowrap"
                 style={{ color: 'var(--text-secondary)' }}
-                title={status}
+                title={`${status}: ${count} (${Math.round((count / barTotal) * 100)}%)`}
               >
                 <span
                   className="w-1.5 h-1.5 rounded-full shrink-0"
@@ -116,7 +136,7 @@ export function StatsCards({ stats, filteredByTestingStatus, filteredCount, acti
             </div>
           </GlassCard>
 
-          {/* QA Missed */}
+          {/* QA Missed — filter-aware */}
           <GlassCard className="p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#ef444420', color: '#ef4444' }}>
@@ -125,17 +145,23 @@ export function StatsCards({ stats, filteredByTestingStatus, filteredCount, acti
               <div className="min-w-0">
                 <p className="text-2xl font-black" style={{ color: 'var(--text-primary)' }}>{qaMissedYes.toLocaleString()}</p>
                 <p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>QA Missed</p>
-                {qaMissedTotal > 0 && (
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#ef4444' }}>
-                      <ShieldAlert className="w-2.5 h-2.5" /> {qaMissedYes}
-                    </span>
-                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>/</span>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#22c55e' }}>
-                      <ShieldCheck className="w-2.5 h-2.5" /> {qaMissedNo}
-                    </span>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#ef4444' }} title="QA Missed: Yes">
+                    <ShieldAlert className="w-2.5 h-2.5" /> {qaMissedYes}
+                  </span>
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>/</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#22c55e' }} title="QA Missed: No">
+                    <ShieldCheck className="w-2.5 h-2.5" /> {qaMissedNo}
+                  </span>
+                  {qaMissedUnknown > 0 && (
+                    <>
+                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>/</span>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#94a3b8' }} title="QA Missed: Unknown">
+                        <HelpCircle className="w-2.5 h-2.5" /> {qaMissedUnknown}
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </GlassCard>

@@ -1,8 +1,8 @@
 // src/modules/StoryPot/WorkPackageRow.tsx
 import React from 'react'
 import {
-  Bug, FileText, Zap, CheckCircle2, User, Calendar, Clock,
-  Users, Tag, History, Square, CheckSquare
+  Bug, FileText, Zap, CheckCircle2, User, Calendar,
+  Users, Tag, History, Square, CheckSquare, Clock, ArrowRight,
 } from 'lucide-react'
 import type { CachedWorkPackage } from '@/services/storypot-cache'
 
@@ -39,24 +39,38 @@ const getStatusColor = (s: string) => {
   return 'var(--text-muted)'
 }
 
+// Format a UTC timestamp for display using the browser's local timezone
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    day: '2-digit', month: 'short', year: 'numeric',
+  })
+}
+function fmtTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
 export function WorkPackageRow({
   wp,
   openprojectUrl,
   isDark,
   isSelected,
   onToggleSelect,
-  showCheckbox = true
+  showCheckbox = true,
 }: WorkPackageRowProps) {
+  const hasHandoff = !!wp.forwarded_to_testing_at && wp.handoff_verified
+
   return (
     <div
       className="flex items-start gap-2 p-4 hover:bg-black/5 dark:hover:bg-white/5"
       style={{
         background: isSelected
           ? (isDark ? 'rgba(34, 197, 94, 0.1)' : 'rgba(34, 197, 94, 0.05)')
-          : undefined
+          : undefined,
       }}
     >
-      {/* Checkbox - only show if user has export permission */}
+      {/* Checkbox */}
       {showCheckbox && onToggleSelect && (
         <button
           type="button"
@@ -81,24 +95,21 @@ export function WorkPackageRow({
           className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
           style={{
             background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-            color: 'var(--text-secondary)'
+            color: 'var(--text-secondary)',
           }}
         >
           {getTypeIcon(wp.type)}
         </div>
 
         <div className="flex-1 min-w-0">
-          {/* Badges */}
+          {/* Badges row */}
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
               #{wp.id}
             </span>
             <span
               className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
-              style={{
-                background: `${getStatusColor(wp.status)}20`,
-                color: getStatusColor(wp.status)
-              }}
+              style={{ background: `${getStatusColor(wp.status)}20`, color: getStatusColor(wp.status) }}
             >
               {wp.status}
             </span>
@@ -106,7 +117,7 @@ export function WorkPackageRow({
               className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
               style={{
                 background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-                color: 'var(--text-secondary)'
+                color: 'var(--text-secondary)',
               }}
             >
               {wp.type}
@@ -124,10 +135,12 @@ export function WorkPackageRow({
                 Overdue
               </span>
             )}
+            {/* Current Testing Status badge */}
             {wp.testing_status && (
               <span
                 className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
                 style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}
+                title="Current Testing Status"
               >
                 {wp.testing_status}
               </span>
@@ -139,13 +152,10 @@ export function WorkPackageRow({
             {wp.subject}
           </p>
 
-          {/* Meta info */}
-          <div className="flex items-center gap-4 text-xs flex-wrap" style={{ color: 'var(--text-muted)' }}>
+          {/* Meta row */}
+          <div className="flex items-center gap-4 text-xs flex-wrap mb-2" style={{ color: 'var(--text-muted)' }}>
             <span className="flex items-center gap-1">
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{ background: getPriorityColor(wp.priority) }}
-              />
+              <span className="w-2 h-2 rounded-full" style={{ background: getPriorityColor(wp.priority) }} />
               {wp.priority}
             </span>
             <span className="flex items-center gap-1">
@@ -160,35 +170,91 @@ export function WorkPackageRow({
                 {new Date(wp.created_at).toLocaleDateString()}
               </span>
             )}
-            {/* PRIME FEATURE: Show forwarded date prominently */}
-            {wp.forwarded_to_testing_at && (
-              <span
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium"
-                style={{
-                  background: isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.08)',
-                  color: '#3b82f6',
-                  border: '1px solid rgba(59, 130, 246, 0.25)'
-                }}
-              >
-                <History className="w-3.5 h-3.5" />
-                <span>
-                  Forwarded: <strong>{new Date(wp.forwarded_to_testing_at).toLocaleDateString()}</strong>
-                  {' at '}
-                  <strong>{new Date(wp.forwarded_to_testing_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
-                </span>
-                {wp.forwarded_to_testing_by && (
-                  <span className="ml-0.5">
-                    by <span className="font-semibold">{wp.forwarded_to_testing_by}</span>
-                  </span>
-                )}
-              </span>
-            )}
             {wp.percentage_done > 0 && (
               <span className="flex items-center gap-1">
                 <Clock className="w-3 h-3" />{wp.percentage_done}%
               </span>
             )}
           </div>
+
+          {/* Handoff event block — shown when a verified transition exists */}
+          {hasHandoff && (
+            <div
+              className="inline-flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg text-xs"
+              style={{
+                background: isDark ? 'rgba(59, 130, 246, 0.12)' : 'rgba(59, 130, 246, 0.07)',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+              }}
+            >
+              {/* Icon + label */}
+              <span className="flex items-center gap-1.5 font-semibold shrink-0" style={{ color: '#3b82f6' }}>
+                <History className="w-3.5 h-3.5" />
+                Forwarded to the Testing Team
+              </span>
+
+              {/* Date Status Changed */}
+              <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                <Calendar className="w-3 h-3" style={{ color: '#3b82f6' }} />
+                <span style={{ color: 'var(--text-muted)' }}>Date:</span>
+                <strong style={{ color: 'var(--text-primary)' }}>
+                  {fmtDate(wp.forwarded_to_testing_at!)}
+                </strong>
+              </span>
+
+              {/* Time Status Changed */}
+              <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                <Clock className="w-3 h-3" style={{ color: '#3b82f6' }} />
+                <span style={{ color: 'var(--text-muted)' }}>Time:</span>
+                <strong style={{ color: 'var(--text-primary)' }}>
+                  {fmtTime(wp.forwarded_to_testing_at!)}
+                </strong>
+              </span>
+
+              {/* Changed By */}
+              {wp.forwarded_to_testing_by && (
+                <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                  <User className="w-3 h-3" style={{ color: '#3b82f6' }} />
+                  <span style={{ color: 'var(--text-muted)' }}>By:</span>
+                  <strong style={{ color: 'var(--text-primary)' }}>{wp.forwarded_to_testing_by}</strong>
+                </span>
+              )}
+
+              {/* Current Testing Status (may differ from the matched transition) */}
+              {wp.testing_status && wp.testing_status !== 'Forwarded to the Testing Team' && (
+                <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                  <ArrowRight className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+                  <span style={{ color: 'var(--text-muted)' }}>Now:</span>
+                  <strong style={{ color: 'var(--text-primary)' }}>{wp.testing_status}</strong>
+                </span>
+              )}
+
+              {/* Multiple forwarding events indicator */}
+              {wp.handoff_count > 1 && (
+                <span
+                  className="px-1.5 py-0.5 rounded text-[10px] font-bold"
+                  style={{ background: 'rgba(59,130,246,0.2)', color: '#3b82f6' }}
+                  title={`Forwarded ${wp.handoff_count} times total`}
+                >
+                  ×{wp.handoff_count}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Unverified indicator — forwarded_to_testing_at present but not verified */}
+          {wp.forwarded_to_testing_at && !wp.handoff_verified && (
+            <div
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs mt-1"
+              style={{
+                background: isDark ? 'rgba(245,158,11,0.1)' : 'rgba(245,158,11,0.07)',
+                border: '1px solid rgba(245,158,11,0.25)',
+                color: '#f59e0b',
+              }}
+            >
+              <History className="w-3 h-3" />
+              Transition date unavailable
+            </div>
+          )}
         </div>
 
         {/* Progress bar */}
@@ -205,7 +271,7 @@ export function WorkPackageRow({
                 className="h-full rounded-full"
                 style={{
                   width: `${wp.percentage_done}%`,
-                  background: wp.percentage_done === 100 ? '#22c55e' : '#3b82f6'
+                  background: wp.percentage_done === 100 ? '#22c55e' : '#3b82f6',
                 }}
               />
             </div>

@@ -509,7 +509,8 @@ export default function StoryPot() {
           )
 
           items = items.map(wp => {
-            const change = changes.get(wp.id)
+            const events = changes.get(wp.id)
+            const change = events?.[0]
             if (change) {
               return {
                 ...wp,
@@ -680,7 +681,8 @@ export default function StoryPot() {
         if (!isMounted) return
 
         setWorkPackages(prev => prev.map(wp => {
-          const change = changes.get(wp.id)
+          const events = changes.get(wp.id)
+            const change = events?.[0]
           if (change) {
             return {
               ...wp,
@@ -1150,7 +1152,8 @@ export default function StoryPot() {
                                 )
                                 // Update work packages with forwarding info
                                 const updated = workPackages.map(wp => {
-                                  const change = changes.get(wp.id)
+                                  const events = changes.get(wp.id)
+            const change = events?.[0]
                                   if (change) {
                                     return {
                                       ...wp,

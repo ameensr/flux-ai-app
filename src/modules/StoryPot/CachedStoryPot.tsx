@@ -202,7 +202,12 @@ export default function CachedStoryPot() {
 
   // Handle sync
   const handleSync = () => {
-    cache.sync()
+    cache.sync().then(() => {
+      const progress = cache.syncProgress
+      if (progress?.phase === 'complete') {
+        toast({ title: 'Sync Complete', description: progress.message })
+      }
+    })
     toast({ title: 'Sync Started', description: 'Fetching data from OpenProject...' })
   }
 
@@ -426,6 +431,7 @@ export default function CachedStoryPot() {
           <StatsCards
             stats={cache.stats || undefined}
             filteredByTestingStatus={cache.filteredByTestingStatus}
+            filteredQaMissed={cache.filteredQaMissed}
             filteredCount={cache.totalCount}
             activeFilterCount={cache.activeFilterCount}
             isDark={isDark}

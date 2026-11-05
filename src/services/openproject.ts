@@ -904,6 +904,7 @@ export interface WorkPackageActivity {
     propertyName?: string
     oldValue?: string
     newValue?: string
+    raw?: string
   }[]
 }
 
@@ -972,7 +973,13 @@ export async function fetchWorkPackageActivities(
     const data = await res.json()
     const elements = data._embedded?.elements || []
 
-    // Process activities and fetch user names
+    // DIAGNOSTIC: log raw shape of first journal entry that has details
+    const firstWithDetails = elements.find((a: { details?: unknown[] }) => (a.details as unknown[])?.length > 0)
+    if (firstWithDetails) {
+      console.log('[OP Activities] RAW detail[0]:', JSON.stringify((firstWithDetails as { details: unknown[] }).details[0], null, 2))
+      console.log('[OP Activities] ALL details:', JSON.stringify((firstWithDetails as { details: unknown[] }).details, null, 2))
+    }
+    // END DIAGNOSTIC
     const activities = await Promise.all(elements.map(async (activity: {
       id: number
       comment?: { raw: string }
@@ -982,52 +989,52 @@ export async function fetchWorkPackageActivities(
         format?: string
         raw?: string
         html?: string
-        // OpenProject v3 structured detail fields
         property?: string
         propertyName?: string
         oldValue?: string
         newValue?: string
       }>
     }) => {
-      // Parse details — OpenProject v3 journal API returns BOTH:
-      //   1. Structured fields: property, propertyName, oldValue, newValue
-      //   2. Raw text: "Testing Status changed from X to Y"
-      // Prefer structured fields; fall back to raw text parsing.
+      // OpenProject v3 journal detail items arrive in one of two shapes:
+      //
+      // Shape A (older / community editions):
+      //   { format: "html", raw: "Testing Status changed from X to Y", html: "..." }
+      //   — no property/newValue fields; values must be parsed from raw text.
+      //
+      // Shape B (newer / some hosted editions):
+      //   { property: "customField14", propertyName: "Testing Status",
+      //     oldValue: "Not Started", newValue: "Forwarded to the Testing Team" }
+      //   — structured fields present; raw may or may not be populated.
+      //
+      // We normalise both into { property, newValue, oldValue, raw } so that
+      // isForwardingDetail can match against any combination.
       const parsedDetails = (activity.details || []).map(d => {
-        // --- Structured fields (most reliable) ---
-        if (d.property || d.propertyName) {
-          return {
-            property: d.propertyName || d.property || '',
-            propertyName: d.propertyName || d.property || '',
-            oldValue: d.oldValue || '',
-            newValue: d.newValue || '',
-            raw: d.raw || ''
+        const rawText = d.raw || ''
+
+        // Start with whatever structured fields exist
+        let property  = d.propertyName || d.property || ''
+        let newValue  = d.newValue  || ''
+        let oldValue  = d.oldValue  || ''
+
+        // If structured fields are missing or incomplete, parse from raw text
+        if (!property || !newValue) {
+          const changedMatch = rawText.match(/^(.+?)\s+changed from\s+(.+?)\s+to\s+(.+)$/i)
+          if (changedMatch) {
+            if (!property) property = changedMatch[1].trim()
+            if (!oldValue) oldValue = changedMatch[2].trim()
+            if (!newValue) newValue = changedMatch[3].trim()
+          } else {
+            const setMatch = rawText.match(/^(.+?)\s+set to\s+(.+)$/i)
+            if (setMatch) {
+              if (!property) property = setMatch[1].trim()
+              if (!newValue) newValue = setMatch[2].trim()
+            }
           }
         }
 
-        // --- Raw text fallback ---
-        const raw = d.raw || ''
-        let property = ''
-        let oldValue = ''
-        let newValue = ''
-
-        const changedMatch = raw.match(/^(.+?)\s+changed from\s+(.+?)\s+to\s+(.+)$/i)
-        if (changedMatch) {
-          property = changedMatch[1].trim()
-          oldValue = changedMatch[2].trim()
-          newValue = changedMatch[3].trim()
-        } else {
-          const setMatch = raw.match(/^(.+?)\s+set to\s+(.+)$/i)
-          if (setMatch) {
-            property = setMatch[1].trim()
-            newValue = setMatch[2].trim()
-          }
-        }
-
-        return { property, propertyName: property, oldValue, newValue, raw }
+        return { property, propertyName: property, oldValue, newValue, raw: rawText }
       })
 
-      // Get user name - try title first, then fetch if needed
       let userName = activity._links?.user?.title || ''
       if (!userName && activity._links?.user?.href) {
         userName = await fetchUserName(config, activity._links.user.href)
@@ -1052,95 +1059,75 @@ export async function fetchWorkPackageActivities(
   }
 }
 
-// Find when Testing Status custom field was changed to "Forwarded to the Testing Team"
-// IMPORTANT: This ONLY looks at the "Testing Status" custom field (customField14),
-// NOT the standard OpenProject "Status" field.
-// Returns the FIRST occurrence when forwarded multiple times (rule 4: use first)
-// Returns null if Testing Status was never set to that value (no fallbacks)
-export async function findTestingStatusChange(
+// Returns true when a normalised journal detail represents a Testing Status
+// transition to targetValue. Matches against all three sources:
+//   1. property name  (structured or parsed from raw)
+//   2. newValue       (structured or parsed from raw)
+//   3. raw text       (direct substring match as final safety net)
+function isForwardingDetail(
+  detail: { property?: string; newValue?: string; raw?: string },
+  targetValue: string
+): boolean {
+  const prop     = (detail.property  || '').toLowerCase()
+  const newVal   = (detail.newValue  || '').toLowerCase()
+  const raw      = (detail.raw       || '').toLowerCase()
+  const target   = targetValue.toLowerCase()
+
+  // Identify the Testing Status custom field by any known identifier
+  const isTestingStatusField =
+    prop === 'testing status' ||
+    prop.includes('testing status') ||
+    prop === 'customfield14' ||
+    prop === 'cf_14' ||
+    prop.includes('customfield14') ||
+    prop.includes('cf_14') ||
+    raw.includes('testing status')
+
+  // Exclude the plain work-package Status field
+  const isPlainStatusField =
+    (prop === 'status' || raw.startsWith('status ')) &&
+    !prop.includes('testing') &&
+    !raw.includes('testing status')
+
+  if (isPlainStatusField) return false
+
+  // Match the target value in newValue OR directly in the raw text
+  const matchesTarget =
+    newVal.includes(target) ||
+    raw.includes(target)
+
+  return isTestingStatusField && matchesTarget
+}
+
+// Returns ALL forwarding events for a work package, sorted newest-first.
+export async function findAllTestingStatusChanges(
   config: OpenProjectConfig,
   workPackageId: number | string,
-  targetValue: string = 'Forwarded to the Testing Team',
-  _fallbackInfo?: { createdAt?: string | null; author?: string | null; updatedAt?: string | null }
-): Promise<TestingStatusChange | null> {
+  targetValue: string = 'Forwarded to the Testing Team'
+): Promise<TestingStatusChange[]> {
   const activities = await fetchWorkPackageActivities(config, workPackageId)
-  
-  // Collect all matches to find the FIRST occurrence
   const matches: TestingStatusChange[] = []
-
-  // Debug: Log all activities for this work package to understand the format
-  let debugLogged = false
 
   for (const activity of activities) {
     for (const detail of activity.details) {
-      // Get the raw text for pattern matching
-      const raw = ((detail as { raw?: string }).raw || '')
-      const rawLower = raw.toLowerCase()
-      const propLower = (detail.property || '').toLowerCase()
-      const newValLower = (detail.newValue || '').toLowerCase()
-      
-      // Debug: Log details that mention "testing" or "forward" to understand the format
-      if (!debugLogged && (rawLower.includes('testing') || rawLower.includes('forward'))) {
-        console.log(`[findTestingStatusChange] WP #${workPackageId} activity detail:`, {
-          raw,
+      // Log every detail that mentions testing or forwarded so we can see what arrives
+      const rawLow = (detail.raw || '').toLowerCase()
+      const propLow = (detail.property || '').toLowerCase()
+      const newLow  = (detail.newValue || '').toLowerCase()
+      if (rawLow.includes('testing') || rawLow.includes('forward') ||
+          propLow.includes('testing') || newLow.includes('forward')) {
+        console.log(`[OP Match] WP#${workPackageId} detail:`, {
           property: detail.property,
           newValue: detail.newValue,
           oldValue: detail.oldValue,
+          raw: detail.raw,
           activityDate: activity.createdAt,
-          user: activity.user.name
-        })
-        debugLogged = true
-      }
-      
-      // ONLY match on "Testing Status" custom field changes
-      // Patterns to match:
-      // 1. Property explicitly mentions "testing status" (the custom field name)
-      // 2. Property is customField14 or cf_14 (the Testing Status field ID)
-      // 3. Raw text contains "testing status" (the field name in activity log)
-      //
-      // EXPLICITLY EXCLUDE:
-      // - Standard "Status" field changes (e.g., "Status changed from X to Y")
-      // - Any change where property is just "status" without "testing"
-      
-      const isTestingStatusCustomField = 
-        // Match "Testing Status" as the property name
-        propLower === 'testing status' ||
-        propLower.includes('testing status') ||
-        // Match customField14 (the Testing Status field)
-        propLower === 'customfield14' ||
-        propLower === 'cf_14' ||
-        propLower.includes('customfield14') ||
-        propLower.includes('cf_14') ||
-        // Match in raw text: "Testing Status set to" or "Testing Status changed"
-        rawLower.includes('testing status set to') ||
-        rawLower.includes('testing status changed from') ||
-        // Match customField14 in raw text
-        rawLower.includes('customfield14') ||
-        rawLower.includes('cf_14')
-      
-      // EXCLUDE standard Status field - if property is just "status" without "testing", skip it
-      const isStandardStatusField = 
-        (propLower === 'status' || rawLower.startsWith('status ')) &&
-        !propLower.includes('testing') &&
-        !rawLower.includes('testing status')
-      
-      if (isStandardStatusField) {
-        // This is a standard Status field change, not Testing Status - skip it
-        continue
-      }
-      
-      // Check if the NEW value is "Forwarded to the Testing Team"
-      // Also check the raw text directly for the target value
-      const isForwardedToTesting = 
-        newValLower.includes('forwarded to the testing team') ||
-        (rawLower.includes('testing status') && rawLower.includes('forwarded to the testing team'))
-      
-      if (isTestingStatusCustomField && isForwardedToTesting) {
-        console.log(`[findTestingStatusChange] WP #${workPackageId} MATCHED:`, {
-          date: activity.createdAt,
           user: activity.user.name,
-          raw
+          matched: isForwardingDetail(detail, targetValue),
         })
+      }
+
+      if (isForwardingDetail(detail, targetValue)) {
         matches.push({
           workPackageId: Number(workPackageId),
           changedAt: activity.createdAt,
@@ -1152,16 +1139,21 @@ export async function findTestingStatusChange(
     }
   }
 
-  // Return the FIRST occurrence (earliest date) - rule 4
-  if (matches.length > 0) {
-    // Sort by date ascending and return the first one
-    matches.sort((a, b) => new Date(a.changedAt).getTime() - new Date(b.changedAt).getTime())
-    return matches[0]
-  }
+  // Newest first
+  matches.sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime())
+  return matches
+}
 
-  // NO FALLBACKS: If Testing Status was never set to "Forwarded to the Testing Team",
-  // return null. Do not use ticket author, updatedAt, or creation date.
-  return null
+// Returns the LATEST forwarding event for a work package, or null if none found.
+// Used by the main cache table to store the most-recent handoff date for date filtering.
+export async function findTestingStatusChange(
+  config: OpenProjectConfig,
+  workPackageId: number | string,
+  targetValue: string = 'Forwarded to the Testing Team',
+  _fallbackInfo?: { createdAt?: string | null; author?: string | null; updatedAt?: string | null }
+): Promise<TestingStatusChange | null> {
+  const all = await findAllTestingStatusChanges(config, workPackageId, targetValue)
+  return all.length > 0 ? all[0] : null
 }
 
 // Debug: Fetch and log all activities for a work package
@@ -1223,35 +1215,33 @@ export type WorkPackageIdentifier = number | string | {
   updatedAt?: string | null 
 }
 
-// Batch fetch Testing Status changes for multiple work packages
+// Batch fetch ALL Testing Status forwarding events for multiple work packages.
+// Returns Map<wpId, events[]> where events are sorted newest-first.
 export async function fetchTestingStatusChanges(
   config: OpenProjectConfig,
   workPackages: WorkPackageIdentifier[],
   targetValue: string = 'Forwarded to the Testing Team',
   onProgress?: (current: number, found: number) => void
-): Promise<Map<number, TestingStatusChange>> {
-  const results = new Map<number, TestingStatusChange>()
-  
-  // Fetch in parallel with batching for speed
+): Promise<Map<number, TestingStatusChange[]>> {
+  const results = new Map<number, TestingStatusChange[]>()
+
   const batchSize = 10
   for (let i = 0; i < workPackages.length; i += batchSize) {
     const batch = workPackages.slice(i, i + batchSize)
     const promises = batch.map(item => {
       const id = typeof item === 'object' && item !== null ? item.id : item
-      const fallback = typeof item === 'object' && item !== null ? item : undefined
-      return findTestingStatusChange(config, id, targetValue, fallback)
+      return findAllTestingStatusChanges(config, id, targetValue)
     })
     const batchResults = await Promise.all(promises)
 
-    batchResults.forEach((result, idx) => {
+    batchResults.forEach((events, idx) => {
       const item = batch[idx]
-      const id = typeof item === 'object' && item !== null ? item.id : item
-      if (result) {
-        results.set(Number(id), result)
+      const id = Number(typeof item === 'object' && item !== null ? item.id : item)
+      if (events.length > 0) {
+        results.set(id, events)
       }
     })
-    
-    // Report progress
+
     const processed = Math.min(i + batchSize, workPackages.length)
     onProgress?.(processed, results.size)
   }

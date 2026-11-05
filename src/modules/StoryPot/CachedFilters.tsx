@@ -17,7 +17,7 @@ interface FilterSelectProps {
 function FilterSelect({ label, value, onChange, options, isDark, placeholder = 'All' }: FilterSelectProps) {
   return (
     <div>
-      <label 
+      <label
         className="block text-xs font-bold uppercase tracking-wider mb-1.5"
         style={{ color: 'var(--text-muted)' }}
       >
@@ -87,9 +87,9 @@ export function CachedFilters({
     <div className="space-y-4">
       {/* Search Bar */}
       <div className="relative">
-        <Search 
+        <Search
           className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-          style={{ color: 'var(--text-muted)' }} 
+          style={{ color: 'var(--text-muted)' }}
         />
         <input
           type="text"
@@ -107,9 +107,9 @@ export function CachedFilters({
 
       {/* Filter Toggle */}
       <div className="flex items-center gap-3">
-        <Button 
-          variant="outline" 
-          onClick={() => setShowFilters(!showFilters)} 
+        <Button
+          variant="outline"
+          onClick={() => setShowFilters(!showFilters)}
           className="gap-2"
         >
           <Filter className="w-4 h-4" />
@@ -137,7 +137,7 @@ export function CachedFilters({
             exit={{ height: 0, opacity: 0 }}
             className="space-y-4 overflow-hidden"
           >
-            {/* Row 1: Type, Status, Priority */}
+            {/* Row 1: Type, Status, Priority, Release (Bug only) */}
             <div className={`grid gap-3 ${isBugType ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3'}`}>
               <FilterSelect
                 label="Type"
@@ -160,7 +160,6 @@ export function CachedFilters({
                 options={opts.priorities}
                 isDark={isDark}
               />
-              {/* Release filter - ONLY shown when Type = Bug */}
               {isBugType && (
                 <FilterSelect
                   label="Release"
@@ -172,8 +171,8 @@ export function CachedFilters({
               )}
             </div>
 
-            {/* Row 2: Author, Assignee, Testing Status */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {/* Row 2: Author, Assignee, Testing Status, QA Missed */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <FilterSelect
                 label="Author"
                 value={filters.author}
@@ -195,10 +194,17 @@ export function CachedFilters({
                 options={opts.testingStatuses}
                 isDark={isDark}
               />
+              <FilterSelect
+                label="QA Missed"
+                value={filters.isQAMissed}
+                onChange={(v) => setFilters({ isQAMissed: v })}
+                options={['Yes', 'No']}
+                isDark={isDark}
+              />
             </div>
 
-            {/* Row 3: PRIME FEATURE - Received for Testing Date */}
-            <div 
+            {/* Row 3: Date Status Changed to "Forwarded to the Testing Team" */}
+            <div
               className="p-4 rounded-xl border"
               style={{
                 background: isDark ? 'rgba(59, 130, 246, 0.08)' : 'rgba(59, 130, 246, 0.04)',
@@ -208,16 +214,13 @@ export function CachedFilters({
               <div className="flex items-center gap-2 mb-3">
                 <History className="w-4 h-4" style={{ color: '#3b82f6' }} />
                 <span className="text-sm font-bold" style={{ color: '#3b82f6' }}>
-                  Received for Testing Date
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
-                  INSTANT FILTER
+                  Date Status Changed to &quot;Forwarded to the Testing Team&quot;
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label 
-                    className="block text-xs font-medium mb-1" 
+                  <label
+                    className="block text-xs font-medium mb-1"
                     style={{ color: 'var(--text-muted)' }}
                   >
                     From
@@ -235,8 +238,8 @@ export function CachedFilters({
                   />
                 </div>
                 <div>
-                  <label 
-                    className="block text-xs font-medium mb-1" 
+                  <label
+                    className="block text-xs font-medium mb-1"
                     style={{ color: 'var(--text-muted)' }}
                   >
                     To
@@ -255,7 +258,7 @@ export function CachedFilters({
                 </div>
               </div>
               <p className="text-[10px] mt-2" style={{ color: 'var(--text-muted)' }}>
-                Filter by exact date when tickets were forwarded to testing team. Results are instant from cache.
+                Filters by the verified date when the ticket&apos;s Testing Status was changed to &quot;Forwarded to the Testing Team&quot; in the activity journal. Tickets without a verified transition date are excluded from date-range results.
               </p>
             </div>
           </motion.div>

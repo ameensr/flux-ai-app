@@ -9,6 +9,7 @@ import {
   getSyncStatus,
   getCachedFilterOptions,
   getFilteredTestingStatusCounts,
+  getFilteredQaMissedCounts,
   clearCache,
   type SyncProgress,
   type SyncResult,
@@ -33,6 +34,7 @@ export interface StoryPotFiltersState {
   priority: string
   releaseTag: string
   testingStatus: string
+  isQAMissed: string
   author: string
   assignee: string
   search: string
@@ -46,6 +48,7 @@ const defaultFilters: StoryPotFiltersState = {
   priority: '',
   releaseTag: '',
   testingStatus: '',
+  isQAMissed: '',
   author: '',
   assignee: '',
   search: '',
@@ -65,6 +68,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
   const [totalCount, setTotalCount] = useState(0)
   const [stats, setStats] = useState<Awaited<ReturnType<typeof getCachedStats>> | null>(null)
   const [filteredByTestingStatus, setFilteredByTestingStatus] = useState<Record<string, number>>({})
+  const [filteredQaMissed, setFilteredQaMissed] = useState<{ yes: number; no: number; unknown: number; total: number }>({ yes: 0, no: 0, unknown: 0, total: 0 })
   const [filterOptions, setFilterOptions] = useState<Awaited<ReturnType<typeof getCachedFilterOptions>> | null>(null)
   const [syncStatus, setSyncStatus] = useState<Awaited<ReturnType<typeof getSyncStatus>> | null>(null)
   
@@ -106,6 +110,31 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
     }
   }, [projectId, opProjectId])
 
+  // Load filtered QA Missed counts (respects active filters)
+  const loadFilteredQaMissed = useCallback(async () => {
+    if (!projectId) return
+    try {
+      const counts = await getFilteredQaMissedCounts({
+        projectId,
+        opProjectId: opProjectId || undefined,
+        forwardedFrom: filters.forwardedFrom || undefined,
+        forwardedTo: filters.forwardedTo || undefined,
+        type: filters.type || undefined,
+        status: filters.status || undefined,
+        priority: filters.priority || undefined,
+        releaseTag: filters.releaseTag || undefined,
+        testingStatus: filters.testingStatus || undefined,
+        isQAMissed: filters.isQAMissed || undefined,
+        author: filters.author || undefined,
+        assignee: filters.assignee || undefined,
+        search: filters.search || undefined,
+      })
+      setFilteredQaMissed(counts)
+    } catch (e) {
+      console.error('Failed to load filtered QA missed counts:', e)
+    }
+  }, [projectId, opProjectId, filters])
+
   // Load filtered testing status counts (respects active filters)
   const loadFilteredTestingStatus = useCallback(async () => {
     if (!projectId) return
@@ -120,6 +149,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
         priority: filters.priority || undefined,
         releaseTag: filters.releaseTag || undefined,
         testingStatus: filters.testingStatus || undefined,
+        isQAMissed: filters.isQAMissed || undefined,
         author: filters.author || undefined,
         assignee: filters.assignee || undefined,
         search: filters.search || undefined,
@@ -135,12 +165,10 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
     if (!projectId) return
     
     // When ANY filter is active, fetch ALL matching rows so no tickets are
-    // hidden behind page boundaries. Previously only date filters triggered
-    // noLimit, so filtering by type/status/assignee etc. silently dropped
-    // tickets beyond the first pageSize.
+    // hidden behind page boundaries.
     const isAnyFilterActive = !!(filters.forwardedFrom || filters.forwardedTo ||
       filters.type || filters.status || filters.priority || filters.releaseTag ||
-      filters.testingStatus || filters.author || filters.assignee || filters.search)
+      filters.testingStatus || filters.isQAMissed || filters.author || filters.assignee || filters.search)
 
     // Build filters inline to avoid stale closure
     const currentFilters: StoryPotQueryFilters = {
@@ -153,6 +181,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
       priority: filters.priority || undefined,
       releaseTag: filters.releaseTag || undefined,
       testingStatus: filters.testingStatus || undefined,
+      isQAMissed: filters.isQAMissed || undefined,
       author: filters.author || undefined,
       assignee: filters.assignee || undefined,
       search: filters.search || undefined,
@@ -195,8 +224,9 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
     if (enabled && projectId && syncStatus?.lastSyncAt) {
       loadWorkPackages()
       loadFilteredTestingStatus()
+      loadFilteredQaMissed()
     }
-  }, [enabled, projectId, syncStatus?.lastSyncAt, loadWorkPackages, loadFilteredTestingStatus])
+  }, [enabled, projectId, syncStatus?.lastSyncAt, loadWorkPackages, loadFilteredTestingStatus, loadFilteredQaMissed])
 
   // Sync function
   const sync = useCallback(async () => {
@@ -226,6 +256,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
         loadFilterOptions(),
         loadStats(),
         loadFilteredTestingStatus(),
+        loadFilteredQaMissed(),
       ])
     } catch (e) {
       console.error('Sync failed:', e)
@@ -234,7 +265,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
       setIsSyncing(false)
       setSyncProgress(null)
     }
-  }, [config, projectId, opProjectId, opProjectName, loadWorkPackages, loadFilterOptions, loadStats, loadFilteredTestingStatus])
+  }, [config, projectId, opProjectId, opProjectName, loadWorkPackages, loadFilterOptions, loadStats, loadFilteredTestingStatus, loadFilteredQaMissed])
 
   // Clear cache function
   const clearCacheData = useCallback(async () => {
@@ -291,6 +322,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
     totalCount,
     stats,
     filteredByTestingStatus,
+    filteredQaMissed,
     filterOptions,
     syncStatus,
 

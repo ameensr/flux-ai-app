@@ -9,6 +9,7 @@ import {
   type OpenProjectConfig,
   type OpenProjectWorkPackage,
   type FormattedWorkPackage,
+  type TestingStatusChange,
 } from './openproject'
 
 // Types for cached work packages
@@ -71,6 +72,7 @@ export interface StoryPotQueryFilters {
   priority?: string | null
   releaseTag?: string | null
   testingStatus?: string | null
+  isQAMissed?: string | null
   author?: string | null
   assignee?: string | null
   search?: string | null
@@ -158,94 +160,24 @@ export async function syncWorkPackagesToCache(
           message: `Processing: ${idx} / ${workPackages.length}`
         })
       }
-      const formatted = formatWorkPackage(wp)
-      
-      // Debug: Log first 10 items to find one with "Forward" in any custom field
-      if (idx < 10) {
-        const customFieldsWithValues: Record<string, string> = {}
-        Object.entries(wp._links || {}).forEach(([key, value]) => {
-          if (key.startsWith('customField') || key.startsWith('cf_')) {
-            const link = value as { title?: string; href?: string }
-            if (link?.title) {
-              customFieldsWithValues[key] = link.title
-            }
-          }
-        })
-        // Check if any value contains "forward"
-        const fieldValues = Object.values(customFieldsWithValues) as string[]
-        const hasForward = fieldValues.some(v => 
-          v.toLowerCase().includes('forward')
-        )
-        if (hasForward || idx === 0) {
-          console.log(`[StoryPot Sync] WP #${formatted.id} Custom Fields:`, customFieldsWithValues)
-        }
-      }
-      
-      return formatted
-    })
-    
-    // Log summary of all unique custom field values found
-    const allTestingStatuses = new Set<string>()
-    formattedWPs.forEach(wp => {
-      if (wp.testingStatus) allTestingStatuses.add(wp.testingStatus)
-    })
-    console.log('[StoryPot Sync] All unique testingStatus values found:', Array.from(allTestingStatuses))
-    
-    // Also collect all unique values from each custom field to identify Testing Status field
-    const customFieldValues: Record<string, Set<string>> = {}
-    workPackages.slice(0, 50).forEach(wp => {
-      Object.entries(wp._links || {}).forEach(([key, value]) => {
-        if (key.startsWith('customField')) {
-          const link = value as { title?: string }
-          if (link?.title) {
-            if (!customFieldValues[key]) customFieldValues[key] = new Set()
-            customFieldValues[key].add(link.title)
-          }
-        }
-      })
-    })
-    console.log('[StoryPot Sync] Custom field unique values (first 50 WPs):')
-    Object.entries(customFieldValues).forEach(([field, values]) => {
-      console.log(`  ${field}:`, Array.from(values).slice(0, 10))
+      return formatWorkPackage(wp)
     })
 
-    // Phase 3: Fetch activity history for items with Testing Status
-    // We need to check ALL items with a testing status value, not just those currently
-    // set to "Forwarded", because the Testing Status might have been changed after forwarding
-    const itemsWithTestingStatus = formattedWPs.filter(wp => wp.testingStatus)
-    
-    console.log(`[StoryPot Sync] Items with testingStatus: ${itemsWithTestingStatus.length} / ${formattedWPs.length}`)
-
+    // Phase 3: Fetch activity history for ALL work packages.
+    // Must check every ticket — not just those currently showing a testing status —
+    // because a ticket may have been forwarded and then had its testing status changed.
     onProgress?.({
       phase: 'syncing-activities',
       current: 0,
-      total: itemsWithTestingStatus.length,
-      message: `Processing ${itemsWithTestingStatus.length} items with testing status...`
+      total: formattedWPs.length,
+      message: `Fetching activity history for ${formattedWPs.length} work packages...`
     })
 
-    // Fetch activity history for ALL items with a testing status
-    // This ensures we catch items that were forwarded but later changed to another status
-    const forwardedCandidates = itemsWithTestingStatus
+    let activityMap = new Map<number, TestingStatusChange[]>()
 
-    onProgress?.({
-      phase: 'syncing-activities',
-      current: 0,
-      total: forwardedCandidates.length,
-      message: `Fetching activity history for ${forwardedCandidates.length} items...`
-    })
-
-    let activityMap = new Map<number, { changedAt: string; changedBy: string }>()
-    
-    if (forwardedCandidates.length > 0) {
-      console.log(`[StoryPot Sync] Fetching activity history for ${forwardedCandidates.length} candidates with Testing Status`)
-      console.log('[StoryPot Sync] Sample candidates:', forwardedCandidates.slice(0, 3).map(wp => ({
-        id: wp.id,
-        testingStatus: wp.testingStatus,
-        subject: wp.subject?.substring(0, 50)
-      })))
-      
+    if (formattedWPs.length > 0) {
       try {
-        const candidatesWithFallback = forwardedCandidates.map(wp => ({
+        const candidates = formattedWPs.map(wp => ({
           id: wp.id,
           createdAt: wp.createdAt,
           author: wp.author,
@@ -254,27 +186,17 @@ export async function syncWorkPackagesToCache(
 
         activityMap = await fetchTestingStatusChanges(
           configWithProject,
-          candidatesWithFallback,
+          candidates,
           'Forwarded to the Testing Team',
           (current, found) => {
             onProgress?.({
               phase: 'syncing-activities',
               current,
-              total: forwardedCandidates.length,
-              message: `Fetching activity history: ${current} / ${forwardedCandidates.length} (${found} with dates)`
+              total: formattedWPs.length,
+              message: `Fetching activity history: ${current} / ${formattedWPs.length} (${found} with forwarding dates)`
             })
           }
         )
-        
-        console.log(`[StoryPot Sync] Activity fetch complete. Found ${activityMap.size} items with verified Testing Status change dates`)
-        if (activityMap.size > 0) {
-          const sample = Array.from(activityMap.entries()).slice(0, 3)
-          console.log('[StoryPot Sync] Sample activity results:', sample.map(([id, data]) => ({
-            wpId: id,
-            changedAt: data.changedAt,
-            changedBy: data.changedBy
-          })))
-        }
       } catch (e) {
         console.warn('[StoryPot Cache] Failed to fetch activity history:', e)
         errors.push(`Activity history fetch failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
@@ -290,33 +212,17 @@ export async function syncWorkPackagesToCache(
     })
 
     const cacheData = formattedWPs.map(wp => {
-      const activity = activityMap.get(wp.id)
-      
-      // Compute is_overdue
+      const events = activityMap.get(wp.id) || []
+      // Latest event (index 0, sorted newest-first) drives the main cache row
+      const latest = events[0] ?? null
+
       const today = new Date().toISOString().split('T')[0]
-      const isOverdue = wp.dueDate 
-        ? wp.dueDate < today && 
+      const isOverdue = wp.dueDate
+        ? wp.dueDate < today &&
           !['closed', 'done', 'rejected'].some(s => wp.status.toLowerCase().includes(s)) &&
           (wp.percentageDone || 0) < 100
         : false
-      
-      // Determine forwarding date and user:
-      // ONLY use activity data from the journal where Testing Status was set to
-      // "Forwarded to the Testing Team". NO FALLBACKS.
-      // - If activity exists: use the journal entry's date and user
-      // - If no activity: forwarded_to_testing_at and forwarded_to_testing_by remain null
-      //   (ticket will be excluded from "Received for Testing Date" filter)
-      let forwardedAt: string | null = null
-      let forwardedBy: string | null = null
-      
-      if (activity?.changedAt) {
-        forwardedAt = activity.changedAt
-        forwardedBy = activity.changedBy
-      }
-      // NO FALLBACK: Do not use updatedAt, createdAt, or author as fallback
-      // If Testing Status was never set to "Forwarded to the Testing Team" in the journal,
-      // the ticket should not have forwarding info and should be excluded from date filter
-      
+
       return {
         id: wp.id,
         project_id: projectId,
@@ -334,10 +240,11 @@ export async function syncWorkPackagesToCache(
         testing_status: wp.testingStatus || null,
         is_qa_missed: wp.isQAMissed || null,
         qa_confirmation: wp.qaConfirmation || null,
-        forwarded_to_testing_at: forwardedAt,
-        forwarded_to_testing_by: forwardedBy,
-        handoff_verified: !!activity,
-        handoff_count: activity ? 1 : 0,
+        // Store the LATEST forwarding event for fast date-range filtering
+        forwarded_to_testing_at: latest?.changedAt ?? null,
+        forwarded_to_testing_by: latest?.changedBy ?? null,
+        handoff_verified: events.length > 0,
+        handoff_count: events.length,
         start_date: wp.startDate || null,
         due_date: wp.dueDate || null,
         created_at: wp.createdAt || null,
@@ -352,32 +259,18 @@ export async function syncWorkPackagesToCache(
       }
     })
     
-    // Debug: Show sample of forwarding dates
-    const withDates = cacheData.filter(d => d.forwarded_to_testing_at)
-    console.log(`[StoryPot Sync] Items with forwarding dates: ${withDates.length}`)
-    if (withDates.length > 0) {
-      console.log('[StoryPot Sync] Sample forwarding dates:')
-      withDates.slice(0, 5).forEach(d => {
-        console.log(`  WP #${d.id}: testing_status="${d.testing_status}", forwarded_at="${d.forwarded_to_testing_at}"`)
-      })
-    }
-
     // Batch upsert to Supabase (in chunks of 500)
     const BATCH_SIZE = 500
     let savedCount = 0
-    
+
     for (let i = 0; i < cacheData.length; i += BATCH_SIZE) {
       const batch = cacheData.slice(i, i + BATCH_SIZE)
-      
+
       const { error } = await supabase
         .from('openproject_work_packages_cache')
-        .upsert(batch, { 
-          onConflict: 'id',
-          ignoreDuplicates: false 
-        })
+        .upsert(batch, { onConflict: 'id', ignoreDuplicates: false })
 
       if (error) {
-        console.error('[StoryPot Cache] Upsert error:', error)
         errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1} failed: ${error.message}`)
       } else {
         savedCount += batch.length
@@ -391,21 +284,66 @@ export async function syncWorkPackagesToCache(
       })
     }
 
-    // Update sync status
+    // Persist ALL forwarding events to the history table.
+    // UNIQUE(wp_id, changed_at) prevents duplicates on re-sync.
+    const historyRows: {
+      wp_id: number
+      project_id: string
+      op_project_id: number | null
+      changed_at: string
+      changed_by: string
+      old_value: string | null
+      new_value: string
+    }[] = []
+
+    activityMap.forEach((events, wpId) => {
+      for (const ev of events) {
+        historyRows.push({
+          wp_id: wpId,
+          project_id: projectId,
+          op_project_id: opProjectId || null,
+          changed_at: ev.changedAt,
+          changed_by: ev.changedBy,
+          old_value: ev.oldValue ?? null,
+          new_value: ev.newValue,
+        })
+      }
+    })
+
+    if (historyRows.length > 0) {
+      for (let i = 0; i < historyRows.length; i += BATCH_SIZE) {
+        const batch = historyRows.slice(i, i + BATCH_SIZE)
+        const { error } = await supabase
+          .from('openproject_forwarding_history')
+          .upsert(batch, { onConflict: 'wp_id,changed_at', ignoreDuplicates: true })
+        if (error) {
+          errors.push(`History batch failed: ${error.message}`)
+        }
+      }
+    }
+
     const itemsWithForwardingDate = cacheData.filter(d => d.forwarded_to_testing_at).length
+    const syncStatus = errors.length > 0 ? 'completed_with_errors' : 'completed'
     await updateSyncStatus(projectId, opProjectId || null, {
       last_full_sync_at: new Date().toISOString(),
-      last_sync_status: errors.length > 0 ? 'completed_with_errors' : 'completed',
+      last_sync_status: syncStatus,
       last_sync_error: errors.length > 0 ? errors.join('; ') : null,
       total_work_packages: savedCount,
       work_packages_with_forwarding_date: itemsWithForwardingDate
     })
 
+    const failedCount = cacheData.length - savedCount
+    const completionMsg = [
+      `Sync complete! ${savedCount.toLocaleString()} tickets synced`,
+      `${itemsWithForwardingDate.toLocaleString()} with forwarding dates`,
+      failedCount > 0 ? `${failedCount} failed` : null,
+    ].filter(Boolean).join(' • ')
+
     onProgress?.({
       phase: 'complete',
       current: savedCount,
-      total: savedCount,
-      message: `Sync complete! ${savedCount} work packages cached, ${itemsWithForwardingDate} with testing dates.`
+      total: cacheData.length,
+      message: completionMsg
     })
 
     return {
@@ -458,6 +396,7 @@ export async function queryCachedWorkPackages(
     priority,
     releaseTag,
     testingStatus,
+    isQAMissed,
     author,
     assignee,
     search,
@@ -466,83 +405,31 @@ export async function queryCachedWorkPackages(
     noLimit = false,
   } = filters
 
-  // Debug: Log active filters
-  const activeFilters = Object.entries(filters).filter(([k, v]) => v && k !== 'projectId' && k !== 'limit' && k !== 'offset')
-  if (activeFilters.length > 0) {
-    console.log('[StoryPot Query] Active filters:', Object.fromEntries(activeFilters))
-  }
-
   // Build query
   let query = supabase
     .from('openproject_work_packages_cache')
     .select('*', { count: 'exact' })
     .eq('project_id', projectId)
 
-  // Apply filters
-  if (opProjectId) {
-    query = query.eq('op_project_id', opProjectId)
-  }
+  if (opProjectId) query = query.eq('op_project_id', opProjectId)
 
-  // PRIME FEATURE: Filter by forwarded to testing date
-  // forwarded_to_testing_at is stored in UTC. The user picks a local date (IST = UTC+5:30).
-  // To include ALL tickets forwarded on that local date regardless of time,
-  // we shift the window by -5h30m on the lower bound and +18h30m on the upper bound
-  // so the full IST day (00:00–23:59 IST) is covered in UTC.
-  // IST 00:00 = UTC 2026-11-02T18:30:00Z  (previous UTC day)
-  // IST 23:59 = UTC 2026-11-03T18:29:59Z
+  // Date filter: forwarded_to_testing_at stored in UTC; user picks local date (IST = UTC+5:30)
   if (forwardedFrom) {
-    // Subtract 5h30m (IST offset) to get the UTC start of that IST day
-    const fromDate = new Date(forwardedFrom + 'T00:00:00+05:30')
-    query = query.gte('forwarded_to_testing_at', fromDate.toISOString())
+    query = query.gte('forwarded_to_testing_at', new Date(forwardedFrom + 'T00:00:00+05:30').toISOString())
   }
   if (forwardedTo) {
-    // End of IST day = next day 00:00 IST minus 1ms, converted to UTC
-    const toDate = new Date(forwardedTo + 'T23:59:59+05:30')
-    query = query.lte('forwarded_to_testing_at', toDate.toISOString())
+    query = query.lte('forwarded_to_testing_at', new Date(forwardedTo + 'T23:59:59+05:30').toISOString())
   }
 
-  // Use the explicit testingStatus filter only — do NOT auto-inject a testing_status
-  // constraint when a date range is active. A ticket's forwarded_to_testing_at is
-  // recorded at the moment of the transition and is independent of the current
-  // testing_status value (which may have changed since then).
-  const effectiveTestingStatus = testingStatus || null
-
-  // Type filter
-  if (type) {
-    query = query.eq('type', type)
-  }
-
-  // Release filter (typically used with Bug type)
-  if (releaseTag) {
-    query = query.eq('release_tag', releaseTag)
-  }
-
-  // Status filter
-  if (status) {
-    query = query.eq('status', status)
-  }
-
-  // Priority filter
-  if (priority) {
-    query = query.eq('priority', priority)
-  }
-
-  // Testing status filter — exact match, case-insensitive via ilike with no wildcards
-  if (effectiveTestingStatus) {
-    query = query.ilike('testing_status', effectiveTestingStatus)
-  }
-
-  // Author filter (exact match from dropdown)
-  if (author) {
-    query = query.eq('author', author)
-  }
-
-  // Assignee filter (exact match from dropdown)
-  if (assignee) {
-    query = query.eq('assignee', assignee)
-  }
-
-  // Search filter (subject or ID)
+  if (type) query = query.eq('type', type)
+  if (releaseTag) query = query.eq('release_tag', releaseTag)
+  if (status) query = query.eq('status', status)
+  if (priority) query = query.eq('priority', priority)
+  if (testingStatus) query = query.ilike('testing_status', testingStatus)
+  // isQAMissed: explicit filter only — no implicit default
+  if (isQAMissed) query = query.ilike('is_qa_missed', isQAMissed)
+  if (author) query = query.eq('author', author)
+  if (assignee) query = query.eq('assignee', assignee)
   if (search) {
     query = query.or(`subject.ilike.%${search}%,id.eq.${parseInt(search) || 0}`)
   }
@@ -578,7 +465,7 @@ export async function queryCachedWorkPackages(
 }
 
 /**
- * Get aggregated stats from cache
+ * Get aggregated stats from cache (global, unfiltered — used for total counts)
  */
 export async function getCachedStats(
   projectId: string,
@@ -594,35 +481,25 @@ export async function getCachedStats(
   byTestingStatus: Record<string, number>
   qaMissedYes: number
   qaMissedNo: number
+  qaMissedUnknown: number
 }> {
   let query = supabase
     .from('openproject_work_packages_cache')
     .select('status, type, priority, testing_status, is_overdue, assignee, forwarded_to_testing_at, is_qa_missed')
     .eq('project_id', projectId)
 
-  if (opProjectId) {
-    query = query.eq('op_project_id', opProjectId)
-  }
+  if (opProjectId) query = query.eq('op_project_id', opProjectId)
 
   const { data, error } = await query
-
-  if (error) {
-    console.error('[StoryPot Cache] Stats query error:', error)
-    throw new Error(`Failed to get stats: ${error.message}`)
-  }
+  if (error) throw new Error(`Failed to get stats: ${error.message}`)
 
   const items = data || []
-  
   const byStatus: Record<string, number> = {}
   const byType: Record<string, number> = {}
   const byPriority: Record<string, number> = {}
   const byTestingStatus: Record<string, number> = {}
-  
-  let overdue = 0
-  let unassigned = 0
-  let withForwardingDate = 0
-  let qaMissedYes = 0
-  let qaMissedNo = 0
+  let overdue = 0, unassigned = 0, withForwardingDate = 0
+  let qaMissedYes = 0, qaMissedNo = 0, qaMissedUnknown = 0
 
   items.forEach(item => {
     if (item.status) byStatus[item.status] = (byStatus[item.status] || 0) + 1
@@ -632,23 +509,56 @@ export async function getCachedStats(
     if (item.is_overdue) overdue++
     if (!item.assignee || item.assignee === 'Unassigned') unassigned++
     if (item.forwarded_to_testing_at) withForwardingDate++
-    const qaMissed = (item as any).is_qa_missed
-    if (qaMissed?.toLowerCase() === 'yes') qaMissedYes++
-    else if (qaMissed?.toLowerCase() === 'no') qaMissedNo++
+    const qm = (item as any).is_qa_missed
+    if (qm?.toLowerCase() === 'yes') qaMissedYes++
+    else if (qm?.toLowerCase() === 'no') qaMissedNo++
+    else qaMissedUnknown++
   })
 
-  return {
-    total: items.length,
-    withForwardingDate,
-    overdue,
-    unassigned,
-    byStatus,
-    byType,
-    byPriority,
-    byTestingStatus,
-    qaMissedYes,
-    qaMissedNo,
+  return { total: items.length, withForwardingDate, overdue, unassigned, byStatus, byType, byPriority, byTestingStatus, qaMissedYes, qaMissedNo, qaMissedUnknown }
+}
+
+/**
+ * Get QA Missed counts for the currently filtered result set.
+ */
+export async function getFilteredQaMissedCounts(
+  filters: Omit<StoryPotQueryFilters, 'limit' | 'offset' | 'noLimit'>
+): Promise<{ yes: number; no: number; unknown: number; total: number }> {
+  let query = supabase
+    .from('openproject_work_packages_cache')
+    .select('is_qa_missed')
+    .eq('project_id', filters.projectId)
+
+  if (filters.opProjectId) query = query.eq('op_project_id', filters.opProjectId)
+  if (filters.forwardedFrom) {
+    query = query.gte('forwarded_to_testing_at', new Date(filters.forwardedFrom + 'T00:00:00+05:30').toISOString())
   }
+  if (filters.forwardedTo) {
+    query = query.lte('forwarded_to_testing_at', new Date(filters.forwardedTo + 'T23:59:59+05:30').toISOString())
+  }
+  if (filters.type) query = query.eq('type', filters.type)
+  if (filters.releaseTag) query = query.eq('release_tag', filters.releaseTag)
+  if (filters.status) query = query.eq('status', filters.status)
+  if (filters.priority) query = query.eq('priority', filters.priority)
+  if (filters.testingStatus) query = query.ilike('testing_status', filters.testingStatus)
+  if (filters.isQAMissed) query = query.ilike('is_qa_missed', filters.isQAMissed)
+  if (filters.author) query = query.eq('author', filters.author)
+  if (filters.assignee) query = query.eq('assignee', filters.assignee)
+  if (filters.search) {
+    query = query.or(`subject.ilike.%${filters.search}%,id.eq.${parseInt(filters.search) || 0}`)
+  }
+
+  const { data, error } = await query
+  if (error) throw new Error(`Failed to get filtered QA missed counts: ${error.message}`)
+
+  let yes = 0, no = 0, unknown = 0
+  for (const item of data || []) {
+    const qm = (item as any).is_qa_missed
+    if (qm?.toLowerCase() === 'yes') yes++
+    else if (qm?.toLowerCase() === 'no') no++
+    else unknown++
+  }
+  return { yes, no, unknown, total: yes + no + unknown }
 }
 
 /**
@@ -668,18 +578,17 @@ export async function getFilteredTestingStatusCounts(
 
   if (filters.opProjectId) query = query.eq('op_project_id', filters.opProjectId)
   if (filters.forwardedFrom) {
-    const fromDate = new Date(filters.forwardedFrom + 'T00:00:00+05:30')
-    query = query.gte('forwarded_to_testing_at', fromDate.toISOString())
+    query = query.gte('forwarded_to_testing_at', new Date(filters.forwardedFrom + 'T00:00:00+05:30').toISOString())
   }
   if (filters.forwardedTo) {
-    const toDate = new Date(filters.forwardedTo + 'T23:59:59+05:30')
-    query = query.lte('forwarded_to_testing_at', toDate.toISOString())
+    query = query.lte('forwarded_to_testing_at', new Date(filters.forwardedTo + 'T23:59:59+05:30').toISOString())
   }
   if (filters.type) query = query.eq('type', filters.type)
   if (filters.releaseTag) query = query.eq('release_tag', filters.releaseTag)
   if (filters.status) query = query.eq('status', filters.status)
   if (filters.priority) query = query.eq('priority', filters.priority)
   if (filters.testingStatus) query = query.ilike('testing_status', filters.testingStatus)
+  if (filters.isQAMissed) query = query.ilike('is_qa_missed', filters.isQAMissed)
   if (filters.author) query = query.eq('author', filters.author)
   if (filters.assignee) query = query.eq('assignee', filters.assignee)
   if (filters.search) {
