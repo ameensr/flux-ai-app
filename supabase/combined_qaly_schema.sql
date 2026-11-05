@@ -3674,10 +3674,31 @@ CREATE POLICY "Users can view cached work packages for their projects"
     OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = openproject_work_packages_cache.project_id AND pm.user_id = auth.uid())
   );
 
+-- Write policies: permission-based via RBAC (095_storypot_permission_based_rls.sql)
+-- Any role with can_import enabled on story-pot module can write
 CREATE POLICY "Admins can manage cached work packages"
-  ON openproject_work_packages_cache FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'super_admin', 'manager'))
-    OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = openproject_work_packages_cache.project_id AND pm.user_id = auth.uid() AND pm.project_role IN ('owner', 'lead'))
+  ON openproject_work_packages_cache FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM role_module_permissions rmp
+      JOIN modules m   ON m.id  = rmp.module_id
+      JOIN permissions p ON p.id = rmp.permission_id
+      JOIN profiles pr  ON pr.id = auth.uid()
+      JOIN roles r      ON r.role_key = pr.role
+      WHERE m.module_key = 'story-pot' AND p.permission_key = 'can_import'
+        AND rmp.role_id = r.id AND rmp.is_enabled = true
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM role_module_permissions rmp
+      JOIN modules m   ON m.id  = rmp.module_id
+      JOIN permissions p ON p.id = rmp.permission_id
+      JOIN profiles pr  ON pr.id = auth.uid()
+      JOIN roles r      ON r.role_key = pr.role
+      WHERE m.module_key = 'story-pot' AND p.permission_key = 'can_import'
+        AND rmp.role_id = r.id AND rmp.is_enabled = true
+    )
   );
 
 CREATE POLICY "Users can view sync status for their projects"
@@ -3687,8 +3708,28 @@ CREATE POLICY "Users can view sync status for their projects"
   );
 
 CREATE POLICY "Admins can manage sync status"
-  ON openproject_sync_status FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'super_admin', 'manager'))
+  ON openproject_sync_status FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM role_module_permissions rmp
+      JOIN modules m   ON m.id  = rmp.module_id
+      JOIN permissions p ON p.id = rmp.permission_id
+      JOIN profiles pr  ON pr.id = auth.uid()
+      JOIN roles r      ON r.role_key = pr.role
+      WHERE m.module_key = 'story-pot' AND p.permission_key = 'can_import'
+        AND rmp.role_id = r.id AND rmp.is_enabled = true
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM role_module_permissions rmp
+      JOIN modules m   ON m.id  = rmp.module_id
+      JOIN permissions p ON p.id = rmp.permission_id
+      JOIN profiles pr  ON pr.id = auth.uid()
+      JOIN roles r      ON r.role_key = pr.role
+      WHERE m.module_key = 'story-pot' AND p.permission_key = 'can_import'
+        AND rmp.role_id = r.id AND rmp.is_enabled = true
+    )
   );
 
 CREATE OR REPLACE FUNCTION get_storypot_work_packages(
@@ -3766,6 +3807,21 @@ GRANT SELECT ON openproject_work_packages_cache TO authenticated;
 GRANT SELECT ON openproject_sync_status TO authenticated;
 GRANT EXECUTE ON FUNCTION get_storypot_work_packages TO authenticated;
 GRANT EXECUTE ON FUNCTION get_storypot_stats TO authenticated;
+
+-- 093: Remove duplicate sync_status rows (NULL != NULL in UNIQUE, so upsert
+-- with op_project_id = NULL inserted a new row on every sync). Keep newest.
+DELETE FROM openproject_sync_status
+WHERE id NOT IN (
+  SELECT DISTINCT ON (project_id, op_project_id) id
+  FROM openproject_sync_status
+  ORDER BY project_id, op_project_id, updated_at DESC NULLS LAST
+);
+
+-- 095: Rename can_import permission label to match frontend
+UPDATE permissions
+SET permission_name = 'Sync Data',
+    description     = 'Can sync / import data (e.g. sync from OpenProject, import from Excel/CSV)'
+WHERE permission_key = 'can_import';
 
 
 -- ============================================================================
