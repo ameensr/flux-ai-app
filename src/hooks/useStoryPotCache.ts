@@ -134,9 +134,13 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
   const loadWorkPackages = useCallback(async () => {
     if (!projectId) return
     
-    // When a date filter is active, fetch ALL matching rows (no pagination limit)
-    // so the user sees every ticket that matches, not just the first page
-    const isDateFiltered = !!(filters.forwardedFrom || filters.forwardedTo)
+    // When ANY filter is active, fetch ALL matching rows so no tickets are
+    // hidden behind page boundaries. Previously only date filters triggered
+    // noLimit, so filtering by type/status/assignee etc. silently dropped
+    // tickets beyond the first pageSize.
+    const isAnyFilterActive = !!(filters.forwardedFrom || filters.forwardedTo ||
+      filters.type || filters.status || filters.priority || filters.releaseTag ||
+      filters.testingStatus || filters.author || filters.assignee || filters.search)
 
     // Build filters inline to avoid stale closure
     const currentFilters: StoryPotQueryFilters = {
@@ -154,7 +158,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
       search: filters.search || undefined,
       limit: pageSize,
       offset: (page - 1) * pageSize,
-      noLimit: isDateFiltered,
+      noLimit: isAnyFilterActive,
     }
     
     setIsLoading(true)

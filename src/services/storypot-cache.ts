@@ -552,8 +552,11 @@ export async function queryCachedWorkPackages(
     .order('forwarded_to_testing_at', { ascending: true, nullsFirst: false })
     .order('updated_at', { ascending: false })
 
-  // Pagination — skip when noLimit is true (e.g. date-filtered full export)
-  if (!noLimit) {
+  // Pagination — when noLimit, use a large explicit range to bypass Supabase's
+  // default 1000-row hard cap. Without this, filtered results >1000 are silently truncated.
+  if (noLimit) {
+    query = query.range(0, 99999)
+  } else {
     query = query.range(offset, offset + limit - 1)
   }
 
