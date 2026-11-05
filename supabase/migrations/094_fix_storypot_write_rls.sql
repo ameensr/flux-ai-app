@@ -1,0 +1,2 @@
+-- Superseded by 095_storypot_permission_based_rls.sql
+-- This migration is intentionally left as a no-op.
