@@ -65,8 +65,9 @@ export const ROUTES = {
   // Release Task Tracker Module
   releaseTracker: '/release-tracker',
 
-  // StoryPot Module
-  storyPot: '/story-pot',
+  // Ticket Bowl Module
+  ticketBowl: '/ticket-bowl',
+  storyPot: '/ticket-bowl', // Backward compatibility redirect alias
 
   // QA Weekly Report Config
   qaReportConfig: '/qa-report/configuration', // Project Configurations (name/code/description/status)
@@ -109,7 +110,7 @@ export const ROUTE_MODULE_KEY: Partial<Record<AppRoute, string>> = {
   [ROUTES.bugStatus]: 'bug-status',
   [ROUTES.supportTracker]: 'support-tracker',
   [ROUTES.releaseTracker]: 'release-tracker',
-  [ROUTES.storyPot]: 'story-pot',
+  [ROUTES.ticketBowl]: 'ticket-bowl',
   // project dropdown config is nested under project-hub
 }
 

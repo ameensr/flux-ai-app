@@ -360,18 +360,19 @@ export const MODULE_PERMISSIONS: Record<string, ModulePermissionDefinition> = {
     description: 'Enterprise QA & release task tracking system with manager dashboard and time logs'
   },
 
-  // ── StoryPot Module ─────────────────────────────────────────────────────────
+  // ── Ticket Bowl Module ───────────────────────────────────────────────────────
 
-  'story-pot': {
-    moduleKey: 'story-pot',
-    moduleName: 'StoryPot',
+  'ticket-bowl': {
+    moduleKey: 'ticket-bowl',
+    moduleName: 'Ticket Bowl',
     supportedPermissions: [
-      'can_view',           // View the module and work packages list
-      'can_view_dashboard', // View stats cards/dashboard
-      'can_export',         // Export to Release/Support Tracker
-      'can_import',         // Sync data from OpenProject
+      'can_view',           // View the Ticket Bowl listing and filters
+      'can_view_dashboard', // View Testing Status distribution and stats cards
+      'can_export',         // Export tickets to Release or Support Tracker
+      'can_import',         // Sync Data from OpenProject API
+      'can_view_history',   // View complete verified forwarding transition history
     ],
-    description: 'View and manage OpenProject work packages across projects'
+    description: 'Track QA handoffs, forwarding counts, actor identification, and Testing Status analytics'
   },
 }
 

@@ -52,7 +52,7 @@ const RequireFullNameGate = lazy(() =>
 )
 const DailyUpdateReport = lazy(() => import('@/modules/DailyUpdateReport').then(m => ({ default: m.DailyUpdateReport })))
 const BugStatus = lazy(() => import('@/modules/BugStatus').then(m => ({ default: m.BugStatus })))
-const StoryPot = lazy(() => import('@/modules/StoryPot'))
+const TicketBowl = lazy(() => import('@/modules/TicketBowl'))
 const SupportIssueTracker = lazy(() => import('@/modules/SupportIssueTracker').then(m => ({ default: m.SupportIssueTracker })))
 const ReleaseTaskTracker = lazy(() => import('@/modules/ReleaseTaskTracker').then(m => ({ default: m.ReleaseTaskTracker })))
 const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINews })))
@@ -408,7 +408,8 @@ export default function App() {
             <Route path={ROUTES.qaReport} element={<QAWeeklyReport />} />
             <Route path={ROUTES.dailyReport} element={<DailyUpdateReport />} />
             <Route path={ROUTES.bugStatus} element={<BugStatus />} />
-            <Route path={ROUTES.storyPot} element={<ProtectedRoute moduleKey="story-pot"><StoryPot /></ProtectedRoute>} />
+            <Route path={ROUTES.ticketBowl} element={<ProtectedRoute moduleKey="ticket-bowl"><TicketBowl /></ProtectedRoute>} />
+            <Route path="/story-pot" element={<Navigate to={ROUTES.ticketBowl} replace />} />
             <Route path={ROUTES.supportTracker} element={<ProtectedRoute moduleKey="support-tracker"><SupportIssueTracker /></ProtectedRoute>} />
             <Route path="/support-issue-tracker" element={<Navigate to={ROUTES.supportTracker} replace />} />
             <Route path={ROUTES.releaseTracker} element={<ProtectedRoute moduleKey="release-tracker"><ReleaseTaskTracker /></ProtectedRoute>} />

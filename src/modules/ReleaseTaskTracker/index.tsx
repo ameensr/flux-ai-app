@@ -101,16 +101,18 @@ export function ReleaseTaskTracker() {
     }
   }, [searchParams, setFilters, setSelectedProduct])
 
-  // Handle StoryPot import
+  // Handle Ticket Bowl / StoryPot import
   const [storyPotImportData, setStoryPotImportData] = useState<any[] | null>(null)
   useEffect(() => {
-    if (searchParams.get('import') === 'storypot') {
-      const raw = sessionStorage.getItem('storypot_export_release')
+    const importParam = searchParams.get('import')
+    if (importParam === 'ticketbowl' || importParam === 'storypot') {
+      const raw = sessionStorage.getItem('ticketbowl_export_release') || sessionStorage.getItem('storypot_export_release')
       if (raw) {
         try {
           const data = JSON.parse(raw)
           if (Array.isArray(data) && data.length > 0) {
             setStoryPotImportData(data)
+            sessionStorage.removeItem('ticketbowl_export_release')
             sessionStorage.removeItem('storypot_export_release')
           }
         } catch { /* ignore */ }
@@ -280,13 +282,13 @@ export function ReleaseTaskTracker() {
         </div>
       </div>
 
-      {/* ── StoryPot Import Panel ── */}
+      {/* ── Ticket Bowl Import Panel ── */}
       {storyPotImportData && storyPotImportData.length > 0 && (
         <div className="rounded-xl border border-accent/30 bg-accent/5 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Rocket className="w-4 h-4 text-accent" />
-              <h3 className="text-sm font-semibold text-text-primary">StoryPot Import</h3>
+              <h3 className="text-sm font-semibold text-text-primary">Ticket Bowl Import</h3>
               <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent font-medium">
                 {storyPotImportData.length} {storyPotImportData.length === 1 ? 'item' : 'items'}
               </span>
@@ -312,6 +314,7 @@ export function ReleaseTaskTracker() {
                   type="button"
                   onClick={() => {
                     setTaskToEdit(null)
+                    sessionStorage.setItem('ticketbowl_prefill_release', JSON.stringify(item))
                     sessionStorage.setItem('storypot_prefill_release', JSON.stringify(item))
                     setIsAddEditOpen(true)
                     setStoryPotImportData(prev => prev?.filter((_, i) => i !== idx) || null)

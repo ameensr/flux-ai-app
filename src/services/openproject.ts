@@ -930,93 +930,129 @@ export async function fetchWorkPackageActivities(
   if (!openproject_url || !openproject_api_key) return []
 
   try {
-    let res: Response
-    if (shouldUseProxy()) {
-      res = await proxyFetch(config, `/api/v3/work_packages/${workPackageId}/activities`)
-    } else {
-      res = await fetch(
-        `${buildBaseUrl(openproject_url)}/api/v3/work_packages/${workPackageId}/activities`,
-        { headers: { Authorization: buildAuthHeader(openproject_api_key) } }
-      )
+    const allRawActivities: any[] = []
+    let nextPath: string | null = `/api/v3/work_packages/${workPackageId}/activities`
+    let pageCount = 0
+
+    while (nextPath && pageCount < 10) {
+      pageCount++
+      let cleanPath = nextPath
+      if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {
+        try {
+          const parsed = new URL(cleanPath)
+          cleanPath = parsed.pathname + parsed.search
+        } catch {
+          // keep cleanPath
+        }
+      }
+
+      let res: Response
+      if (shouldUseProxy()) {
+        res = await proxyFetch(config, cleanPath)
+      } else {
+        const fullUrl = `${buildBaseUrl(openproject_url)}${cleanPath}`
+        res = await fetch(fullUrl, {
+          headers: { Authorization: buildAuthHeader(openproject_api_key) },
+        })
+      }
+
+      if (!res.ok) {
+        console.warn(`[Ticket Bowl] Activities fetch for WP#${workPackageId} status: ${res.status}`)
+        break
+      }
+
+      const data = await res.json()
+      const elements = data._embedded?.elements || []
+      allRawActivities.push(...elements)
+
+      // Paginate if more activities exist
+      const nextHref = data._links?.nextByOffset?.href || data._links?.next?.href || null
+      if (nextHref && elements.length > 0) {
+        nextPath = nextHref
+      } else {
+        nextPath = null
+      }
     }
-    if (!res.ok) return []
 
-    const data = await res.json()
-    const elements = data._embedded?.elements || []
-    const activities = await Promise.all(elements.map(async (activity: {
-      id: number
-      comment?: { raw: string }
-      createdAt: string
-      _links?: { user?: { title?: string; href?: string } }
-      details?: Array<{
-        format?: string
-        raw?: string
-        html?: string
-        property?: string
-        propertyName?: string
-        oldValue?: string
-        newValue?: string
-      }>
-    }) => {
-      // OpenProject v3 journal detail items arrive in one of two shapes:
-      //
-      // Shape A (older / community editions):
-      //   { format: "html", raw: "Testing Status changed from X to Y", html: "..." }
-      //   — no property/newValue fields; values must be parsed from raw text.
-      //
-      // Shape B (newer / some hosted editions):
-      //   { property: "customField14", propertyName: "Testing Status",
-      //     oldValue: "Not Started", newValue: "Forwarded to the Testing Team" }
-      //   — structured fields present; raw may or may not be populated.
-      //
-      // We normalise both into { property, newValue, oldValue, raw } so that
-      // isForwardingDetail can match against any combination.
-      const parsedDetails = (activity.details || []).map(d => {
-        const rawText = d.raw || ''
+    const activities = await Promise.all(
+      allRawActivities.map(async (activity: any) => {
+        const rawDetails = activity.details || activity._embedded?.details || []
+        const parsedDetails = rawDetails.map((d: any) => {
+          // Extract property from all possible structured locations
+          let property =
+            d.propertyName ||
+            d.property ||
+            d._links?.property?.title ||
+            d._links?.property?.href ||
+            d._links?.schema?.title ||
+            ''
 
-        // Start with whatever structured fields exist
-        let property  = d.propertyName || d.property || ''
-        let newValue  = d.newValue  || ''
-        let oldValue  = d.oldValue  || ''
+          // Extract newValue
+          let newValue =
+            (typeof d.newValue === 'string' ? d.newValue : '') ||
+            (typeof d.new_value === 'string' ? d.new_value : '') ||
+            d._links?.newValue?.title ||
+            d._links?.new_value?.title ||
+            d._links?.value?.title ||
+            (typeof d.newValue === 'object' && d.newValue?.title) ||
+            ''
 
-        // If structured fields are missing or incomplete, parse from raw text
-        if (!property || !newValue) {
-          const changedMatch = rawText.match(/^(.+?)\s+changed from\s+(.+?)\s+to\s+(.+)$/i)
-          if (changedMatch) {
-            if (!property) property = changedMatch[1].trim()
-            if (!oldValue) oldValue = changedMatch[2].trim()
-            if (!newValue) newValue = changedMatch[3].trim()
-          } else {
-            const setMatch = rawText.match(/^(.+?)\s+set to\s+(.+)$/i)
-            if (setMatch) {
-              if (!property) property = setMatch[1].trim()
-              if (!newValue) newValue = setMatch[2].trim()
+          // Extract oldValue
+          let oldValue =
+            (typeof d.oldValue === 'string' ? d.oldValue : '') ||
+            (typeof d.old_value === 'string' ? d.old_value : '') ||
+            d._links?.oldValue?.title ||
+            d._links?.old_value?.title ||
+            (typeof d.oldValue === 'object' && d.oldValue?.title) ||
+            ''
+
+          // Raw / HTML text clean-up
+          const rawText = d.raw || ''
+          const htmlText = d.html || ''
+          const combinedCleanText = (rawText || htmlText).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+
+          // If structured fields are missing or incomplete, parse from combined clean text
+          if (!property || !newValue) {
+            const changedMatch = combinedCleanText.match(/(?:Testing\s+Status|customfield14|custom_field_14|cf_14)\s+changed\s+from\s+(.+?)\s+to\s+(.+)/i)
+            if (changedMatch) {
+              if (!property) property = 'Testing Status'
+              if (!oldValue) oldValue = changedMatch[1].replace(/\.+$/, '').trim()
+              if (!newValue) newValue = changedMatch[2].replace(/\.+$/, '').trim()
+            } else {
+              const setMatch = combinedCleanText.match(/(?:Testing\s+Status|customfield14|custom_field_14|cf_14)\s+set\s+to\s+(.+)/i)
+              if (setMatch) {
+                if (!property) property = 'Testing Status'
+                if (!newValue) newValue = setMatch[1].replace(/\.+$/, '').trim()
+              }
             }
           }
+
+          return {
+            property,
+            propertyName: property,
+            oldValue: String(oldValue || '').replace(/\.+$/, '').trim(),
+            newValue: String(newValue || '').replace(/\.+$/, '').trim(),
+            raw: combinedCleanText || rawText,
+          }
+        })
+
+        let userName = (activity._links?.user?.title || '').trim()
+        if (!userName && activity._links?.user?.href) {
+          userName = await fetchUserName(config, activity._links.user.href)
         }
 
-        return { property, propertyName: property, oldValue, newValue, raw: rawText }
+        return {
+          id: activity.id,
+          comment: activity.comment,
+          createdAt: activity.createdAt,
+          user: {
+            name: userName || 'Unknown',
+            id: parseInt(activity._links?.user?.href?.split('/').pop() || '0'),
+          },
+          details: parsedDetails,
+        }
       })
-
-      // The user who performed this journal entry is in _links.user.
-      // title is populated by OpenProject for all users (not just the API caller).
-      // If title is missing for any reason, fall back to fetching by href.
-      let userName = (activity._links?.user?.title || '').trim()
-      if (!userName && activity._links?.user?.href) {
-        userName = await fetchUserName(config, activity._links.user.href)
-      }
-
-      return {
-        id: activity.id,
-        comment: activity.comment,
-        createdAt: activity.createdAt,
-        user: {
-          name: userName || 'Unknown',
-          id: parseInt(activity._links?.user?.href?.split('/').pop() || '0'),
-        },
-        details: parsedDetails,
-      }
-    }))
+    )
 
     return activities
   } catch (e) {
@@ -1026,44 +1062,44 @@ export async function fetchWorkPackageActivities(
 }
 
 // Returns true when a normalised journal detail represents a Testing Status
-// transition to targetValue. Matches against all three sources:
-//   1. property name  (structured or parsed from raw)
-//   2. newValue       (structured or parsed from raw)
-//   3. raw text       (direct substring match as final safety net)
+// transition to targetValue. Matches against all sources.
 function isForwardingDetail(
   detail: { property?: string; newValue?: string; raw?: string },
   targetValue: string
 ): boolean {
-  const prop   = (detail.property  || '').toLowerCase()
-  const newVal = (detail.newValue  || '').toLowerCase()
-  const raw    = (detail.raw       || '').toLowerCase()
+  const prop = (detail.property || '').toLowerCase()
+  const newVal = (detail.newValue || '').toLowerCase()
+  const raw = (detail.raw || '').toLowerCase()
   const target = targetValue.toLowerCase()
 
-  // 1. newValue must equal the target.
-  //    Never check raw text for the target — raw contains BOTH old and new values
-  //    e.g. "Testing Status changed from Forwarded to the Testing Team to Testing Completed"
-  //    would falsely match Maneesh's away-from event.
-  if (!newVal.includes(target)) return false
+  // 1. newValue must match the target
+  if (!newVal.includes(target) && !raw.includes(`to ${target}`)) return false
 
   // 2. Hard-exclude the plain work-package Status field.
   if (prop === 'status') return false
 
   // 3. Identify as the Testing Status field (customField14).
-  //    Accept any of: human-readable name, camelCase ID, underscore ID, or raw text signal.
   const isTestingStatusField =
     prop === 'testing status' ||
     prop.includes('testing') ||
     prop === 'customfield14' ||
     prop === 'cf_14' ||
+    prop === 'cf14' ||
+    prop === 'custom_field_14' ||
+    prop === 'custom_field14' ||
     prop.includes('customfield14') ||
+    prop.includes('custom_field_14') ||
+    prop.includes('custom_field14') ||
     prop.includes('cf_14') ||
+    prop.includes('cf14') ||
+    prop.includes('custom_fields/14') ||
+    prop.endsWith('/14') ||
     raw.includes('testing status') ||
     raw.includes('customfield14') ||
+    raw.includes('custom_field_14') ||
     raw.includes('cf_14')
 
   // 4. If prop is set but not recognised as Testing Status — reject.
-  //    If prop is empty (Shape A — raw-only) and newValue matched — allow,
-  //    because "Forwarded to the Testing Team" is specific enough.
   if (prop.length > 0 && !isTestingStatusField) return false
 
   return true
@@ -1081,7 +1117,7 @@ export async function findAllTestingStatusChanges(
   for (const activity of activities) {
     for (const detail of activity.details) {
       // Log ALL details during sync so we can diagnose match failures
-      console.log(`[StoryPot] WP#${workPackageId} activity#${activity.id} detail:`, {
+      console.log(`[Ticket Bowl] WP#${workPackageId} activity#${activity.id} detail:`, {
         property: detail.property,
         newValue: detail.newValue,
         oldValue: detail.oldValue,
@@ -1098,7 +1134,7 @@ export async function findAllTestingStatusChanges(
           oldValue: detail.oldValue || null,
           newValue: detail.newValue || targetValue,
         }
-        console.log(`[StoryPot] WP#${workPackageId} forwarding event found:`, {
+        console.log(`[Ticket Bowl] WP#${workPackageId} forwarding event found:`, {
           changedAt: event.changedAt,
           changedBy: event.changedBy,
           oldValue: event.oldValue,

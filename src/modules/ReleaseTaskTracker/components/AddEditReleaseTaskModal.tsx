@@ -104,12 +104,13 @@ export function AddEditReleaseTaskModal({
   useEffect(() => {
     if (!isOpen) { submitRef.current = false; return }
 
-    // Check for StoryPot prefill data
-    const prefillRaw = sessionStorage.getItem('storypot_prefill_release')
+    // Check for Ticket Bowl / StoryPot prefill data
+    const prefillRaw = sessionStorage.getItem('ticketbowl_prefill_release') || sessionStorage.getItem('storypot_prefill_release')
     let prefillData: any = null
     if (prefillRaw && !taskToEdit) {
       try {
         prefillData = JSON.parse(prefillRaw)
+        sessionStorage.removeItem('ticketbowl_prefill_release')
         sessionStorage.removeItem('storypot_prefill_release')
       } catch { /* ignore */ }
     }

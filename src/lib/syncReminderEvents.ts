@@ -1,6 +1,6 @@
 // src/lib/syncReminderEvents.ts
 // Lightweight event bus for sync lifecycle signals.
-// CachedStoryPot emits; useSyncReminder listens.
+// Sync actions emit; useSyncReminder listens.
 
 type SyncEvent = 'sync:start' | 'sync:success' | 'sync:fail'
 

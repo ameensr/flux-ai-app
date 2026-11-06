@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Bug, FileText, PenTool, Settings,
   ChevronLeft, Shield, LogOut, ClipboardList,
   ClipboardCheck, FolderKanban, UserRound, AlertCircle,
-  LifeBuoy, Layers, Rocket, ChevronDown, BookOpen,
+  LifeBuoy, Layers, Rocket, ChevronDown, Ticket,
 } from 'lucide-react'
 import { Logo } from '../ui/Logo'
 import { SignOutConfirmModal } from './SignOutConfirmModal'
@@ -40,13 +40,13 @@ export type NavEntry = NavItemEntry | NavGroupEntry
 
 const ALL_NAV_CONFIG: NavEntry[] = [
   { type: 'item', path: ROUTES.dashboard, label: 'Dashboard', icon: LayoutDashboard, moduleKey: 'dashboard' },
-  { type: 'item', path: ROUTES.storyPot, label: 'StoryPot', icon: BookOpen, moduleKey: 'story-pot' },
   {
     type: 'group',
     label: 'QA Operations Hub',
     icon: Layers,
     groupKey: 'qa-operations',
     items: [
+      { path: ROUTES.ticketBowl, label: 'Ticket Bowl', icon: Ticket, moduleKey: 'ticket-bowl' },
       { path: ROUTES.supportTracker, label: 'Support Issue Tracker', icon: LifeBuoy, moduleKey: 'support-tracker' },
       { path: ROUTES.releaseTracker, label: 'Release Task Tracker', icon: Rocket, moduleKey: 'release-tracker' },
     ]

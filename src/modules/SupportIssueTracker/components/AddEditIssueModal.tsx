@@ -63,12 +63,13 @@ export function AddEditIssueModal({ isOpen, issueToEdit, onClose, onSaveSuccess 
   useEffect(() => {
     if (!isOpen) { submitRef.current = false; return }
 
-    // Check for StoryPot prefill data
-    const prefillRaw = sessionStorage.getItem('storypot_prefill_support')
+    // Check for Ticket Bowl / StoryPot prefill data
+    const prefillRaw = sessionStorage.getItem('ticketbowl_prefill_support') || sessionStorage.getItem('storypot_prefill_support')
     let prefillData: any = null
     if (prefillRaw && !issueToEdit) {
       try {
         prefillData = JSON.parse(prefillRaw)
+        sessionStorage.removeItem('ticketbowl_prefill_support')
         sessionStorage.removeItem('storypot_prefill_support')
       } catch { /* ignore */ }
     }
