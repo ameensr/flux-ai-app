@@ -10,6 +10,8 @@ import type {
 import {
   PARENT_COLUMN_ALIASES,
   BUG_STATUS_COLUMN_ALIASES,
+  SEVERITY_COLUMN_ALIASES,
+  SEVERITY_ORDER,
 } from './bugStatusTypes'
 
 function findColumnIndex(headers: string[], aliases: string[]): number {
@@ -49,6 +51,7 @@ export async function parseBugStatusFile(file: File): Promise<BugStatusAnalytics
 
         const parentColIdx = findColumnIndex(headers, PARENT_COLUMN_ALIASES)
         const statusColIdx = findColumnIndex(headers, BUG_STATUS_COLUMN_ALIASES)
+        const severityColIdx = findColumnIndex(headers, SEVERITY_COLUMN_ALIASES)
 
         if (statusColIdx === -1) {
           throw new Error('Could not find a "Status" column. Please ensure your spreadsheet has a Status column.')
@@ -56,6 +59,7 @@ export async function parseBugStatusFile(file: File): Promise<BugStatusAnalytics
 
         const parentColumn = parentColIdx !== -1 ? headers[parentColIdx] : null
         const statusColumn = headers[statusColIdx]
+        const severityColumn = severityColIdx !== -1 ? headers[severityColIdx] : null
 
         const allRecords: BugStatusRecord[] = []
         const dataRows = rows.slice(1).filter(row => row && row.length > 0)
@@ -75,6 +79,24 @@ export async function parseBugStatusFile(file: File): Promise<BugStatusAnalytics
         }
 
         if (allRecords.length === 0) throw new Error('No valid data rows found after the header.')
+
+        // Collect unique severities in canonical order
+        const severitySet = new Set<string>()
+        if (severityColumn) {
+          for (const record of allRecords) {
+            const sev = record[severityColumn]
+            if (sev) severitySet.add(sev)
+          }
+        }
+        // Sort by canonical order first, then alphabetically for unknowns
+        const uniqueSeverities = [...severitySet].sort((a, b) => {
+          const ai = SEVERITY_ORDER.findIndex(o => a.toLowerCase().startsWith(o))
+          const bi = SEVERITY_ORDER.findIndex(o => b.toLowerCase().startsWith(o))
+          if (ai !== -1 && bi !== -1) return ai - bi
+          if (ai !== -1) return -1
+          if (bi !== -1) return 1
+          return a.localeCompare(b)
+        })
 
         const statusMap = new Map<string, number>()
         for (const record of allRecords) {
@@ -144,11 +166,13 @@ export async function parseBugStatusFile(file: File): Promise<BugStatusAnalytics
           detectedColumns,
           parentColumn,
           statusColumn,
+          severityColumn,
           allRecords,
           parentWiseStatus,
           overallStatus,
           uniqueParents: parentWiseStatus.length,
           uniqueStatuses,
+          uniqueSeverities,
           validation,
         })
       } catch (err: any) {

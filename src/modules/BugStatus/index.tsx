@@ -15,6 +15,7 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { pressTap, springSettle, springMove } from '@/lib/motion'
 import { parseBugStatusFile } from './bugStatusParser'
+import { exportPivotExcel } from './bugStatusPivotExport'
 import type { BugStatusAnalytics } from './bugStatusTypes'
 
 const MODULE_KEY = 'bug-status'
@@ -588,11 +589,17 @@ function ParentBugsModal({
   }, [records, columns, q, filterStatus, statusColumn])
 
   const exportParentRecords = async () => {
-    const XLSX = await import('xlsx')
-    const wb = XLSX.utils.book_new()
-    const safeSheetName = (parentName || 'Bugs').slice(0, 31).replace(/[\\/?*[\]]/g, '_')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(records), safeSheetName)
-    XLSX.writeFile(wb, `${safeSheetName.toLowerCase()}-bugs-${new Date().toISOString().split('T')[0]}.xlsx`)
+    try {
+      const XLSX = await import('xlsx')
+      const wb = XLSX.utils.book_new()
+      // Fix: properly escape all invalid sheet name characters including '[' and ']'
+      const safeSheetName = (parentName || 'Bugs').slice(0, 31).replace(/[\\/\?\*\[\]:]/g, '_')
+      // Export filteredRecords so active filters are respected
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filteredRecords), safeSheetName)
+      XLSX.writeFile(wb, `${safeSheetName.toLowerCase()}-bugs-${new Date().toISOString().split('T')[0]}.xlsx`)
+    } catch (err: any) {
+      console.error('Export failed:', err)
+    }
   }
 
   const isBlankParent = parentName === 'No Parent Assigned'
@@ -906,6 +913,157 @@ function ValidationSummary({
   )
 }
 
+// ─── Parent selector panel ──────────────────────────────────────────────────
+function ParentSelector({
+  parents,
+  selected,
+  onToggle,
+  onSelectAll,
+  onClearAll,
+}: {
+  parents: string[]
+  selected: Set<string>
+  onToggle: (p: string) => void
+  onSelectAll: () => void
+  onClearAll: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const q = search.trim().toLowerCase()
+  const filtered = q ? parents.filter(p => p.toLowerCase().includes(q)) : parents
+  const allSelected = parents.length > 0 && parents.every(p => selected.has(p))
+  const someSelected = selected.size > 0 && !allSelected
+
+  return (
+    <div
+      className="rounded-2xl overflow-hidden"
+      style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}
+    >
+      {/* Header */}
+      <div
+        className="flex items-center justify-between gap-3 px-4 py-3"
+        style={{ background: 'var(--hover)', borderBottom: '1px solid var(--divider)' }}
+      >
+        <div className="flex items-center gap-2">
+          <FolderTree className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+          <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+            Select Parents to Export
+          </span>
+          {selected.size > 0 && (
+            <span
+              className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+              style={{ background: 'var(--accent)', color: 'var(--accent-fg)' }}
+            >
+              {selected.size} selected
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={allSelected ? onClearAll : onSelectAll}
+            className="text-[11px] font-semibold px-2.5 py-1 rounded-lg cursor-pointer transition-colors"
+            style={{
+              background: allSelected ? 'rgba(239,68,68,0.08)' : 'color-mix(in srgb, var(--accent) 12%, transparent)',
+              color: allSelected ? '#ef4444' : 'var(--accent)',
+              border: `1px solid ${allSelected ? 'rgba(239,68,68,0.22)' : 'color-mix(in srgb, var(--accent) 28%, transparent)'}`,
+            }}
+          >
+            {allSelected ? 'Clear All' : 'Select All'}
+          </button>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="px-3 py-2" style={{ borderBottom: '1px solid var(--divider)' }}>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-muted)' }} />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search parents…"
+            className="w-full h-8 pl-8 pr-8 rounded-xl text-xs outline-none"
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-primary)',
+            }}
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded flex items-center justify-center"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="overflow-y-auto" style={{ maxHeight: '260px' }}>
+        {filtered.length === 0 ? (
+          <div className="py-6 text-center text-xs" style={{ color: 'var(--text-muted)' }}>No parents match</div>
+        ) : (
+          filtered.map(parent => {
+            const checked = selected.has(parent)
+            return (
+              <label
+                key={parent}
+                className="flex items-start gap-3 px-4 py-2.5 cursor-pointer transition-colors"
+                style={{
+                  background: checked ? 'color-mix(in srgb, var(--accent) 6%, transparent)' : 'transparent',
+                  borderBottom: '1px solid var(--divider)',
+                }}
+              >
+                <div className="relative mt-0.5 shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => onToggle(parent)}
+                    className="sr-only"
+                  />
+                  <div
+                    className="w-4 h-4 rounded flex items-center justify-center transition-all"
+                    style={{
+                      background: checked ? 'var(--accent)' : 'var(--surface)',
+                      border: `1.5px solid ${checked ? 'var(--accent)' : 'var(--border)'}`,
+                    }}
+                  >
+                    {checked && (
+                      <svg className="w-2.5 h-2.5" viewBox="0 0 10 8" fill="none">
+                        <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                <span
+                  className="text-xs leading-snug"
+                  style={{ color: checked ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                >
+                  {parent}
+                </span>
+              </label>
+            )
+          })
+        )}
+      </div>
+
+      {/* Indeterminate hint */}
+      {someSelected && (
+        <div
+          className="px-4 py-2 text-[11px]"
+          style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--divider)' }}
+        >
+          {selected.size} of {parents.length} parents selected
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function BugStatus() {
   const { toast } = useToast()
   const { canExport } = usePermissions()
@@ -919,6 +1077,54 @@ export function BugStatus() {
     parentName: '',
     records: [],
   })
+
+  // ── Pivot export selection state
+  const [exportSelected, setExportSelected] = useState<Set<string>>(new Set())
+  const [isExporting, setIsExporting] = useState(false)
+
+  // Reset selection when a new file is loaded
+  useEffect(() => {
+    setExportSelected(new Set())
+  }, [analytics])
+
+  const exportParentList = useMemo(
+    () => analytics?.parentWiseStatus.map(p => p.parent) ?? [],
+    [analytics],
+  )
+
+  const handleToggleExportParent = useCallback((parent: string) => {
+    setExportSelected(prev => {
+      const next = new Set(prev)
+      next.has(parent) ? next.delete(parent) : next.add(parent)
+      return next
+    })
+  }, [])
+
+  const handleSelectAllExport = useCallback(() => {
+    setExportSelected(new Set(exportParentList))
+  }, [exportParentList])
+
+  const handleClearAllExport = useCallback(() => {
+    setExportSelected(new Set())
+  }, [])
+
+  const handlePivotExport = useCallback(async () => {
+    if (!analytics || exportSelected.size === 0) return
+    setIsExporting(true)
+    try {
+      // Preserve the order from parentWiseStatus
+      const ordered = exportParentList.filter(p => exportSelected.has(p))
+      await exportPivotExcel(analytics, ordered)
+      toast({
+        title: 'Export Complete',
+        description: `Pivot report exported for ${ordered.length} parent${ordered.length === 1 ? '' : 's'}.`,
+      })
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Export Failed', description: err.message || 'Could not generate Excel file.' })
+    } finally {
+      setIsExporting(false)
+    }
+  }, [analytics, exportSelected, exportParentList, toast])
 
   const parentModalRecords = useMemo(() => {
     if (!analytics || !selectedParentForModal || !analytics.parentColumn) return []
@@ -995,26 +1201,41 @@ export function BugStatus() {
 
   const exportToExcel = async () => {
     if (!analytics) return
-    const XLSX = await import('xlsx')
-    const wb = XLSX.utils.book_new()
+    try {
+      const XLSX = await import('xlsx')
+      const wb = XLSX.utils.book_new()
 
-    const overallData = analytics.overallStatus.map(s => ({ Status: s.status, Count: s.count }))
-    overallData.push({ Status: 'Total', Count: analytics.rawRowCount })
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(overallData), 'Overall Status')
+      // Overall Status sheet
+      const overallData = analytics.overallStatus.map(s => ({ Status: s.status, Count: s.count }))
+      overallData.push({ Status: 'Total', Count: analytics.rawRowCount })
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(overallData), 'Overall Status')
 
-    if (analytics.parentWiseStatus.length > 0) {
-      const parentData = analytics.parentWiseStatus.map(p => ({
-        Parent: p.parent,
-        Total: p.total,
-        ...p.statusCounts,
-      }))
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parentData), 'Parent-Wise Status')
+      // Parent-Wise Status sheet — fix column ordering by building rows with explicit key order
+      if (analytics.parentWiseStatus.length > 0) {
+        const parentData = analytics.parentWiseStatus.map(p => {
+          const row: Record<string, string | number> = { Parent: p.parent, Total: p.total }
+          analytics.uniqueStatuses.forEach(s => { row[s] = p.statusCounts[s] || 0 })
+          return row
+        })
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parentData), 'Parent-Wise Status')
+      }
+
+      // All Records sheet — restore numeric types for numeric-looking values
+      const typedRecords = analytics.allRecords.map(record => {
+        const row: Record<string, string | number> = {}
+        for (const [k, v] of Object.entries(record)) {
+          const n = Number(v)
+          row[k] = v !== '' && !isNaN(n) ? n : (v as string)
+        }
+        return row
+      })
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(typedRecords), 'All Records')
+
+      XLSX.writeFile(wb, `bug-status-report-${new Date().toISOString().split('T')[0]}.xlsx`)
+      toast({ title: 'Export Complete', description: 'Bug status report exported to Excel' })
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Export Failed', description: err.message || 'Could not generate Excel file.' })
     }
-
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(analytics.allRecords), 'All Records')
-
-    XLSX.writeFile(wb, `bug-status-report-${new Date().toISOString().split('T')[0]}.xlsx`)
-    toast({ title: 'Export Complete', description: 'Bug status report exported to Excel' })
   }
 
   const printReport = () => {
@@ -1022,11 +1243,19 @@ export function BugStatus() {
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
 
+    // Escape HTML to prevent layout breaks and XSS from file/status/parent values
+    const esc = (v: unknown) =>
+      String(v ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+
     const html = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Bug Status Report - ${analytics.uploadedFileName}</title>
+        <title>Bug Status Report - ${esc(analytics.uploadedFileName)}</title>
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; }
           h1 { color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
@@ -1043,7 +1272,7 @@ export function BugStatus() {
       </head>
       <body>
         <h1>Bug Status Report</h1>
-        <p><strong>File:</strong> ${analytics.uploadedFileName} | <strong>Date:</strong> ${new Date(analytics.uploadedAt).toLocaleDateString()}</p>
+        <p><strong>File:</strong> ${esc(analytics.uploadedFileName)} | <strong>Date:</strong> ${esc(new Date(analytics.uploadedAt).toLocaleDateString())}</p>
 
         <div class="summary">
           <div class="stat"><div class="stat-value">${analytics.rawRowCount}</div><div class="stat-label">Total Bugs</div></div>
@@ -1054,15 +1283,15 @@ export function BugStatus() {
         <h2>Overall Status Distribution</h2>
         <table>
           <tr><th>Status</th><th>Count</th><th>Percentage</th></tr>
-          ${analytics.overallStatus.map(s => `<tr><td>${s.status}</td><td>${s.count}</td><td>${((s.count / analytics.rawRowCount) * 100).toFixed(1)}%</td></tr>`).join('')}
+          ${analytics.overallStatus.map(s => `<tr><td>${esc(s.status)}</td><td>${s.count}</td><td>${((s.count / analytics.rawRowCount) * 100).toFixed(1)}%</td></tr>`).join('')}
           <tr style="font-weight:bold;background:#f1f5f9"><td>Total</td><td>${analytics.rawRowCount}</td><td>100%</td></tr>
         </table>
 
         ${analytics.parentWiseStatus.length > 0 ? `
         <h2>Parent-Wise Status</h2>
         <table>
-          <tr><th>Parent</th><th>Total</th>${analytics.uniqueStatuses.map(s => `<th>${s}</th>`).join('')}</tr>
-          ${analytics.parentWiseStatus.map(p => `<tr><td>${p.parent}</td><td><strong>${p.total}</strong></td>${analytics.uniqueStatuses.map(s => `<td>${p.statusCounts[s] || 0}</td>`).join('')}</tr>`).join('')}
+          <tr><th>Parent</th><th>Total</th>${analytics.uniqueStatuses.map(s => `<th>${esc(s)}</th>`).join('')}</tr>
+          ${analytics.parentWiseStatus.map(p => `<tr><td>${esc(p.parent)}</td><td><strong>${p.total}</strong></td>${analytics.uniqueStatuses.map(s => `<td>${p.statusCounts[s] || 0}</td>`).join('')}</tr>`).join('')}
         </table>
         ` : ''}
 
@@ -1221,11 +1450,16 @@ export function BugStatus() {
                       <>
                         <motion.button
                           whileTap={pressTap}
-                          onClick={exportToExcel}
-                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold"
+                          onClick={handlePivotExport}
+                          disabled={exportSelected.size === 0 || isExporting}
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           style={{ background: 'var(--accent)', color: 'var(--accent-fg)' }}
+                          title={exportSelected.size === 0 ? 'Select at least one parent to export' : `Export ${exportSelected.size} parent${exportSelected.size === 1 ? '' : 's'} as pivot Excel`}
                         >
-                          <Download className="w-3.5 h-3.5" /> Export
+                          {isExporting
+                            ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            : <Download className="w-3.5 h-3.5" />}
+                          {isExporting ? 'Exporting…' : exportSelected.size > 0 ? `Export (${exportSelected.size})` : 'Export Excel'}
                         </motion.button>
                         <motion.button
                           whileTap={pressTap}
@@ -1273,6 +1507,23 @@ export function BugStatus() {
                   )
                 })}
               </div>
+
+              {analytics.parentColumn && exportParentList.length > 0 && canExport(MODULE_KEY) && (
+                <div>
+                  <SectionHeading
+                    icon={Download}
+                    title="Export pivot report"
+                    hint="Select parents to include in the formatted Excel export"
+                  />
+                  <ParentSelector
+                    parents={exportParentList}
+                    selected={exportSelected}
+                    onToggle={handleToggleExportParent}
+                    onSelectAll={handleSelectAllExport}
+                    onClearAll={handleClearAllExport}
+                  />
+                </div>
+              )}
 
               <div>
                 <SectionHeading icon={BarChart3} title="Overall status" hint="Distribution across every ticket in the file" />

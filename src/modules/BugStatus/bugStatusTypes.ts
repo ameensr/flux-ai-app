@@ -23,11 +23,13 @@ export interface BugStatusAnalytics {
   detectedColumns: string[]
   parentColumn: string | null
   statusColumn: string | null
+  severityColumn: string | null
   allRecords: BugStatusRecord[]
   parentWiseStatus: ParentStatusSummary[]
   overallStatus: OverallStatusSummary[]
   uniqueParents: number
   uniqueStatuses: string[]
+  uniqueSeverities: string[]
   validation: {
     totalRecordsMatch: boolean
     parentWiseTotalMatch: boolean
@@ -48,3 +50,12 @@ export const BUG_STATUS_COLUMN_ALIASES = [
   'status', 'bug status', 'issue status', 'defect status',
   'current status', 'workflow status', 'state', 'issue state', 'resolution'
 ]
+
+export const SEVERITY_COLUMN_ALIASES = [
+  'severity', 'bug severity', 'issue severity', 'defect severity',
+  'priority', 'bug priority', 'issue priority', 'defect priority',
+  'impact', 'criticality', 'level'
+]
+
+// Canonical severity order for pivot columns (case-insensitive prefix match)
+export const SEVERITY_ORDER = ['critical', 'major', 'minor', 'low', 'trivial']
