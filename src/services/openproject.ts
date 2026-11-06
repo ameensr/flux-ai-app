@@ -727,13 +727,19 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
     links['cf_9']?.title ||
     (customFields['customField9'] ?? customFields['cf_9'] ?? null)
 
-  // ── customField21 → Is QA Missed ────────────────────────────────────────
-  // Only present on SUPPORT ISSUE tickets. For BUG tickets the field is
-  // absent entirely — we resolve the correct value after we know the type.
+  // ── customField21 → Is QA Missed (boolean checkbox) ────────────────────
+  // OpenProject checkbox fields are stored as direct boolean properties,
+  // NOT in _links. true = checked = "Yes", false/absent = unchecked = "No".
+  const rawIsQAMissedBool: unknown =
+    wp['customField21'] ?? wp['cf_21'] ?? null
+  // Normalise: true → 'Yes', false → 'No', null/undefined → null (resolve below)
   const rawIsQAMissed: string | null =
-    links['customField21']?.title ||
-    links['cf_21']?.title ||
-    (customFields['customField21'] ?? customFields['cf_21'] ?? null)
+    rawIsQAMissedBool === true  ? 'Yes' :
+    rawIsQAMissedBool === false ? 'No'  :
+    // Fallback: some editions may still send it as a string
+    (typeof rawIsQAMissedBool === 'string' && rawIsQAMissedBool.length > 0)
+      ? rawIsQAMissedBool
+      : null
 
   // ── customField3 → QA Confirmation ──────────────────────────────────────
   const qaConfirmation: string | null =
@@ -757,15 +763,14 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
   const isBugTicket = ticketType.toLowerCase() === 'bug'
 
   // BUG tickets do not have customField21 — store 'N/A' explicitly.
-  // SUPPORT ISSUE tickets: use the actual value; if absent treat as 'Unknown'.
+  // All other ticket types: checkbox default is unchecked = 'No'.
+  // null means the field was absent from the API response → treat as 'No' (unchecked).
   let isQAMissed: string | null
   if (isBugTicket) {
     isQAMissed = 'N/A'
-  } else if (rawIsQAMissed) {
-    isQAMissed = rawIsQAMissed
   } else {
-    // Support Issue with no value returned by OpenProject
-    isQAMissed = 'Unknown'
+    // rawIsQAMissed is 'Yes', 'No', or null (absent = unchecked = No)
+    isQAMissed = rawIsQAMissed ?? 'No'
   }
 
   return {

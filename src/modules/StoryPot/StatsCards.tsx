@@ -1,6 +1,6 @@
 // src/modules/StoryPot/StatsCards.tsx
 import React from 'react'
-import { BarChart3, ShieldAlert, ShieldCheck, HelpCircle, Minus } from 'lucide-react'
+import { BarChart3, ShieldAlert, ShieldCheck, Minus } from 'lucide-react'
 import { GlassCard } from '@/components/ui/GlassCard'
 
 interface StatsCardsProps {
@@ -62,7 +62,6 @@ export function StatsCards({
   const qaMissedYes = activeFilterCount > 0 ? (filteredQaMissed?.yes ?? 0) : (stats.qaMissedYes ?? 0)
   const qaMissedNo = activeFilterCount > 0 ? (filteredQaMissed?.no ?? 0) : (stats.qaMissedNo ?? 0)
   const qaMissedNa = activeFilterCount > 0 ? (filteredQaMissed?.na ?? 0) : (stats.qaMissedNa ?? 0)
-  const qaMissedUnknown = activeFilterCount > 0 ? (filteredQaMissed?.unknown ?? 0) : (stats.qaMissedUnknown ?? 0)
 
   return (
     <div className="space-y-3">
@@ -154,14 +153,6 @@ export function StatsCards({
                       <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>/</span>
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#64748b' }} title="QA Missed: N/A (Bug tickets)">
                         <Minus className="w-2.5 h-2.5" /> {qaMissedNa} N/A
-                      </span>
-                    </>
-                  )}
-                  {qaMissedUnknown > 0 && (
-                    <>
-                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>/</span>
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#94a3b8' }} title="QA Missed: Unknown (Support Issue, value not set)">
-                        <HelpCircle className="w-2.5 h-2.5" /> {qaMissedUnknown}
                       </span>
                     </>
                   )}

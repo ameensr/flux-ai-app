@@ -202,15 +202,13 @@ export function WorkPackageRow({
                 <Clock className="w-3 h-3" />{wp.percentage_done}%
               </span>
             )}
-            {/* Is QA Missed inline label in meta row */}
-            {wp.is_qa_missed && (
+            {/* Is QA Missed inline label — only show Yes and N/A; No is the default/noise */}
+            {wp.is_qa_missed && wp.is_qa_missed.toLowerCase() !== 'no' && (
               <span
                 className="flex items-center gap-1 font-medium"
                 style={{
                   color:
-                    wp.is_qa_missed.toLowerCase() === 'yes' ? '#ef4444' :
-                    wp.is_qa_missed.toLowerCase() === 'no'  ? '#22c55e' :
-                    '#64748b',
+                    wp.is_qa_missed.toLowerCase() === 'yes' ? '#ef4444' : '#64748b',
                 }}
                 title={`Is QA Missed: ${wp.is_qa_missed}`}
               >

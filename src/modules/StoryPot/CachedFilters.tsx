@@ -198,7 +198,7 @@ export function CachedFilters({
                 label="QA Missed"
                 value={filters.isQAMissed}
                 onChange={(v) => setFilters({ isQAMissed: v })}
-                options={['Yes', 'No', 'N/A', 'Unknown']}
+                options={['Yes', 'No', 'N/A']}
                 isDark={isDark}
               />
             </div>
