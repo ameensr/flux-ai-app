@@ -1034,35 +1034,39 @@ function isForwardingDetail(
   detail: { property?: string; newValue?: string; raw?: string },
   targetValue: string
 ): boolean {
-  const prop     = (detail.property  || '').toLowerCase()
-  const newVal   = (detail.newValue  || '').toLowerCase()
-  const raw      = (detail.raw       || '').toLowerCase()
-  const target   = targetValue.toLowerCase()
+  const prop   = (detail.property  || '').toLowerCase()
+  const newVal = (detail.newValue  || '').toLowerCase()
+  const raw    = (detail.raw       || '').toLowerCase()
+  const target = targetValue.toLowerCase()
 
-  // Identify the Testing Status custom field by any known identifier
+  // 1. newValue must equal the target.
+  //    Never check raw text for the target — raw contains BOTH old and new values
+  //    e.g. "Testing Status changed from Forwarded to the Testing Team to Testing Completed"
+  //    would falsely match Maneesh's away-from event.
+  if (!newVal.includes(target)) return false
+
+  // 2. Hard-exclude the plain work-package Status field.
+  if (prop === 'status') return false
+
+  // 3. Identify as the Testing Status field (customField14).
+  //    Accept any of: human-readable name, camelCase ID, underscore ID, or raw text signal.
   const isTestingStatusField =
     prop === 'testing status' ||
-    prop.includes('testing status') ||
+    prop.includes('testing') ||
     prop === 'customfield14' ||
     prop === 'cf_14' ||
     prop.includes('customfield14') ||
     prop.includes('cf_14') ||
-    raw.includes('testing status')
+    raw.includes('testing status') ||
+    raw.includes('customfield14') ||
+    raw.includes('cf_14')
 
-  // Exclude the plain work-package Status field
-  const isPlainStatusField =
-    (prop === 'status' || raw.startsWith('status ')) &&
-    !prop.includes('testing') &&
-    !raw.includes('testing status')
+  // 4. If prop is set but not recognised as Testing Status — reject.
+  //    If prop is empty (Shape A — raw-only) and newValue matched — allow,
+  //    because "Forwarded to the Testing Team" is specific enough.
+  if (prop.length > 0 && !isTestingStatusField) return false
 
-  if (isPlainStatusField) return false
-
-  // Match the target value in newValue OR directly in the raw text
-  const matchesTarget =
-    newVal.includes(target) ||
-    raw.includes(target)
-
-  return isTestingStatusField && matchesTarget
+  return true
 }
 
 // Returns ALL forwarding events for a work package, sorted newest-first.
@@ -1076,6 +1080,16 @@ export async function findAllTestingStatusChanges(
 
   for (const activity of activities) {
     for (const detail of activity.details) {
+      // Log ALL details during sync so we can diagnose match failures
+      console.log(`[StoryPot] WP#${workPackageId} activity#${activity.id} detail:`, {
+        property: detail.property,
+        newValue: detail.newValue,
+        oldValue: detail.oldValue,
+        raw: detail.raw,
+        user: activity.user.name,
+        date: activity.createdAt,
+        isMatch: isForwardingDetail(detail, targetValue),
+      })
       if (isForwardingDetail(detail, targetValue)) {
         const event: TestingStatusChange = {
           workPackageId: Number(workPackageId),

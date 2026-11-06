@@ -2,7 +2,8 @@
 import React from 'react'
 import {
   Bug, FileText, Zap, CheckCircle2, User, Calendar,
-  Users, Tag, History, Square, CheckSquare, Clock, ArrowRight,
+  Users, Tag, History, Square, CheckSquare, Clock,
+  ShieldAlert, ShieldCheck, Minus, Activity,
 } from 'lucide-react'
 import type { CachedWorkPackage } from '@/services/storypot-cache'
 
@@ -39,7 +40,17 @@ const getStatusColor = (s: string) => {
   return 'var(--text-muted)'
 }
 
-// Format a UTC timestamp for display using the browser's local timezone
+const getTestingStatusColor = (ts: string) => {
+  const t = ts.toLowerCase()
+  if (t.includes('forwarded')) return '#3b82f6'
+  if (t.includes('completed')) return '#22c55e'
+  if (t.includes('progress')) return '#8b5cf6'
+  if (t.includes('re-test') || t.includes('retest')) return '#f97316'
+  if (t.includes('hold')) return '#94a3b8'
+  if (t.includes('reported')) return '#ef4444'
+  return '#64748b'
+}
+
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
     day: '2-digit', month: 'short', year: 'numeric',
@@ -51,6 +62,29 @@ function fmtTime(iso: string): string {
   })
 }
 
+function QAMissedBadge({ value }: { value: string | null }) {
+  if (!value) return null
+  const v = value.toLowerCase()
+  if (v === 'yes') return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-500/15 text-red-500">
+      <ShieldAlert className="w-3 h-3" /> QA Missed
+    </span>
+  )
+  if (v === 'no') return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase"
+      style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}>
+      <ShieldCheck className="w-3 h-3" /> QA OK
+    </span>
+  )
+  if (v === 'n/a') return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase"
+      style={{ background: 'rgba(100,116,139,0.15)', color: '#64748b' }}>
+      <Minus className="w-3 h-3" /> N/A
+    </span>
+  )
+  return null
+}
+
 export function WorkPackageRow({
   wp,
   openprojectUrl,
@@ -60,6 +94,7 @@ export function WorkPackageRow({
   showCheckbox = true,
 }: WorkPackageRowProps) {
   const hasHandoff = !!wp.forwarded_to_testing_at && wp.handoff_verified
+  const tsColor = wp.testing_status ? getTestingStatusColor(wp.testing_status) : '#64748b'
 
   return (
     <div
@@ -84,13 +119,13 @@ export function WorkPackageRow({
         </button>
       )}
 
-      {/* Content */}
       <a
         href={`${openprojectUrl}/work_packages/${wp.id}`}
         target="_blank"
         rel="noopener noreferrer"
         className="flex-1 flex items-start gap-4"
       >
+        {/* Type icon */}
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
           style={{
@@ -102,9 +137,10 @@ export function WorkPackageRow({
         </div>
 
         <div className="flex-1 min-w-0">
-          {/* Badges row */}
+
+          {/* ── Row 1: ID · Status · Type · Release · Overdue ── */}
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+            <span className="text-xs font-mono font-bold" style={{ color: 'var(--text-muted)' }}>
               #{wp.id}
             </span>
             <span
@@ -135,90 +171,69 @@ export function WorkPackageRow({
                 Overdue
               </span>
             )}
-            {/* Current Testing Status badge */}
-            {wp.testing_status && (
-              <span
-                className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
-                style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}
-                title="Current Testing Status (customField14)"
-              >
-                {wp.testing_status}
-              </span>
-            )}
-            {/* Is QA Missed badge — only render when value is meaningful */}
-            {wp.is_qa_missed && wp.is_qa_missed.toLowerCase() === 'yes' && (
-              <span
-                className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-500/20 text-red-500"
-                title="QA Missed: Yes (customField21)"
-              >
-                QA Missed
-              </span>
-            )}
-            {wp.is_qa_missed && wp.is_qa_missed.toLowerCase() === 'no' && (
-              <span
-                className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
-                style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}
-                title="QA Missed: No (customField21)"
-              >
-                QA OK
-              </span>
-            )}
-            {wp.is_qa_missed && wp.is_qa_missed.toLowerCase() === 'n/a' && (
-              <span
-                className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
-                style={{ background: 'rgba(100,116,139,0.15)', color: '#64748b' }}
-                title="QA Missed: N/A — Bug tickets do not have this field"
-              >
-                N/A
-              </span>
-            )}
           </div>
 
-          {/* Subject */}
-          <p className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+          {/* ── Row 2: Subject ── */}
+          <p className="text-sm font-semibold mb-2.5" style={{ color: 'var(--text-primary)' }}>
             {wp.subject}
           </p>
 
-          {/* Meta row */}
-          <div className="flex items-center gap-4 text-xs flex-wrap mb-2" style={{ color: 'var(--text-muted)' }}>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full" style={{ background: getPriorityColor(wp.priority) }} />
-              {wp.priority}
+          {/* ── Row 3: Key info grid ── */}
+          <div className="flex flex-wrap gap-x-5 gap-y-1.5 mb-2.5 text-xs">
+
+            {/* Author */}
+            <span className="flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+              <Users className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+              <span style={{ color: 'var(--text-muted)' }}>Author:</span>
+              <strong style={{ color: 'var(--text-primary)' }}>{wp.author || 'Unknown'}</strong>
             </span>
-            <span className="flex items-center gap-1">
-              <Users className="w-3 h-3" />Author: {wp.author || 'Unknown'}
+
+            {/* Assignee */}
+            <span className="flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+              <User className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+              <span style={{ color: 'var(--text-muted)' }}>Assignee:</span>
+              <strong style={{ color: 'var(--text-primary)' }}>{wp.assignee || 'Unassigned'}</strong>
             </span>
-            <span className="flex items-center gap-1">
-              <User className="w-3 h-3" />{wp.assignee || 'Unassigned'}
+
+            {/* Priority */}
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: getPriorityColor(wp.priority) }} />
+              <span style={{ color: 'var(--text-muted)' }}>Priority:</span>
+              <strong style={{ color: 'var(--text-primary)' }}>{wp.priority}</strong>
             </span>
+
+            {/* Created date */}
             {wp.created_at && (
-              <span className="flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                {new Date(wp.created_at).toLocaleDateString()}
-              </span>
-            )}
-            {wp.percentage_done > 0 && (
-              <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />{wp.percentage_done}%
-              </span>
-            )}
-            {/* Is QA Missed inline label — only show Yes and N/A; No is the default/noise */}
-            {wp.is_qa_missed && wp.is_qa_missed.toLowerCase() !== 'no' && (
-              <span
-                className="flex items-center gap-1 font-medium"
-                style={{
-                  color:
-                    wp.is_qa_missed.toLowerCase() === 'yes' ? '#ef4444' : '#64748b',
-                }}
-                title={`Is QA Missed: ${wp.is_qa_missed}`}
-              >
-                QA Missed: {wp.is_qa_missed}
+              <span className="flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                <Calendar className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                <span style={{ color: 'var(--text-muted)' }}>Created:</span>
+                <strong style={{ color: 'var(--text-primary)' }}>
+                  {new Date(wp.created_at).toLocaleDateString()}
+                </strong>
               </span>
             )}
           </div>
 
-          {/* Handoff event block — shown when a verified transition exists */}
-          {hasHandoff && (
+          {/* ── Row 4: Testing Status · QA Missed — always visible ── */}
+          <div className="flex flex-wrap items-center gap-2 mb-2.5">
+
+            {/* Testing Status */}
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold"
+              style={{ background: `${tsColor}18`, color: tsColor, border: `1px solid ${tsColor}30` }}
+              title="Current Testing Status (customField14)"
+            >
+              <Activity className="w-3 h-3" />
+              {wp.testing_status || 'No Testing Status'}
+            </span>
+
+            {/* QA Missed */}
+            <QAMissedBadge value={wp.is_qa_missed} />
+
+          </div>
+
+          {/* ── Row 5: Forwarding event block ── */}
+          {hasHandoff ? (
             <div
               className="inline-flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg text-xs"
               style={{
@@ -226,13 +241,30 @@ export function WorkPackageRow({
                 border: '1px solid rgba(59, 130, 246, 0.25)',
               }}
             >
-              {/* Icon + label — clarify "First" when forwarded multiple times */}
               <span className="flex items-center gap-1.5 font-semibold shrink-0" style={{ color: '#3b82f6' }}>
                 <History className="w-3.5 h-3.5" />
-                {wp.handoff_count > 1 ? 'Re-Forwarded to the Testing Team' : 'Forwarded to the Testing Team'}
+                Forwarded to Testing
+                {wp.handoff_count > 1 && (
+                  <span
+                    className="px-1.5 py-0.5 rounded text-[10px] font-bold"
+                    style={{ background: 'rgba(59,130,246,0.2)', color: '#3b82f6' }}
+                    title={`Forwarded ${wp.handoff_count} times — showing latest`}
+                  >
+                    ×{wp.handoff_count}
+                  </span>
+                )}
               </span>
 
-              {/* Date Status Changed */}
+              {/* Who forwarded */}
+              <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                <User className="w-3 h-3" style={{ color: '#3b82f6' }} />
+                <span style={{ color: 'var(--text-muted)' }}>By:</span>
+                <strong style={{ color: 'var(--text-primary)' }}>
+                  {wp.forwarded_to_testing_by || 'Unknown'}
+                </strong>
+              </span>
+
+              {/* Date */}
               <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
                 <Calendar className="w-3 h-3" style={{ color: '#3b82f6' }} />
                 <span style={{ color: 'var(--text-muted)' }}>Date:</span>
@@ -241,7 +273,7 @@ export function WorkPackageRow({
                 </strong>
               </span>
 
-              {/* Time Status Changed */}
+              {/* Time */}
               <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
                 <Clock className="w-3 h-3" style={{ color: '#3b82f6' }} />
                 <span style={{ color: 'var(--text-muted)' }}>Time:</span>
@@ -249,42 +281,11 @@ export function WorkPackageRow({
                   {fmtTime(wp.forwarded_to_testing_at!)}
                 </strong>
               </span>
-
-              {/* Changed By */}
-              {wp.forwarded_to_testing_by && (
-                <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
-                  <User className="w-3 h-3" style={{ color: '#3b82f6' }} />
-                  <span style={{ color: 'var(--text-muted)' }}>By:</span>
-                  <strong style={{ color: 'var(--text-primary)' }}>{wp.forwarded_to_testing_by}</strong>
-                </span>
-              )}
-
-              {/* Current Testing Status (may differ from the matched transition) */}
-              {wp.testing_status && wp.testing_status !== 'Forwarded to the Testing Team' && (
-                <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
-                  <ArrowRight className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
-                  <span style={{ color: 'var(--text-muted)' }}>Now:</span>
-                  <strong style={{ color: 'var(--text-primary)' }}>{wp.testing_status}</strong>
-                </span>
-              )}
-
-              {/* Multiple forwarding events indicator */}
-              {wp.handoff_count > 1 && (
-                <span
-                  className="px-1.5 py-0.5 rounded text-[10px] font-bold"
-                  style={{ background: 'rgba(59,130,246,0.2)', color: '#3b82f6' }}
-                  title={`Forwarded ${wp.handoff_count} times total`}
-                >
-                  ×{wp.handoff_count}
-                </span>
-              )}
             </div>
-          )}
-
-          {/* Unverified indicator — forwarded_to_testing_at present but not verified */}
-          {wp.forwarded_to_testing_at && !wp.handoff_verified && (
+          ) : wp.forwarded_to_testing_at ? (
+            /* Has a date stored but handoff_verified = false */
             <div
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs mt-1"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs"
               style={{
                 background: isDark ? 'rgba(245,158,11,0.1)' : 'rgba(245,158,11,0.07)',
                 border: '1px solid rgba(245,158,11,0.25)',
@@ -292,9 +293,10 @@ export function WorkPackageRow({
               }}
             >
               <History className="w-3 h-3" />
-              Transition date unavailable
+              Forwarding date unverified
             </div>
-          )}
+          ) : null}
+
         </div>
 
         {/* Progress bar */}

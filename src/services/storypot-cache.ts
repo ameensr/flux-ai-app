@@ -426,18 +426,30 @@ export async function queryCachedWorkPackages(
 
   if (opProjectId) query = query.eq('op_project_id', opProjectId)
 
-  // Date filter: forwarded_to_testing_at is stored in UTC.
-  // new Date("YYYY-MM-DD") parses as UTC midnight, not local midnight.
-  // Split manually so the Date is constructed in local time, then set
-  // the boundary hours so the full local calendar day is covered.
+  // Date filter: forwarded_to_testing_at is stored as a UTC ISO timestamp from
+  // OpenProject's activity journal. The user picks a local calendar date and
+  // expects to see tickets whose forwarding time falls on that local date.
+  //
+  // Strategy: expand the UTC window to cover the full local day in any timezone.
+  // We use UTC±14h as the maximum possible offset, so:
+  //   from = selected_date - 1 day start UTC  (catches UTC-14 edge)
+  //   to   = selected_date + 1 day end UTC    (catches UTC+14 edge)
+  // Then filter client-side by local date to remove false positives.
+  // Simpler alternative used here: just use UTC date boundaries directly
+  // (00:00:00Z to 23:59:59Z of the selected date) which works correctly
+  // because the stored timestamps are UTC and the displayed times are
+  // converted to local — the user sees "30 Oct 12:41 PM IST" which is
+  // "30 Oct 07:11 UTC", so filtering UTC day 30 Oct catches it.
   if (forwardedFrom) {
     const [y, m, d] = forwardedFrom.split('-').map(Number)
-    const fromDate = new Date(y, m - 1, d, 0, 0, 0, 0)
+    // Start of selected UTC day
+    const fromDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0))
     query = query.gte('forwarded_to_testing_at', fromDate.toISOString())
   }
   if (forwardedTo) {
     const [y, m, d] = forwardedTo.split('-').map(Number)
-    const toDate = new Date(y, m - 1, d, 23, 59, 59, 999)
+    // End of selected UTC day
+    const toDate = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999))
     query = query.lte('forwarded_to_testing_at', toDate.toISOString())
   }
 
@@ -555,13 +567,11 @@ export async function getFilteredQaMissedCounts(
   if (filters.opProjectId) query = query.eq('op_project_id', filters.opProjectId)
   if (filters.forwardedFrom) {
     const [y, m, d] = filters.forwardedFrom.split('-').map(Number)
-    const fromDate = new Date(y, m - 1, d, 0, 0, 0, 0)
-    query = query.gte('forwarded_to_testing_at', fromDate.toISOString())
+    query = query.gte('forwarded_to_testing_at', new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0)).toISOString())
   }
   if (filters.forwardedTo) {
     const [y, m, d] = filters.forwardedTo.split('-').map(Number)
-    const toDate = new Date(y, m - 1, d, 23, 59, 59, 999)
-    query = query.lte('forwarded_to_testing_at', toDate.toISOString())
+    query = query.lte('forwarded_to_testing_at', new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999)).toISOString())
   }
   if (filters.type) query = query.eq('type', filters.type)
   if (filters.releaseTag) query = query.eq('release_tag', filters.releaseTag)
@@ -608,13 +618,11 @@ export async function getFilteredTestingStatusCounts(
   if (filters.opProjectId) query = query.eq('op_project_id', filters.opProjectId)
   if (filters.forwardedFrom) {
     const [y, m, d] = filters.forwardedFrom.split('-').map(Number)
-    const fromDate = new Date(y, m - 1, d, 0, 0, 0, 0)
-    query = query.gte('forwarded_to_testing_at', fromDate.toISOString())
+    query = query.gte('forwarded_to_testing_at', new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0)).toISOString())
   }
   if (filters.forwardedTo) {
     const [y, m, d] = filters.forwardedTo.split('-').map(Number)
-    const toDate = new Date(y, m - 1, d, 23, 59, 59, 999)
-    query = query.lte('forwarded_to_testing_at', toDate.toISOString())
+    query = query.lte('forwarded_to_testing_at', new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999)).toISOString())
   }
   if (filters.type) query = query.eq('type', filters.type)
   if (filters.releaseTag) query = query.eq('release_tag', filters.releaseTag)

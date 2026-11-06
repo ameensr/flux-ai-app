@@ -23,7 +23,6 @@ import { useToast } from '@/hooks/use-toast'
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog'
 import { PandaIdleNotification } from '@/components/LazyPanda'
 import { FloatingThemeToggle } from '@/components/ui/FloatingThemeToggle'
-import { SyncReminderPopup } from '@/components/SyncReminderPopup'
 
 // ── Idle timeout context ──────────────────────────────────────────────────────
 type RegisterOperationFn = (key: string) => () => void
@@ -355,7 +354,6 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       <AIRestrictedModal />
       <SessionExpiredToast />
       {isAuthenticated && <PandaIdleNotification />}
-      {isAuthenticated && <SyncReminderPopup />}
     </>
   )
 }

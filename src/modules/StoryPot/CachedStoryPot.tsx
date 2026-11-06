@@ -19,6 +19,10 @@ import { supabase } from '@/lib/supabase'
 import { fetchOpenProjectProjects, type OpenProjectConfig, type OpenProjectProject } from '@/services/openproject'
 import { SyncButton, SyncProgressBar } from './SyncButton'
 import { emitSyncEvent } from '@/lib/syncReminderEvents'
+import { useSyncReminder } from '@/hooks/useSyncReminder'
+import { useSyncReminderConfigStore } from '@/lib/syncReminderConfig'
+import { SyncReminderPopup } from '@/components/SyncReminderPopup'
+import { useAppStore } from '@/store/useAppStore'
 import { CachedFilters } from './CachedFilters'
 import { WorkPackageRow } from './WorkPackageRow'
 import { StatsCards } from './StatsCards'
@@ -52,6 +56,7 @@ export default function CachedStoryPot() {
   const [projectSearch, setProjectSearch] = useState('')
   const [showProjectDropdown, setShowProjectDropdown] = useState(false)
   const projectDropdownRef = useRef<HTMLButtonElement>(null)
+  const syncWrapperRef = useRef<HTMLDivElement>(null)
 
   // OpenProject project selection
   const [opProjects, setOpProjects] = useState<OpenProjectProject[]>([])
@@ -61,6 +66,41 @@ export default function CachedStoryPot() {
   const [opProjectSearch, setOpProjectSearch] = useState('')
   const [showOpProjectDropdown, setShowOpProjectDropdown] = useState(false)
   const opProjectDropdownRef = useRef<HTMLButtonElement>(null)
+
+  const { visible: reminderVisible, dismiss: dismissReminder, lastSyncAt } = useSyncReminder()
+  const reminderConfig = useSyncReminderConfigStore(s => s.config)
+  const profile = useAppStore(s => s.profile)
+  const user = useAppStore(s => s.user)
+
+  const displayName =
+    profile?.full_name?.trim() ||
+    (user?.user_metadata as Record<string, unknown> | undefined)?.full_name?.toString().trim() ||
+    user?.email?.split('@')[0]?.trim() ||
+    'there'
+
+  const MESSAGES = [
+    "Your data might be out of sync! 🔄",
+    "Time for a quick sync check! 📡",
+    "Keep your data fresh — sync now! 🌿",
+    "Don't miss any updates — sync! 🚀",
+    "A sync a day keeps stale data away! 🐼",
+    "Your OpenProject data is waiting! 📋",
+  ]
+  const reminderMsgRef = React.useRef(0)
+  const reminderMessage = React.useMemo(() => {
+    if (!reminderVisible) return MESSAGES[0]
+    const msg = MESSAGES[reminderMsgRef.current % MESSAGES.length]
+    if (reminderConfig.rotateMessages) reminderMsgRef.current++
+    return msg
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reminderVisible])
+
+  const formattedLastSync = lastSyncAt
+    ? new Date(lastSyncAt).toLocaleString([], {
+        day: '2-digit', month: 'short',
+        hour: '2-digit', minute: '2-digit',
+      })
+    : 'Never'
 
   // UI state
   const [showFilters, setShowFilters] = useState(false)
@@ -394,9 +434,17 @@ export default function CachedStoryPot() {
                 </div>
               )}
 
-              {/* Sync Button - only show if user has can_import permission */}
+              {/* Sync Button — ref wrapper for popup anchor */}
               {canImport && (
-                <div className="flex items-end">
+                <div ref={syncWrapperRef} className="flex items-end relative">
+                  <SyncReminderPopup
+                    visible={reminderVisible}
+                    onDismiss={dismissReminder}
+                    anchorRef={syncWrapperRef}
+                    displayName={displayName}
+                    message={reminderMessage}
+                    formattedLastSync={formattedLastSync}
+                  />
                   <SyncButton
                     onSync={handleSync}
                     isSyncing={cache.isSyncing}

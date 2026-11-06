@@ -1,146 +1,174 @@
 // src/components/SyncReminderPopup.tsx
-// Smart Sync Reminder popup — bottom-right, premium glassmorphic design.
-// Reuses VITE_PANDA_IDLE visual style. No background blur, no overlay.
+// Smart Sync Reminder — portal popover anchored above the Sync button.
+// Uses fixed positioning so it is immune to any parent overflow/clip.
 
-import React, { useMemo } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PandaSVG } from '@/components/LazyPanda/PandaSVG'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
-import { useSyncReminder } from '@/hooks/useSyncReminder'
-import { useSyncReminderConfigStore } from '@/lib/syncReminderConfig'
-import { useAppStore } from '@/store/useAppStore'
 
-const MESSAGES = [
-  "Your data might be out of sync! 🔄",
-  "Time for a quick sync check! 📡",
-  "Keep your data fresh — sync now! 🌿",
-  "Don't miss any updates — sync! 🚀",
-  "A sync a day keeps stale data away! 🐼",
-  "Your OpenProject data is waiting! 📋",
-]
-
-let msgIndex = 0
-
-function getNextMessage(rotate: boolean): string {
-  if (!rotate) return MESSAGES[0]
-  const msg = MESSAGES[msgIndex % MESSAGES.length]
-  msgIndex++
-  return msg
+interface SyncReminderPopupProps {
+  visible: boolean
+  onDismiss: () => void
+  anchorRef: React.RefObject<HTMLElement | null>
+  displayName: string
+  message: string
+  formattedLastSync: string
 }
 
-export function SyncReminderPopup() {
-  const prefersReducedMotion = usePrefersReducedMotion()
-  const { visible, dismiss, lastSyncAt } = useSyncReminder()
-  const config = useSyncReminderConfigStore(s => s.config)
-  const profile = useAppStore(s => s.profile)
-  const user = useAppStore(s => s.user)
+const POPUP_WIDTH = 232
 
-  const displayName =
-    profile?.full_name?.trim() ||
-    (user?.user_metadata as Record<string, unknown> | undefined)?.full_name?.toString().trim() ||
-    user?.email?.split('@')[0]?.trim() ||
-    'there'
+export function SyncReminderPopup({
+  visible,
+  onDismiss,
+  anchorRef,
+  displayName,
+  message,
+  formattedLastSync,
+}: SyncReminderPopupProps) {
+  const reduced = usePrefersReducedMotion()
+  const popupRef = useRef<HTMLDivElement>(null)
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const [popupHeight, setPopupHeight] = useState(200)
 
-  const message = useMemo(
-    () => visible ? getNextMessage(config.rotateMessages) : '',
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visible]
-  )
+  // Measure anchor position
+  useEffect(() => {
+    if (!visible || !anchorRef.current) { setRect(null); return }
+    const measure = () => setRect(anchorRef.current!.getBoundingClientRect())
+    measure()
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [visible, anchorRef])
 
-  const formattedLastSync = lastSyncAt
-    ? new Date(lastSyncAt).toLocaleString([], {
-        day: '2-digit', month: 'short',
-        hour: '2-digit', minute: '2-digit',
-      })
-    : 'Never'
+  // Measure popup height after it renders
+  useEffect(() => {
+    if (popupRef.current) {
+      setPopupHeight(popupRef.current.offsetHeight)
+    }
+  })
 
-  return (
+  if (!visible || !rect) return null
+
+  // fixed coords: sit above the anchor with 8px gap
+  const top  = rect.top - popupHeight - 8
+  const left = rect.left
+
+  // Clamp so it never goes off-screen left/right
+  const clampedLeft = Math.max(8, Math.min(left, window.innerWidth - POPUP_WIDTH - 8))
+
+  return createPortal(
     <AnimatePresence>
       {visible && (
         <motion.div
-          key="sync-reminder-card"
-          initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 20, scale: 0.93 }}
-          animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
-          exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.95 }}
-          transition={prefersReducedMotion ? { duration: 0.2 } : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          className="fixed bottom-24 right-6 sm:right-8 z-[99998] flex flex-col items-center select-none pointer-events-auto"
+          ref={popupRef}
+          key="sync-reminder-portal"
+          initial={reduced ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.96 }}
+          animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+          exit={reduced ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.97 }}
+          transition={reduced ? { duration: 0.15 } : { duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            position: 'fixed',
+            top,
+            left: clampedLeft,
+            width: POPUP_WIDTH,
+            zIndex: 99998,
+          }}
+          className="pointer-events-auto select-none"
           role="status"
           aria-live="polite"
         >
-          {/* Panda — smaller */}
-          <div className="relative flex items-center justify-center -mb-2 z-10">
-            {!prefersReducedMotion && (
-              <motion.div
-                className="absolute rounded-full pointer-events-none"
-                style={{
-                  width: 64, height: 64,
-                  background: 'radial-gradient(circle, rgba(59,130,246,0.15) 0%, rgba(99,102,241,0.06) 60%, transparent 100%)',
-                }}
-                animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.9, 0.4] }}
-                transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
-              />
-            )}
-            <div className="w-14 h-14 filter drop-shadow-md">
-              <PandaSVG
-                state="IDLE"
-                eyeOffset={{ x: 0, y: 0 }}
-                headRotation={0}
-                isBlinking={false}
-                size={56}
-                reducedMotion={prefersReducedMotion}
-              />
-            </div>
-          </div>
+          <div className="flex flex-col items-start">
 
-          {/* Speech bubble — compact */}
-          <div
-            className="rounded-xl px-4 py-3 relative max-w-[240px] text-center backdrop-blur-2xl"
-            style={{
-              background: 'color-mix(in srgb, var(--surface) 94%, transparent)',
-              border: '1px solid var(--border)',
-              boxShadow:
-                '0 12px 32px -6px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.07), 0 0 18px rgba(59,130,246,0.1)',
-            }}
-          >
-            {/* Bubble tail */}
-            <div
-              className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45"
-              style={{
-                background: 'var(--surface)',
-                borderLeft: '1px solid var(--border)',
-                borderTop: '1px solid var(--border)',
-              }}
-            />
-
-            <div className="relative z-10 pt-0.5 space-y-1.5">
-              <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                Hey {displayName}! 🐼
-              </p>
-              <p className="text-xs leading-snug" style={{ color: 'var(--text-primary)' }}>
-                {message}
-              </p>
-              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                Last sync: {formattedLastSync}
-              </p>
-              <div className="pt-1">
-                <button
-                  onClick={dismiss}
-                  className="px-4 py-1.5 rounded-lg text-xs font-semibold transition-all w-full"
+            {/* Panda above bubble */}
+            <div className="relative ml-3 -mb-2 z-10">
+              {!reduced && (
+                <motion.div
+                  className="absolute inset-0 rounded-full pointer-events-none"
                   style={{
-                    background: 'var(--hover)',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text-primary)',
+                    background:
+                      'radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%)',
+                    width: 48, height: 48, top: -4, left: -4,
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.8' }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
-                >
-                  Got it!
-                </button>
+                  animate={{ scale: [1, 1.18, 1], opacity: [0.3, 0.75, 0.3] }}
+                  transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+                />
+              )}
+              <div className="w-10 h-10 drop-shadow-md">
+                <PandaSVG
+                  state="IDLE"
+                  eyeOffset={{ x: 0, y: 0 }}
+                  headRotation={-8}
+                  isBlinking={false}
+                  size={40}
+                  reducedMotion={reduced}
+                />
               </div>
             </div>
+
+            {/* Bubble */}
+            <div
+              className="relative rounded-2xl px-4 py-3 w-full"
+              style={{
+                background:
+                  'color-mix(in srgb, var(--surface) 95%, #6366f1 5%)',
+                border: '1px solid color-mix(in srgb, var(--border) 70%, #6366f1 30%)',
+                boxShadow:
+                  '0 8px 24px -4px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.05), 0 0 16px rgba(99,102,241,0.1)',
+              }}
+            >
+              {/* Tail pointing down */}
+              <div
+                className="absolute -bottom-[7px] left-4 w-3 h-3 rotate-45"
+                style={{
+                  background: 'color-mix(in srgb, var(--surface) 95%, #6366f1 5%)',
+                  borderRight: '1px solid color-mix(in srgb, var(--border) 70%, #6366f1 30%)',
+                  borderBottom: '1px solid color-mix(in srgb, var(--border) 70%, #6366f1 30%)',
+                }}
+              />
+
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-bold" style={{ color: 'var(--text-primary)' }}>
+                  Hey {displayName}! 🐼
+                </p>
+                <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  {message}
+                </p>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Last sync: {formattedLastSync}
+                </p>
+                <div className="pt-1">
+                  <button
+                    onClick={onDismiss}
+                    className="w-full py-1.5 rounded-xl text-[11px] font-bold transition-all duration-150"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(59,130,246,0.1))',
+                      border: '1px solid rgba(99,102,241,0.2)',
+                      color: 'var(--text-primary)',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background =
+                        'linear-gradient(135deg, rgba(99,102,241,0.25), rgba(59,130,246,0.18))'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background =
+                        'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(59,130,246,0.1))'
+                    }}
+                  >
+                    Got it!
+                  </button>
+                </div>
+              </div>
+            </div>
+
           </div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }
