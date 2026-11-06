@@ -214,8 +214,9 @@ export async function syncWorkPackagesToCache(
     const cacheData = formattedWPs.map(wp => {
       const events = activityMap.get(wp.id) || []
       // events[] is sorted newest-first (from findAllTestingStatusChanges).
-      // Store the LATEST (most recent) forwarding event — events[0] — so that
-      // date-range filters match the last time the ticket was forwarded to QA.
+      // events[] is sorted newest-first (from findAllTestingStatusChanges).
+      // Store the LATEST forwarding event — who most recently set Testing Status
+      // to "Forwarded to the Testing Team" and when.
       const latest = events.length > 0 ? events[0] : null
 
       const today = new Date().toISOString().split('T')[0]

@@ -18,6 +18,7 @@ import { useStoryPotCache } from '@/hooks/useStoryPotCache'
 import { supabase } from '@/lib/supabase'
 import { fetchOpenProjectProjects, type OpenProjectConfig, type OpenProjectProject } from '@/services/openproject'
 import { SyncButton, SyncProgressBar } from './SyncButton'
+import { emitSyncEvent } from '@/lib/syncReminderEvents'
 import { CachedFilters } from './CachedFilters'
 import { WorkPackageRow } from './WorkPackageRow'
 import { StatsCards } from './StatsCards'
@@ -202,11 +203,15 @@ export default function CachedStoryPot() {
 
   // Handle sync
   const handleSync = () => {
+    emitSyncEvent('sync:start')
     cache.sync().then(() => {
       const progress = cache.syncProgress
       if (progress?.phase === 'complete') {
         toast({ title: 'Sync Complete', description: progress.message })
       }
+      emitSyncEvent('sync:success')
+    }).catch(() => {
+      emitSyncEvent('sync:fail')
     })
     toast({ title: 'Sync Started', description: 'Fetching data from OpenProject...' })
   }

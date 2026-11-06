@@ -16,6 +16,7 @@ import {
   type OpenProjectConfig,
   type OpenProjectProject,
 } from '@/services/openproject'
+import { useSyncReminderConfigStore, DEFAULT_SYNC_REMINDER_CONFIG } from '@/lib/syncReminderConfig'
 
 interface OpenProjectConfigModalProps {
   project: Project
@@ -140,6 +141,9 @@ export function OpenProjectConfigModal({ project, onClose, onSuccess }: OpenProj
       setLoading(false)
     }
   }
+
+  const syncReminderConfig = useSyncReminderConfigStore(s => s.config)
+  const setSyncReminderConfig = useSyncReminderConfigStore(s => s.setConfig)
 
   const inputStyle = {
     background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.02)',
@@ -309,6 +313,113 @@ export function OpenProjectConfigModal({ project, onClose, onSuccess }: OpenProj
                 </p>
               </div>
             )}
+
+            {/* 🐼 Smart Sync Reminder */}
+            <div
+              className="rounded-xl p-4 space-y-3"
+              style={{
+                background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+              }}
+            >
+              <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                🐼 Smart Sync Reminder
+              </h3>
+
+              {/* Enable toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Enable Smart Sync Reminder</span>
+                  <span className="text-[10px] block" style={{ color: 'var(--text-muted)' }}>Remind users to sync OpenProject data</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSyncReminderConfig({ enabled: !syncReminderConfig.enabled })}
+                  className="relative w-11 h-6 rounded-full shrink-0 transition-colors duration-200"
+                  style={{
+                    background: syncReminderConfig.enabled ? '#22c55e' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'),
+                    border: `1px solid ${syncReminderConfig.enabled ? '#22c55e' : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)')}`,
+                  }}
+                  role="switch"
+                  aria-checked={syncReminderConfig.enabled}
+                >
+                  <span
+                    className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
+                    style={{ transform: syncReminderConfig.enabled ? 'translateX(20px)' : 'translateX(0)' }}
+                  />
+                </button>
+              </div>
+
+              {syncReminderConfig.enabled && (
+                <>
+                  {/* Reminder Interval */}
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+                      Reminder Interval (Seconds)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={syncReminderConfig.reminderIntervalSeconds}
+                      onChange={e => {
+                        const v = parseInt(e.target.value)
+                        if (v > 0) setSyncReminderConfig({ reminderIntervalSeconds: v })
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all text-sm"
+                      style={inputStyle}
+                    />
+                    <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                      Default: {DEFAULT_SYNC_REMINDER_CONFIG.reminderIntervalSeconds}s — interval between repeated reminders
+                    </p>
+                  </div>
+
+                  {/* Initial Delay */}
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+                      Initial Reminder Delay (Seconds)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={syncReminderConfig.initialDelaySeconds}
+                      onChange={e => {
+                        const v = parseInt(e.target.value)
+                        if (v > 0) setSyncReminderConfig({ initialDelaySeconds: v })
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all text-sm"
+                      style={inputStyle}
+                    />
+                    <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                      Default: {DEFAULT_SYNC_REMINDER_CONFIG.initialDelaySeconds}s — delay after login before first reminder
+                    </p>
+                  </div>
+
+                  {/* Message Rotation toggle */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Enable Message Rotation</span>
+                      <span className="text-[10px] block" style={{ color: 'var(--text-muted)' }}>Rotate creative reminder messages</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSyncReminderConfig({ rotateMessages: !syncReminderConfig.rotateMessages })}
+                      className="relative w-11 h-6 rounded-full shrink-0 transition-colors duration-200"
+                      style={{
+                        background: syncReminderConfig.rotateMessages ? '#22c55e' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'),
+                        border: `1px solid ${syncReminderConfig.rotateMessages ? '#22c55e' : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)')}`,
+                      }}
+                      role="switch"
+                      aria-checked={syncReminderConfig.rotateMessages}
+                    >
+                      <span
+                        className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
+                        style={{ transform: syncReminderConfig.rotateMessages ? 'translateX(20px)' : 'translateX(0)' }}
+                      />
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
             {/* Actions */}
             <div

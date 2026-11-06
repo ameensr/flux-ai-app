@@ -943,14 +943,6 @@ export async function fetchWorkPackageActivities(
 
     const data = await res.json()
     const elements = data._embedded?.elements || []
-
-    // DIAGNOSTIC: log raw shape of first journal entry that has details
-    const firstWithDetails = elements.find((a: { details?: unknown[] }) => (a.details as unknown[])?.length > 0)
-    if (firstWithDetails) {
-      console.log('[OP Activities] RAW detail[0]:', JSON.stringify((firstWithDetails as { details: unknown[] }).details[0], null, 2))
-      console.log('[OP Activities] ALL details:', JSON.stringify((firstWithDetails as { details: unknown[] }).details, null, 2))
-    }
-    // END DIAGNOSTIC
     const activities = await Promise.all(elements.map(async (activity: {
       id: number
       comment?: { raw: string }
@@ -1006,7 +998,10 @@ export async function fetchWorkPackageActivities(
         return { property, propertyName: property, oldValue, newValue, raw: rawText }
       })
 
-      let userName = activity._links?.user?.title || ''
+      // The user who performed this journal entry is in _links.user.
+      // title is populated by OpenProject for all users (not just the API caller).
+      // If title is missing for any reason, fall back to fetching by href.
+      let userName = (activity._links?.user?.title || '').trim()
       if (!userName && activity._links?.user?.href) {
         userName = await fetchUserName(config, activity._links.user.href)
       }
@@ -1081,31 +1076,23 @@ export async function findAllTestingStatusChanges(
 
   for (const activity of activities) {
     for (const detail of activity.details) {
-      // Log every detail that mentions testing or forwarded so we can see what arrives
-      const rawLow = (detail.raw || '').toLowerCase()
-      const propLow = (detail.property || '').toLowerCase()
-      const newLow  = (detail.newValue || '').toLowerCase()
-      if (rawLow.includes('testing') || rawLow.includes('forward') ||
-          propLow.includes('testing') || newLow.includes('forward')) {
-        console.log(`[OP Match] WP#${workPackageId} detail:`, {
-          property: detail.property,
-          newValue: detail.newValue,
-          oldValue: detail.oldValue,
-          raw: detail.raw,
-          activityDate: activity.createdAt,
-          user: activity.user.name,
-          matched: isForwardingDetail(detail, targetValue),
-        })
-      }
-
       if (isForwardingDetail(detail, targetValue)) {
-        matches.push({
+        const event: TestingStatusChange = {
           workPackageId: Number(workPackageId),
           changedAt: activity.createdAt,
           changedBy: activity.user.name || 'Unknown',
           oldValue: detail.oldValue || null,
           newValue: detail.newValue || targetValue,
+        }
+        console.log(`[StoryPot] WP#${workPackageId} forwarding event found:`, {
+          changedAt: event.changedAt,
+          changedBy: event.changedBy,
+          oldValue: event.oldValue,
+          newValue: event.newValue,
+          activityId: activity.id,
+          userFromLinks: activity.user.name,
         })
+        matches.push(event)
       }
     }
   }

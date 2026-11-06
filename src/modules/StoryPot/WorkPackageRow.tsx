@@ -229,7 +229,7 @@ export function WorkPackageRow({
               {/* Icon + label — clarify "First" when forwarded multiple times */}
               <span className="flex items-center gap-1.5 font-semibold shrink-0" style={{ color: '#3b82f6' }}>
                 <History className="w-3.5 h-3.5" />
-                {wp.handoff_count > 1 ? 'Latest Forwarded to the Testing Team' : 'Forwarded to the Testing Team'}
+                {wp.handoff_count > 1 ? 'Re-Forwarded to the Testing Team' : 'Forwarded to the Testing Team'}
               </span>
 
               {/* Date Status Changed */}
