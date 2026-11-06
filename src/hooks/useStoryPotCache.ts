@@ -68,7 +68,7 @@ export function useStoryPotCache(options: UseStoryPotCacheOptions) {
   const [totalCount, setTotalCount] = useState(0)
   const [stats, setStats] = useState<Awaited<ReturnType<typeof getCachedStats>> | null>(null)
   const [filteredByTestingStatus, setFilteredByTestingStatus] = useState<Record<string, number>>({})
-  const [filteredQaMissed, setFilteredQaMissed] = useState<{ yes: number; no: number; unknown: number; total: number }>({ yes: 0, no: 0, unknown: 0, total: 0 })
+  const [filteredQaMissed, setFilteredQaMissed] = useState<{ yes: number; no: number; na: number; unknown: number; total: number }>({ yes: 0, no: 0, na: 0, unknown: 0, total: 0 })
   const [filterOptions, setFilterOptions] = useState<Awaited<ReturnType<typeof getCachedFilterOptions>> | null>(null)
   const [syncStatus, setSyncStatus] = useState<Awaited<ReturnType<typeof getSyncStatus>> | null>(null)
   

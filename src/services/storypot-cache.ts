@@ -213,8 +213,10 @@ export async function syncWorkPackagesToCache(
 
     const cacheData = formattedWPs.map(wp => {
       const events = activityMap.get(wp.id) || []
-      // Latest event (index 0, sorted newest-first) drives the main cache row
-      const latest = events[0] ?? null
+      // events[] is sorted newest-first (from findAllTestingStatusChanges).
+      // Store the LATEST (most recent) forwarding event — events[0] — so that
+      // date-range filters match the last time the ticket was forwarded to QA.
+      const latest = events.length > 0 ? events[0] : null
 
       const today = new Date().toISOString().split('T')[0]
       const isOverdue = wp.dueDate
@@ -222,6 +224,13 @@ export async function syncWorkPackagesToCache(
           !['closed', 'done', 'rejected'].some(s => wp.status.toLowerCase().includes(s)) &&
           (wp.percentageDone || 0) < 100
         : false
+
+      // Preserve the exact isQAMissed value from formatWorkPackage:
+      //   'N/A'     → Bug ticket (customField21 absent by design)
+      //   'Yes'/'No'→ Support Issue with a value
+      //   'Unknown' → Support Issue where the field was absent
+      //   null      → should not occur after the fix, but guard anyway
+      const isQAMissedValue = wp.isQAMissed ?? null
 
       return {
         id: wp.id,
@@ -238,9 +247,12 @@ export async function syncWorkPackagesToCache(
         responsible: wp.responsible || null,
         release_tag: wp.release || null,
         testing_status: wp.testingStatus || null,
-        is_qa_missed: wp.isQAMissed || null,
+        is_qa_missed: isQAMissedValue,
         qa_confirmation: wp.qaConfirmation || null,
-        // Store the LATEST forwarding event for fast date-range filtering
+        // Store the LATEST forwarding event for date-range filtering.
+        // When a ticket is forwarded multiple times, the most recent handoff is
+        // what matters for "who last sent this to QA and when".
+        // All events are preserved in openproject_forwarding_history.
         forwarded_to_testing_at: latest?.changedAt ?? null,
         forwarded_to_testing_by: latest?.changedBy ?? null,
         handoff_verified: events.length > 0,
@@ -413,12 +425,22 @@ export async function queryCachedWorkPackages(
 
   if (opProjectId) query = query.eq('op_project_id', opProjectId)
 
-  // Date filter: forwarded_to_testing_at stored in UTC; user picks local date (IST = UTC+5:30)
+  // Date filter: forwarded_to_testing_at is stored in UTC.
+  // The user selects a local calendar date; we convert it to a UTC range that
+  // covers the full 24-hour window in the browser's local timezone so that
+  // tickets forwarded at any time on that day are included regardless of the
+  // server's timezone.
   if (forwardedFrom) {
-    query = query.gte('forwarded_to_testing_at', new Date(forwardedFrom + 'T00:00:00+05:30').toISOString())
+    // Start of the selected day in local time → UTC
+    const fromDate = new Date(forwardedFrom)
+    fromDate.setHours(0, 0, 0, 0)
+    query = query.gte('forwarded_to_testing_at', fromDate.toISOString())
   }
   if (forwardedTo) {
-    query = query.lte('forwarded_to_testing_at', new Date(forwardedTo + 'T23:59:59+05:30').toISOString())
+    // End of the selected day in local time → UTC
+    const toDate = new Date(forwardedTo)
+    toDate.setHours(23, 59, 59, 999)
+    query = query.lte('forwarded_to_testing_at', toDate.toISOString())
   }
 
   if (type) query = query.eq('type', type)
@@ -481,6 +503,7 @@ export async function getCachedStats(
   byTestingStatus: Record<string, number>
   qaMissedYes: number
   qaMissedNo: number
+  qaMissedNa: number
   qaMissedUnknown: number
 }> {
   let query = supabase
@@ -499,7 +522,7 @@ export async function getCachedStats(
   const byPriority: Record<string, number> = {}
   const byTestingStatus: Record<string, number> = {}
   let overdue = 0, unassigned = 0, withForwardingDate = 0
-  let qaMissedYes = 0, qaMissedNo = 0, qaMissedUnknown = 0
+  let qaMissedYes = 0, qaMissedNo = 0, qaMissedNa = 0, qaMissedUnknown = 0
 
   items.forEach(item => {
     if (item.status) byStatus[item.status] = (byStatus[item.status] || 0) + 1
@@ -509,13 +532,15 @@ export async function getCachedStats(
     if (item.is_overdue) overdue++
     if (!item.assignee || item.assignee === 'Unassigned') unassigned++
     if (item.forwarded_to_testing_at) withForwardingDate++
-    const qm = (item as any).is_qa_missed
-    if (qm?.toLowerCase() === 'yes') qaMissedYes++
-    else if (qm?.toLowerCase() === 'no') qaMissedNo++
+    const qm = (item as Record<string, unknown>).is_qa_missed as string | null
+    const qmLower = qm?.toLowerCase() ?? ''
+    if (qmLower === 'yes') qaMissedYes++
+    else if (qmLower === 'no') qaMissedNo++
+    else if (qmLower === 'n/a') qaMissedNa++
     else qaMissedUnknown++
   })
 
-  return { total: items.length, withForwardingDate, overdue, unassigned, byStatus, byType, byPriority, byTestingStatus, qaMissedYes, qaMissedNo, qaMissedUnknown }
+  return { total: items.length, withForwardingDate, overdue, unassigned, byStatus, byType, byPriority, byTestingStatus, qaMissedYes, qaMissedNo, qaMissedNa, qaMissedUnknown }
 }
 
 /**
@@ -523,7 +548,7 @@ export async function getCachedStats(
  */
 export async function getFilteredQaMissedCounts(
   filters: Omit<StoryPotQueryFilters, 'limit' | 'offset' | 'noLimit'>
-): Promise<{ yes: number; no: number; unknown: number; total: number }> {
+): Promise<{ yes: number; no: number; na: number; unknown: number; total: number }> {
   let query = supabase
     .from('openproject_work_packages_cache')
     .select('is_qa_missed')
@@ -531,10 +556,14 @@ export async function getFilteredQaMissedCounts(
 
   if (filters.opProjectId) query = query.eq('op_project_id', filters.opProjectId)
   if (filters.forwardedFrom) {
-    query = query.gte('forwarded_to_testing_at', new Date(filters.forwardedFrom + 'T00:00:00+05:30').toISOString())
+    const fromDate = new Date(filters.forwardedFrom)
+    fromDate.setHours(0, 0, 0, 0)
+    query = query.gte('forwarded_to_testing_at', fromDate.toISOString())
   }
   if (filters.forwardedTo) {
-    query = query.lte('forwarded_to_testing_at', new Date(filters.forwardedTo + 'T23:59:59+05:30').toISOString())
+    const toDate = new Date(filters.forwardedTo)
+    toDate.setHours(23, 59, 59, 999)
+    query = query.lte('forwarded_to_testing_at', toDate.toISOString())
   }
   if (filters.type) query = query.eq('type', filters.type)
   if (filters.releaseTag) query = query.eq('release_tag', filters.releaseTag)
@@ -551,14 +580,16 @@ export async function getFilteredQaMissedCounts(
   const { data, error } = await query
   if (error) throw new Error(`Failed to get filtered QA missed counts: ${error.message}`)
 
-  let yes = 0, no = 0, unknown = 0
+  let yes = 0, no = 0, na = 0, unknown = 0
   for (const item of data || []) {
-    const qm = (item as any).is_qa_missed
-    if (qm?.toLowerCase() === 'yes') yes++
-    else if (qm?.toLowerCase() === 'no') no++
+    const qm = (item as Record<string, unknown>).is_qa_missed as string | null
+    const qmLower = qm?.toLowerCase() ?? ''
+    if (qmLower === 'yes') yes++
+    else if (qmLower === 'no') no++
+    else if (qmLower === 'n/a') na++
     else unknown++
   }
-  return { yes, no, unknown, total: yes + no + unknown }
+  return { yes, no, na, unknown, total: yes + no + na + unknown }
 }
 
 /**
@@ -578,10 +609,14 @@ export async function getFilteredTestingStatusCounts(
 
   if (filters.opProjectId) query = query.eq('op_project_id', filters.opProjectId)
   if (filters.forwardedFrom) {
-    query = query.gte('forwarded_to_testing_at', new Date(filters.forwardedFrom + 'T00:00:00+05:30').toISOString())
+    const fromDate = new Date(filters.forwardedFrom)
+    fromDate.setHours(0, 0, 0, 0)
+    query = query.gte('forwarded_to_testing_at', fromDate.toISOString())
   }
   if (filters.forwardedTo) {
-    query = query.lte('forwarded_to_testing_at', new Date(filters.forwardedTo + 'T23:59:59+05:30').toISOString())
+    const toDate = new Date(filters.forwardedTo)
+    toDate.setHours(23, 59, 59, 999)
+    query = query.lte('forwarded_to_testing_at', toDate.toISOString())
   }
   if (filters.type) query = query.eq('type', filters.type)
   if (filters.releaseTag) query = query.eq('release_tag', filters.releaseTag)

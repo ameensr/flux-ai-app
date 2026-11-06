@@ -140,9 +140,36 @@ export function WorkPackageRow({
               <span
                 className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
                 style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}
-                title="Current Testing Status"
+                title="Current Testing Status (customField14)"
               >
                 {wp.testing_status}
+              </span>
+            )}
+            {/* Is QA Missed badge — only render when value is meaningful */}
+            {wp.is_qa_missed && wp.is_qa_missed.toLowerCase() === 'yes' && (
+              <span
+                className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-500/20 text-red-500"
+                title="QA Missed: Yes (customField21)"
+              >
+                QA Missed
+              </span>
+            )}
+            {wp.is_qa_missed && wp.is_qa_missed.toLowerCase() === 'no' && (
+              <span
+                className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
+                style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}
+                title="QA Missed: No (customField21)"
+              >
+                QA OK
+              </span>
+            )}
+            {wp.is_qa_missed && wp.is_qa_missed.toLowerCase() === 'n/a' && (
+              <span
+                className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
+                style={{ background: 'rgba(100,116,139,0.15)', color: '#64748b' }}
+                title="QA Missed: N/A — Bug tickets do not have this field"
+              >
+                N/A
               </span>
             )}
           </div>
@@ -175,6 +202,21 @@ export function WorkPackageRow({
                 <Clock className="w-3 h-3" />{wp.percentage_done}%
               </span>
             )}
+            {/* Is QA Missed inline label in meta row */}
+            {wp.is_qa_missed && (
+              <span
+                className="flex items-center gap-1 font-medium"
+                style={{
+                  color:
+                    wp.is_qa_missed.toLowerCase() === 'yes' ? '#ef4444' :
+                    wp.is_qa_missed.toLowerCase() === 'no'  ? '#22c55e' :
+                    '#64748b',
+                }}
+                title={`Is QA Missed: ${wp.is_qa_missed}`}
+              >
+                QA Missed: {wp.is_qa_missed}
+              </span>
+            )}
           </div>
 
           {/* Handoff event block — shown when a verified transition exists */}
@@ -186,10 +228,10 @@ export function WorkPackageRow({
                 border: '1px solid rgba(59, 130, 246, 0.25)',
               }}
             >
-              {/* Icon + label */}
+              {/* Icon + label — clarify "First" when forwarded multiple times */}
               <span className="flex items-center gap-1.5 font-semibold shrink-0" style={{ color: '#3b82f6' }}>
                 <History className="w-3.5 h-3.5" />
-                Forwarded to the Testing Team
+                {wp.handoff_count > 1 ? 'Latest Forwarded to the Testing Team' : 'Forwarded to the Testing Team'}
               </span>
 
               {/* Date Status Changed */}

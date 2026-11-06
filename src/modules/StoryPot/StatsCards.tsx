@@ -1,6 +1,6 @@
 // src/modules/StoryPot/StatsCards.tsx
 import React from 'react'
-import { BarChart3, ShieldAlert, ShieldCheck, HelpCircle } from 'lucide-react'
+import { BarChart3, ShieldAlert, ShieldCheck, HelpCircle, Minus } from 'lucide-react'
 import { GlassCard } from '@/components/ui/GlassCard'
 
 interface StatsCardsProps {
@@ -15,11 +15,12 @@ interface StatsCardsProps {
     byTestingStatus: Record<string, number>
     qaMissedYes?: number
     qaMissedNo?: number
+    qaMissedNa?: number
     qaMissedUnknown?: number
   } | undefined
   filteredByTestingStatus: Record<string, number>
   // Filter-aware QA Missed counts (from getFilteredQaMissedCounts)
-  filteredQaMissed?: { yes: number; no: number; unknown: number; total: number }
+  filteredQaMissed?: { yes: number; no: number; na: number; unknown: number; total: number }
   filteredCount: number
   activeFilterCount: number
   isDark: boolean
@@ -58,15 +59,10 @@ export function StatsCards({
   const barTotal = entries.reduce((s, [, c]) => s + c, 0) || 1
 
   // QA Missed: use filter-aware counts when filters are active, fall back to global stats
-  const qaMissedYes = activeFilterCount > 0
-    ? (filteredQaMissed?.yes ?? 0)
-    : (stats.qaMissedYes ?? 0)
-  const qaMissedNo = activeFilterCount > 0
-    ? (filteredQaMissed?.no ?? 0)
-    : (stats.qaMissedNo ?? 0)
-  const qaMissedUnknown = activeFilterCount > 0
-    ? (filteredQaMissed?.unknown ?? 0)
-    : (stats.qaMissedUnknown ?? 0)
+  const qaMissedYes = activeFilterCount > 0 ? (filteredQaMissed?.yes ?? 0) : (stats.qaMissedYes ?? 0)
+  const qaMissedNo = activeFilterCount > 0 ? (filteredQaMissed?.no ?? 0) : (stats.qaMissedNo ?? 0)
+  const qaMissedNa = activeFilterCount > 0 ? (filteredQaMissed?.na ?? 0) : (stats.qaMissedNa ?? 0)
+  const qaMissedUnknown = activeFilterCount > 0 ? (filteredQaMissed?.unknown ?? 0) : (stats.qaMissedUnknown ?? 0)
 
   return (
     <div className="space-y-3">
@@ -136,7 +132,7 @@ export function StatsCards({
             </div>
           </GlassCard>
 
-          {/* QA Missed — filter-aware */}
+          {/* QA Missed — filter-aware, with N/A bucket for Bug tickets */}
           <GlassCard className="p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#ef444420', color: '#ef4444' }}>
@@ -153,10 +149,18 @@ export function StatsCards({
                   <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#22c55e' }} title="QA Missed: No">
                     <ShieldCheck className="w-2.5 h-2.5" /> {qaMissedNo}
                   </span>
+                  {qaMissedNa > 0 && (
+                    <>
+                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>/</span>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#64748b' }} title="QA Missed: N/A (Bug tickets)">
+                        <Minus className="w-2.5 h-2.5" /> {qaMissedNa} N/A
+                      </span>
+                    </>
+                  )}
                   {qaMissedUnknown > 0 && (
                     <>
                       <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>/</span>
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#94a3b8' }} title="QA Missed: Unknown">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#94a3b8' }} title="QA Missed: Unknown (Support Issue, value not set)">
                         <HelpCircle className="w-2.5 h-2.5" /> {qaMissedUnknown}
                       </span>
                     </>

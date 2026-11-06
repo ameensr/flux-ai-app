@@ -693,17 +693,16 @@ export async function fetchReleaseOptions(
 export function formatWorkPackage(wp: OpenProjectWorkPackage) {
   // Extract custom fields - OpenProject uses customFieldX naming
   const customFields: Record<string, string | null> = {}
-  
-  // First collect from direct properties
+
+  // Collect from direct properties
   Object.keys(wp).forEach(key => {
     if (key.startsWith('customField') || key.startsWith('cf_')) {
       const val = wp[key]
-      // Convert to string if not null/undefined
       customFields[key] = val != null ? String(val) : null
     }
   })
-  
-  // Then collect from _links (this is where list-type custom fields are stored)
+
+  // Collect from _links (list-type custom fields are stored here as { title, href })
   Object.keys(wp._links || {}).forEach(key => {
     if (key.startsWith('customField') || key.startsWith('cf_')) {
       const link = (wp._links as Record<string, { title?: string; href?: string }>)[key]
@@ -712,100 +711,68 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
       }
     }
   })
-  
-  // Find specific custom fields by checking all customField values
-  let testingStatus: string | null = null
-  let isQAMissed: string | null = null
-  let qaConfirmation: string | null = null
+
+  const links = wp._links as Record<string, { title?: string; href?: string } | undefined>
+
+  // ── customField14 → Testing Status ──────────────────────────────────────
+  // Prefer _links (list-type field); fall back to direct property.
+  const testingStatus: string | null =
+    links['customField14']?.title ||
+    links['cf_14']?.title ||
+    (customFields['customField14'] ?? customFields['cf_14'] ?? null)
+
+  // ── customField9 → Release ───────────────────────────────────────────────
+  const release: string | null =
+    links['customField9']?.title ||
+    links['cf_9']?.title ||
+    (customFields['customField9'] ?? customFields['cf_9'] ?? null)
+
+  // ── customField21 → Is QA Missed ────────────────────────────────────────
+  // Only present on SUPPORT ISSUE tickets. For BUG tickets the field is
+  // absent entirely — we resolve the correct value after we know the type.
+  const rawIsQAMissed: string | null =
+    links['customField21']?.title ||
+    links['cf_21']?.title ||
+    (customFields['customField21'] ?? customFields['cf_21'] ?? null)
+
+  // ── customField3 → QA Confirmation ──────────────────────────────────────
+  const qaConfirmation: string | null =
+    links['customField3']?.title ||
+    links['cf_3']?.title ||
+    (customFields['customField3'] ?? customFields['cf_3'] ?? null)
+
+  // ── Received Date (date-type custom field) ───────────────────────────────
   let receivedDate: string | null = null
-  let release: string | null = null
-  
-  // First, check _links for custom field references (most reliable for list-type fields)
-  Object.keys(wp._links || {}).forEach(key => {
-    if (key.startsWith('customField') || key.startsWith('cf_')) {
-      const link = (wp._links as Record<string, { title?: string; href?: string }>)[key]
-      if (link?.title) {
-        const title = link.title
-        const titleLower = title.toLowerCase()
-        
-        // customField14 is Testing Status (based on actual data)
-        if (key === 'customField14' || key === 'cf_14') {
-          testingStatus = title
-        }
-        
-        // customField9 is Release
-        if (key === 'customField9' || key === 'cf_9') {
-          release = title
-        }
-
-        // customField2 is Is QA Missed
-        if (key === 'customField2' || key === 'cf_2') {
-          isQAMissed = title
-        }
-
-        // customField3 is QA Confirmation
-        if (key === 'customField3' || key === 'cf_3') {
-          qaConfirmation = title
-        }
-        
-        // Fallback detection by value patterns if not already set
-        if (!testingStatus) {
-          if (
-            titleLower.includes('forward') ||
-            titleLower.includes('not started') ||
-            titleLower.includes('in progress') ||
-            titleLower.includes('completed') ||
-            titleLower.includes('testing') ||
-            titleLower.includes('ready for') ||
-            titleLower.includes('blocked')
-          ) {
-            testingStatus = title
-          }
-        }
-      }
-    }
-  })
-  
-  // Check direct custom field values as fallback
-  Object.entries(customFields).forEach(([key, value]) => {
-    if (!value || typeof value !== 'string') return
-    const valLower = value.toLowerCase()
-    
-    // Detect Testing Status by value patterns
-    if (!testingStatus) {
-      if (
-        valLower.includes('forward') ||
-        valLower.includes('not started') ||
-        valLower.includes('in progress') ||
-        valLower.includes('completed') ||
-        valLower.includes('testing') ||
-        valLower.includes('ready for') ||
-        valLower.includes('blocked')
-      ) {
-        testingStatus = value
-      }
-    }
-    
-
-  })
-  
-  // Also check direct custom field values for dates (Received Date)
   Object.keys(wp).forEach(key => {
     if (key.startsWith('customField') || key.startsWith('cf_')) {
       const value = wp[key]
-      // Date fields are stored as ISO date strings (YYYY-MM-DD)
       if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        // This is likely a date field - could be Received Date
         if (!receivedDate) receivedDate = value
       }
     }
   })
 
+  // ── Determine ticket type and resolve Is QA Missed ───────────────────────
+  const ticketType = wp._links.type?.title || 'Unknown'
+  const isBugTicket = ticketType.toLowerCase() === 'bug'
+
+  // BUG tickets do not have customField21 — store 'N/A' explicitly.
+  // SUPPORT ISSUE tickets: use the actual value; if absent treat as 'Unknown'.
+  let isQAMissed: string | null
+  if (isBugTicket) {
+    isQAMissed = 'N/A'
+  } else if (rawIsQAMissed) {
+    isQAMissed = rawIsQAMissed
+  } else {
+    // Support Issue with no value returned by OpenProject
+    isQAMissed = 'Unknown'
+  }
+
   return {
     id: wp.id,
     subject: wp.subject,
     description: wp.description?.raw || '',
-    type: wp._links.type?.title || 'Unknown',
+    type: ticketType,
     status: wp._links.status?.title || 'Unknown',
     priority: wp._links.priority?.title || 'Normal',
     assignee: wp._links.assignee?.title || 'Unassigned',
@@ -813,7 +780,7 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
     project: wp._links.project?.title || '',
     author: wp._links.author?.title || '',
     version: wp._links.version?.title || null,
-    release: release || wp._links.version?.title || null, // Release custom field or fallback to version
+    release: release || wp._links.version?.title || null,
     startDate: wp.startDate || null,
     dueDate: wp.dueDate || null,
     createdAt: wp.createdAt || null,
@@ -823,12 +790,11 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
     spentTime: wp.spentTime || null,
     storyPoints: wp.storyPoints || null,
     isOverdue: wp.dueDate ? wp.dueDate < new Date().toISOString().split('T')[0] && wp.percentageDone !== 100 : false,
-    // Custom fields for QA
     customFields,
     testingStatus,
     isQAMissed,
     qaConfirmation,
-    receivedDate, // The "Received Date" custom field from OpenProject
+    receivedDate,
   }
 }
 
