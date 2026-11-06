@@ -933,8 +933,9 @@ export async function fetchWorkPackageActivities(
     const allRawActivities: any[] = []
     let nextPath: string | null = `/api/v3/work_packages/${workPackageId}/activities`
     let pageCount = 0
+    const MAX_ACTIVITY_PAGES = 500 // Safety cap — never silently truncate
 
-    while (nextPath && pageCount < 10) {
+    while (nextPath && pageCount < MAX_ACTIVITY_PAGES) {
       pageCount++
       let cleanPath = nextPath
       if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {

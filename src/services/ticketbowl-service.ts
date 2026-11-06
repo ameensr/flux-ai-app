@@ -57,54 +57,57 @@ export interface VerifiedTransition {
   changedById: number | null
   changedByName: string
   verificationStatus: 'verified' | 'unverified'
+  isForwardingEvent: boolean
 }
 
 export interface ActivityInspectionResult {
+  // All Testing Status (customField14) changes — complete history
+  allTestingStatusChanges: VerifiedTransition[]
+  // Subset: only transitions to exact target value
   transitions: VerifiedTransition[]
   historyStatus: ForwardingHistoryVerification
   error?: string
 }
 
 /**
- * Inspects work package activity history to detect verified transitions where
- * Testing Status (customField14) transitioned to EXACTLY "Forwarded to the Testing Team".
+ * Inspects work package activity history to capture:
+ * 1. ALL Testing Status (customField14) changes — complete history.
+ * 2. Forwarding events — transitions where newValue === EXACT target (case-sensitive).
  *
  * NON-NEGOTIABLE RULES:
- * 1. Strict equality check: newValue === "Forwarded to the Testing Team".
- * 2. Never match general work package Status.
- * 3. Never match author, assignee, or ticket creation.
- * 4. Actor MUST be extracted from the SAME journal entry.
- * 5. Accurately determines whether history was verified, unavailable, unverified, or no_matching_event.
+ * - Exact case-sensitive match for forwarding detection.
+ * - Never match the standard work package Status field.
+ * - Actor extracted from the SAME journal entry only.
+ * - All Testing Status changes preserved, not just forwarding events.
  */
 export function inspectWorkPackageActivities(
   workPackageId: number,
   activities: WorkPackageActivity[] | null,
   fetchError?: string | null
 ): ActivityInspectionResult {
-  // If activities could not be fetched or errored
   if (fetchError || activities === null) {
     return {
+      allTestingStatusChanges: [],
       transitions: [],
       historyStatus: 'unavailable',
       error: fetchError || 'Historical activity journal inaccessible or missing',
     }
   }
 
-  // If activity journal is empty (ticket has no recorded journals in OpenProject)
   if (!Array.isArray(activities) || activities.length === 0) {
     return {
+      allTestingStatusChanges: [],
       transitions: [],
       historyStatus: 'no_matching_event',
-      error: 'No recorded journals in OpenProject',
     }
   }
 
-  const verifiedTransitions: VerifiedTransition[] = []
-  let hasTestingFieldChanges = false
+  const allChanges: VerifiedTransition[] = []
+  const forwardingTransitions: VerifiedTransition[] = []
 
   for (const activity of activities) {
     const rawDetails = activity.details || (activity as any)._embedded?.details || []
-    if (!rawDetails || !Array.isArray(rawDetails)) continue
+    if (!Array.isArray(rawDetails)) continue
 
     for (const detail of rawDetails) {
       const anyDetail = detail as any
@@ -117,18 +120,15 @@ export function inspectWorkPackageActivities(
         ''
       ).trim().toLowerCase()
 
-      // 1. Hard-exclude the standard work package Status field
+      // Hard-exclude the standard work package Status field
       if (prop === 'status') continue
 
-      // Clean raw text or HTML
       const rawText = (detail.raw || anyDetail.html || '').trim()
       const cleanRaw = rawText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
 
-      // 2. Identify if this detail targets Testing Status (customField14)
+      // Identify Testing Status field (customField14)
       const isTestingStatusField =
         prop === 'testing status' ||
-        prop.includes('testing status') ||
-        prop.includes('testing') ||
         prop === 'customfield14' ||
         prop === 'cf_14' ||
         prop === 'cf14' ||
@@ -146,9 +146,7 @@ export function inspectWorkPackageActivities(
         cleanRaw.includes('custom_field_14') ||
         cleanRaw.includes('cf_14')
 
-      if (isTestingStatusField) {
-        hasTestingFieldChanges = true
-      }
+      if (!isTestingStatusField) continue
 
       let extractedNewValue =
         extractCustomFieldValue(detail.newValue) ||
@@ -161,7 +159,7 @@ export function inspectWorkPackageActivities(
         extractCustomFieldValue(anyDetail._links?.oldValue) ||
         extractCustomFieldValue(anyDetail._links?.old_value)
 
-      // Fallback: Parse from clean text if structured fields were not populated by the API
+      // Fallback: parse from raw text
       if (!extractedNewValue && cleanRaw) {
         const changedMatch = cleanRaw.match(/(?:testing\s+status|customfield14|custom_field_14|cf_14)\s+changed\s+from\s+(.+?)\s+to\s+(.+)/i)
         if (changedMatch) {
@@ -175,47 +173,47 @@ export function inspectWorkPackageActivities(
         }
       }
 
-      // 3. Strict business rule: EXACT comparison against target value
-      if (
-        isTestingStatusField &&
-        extractedNewValue.toLowerCase() === EXACT_FORWARDED_TARGET_VALUE.toLowerCase()
-      ) {
-        const actorName = activity.user?.name?.trim() || 'Unknown'
-        const actorId = activity.user?.id || null
+      if (!extractedNewValue) continue
 
-        verifiedTransitions.push({
-          workPackageId,
-          activityId: activity.id || null,
-          previousTestingStatus: extractedOldValue || null,
-          newTestingStatus: EXACT_FORWARDED_TARGET_VALUE,
-          changedAt: activity.createdAt,
-          changedById: actorId,
-          changedByName: actorName,
-          verificationStatus: 'verified',
-        })
+      const actorName = activity.user?.name?.trim() || 'Unknown'
+      const actorId = activity.user?.id || null
+
+      // EXACT case-sensitive match for forwarding detection (business rule)
+      const isForwarding = extractedNewValue === EXACT_FORWARDED_TARGET_VALUE
+
+      const transition: VerifiedTransition = {
+        workPackageId,
+        activityId: activity.id || null,
+        previousTestingStatus: extractedOldValue || null,
+        newTestingStatus: extractedNewValue,
+        changedAt: activity.createdAt,
+        changedById: actorId,
+        changedByName: actorName,
+        verificationStatus: 'verified',
+        isForwardingEvent: isForwarding,
       }
+
+      allChanges.push(transition)
+      if (isForwarding) forwardingTransitions.push(transition)
     }
   }
 
   // Sort newest first
-  verifiedTransitions.sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime())
+  const sortDesc = (a: VerifiedTransition, b: VerifiedTransition) =>
+    new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime()
+  allChanges.sort(sortDesc)
+  forwardingTransitions.sort(sortDesc)
 
-  let historyStatus: ForwardingHistoryVerification = 'no_matching_event'
-  if (verifiedTransitions.length > 0) {
-    historyStatus = 'verified'
-  } else if (hasTestingFieldChanges && verifiedTransitions.length === 0) {
-    historyStatus = 'no_matching_event'
-  }
+  const historyStatus: ForwardingHistoryVerification =
+    forwardingTransitions.length > 0 ? 'verified' : 'no_matching_event'
 
   return {
-    transitions: verifiedTransitions,
+    allTestingStatusChanges: allChanges,
+    transitions: forwardingTransitions,
     historyStatus,
   }
 }
 
-/**
- * Backward-compatible helper for transition detection.
- */
 export function detectExactForwardingTransitions(
   workPackageId: number,
   activities: WorkPackageActivity[]
@@ -398,8 +396,14 @@ export async function syncTicketBowlData(
           (wp.percentageDone || 0) < 100
         : false
 
-      const defaultStatus: ForwardingHistoryVerification =
-        wp.testingStatus === EXACT_FORWARDED_TARGET_VALUE ? 'unavailable' : 'no_matching_event'
+      // Default history status for the snapshot upsert:
+      // - If ticket is currently forwarded and we have no prior record: mark unavailable
+      //   (history needs to be fetched before we can confirm).
+      // - If we have a prior record: preserve it.
+      // - Otherwise: mark unavailable so it will be inspected.
+      // NEVER pre-assign 'no_matching_event' here — that can only be set after
+      // a successful activity inspection that found no qualifying transition.
+      const defaultStatus: ForwardingHistoryVerification = 'unavailable'
 
       return {
         project_id: projectId,
@@ -472,24 +476,43 @@ export async function syncTicketBowlData(
     // ------------------------------------------------------------------------
     // PHASE 3: Selective & Incremental Activity Journal Inspection
     // ------------------------------------------------------------------------
-    // Skip tickets that have already been checked successfully and haven't changed in OpenProject since
+    // A ticket is skipped ONLY when ALL of the following are true:
+    //   1. It already exists in the DB with a confirmed result.
+    //   2. Its history_verification_status is 'verified' OR 'no_matching_event'.
+    //   3. Its OpenProject updatedAt has NOT advanced past the last history check.
+    //
+    // CRITICAL: 'no_matching_event' is NOT a permanent terminal state.
+    // A ticket may have been forwarded historically even if its current Testing
+    // Status is no longer the target value. It must be re-inspected whenever
+    // OpenProject reports it was updated after the last check.
+    // Only skip 'no_matching_event' tickets when updatedAt confirms no change.
     const ticketsToInspect = formattedWPs.filter(wp => {
       const existing = existingWpMap.get(wp.id)
+
+      // Always inspect new tickets
       if (!existing) return true
-      // Always inspect if currently Forwarded to the Testing Team but no verified handoffs saved yet
+
+      // Always retry tickets with fetch errors or unconfirmed state
+      if (
+        existing.history_verification_status === 'unavailable' ||
+        existing.history_verification_status === 'unverified'
+      ) return true
+
+      // Always inspect if currently forwarded but no verified event stored yet
       if (
         wp.testingStatus === EXACT_FORWARDED_TARGET_VALUE &&
-        (!existing.latest_forwarded_at || existing.forwarding_count === 0)
-      ) {
-        return true
-      }
-      if (existing.history_verification_status === 'unavailable') return true // Retry previously unavailable
-      if (existing.history_verification_status === 'unverified') return true
-      // If ticket was updated in OpenProject after history was checked, re-check
+        existing.forwarding_count === 0
+      ) return true
+
+      // For both 'verified' and 'no_matching_event': only skip if the ticket
+      // has not been updated in OpenProject since the last history check.
+      // If updatedAt is unknown on either side, always inspect to be safe.
       if (wp.updatedAt && existing.history_checked_at) {
         return new Date(wp.updatedAt).getTime() > new Date(existing.history_checked_at).getTime()
       }
-      return false
+
+      // updatedAt or history_checked_at is missing — inspect to be safe
+      return true
     })
 
     onProgress?.({
@@ -500,6 +523,7 @@ export async function syncTicketBowlData(
     })
 
     const allDiscoveredTransitions: VerifiedTransition[] = []
+    const allDiscoveredStatusChanges: VerifiedTransition[] = []
     const inspectionResultsMap = new Map<number, ActivityInspectionResult>()
 
     const ACTIVITY_BATCH_SIZE = 8
@@ -523,6 +547,9 @@ export async function syncTicketBowlData(
         if (res.result.transitions.length > 0) {
           allDiscoveredTransitions.push(...res.result.transitions)
         }
+        if (res.result.allTestingStatusChanges.length > 0) {
+          allDiscoveredStatusChanges.push(...res.result.allTestingStatusChanges)
+        }
       }
 
       const progressCount = Math.min(i + ACTIVITY_BATCH_SIZE, ticketsToInspect.length)
@@ -536,16 +563,19 @@ export async function syncTicketBowlData(
     }
 
     // ------------------------------------------------------------------------
-    // PHASE 4: Persist Verified Transitions to History Table
-    // Deduplication constraint prevents duplicate rows on re-sync.
+    // PHASE 4: Persist History
+    // 4a. Forwarding events → ticket_bowl_forwarding_history
+    // 4b. All Testing Status changes → ticket_bowl_testing_status_history
+    // Deduplication constraints prevent duplicates on re-sync.
     // ------------------------------------------------------------------------
     onProgress?.({
       phase: 'saving-history',
       current: 0,
       total: allDiscoveredTransitions.length,
-      message: 'Persisting verified forwarding events...',
+      message: 'Persisting verified forwarding events and complete Testing Status history...',
     })
 
+    // 4a. Forwarding events
     const historyRows = allDiscoveredTransitions.map(t => ({
       project_id: projectId,
       op_project_id: opProjectId || null,
@@ -569,10 +599,35 @@ export async function syncTicketBowlData(
             onConflict: 'project_id,work_package_id,activity_id,changed_at',
             ignoreDuplicates: true,
           })
+        if (error) errors.push(`Forwarding history upsert failed: ${error.message}`)
+      }
+    }
 
-        if (error) {
-          errors.push(`History upsert failed: ${error.message}`)
-        }
+    // 4b. Complete Testing Status history (all customField14 changes)
+    const statusHistoryRows = allDiscoveredStatusChanges.map(t => ({
+      project_id: projectId,
+      op_project_id: opProjectId || null,
+      work_package_id: t.workPackageId,
+      activity_id: t.activityId,
+      previous_testing_status: t.previousTestingStatus,
+      new_testing_status: t.newTestingStatus,
+      changed_at: t.changedAt,
+      changed_by_id: t.changedById,
+      changed_by_name: t.changedByName,
+      is_forwarding_event: t.isForwardingEvent,
+      source: 'sync',
+    }))
+
+    if (statusHistoryRows.length > 0) {
+      for (let i = 0; i < statusHistoryRows.length; i += UPSERT_CHUNK) {
+        const chunk = statusHistoryRows.slice(i, i + UPSERT_CHUNK)
+        const { error } = await supabase
+          .from('ticket_bowl_testing_status_history')
+          .upsert(chunk, {
+            onConflict: 'project_id,work_package_id,activity_id,changed_at',
+            ignoreDuplicates: true,
+          })
+        if (error) errors.push(`Testing status history upsert failed: ${error.message}`)
       }
     }
 
@@ -594,8 +649,10 @@ export async function syncTicketBowlData(
       const inspection = inspectionResultsMap.get(wp.id)
       const existing = existingWpMap.get(wp.id)
 
-      let finalHistoryStatus: ForwardingHistoryVerification =
-        wp.testingStatus === EXACT_FORWARDED_TARGET_VALUE ? 'unavailable' : 'no_matching_event'
+      // Default: preserve existing status if we didn't inspect this ticket.
+      // If no existing record, mark unavailable (not no_matching_event) so it
+      // gets inspected on the next sync.
+      let finalHistoryStatus: ForwardingHistoryVerification = existing?.history_verification_status || 'unavailable'
       let finalCount = existing?.forwarding_count || 0
       let latestAt: string | null = existing?.latest_forwarded_at || null
       let latestBy: string | null = existing?.latest_forwarded_by_name || null
@@ -606,26 +663,21 @@ export async function syncTicketBowlData(
 
         if (inspection.transitions.length > 0) {
           finalHistoryStatus = 'verified'
-          finalCount = inspection.transitions.length
           latestAt = inspection.transitions[0].changedAt
           latestBy = inspection.transitions[0].changedByName
         } else if (inspection.historyStatus === 'unverified') {
           finalHistoryStatus = 'unverified'
-        } else if (wp.testingStatus === EXACT_FORWARDED_TARGET_VALUE) {
-          // In Forwarded status, but no transition was confirmed in history
+        } else if (inspection.historyStatus === 'unavailable') {
+          // Fetch error — keep as unavailable so it retries next sync
           finalHistoryStatus = 'unavailable'
-          finalCount = 0
-          latestAt = null
-          latestBy = null
         } else {
-          // Never forwarded to testing
+          // Activity was successfully fetched and inspected; no forwarding transition found.
+          // Only now is it safe to mark as no_matching_event.
           finalHistoryStatus = 'no_matching_event'
           finalCount = 0
           latestAt = null
           latestBy = null
         }
-      } else if (existing) {
-        finalHistoryStatus = existing.history_verification_status
       }
 
       if (finalHistoryStatus === 'verified') verifiedCountTotal++
@@ -643,6 +695,32 @@ export async function syncTicketBowlData(
         history_error: historyError,
       }
     })
+
+    // Recalculate forwarding_count from the history table (authoritative source)
+    // This prevents count from being overwritten by a partial sync run.
+    const { data: dbCounts } = await supabase
+      .from('ticket_bowl_forwarding_history')
+      .select('work_package_id')
+      .eq('project_id', projectId)
+
+    const dbCountMap = new Map<number, number>()
+    if (dbCounts) {
+      for (const row of dbCounts) {
+        const id = Number(row.work_package_id)
+        dbCountMap.set(id, (dbCountMap.get(id) || 0) + 1)
+      }
+    }
+
+    // Apply DB-authoritative counts to the update payload
+    for (const upd of updateUpdates) {
+      const dbCount = dbCountMap.get(Number(upd.work_package_id))
+      if (dbCount !== undefined) {
+        upd.forwarding_count = dbCount
+        if (upd.history_verification_status === 'no_matching_event' && dbCount > 0) {
+          upd.history_verification_status = 'verified'
+        }
+      }
+    }
 
     // Batch update the verification fields
     for (let i = 0; i < updateUpdates.length; i += UPSERT_CHUNK) {
@@ -890,6 +968,7 @@ export async function queryTicketBowlWorkPackages(
 
 /**
  * Direct table query fallback.
+ * Uses ticket_bowl_forwarding_history for date filtering — same as the RPC.
  */
 async function fallbackQueryTicketBowl(
   filters: TicketBowlFilters,
@@ -913,6 +992,26 @@ async function fallbackQueryTicketBowl(
     page = 1,
   } = filters
 
+  const isDateFiltered = Boolean(fromIso || toIso)
+
+  // Step 1: If date filter active, get qualifying work_package_ids from history table
+  let qualifyingWpIds: number[] | null = null
+  if (isDateFiltered) {
+    let histQuery = supabase
+      .from('ticket_bowl_forwarding_history')
+      .select('work_package_id')
+      .eq('project_id', projectId)
+    if (fromIso) histQuery = histQuery.gte('changed_at', fromIso)
+    if (toIso) histQuery = histQuery.lte('changed_at', toIso)
+
+    const { data: histData } = await histQuery
+    if (!histData || histData.length === 0) {
+      return { items: [], total: 0, pageSize, page, totalPages: 1 }
+    }
+    qualifyingWpIds = [...new Set(histData.map(r => Number(r.work_package_id)))]
+  }
+
+  // Step 2: Query work packages
   let query = supabase
     .from('ticket_bowl_work_packages')
     .select('*', { count: 'exact' })
@@ -928,9 +1027,7 @@ async function fallbackQueryTicketBowl(
   if (authorName) query = query.ilike('author_name', `%${authorName}%`)
   if (assigneeName) query = query.ilike('assignee_name', `%${assigneeName}%`)
   if (search) query = query.or(`subject.ilike.%${search}%,work_package_id.eq.${!isNaN(Number(search)) ? search : 0}`)
-
-  if (fromIso) query = query.gte('latest_forwarded_at', fromIso)
-  if (toIso) query = query.lte('latest_forwarded_at', toIso)
+  if (qualifyingWpIds) query = query.in('work_package_id', qualifyingWpIds)
 
   query = query
     .order('latest_forwarded_at', { ascending: false, nullsFirst: false })
@@ -950,14 +1047,12 @@ async function fallbackQueryTicketBowl(
   }))
 
   const total = count || 0
-  const totalPages = Math.ceil(total / pageSize) || 1
-
   return {
     items: items as TicketBowlWorkPackage[],
     total,
     pageSize,
     page,
-    totalPages,
+    totalPages: Math.ceil(total / pageSize) || 1,
   }
 }
 
@@ -977,12 +1072,61 @@ export async function fetchTicketForwardingHistory(
       .order('changed_at', { ascending: false })
 
     if (error) {
-      console.error('[Ticket Bowl] Failed to fetch history:', error)
+      console.error('[Ticket Bowl] Failed to fetch forwarding history:', error)
       return []
     }
     return (data || []) as TicketBowlForwardingEvent[]
   } catch (err) {
     console.error('[Ticket Bowl] History exception:', err)
+    return []
+  }
+}
+
+/**
+ * Fetch complete Testing Status history for a work package (all customField14 changes).
+ * Falls back to the forwarding history table if the complete history table is unavailable.
+ */
+export async function fetchTicketTestingStatusHistory(
+  projectId: string,
+  workPackageId: number
+): Promise<import('@/modules/TicketBowl/types').TicketBowlTestingStatusEvent[]> {
+  try {
+    // Try the complete history table first (via RPC)
+    const { data: rpcData, error: rpcError } = await supabase.rpc(
+      'get_ticket_testing_status_history',
+      { p_project_id: projectId, p_work_package_id: workPackageId }
+    )
+
+    if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+      return rpcData as import('@/modules/TicketBowl/types').TicketBowlTestingStatusEvent[]
+    }
+
+    // Fallback: direct table query
+    const { data, error } = await supabase
+      .from('ticket_bowl_testing_status_history')
+      .select('id, activity_id, previous_testing_status, new_testing_status, changed_at, changed_by_name, is_forwarding_event')
+      .eq('project_id', projectId)
+      .eq('work_package_id', workPackageId)
+      .order('changed_at', { ascending: false })
+
+    if (!error && data && data.length > 0) {
+      return data as import('@/modules/TicketBowl/types').TicketBowlTestingStatusEvent[]
+    }
+
+    // Last resort: synthesize from forwarding history table
+    const { data: fwdData } = await supabase
+      .from('ticket_bowl_forwarding_history')
+      .select('id, activity_id, previous_testing_status, new_testing_status, changed_at, changed_by_name')
+      .eq('project_id', projectId)
+      .eq('work_package_id', workPackageId)
+      .order('changed_at', { ascending: false })
+
+    return (fwdData || []).map(r => ({
+      ...r,
+      is_forwarding_event: true,
+    })) as import('@/modules/TicketBowl/types').TicketBowlTestingStatusEvent[]
+  } catch (err) {
+    console.error('[Ticket Bowl] Testing status history exception:', err)
     return []
   }
 }

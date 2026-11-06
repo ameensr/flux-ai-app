@@ -142,6 +142,7 @@ export default function TicketBowl() {
     availableTypes,
     selectedTicketForHistory,
     historyEvents,
+    testingStatusHistory,
     historyLoading,
     openHistoryModal,
     closeHistoryModal,
@@ -235,6 +236,9 @@ export default function TicketBowl() {
         onResetFilters={resetFilters}
         onToggleUnavailableHistory={toggleViewUnavailableHistory}
         availableTypes={availableTypes}
+        availableTestingStatuses={Object.keys(stats.currentTestingStatusCounts).length > 0
+          ? Object.keys(stats.currentTestingStatusCounts).sort()
+          : undefined}
         unavailableCount={stats.unavailableHistoryTickets}
       />
 
@@ -268,6 +272,7 @@ export default function TicketBowl() {
       <TicketForwardingHistoryModal
         ticket={selectedTicketForHistory}
         events={historyEvents}
+        testingStatusHistory={testingStatusHistory}
         loading={historyLoading}
         onClose={closeHistoryModal}
       />
