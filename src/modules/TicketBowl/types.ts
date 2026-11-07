@@ -76,6 +76,17 @@ export interface TicketBowlForwardingEvent {
   created_at: string
 }
 
+// Complete Testing Status history event (all customField14 changes, not just forwarding)
+export interface TicketBowlTestingStatusEvent {
+  id: string
+  activity_id: number | null
+  previous_testing_status: string | null
+  new_testing_status: string
+  changed_at: string
+  changed_by_name: string
+  is_forwarding_event: boolean
+}
+
 export interface TicketBowlSyncStatus {
   id: string
   project_id: string

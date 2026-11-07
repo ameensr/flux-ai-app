@@ -9,12 +9,14 @@ import {
   queryTicketBowlWorkPackages,
   fetchTicketBowlSyncStatus,
   fetchTicketForwardingHistory,
+  fetchTicketTestingStatusHistory,
   fetchTicketBowlDashboardStats,
   fetchAllOpenProjectTypes,
 } from '@/services/ticketbowl-service'
 import type {
   TicketBowlWorkPackage,
   TicketBowlForwardingEvent,
+  TicketBowlTestingStatusEvent,
   TicketBowlSyncStatus,
   TicketBowlFilters,
   TicketBowlDashboardStats,
@@ -108,6 +110,7 @@ export function useTicketBowl({
   // History Modal State
   const [selectedTicketForHistory, setSelectedTicketForHistory] = useState<TicketBowlWorkPackage | null>(null)
   const [historyEvents, setHistoryEvents] = useState<TicketBowlForwardingEvent[]>([])
+  const [testingStatusHistory, setTestingStatusHistory] = useState<TicketBowlTestingStatusEvent[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
   // Selected Tickets for Batch Export
@@ -295,8 +298,12 @@ export function useTicketBowl({
     setSelectedTicketForHistory(wp)
     setHistoryLoading(true)
     try {
-      const events = await fetchTicketForwardingHistory(wp.project_id, wp.work_package_id)
+      const [events, statusHistory] = await Promise.all([
+        fetchTicketForwardingHistory(wp.project_id, wp.work_package_id),
+        fetchTicketTestingStatusHistory(wp.project_id, wp.work_package_id),
+      ])
       setHistoryEvents(events)
+      setTestingStatusHistory(statusHistory)
     } finally {
       setHistoryLoading(false)
     }
@@ -305,6 +312,7 @@ export function useTicketBowl({
   const closeHistoryModal = useCallback(() => {
     setSelectedTicketForHistory(null)
     setHistoryEvents([])
+    setTestingStatusHistory([])
   }, [])
 
   // Toggle Ticket Selection
@@ -460,6 +468,7 @@ export function useTicketBowl({
     loadingTypes,
     selectedTicketForHistory,
     historyEvents,
+    testingStatusHistory,
     historyLoading,
     openHistoryModal,
     closeHistoryModal,
