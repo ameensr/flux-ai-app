@@ -7,11 +7,17 @@ import {
   fetchAllWorkPackages,
   fetchWorkPackageActivities,
   formatWorkPackage,
+  resolveAllCustomFieldIds,
   type OpenProjectConfig,
   type OpenProjectWorkPackage,
   type FormattedWorkPackage,
   type WorkPackageActivity,
 } from './openproject'
+import {
+  getActivitySyncCursor,
+  fetchActivitiesIncremental,
+  shouldReinspectActivities,
+} from './openproject-incremental-sync'
 import type {
   TicketBowlWorkPackage,
   TicketBowlForwardingEvent,
@@ -285,15 +291,34 @@ export async function syncTicketBowlData(
   projectId: string,
   opProjectId?: number | null,
   opProjectName?: string | null,
-  onProgress?: (progress: TicketBowlSyncProgress) => void
+  onProgress?: (progress: TicketBowlSyncProgress) => void,
+  options?: {
+    useIncrementalActivities?: boolean
+    forceFullActivityResync?: boolean
+  }
 ): Promise<{ success: boolean; message: string; totalSynced: number; eventsFound: number }> {
   const startTime = Date.now()
   const startedAtIso = new Date().toISOString()
   const errors: string[] = []
+  const useIncremental = options?.useIncrementalActivities ?? true
+  const forceFullResync = options?.forceFullActivityResync ?? false
 
   emitSyncEvent('sync:start')
 
   try {
+    // ------------------------------------------------------------------------
+    // PHASE 0: Resolve Custom Field IDs Dynamically
+    // ------------------------------------------------------------------------
+    onProgress?.({
+      phase: 'fetching-tickets',
+      current: 0,
+      total: 0,
+      message: 'Resolving custom field configuration...',
+    })
+
+    const customFieldIds = await resolveAllCustomFieldIds(config)
+    console.log('[Ticket Bowl] Resolved custom field IDs:', customFieldIds)
+
     // ------------------------------------------------------------------------
     // PHASE 1: Fetch Work Packages from OpenProject (All Types)
     // ------------------------------------------------------------------------
@@ -324,6 +349,18 @@ export async function syncTicketBowlData(
     })
 
     const rawWorkPackages: OpenProjectWorkPackage[] = wpResult.items
+    const reportedTotal = wpResult.total
+
+    // DATA COMPLETENESS CHECK: Validate fetched count vs OpenProject's reported total
+    const fetchedCount = rawWorkPackages.length
+    const countMismatch = Math.abs(fetchedCount - reportedTotal)
+    const mismatchPercentage = reportedTotal > 0 ? (countMismatch / reportedTotal) * 100 : 0
+
+    if (mismatchPercentage > 5) {
+      const warning = `Data completeness warning: OpenProject reported ${reportedTotal} tickets, but only ${fetchedCount} were fetched (${mismatchPercentage.toFixed(1)}% mismatch)`
+      console.warn(`[Ticket Bowl] ${warning}`)
+      errors.push(warning)
+    }
 
     if (rawWorkPackages.length === 0) {
       await updateSyncStatusRecord(projectId, opProjectId || null, opProjectName || null, {
@@ -394,8 +431,8 @@ export async function syncTicketBowlData(
       const existing = existingWpMap.get(wp.id)
       const isOverdue = wp.dueDate
         ? wp.dueDate < today &&
-          !['closed', 'done', 'rejected'].some(s => wp.status.toLowerCase().includes(s)) &&
-          (wp.percentageDone || 0) < 100
+        !['closed', 'done', 'rejected'].some(s => wp.status.toLowerCase().includes(s)) &&
+        (wp.percentageDone || 0) < 100
         : false
 
       const defaultStatus: ForwardingHistoryVerification =
@@ -472,25 +509,60 @@ export async function syncTicketBowlData(
     // ------------------------------------------------------------------------
     // PHASE 3: Selective & Incremental Activity Journal Inspection
     // ------------------------------------------------------------------------
-    // Skip tickets that have already been checked successfully and haven't changed in OpenProject since
-    const ticketsToInspect = formattedWPs.filter(wp => {
+    // Enhanced logic: uses activity cursors and re-inspects old unverified tickets
+    const ticketsToInspect: typeof formattedWPs = []
+
+    for (const wp of formattedWPs) {
       const existing = existingWpMap.get(wp.id)
-      if (!existing) return true
-      // Always inspect if currently Forwarded to the Testing Team but no verified handoffs saved yet
-      if (
-        wp.testingStatus === EXACT_FORWARDED_TARGET_VALUE &&
-        (!existing.latest_forwarded_at || existing.forwarding_count === 0)
-      ) {
-        return true
+
+      if (forceFullResync) {
+        ticketsToInspect.push(wp)
+        continue
       }
-      if (existing.history_verification_status === 'unavailable') return true // Retry previously unavailable
-      if (existing.history_verification_status === 'unverified') return true
-      // If ticket was updated in OpenProject after history was checked, re-check
-      if (wp.updatedAt && existing.history_checked_at) {
-        return new Date(wp.updatedAt).getTime() > new Date(existing.history_checked_at).getTime()
+
+      if (!existing) {
+        // New ticket - always inspect
+        ticketsToInspect.push(wp)
+        continue
       }
-      return false
-    })
+
+      // Use smart inspection logic with cursor awareness
+      if (useIncremental) {
+        const cursor = await getActivitySyncCursor(projectId, wp.id)
+        const shouldInspect = shouldReinspectActivities(
+          cursor,
+          wp.updatedAt,
+          existing.history_verification_status,
+          wp.testingStatus || '',
+          EXACT_FORWARDED_TARGET_VALUE
+        )
+        if (shouldInspect) {
+          ticketsToInspect.push(wp)
+        }
+      } else {
+        // Legacy logic (no cursor)
+        if (
+          wp.testingStatus === EXACT_FORWARDED_TARGET_VALUE &&
+          (!existing.latest_forwarded_at || existing.forwarding_count === 0)
+        ) {
+          ticketsToInspect.push(wp)
+          continue
+        }
+        if (existing.history_verification_status === 'unavailable') {
+          ticketsToInspect.push(wp)
+          continue
+        }
+        if (existing.history_verification_status === 'unverified') {
+          ticketsToInspect.push(wp)
+          continue
+        }
+        if (wp.updatedAt && existing.history_checked_at) {
+          if (new Date(wp.updatedAt).getTime() > new Date(existing.history_checked_at).getTime()) {
+            ticketsToInspect.push(wp)
+          }
+        }
+      }
+    }
 
     onProgress?.({
       phase: 'fetching-activities',
@@ -503,36 +575,74 @@ export async function syncTicketBowlData(
     const inspectionResultsMap = new Map<number, ActivityInspectionResult>()
 
     const ACTIVITY_BATCH_SIZE = 8
+    let incrementalHits = 0
+    let incrementalSkips = 0
+
     for (let i = 0; i < ticketsToInspect.length; i += ACTIVITY_BATCH_SIZE) {
       const slice = ticketsToInspect.slice(i, i + ACTIVITY_BATCH_SIZE)
       const batchPromises = slice.map(async wp => {
         try {
-          const activities = await fetchWorkPackageActivities(configWithProject, wp.id)
+          let activities: WorkPackageActivity[]
+          let newActivitiesCount = 0
+
+          // Use incremental fetching if enabled
+          if (useIncremental && !forceFullResync) {
+            const incrementalResult = await fetchActivitiesIncremental(
+              configWithProject,
+              projectId,
+              wp.id
+            )
+            activities = incrementalResult.activities
+            newActivitiesCount = incrementalResult.newActivitiesCount
+
+            if (newActivitiesCount === 0) {
+              incrementalSkips++
+              // No new activities - use cached inspection result if verified
+              const existing = existingWpMap.get(wp.id)
+              if (existing && existing.history_verification_status === 'verified') {
+                return { wpId: wp.id, result: { transitions: [], historyStatus: 'verified' as const }, skipped: true }
+              }
+            } else {
+              incrementalHits++
+            }
+          } else {
+            activities = await fetchWorkPackageActivities(configWithProject, wp.id)
+          }
+
           const result = inspectWorkPackageActivities(wp.id, activities, null)
-          return { wpId: wp.id, result }
+          return { wpId: wp.id, result, skipped: false }
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : 'Network failure fetching activities'
           const result = inspectWorkPackageActivities(wp.id, null, errMsg)
-          return { wpId: wp.id, result }
+          return { wpId: wp.id, result, skipped: false }
         }
       })
 
       const results = await Promise.all(batchPromises)
       for (const res of results) {
-        inspectionResultsMap.set(res.wpId, res.result)
-        if (res.result.transitions.length > 0) {
-          allDiscoveredTransitions.push(...res.result.transitions)
+        if (!res.skipped) {
+          inspectionResultsMap.set(res.wpId, res.result)
+          if (res.result.transitions.length > 0) {
+            allDiscoveredTransitions.push(...res.result.transitions)
+          }
         }
       }
 
       const progressCount = Math.min(i + ACTIVITY_BATCH_SIZE, ticketsToInspect.length)
+      const incrementalMsg = useIncremental
+        ? ` (${incrementalHits} new activities, ${incrementalSkips} cached)`
+        : ''
       onProgress?.({
         phase: 'fetching-activities',
         current: progressCount,
         total: ticketsToInspect.length,
-        message: `Inspecting activities: ${progressCount} / ${ticketsToInspect.length} (${allDiscoveredTransitions.length} forwarding events found)`,
+        message: `Inspecting activities: ${progressCount} / ${ticketsToInspect.length}${incrementalMsg} (${allDiscoveredTransitions.length} events found)`,
         eventsFound: allDiscoveredTransitions.length,
       })
+    }
+
+    if (useIncremental) {
+      console.log(`[Ticket Bowl] Incremental sync: ${incrementalHits} tickets with new activities, ${incrementalSkips} skipped (cached)`)
     }
 
     // ------------------------------------------------------------------------

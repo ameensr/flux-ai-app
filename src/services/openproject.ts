@@ -97,12 +97,12 @@ function getProxyUrl(): string {
 
 function buildBaseUrl(url: string): string {
   const cleanUrl = url.replace(/\/$/, '')
-  
+
   // In development, route through Vite proxy to avoid CORS
   if (import.meta.env.DEV && cleanUrl.includes('tms.ktu.edu.in')) {
     return '/openproject-api'
   }
-  
+
   return cleanUrl
 }
 
@@ -113,7 +113,7 @@ async function proxyFetch(
 ): Promise<Response> {
   const proxyUrl = `${getProxyUrl()}?path=${encodeURIComponent(apiPath)}`
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-  
+
   return fetch(proxyUrl, {
     method: 'POST',
     headers: {
@@ -137,7 +137,7 @@ export async function testOpenProjectConnection(
 
   try {
     let res: Response
-    
+
     if (shouldUseProxy()) {
       res = await proxyFetch(config, '/api/v3/users/me')
     } else {
@@ -145,7 +145,7 @@ export async function testOpenProjectConnection(
         headers: { Authorization: buildAuthHeader(openproject_api_key) },
       })
     }
-    
+
     if (!res.ok) {
       if (res.status === 401) return { success: false, message: 'Invalid API Key' }
       if (res.status === 403) return { success: false, message: 'Access forbidden. Check permissions.' }
@@ -278,7 +278,7 @@ export async function fetchWorkPackages(
   }
 
   const data = await res.json()
-  
+
   return {
     items: data._embedded?.elements || [],
     total: data.total || 0,
@@ -347,6 +347,8 @@ export async function fetchAllWorkPackages(
   let loadedCount = firstItems.length
 
   // 2. Fetch remaining pages in concurrent batches
+  // CRITICAL FIX: Do NOT early-terminate on empty batches
+  // OpenProject API can have sparse pages - page 3 empty, page 4 has data
   for (let i = 0; i < remainingPages.length; i += concurrency) {
     const batch = remainingPages.slice(i, i + concurrency)
     const batchResults = await Promise.all(
@@ -363,21 +365,15 @@ export async function fetchAllWorkPackages(
       )
     )
 
-    let allEmptyInBatch = true
     batch.forEach((pageNum, idx) => {
       const pageItems = batchResults[idx].items
       pageMap.set(pageNum, pageItems)
       loadedCount += pageItems.length
-      if (pageItems.length > 0) {
-        allEmptyInBatch = false
-      }
     })
 
     filters?.onProgress?.(Math.min(loadedCount, total), total)
 
-    if (allEmptyInBatch) {
-      break
-    }
+    // Continue fetching ALL calculated pages - no early termination
   }
 
   // 3. Assemble all items in strict page order and deduplicate by ID
@@ -611,11 +607,11 @@ let releaseFieldId: number | null = null
 // Get the Release custom field ID (customField9 = field ID 9)
 export async function getReleaseFieldId(config: OpenProjectConfig): Promise<number | null> {
   if (releaseFieldId !== null) return releaseFieldId
-  
+
   try {
     const customFields = await fetchCustomFields(config)
-    const releaseField = customFields.find(cf => 
-      cf.name.toLowerCase() === 'release' || 
+    const releaseField = customFields.find(cf =>
+      cf.name.toLowerCase() === 'release' ||
       cf.name.toLowerCase().includes('release')
     )
     if (releaseField) {
@@ -677,11 +673,11 @@ export async function fetchReleaseOptions(
         }
       }
     })
-    
+
     const options = Array.from(releases.entries())
       .map(([name, id]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name))
-    
+
     return options
   } catch (e) {
     console.error('[OpenProject] Failed to fetch release options:', e)
@@ -734,12 +730,12 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
     wp['customField21'] ?? wp['cf_21'] ?? null
   // Normalise: true → 'Yes', false → 'No', null/undefined → null (resolve below)
   const rawIsQAMissed: string | null =
-    rawIsQAMissedBool === true  ? 'Yes' :
-    rawIsQAMissedBool === false ? 'No'  :
-    // Fallback: some editions may still send it as a string
-    (typeof rawIsQAMissedBool === 'string' && rawIsQAMissedBool.length > 0)
-      ? rawIsQAMissedBool
-      : null
+    rawIsQAMissedBool === true ? 'Yes' :
+      rawIsQAMissedBool === false ? 'No' :
+        // Fallback: some editions may still send it as a string
+        (typeof rawIsQAMissedBool === 'string' && rawIsQAMissedBool.length > 0)
+          ? rawIsQAMissedBool
+          : null
 
   // ── customField3 → QA Confirmation ──────────────────────────────────────
   const qaConfirmation: string | null =
@@ -804,6 +800,99 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
 }
 
 export type FormattedWorkPackage = ReturnType<typeof formatWorkPackage>
+
+// Cache for custom field ID mappings
+const customFieldCache = new Map<string, Map<string, number>>()
+
+/**
+ * Dynamically resolves custom field ID by field name.
+ * Caches results per OpenProject instance URL to avoid repeated API calls.
+ */
+export async function resolveCustomFieldId(
+  config: OpenProjectConfig,
+  fieldName: string
+): Promise<number | null> {
+  const { openproject_url } = config
+  const cacheKey = openproject_url.toLowerCase()
+
+  // Check cache first
+  if (customFieldCache.has(cacheKey)) {
+    const instanceCache = customFieldCache.get(cacheKey)!
+    if (instanceCache.has(fieldName.toLowerCase())) {
+      return instanceCache.get(fieldName.toLowerCase())!
+    }
+  }
+
+  // Fetch all custom fields if not cached
+  const customFields = await fetchCustomFields(config)
+
+  // Build cache for this instance
+  const instanceCache = new Map<string, number>()
+  for (const field of customFields) {
+    instanceCache.set(field.name.toLowerCase(), field.id)
+  }
+  customFieldCache.set(cacheKey, instanceCache)
+
+  // Return resolved ID
+  return instanceCache.get(fieldName.toLowerCase()) || null
+}
+
+/**
+ * Resolves all critical custom field IDs with fallbacks.
+ * Returns a map of field name → field ID.
+ */
+export async function resolveAllCustomFieldIds(
+  config: OpenProjectConfig
+): Promise<{
+  testingStatus: number
+  isQAMissed: number
+  qaConfirmation: number
+  release: number
+}> {
+  const customFields = await fetchCustomFields(config)
+  const fieldMap = new Map<string, number>()
+
+  for (const field of customFields) {
+    fieldMap.set(field.name.toLowerCase(), field.id)
+  }
+
+  // Try to resolve each field with fallbacks
+  const testingStatusId =
+    fieldMap.get('testing status') ||
+    fieldMap.get('testingstatus') ||
+    14 // Fallback to known customField14
+
+  const isQAMissedId =
+    fieldMap.get('is qa missed') ||
+    fieldMap.get('isqamissed') ||
+    fieldMap.get('qa missed') ||
+    21 // Fallback to known customField21
+
+  const qaConfirmationId =
+    fieldMap.get('qa confirmation') ||
+    fieldMap.get('qaconfirmation') ||
+    3 // Fallback to known customField3
+
+  const releaseId =
+    fieldMap.get('release') ||
+    fieldMap.get('version') ||
+    9 // Fallback to known customField9
+
+  // Log warnings if using fallbacks
+  if (!fieldMap.has('testing status') && !fieldMap.has('testingstatus')) {
+    console.warn('[OpenProject] Testing Status field not found, using fallback customField14')
+  }
+  if (!fieldMap.has('is qa missed') && !fieldMap.has('isqamissed')) {
+    console.warn('[OpenProject] Is QA Missed field not found, using fallback customField21')
+  }
+
+  return {
+    testingStatus: testingStatusId,
+    isQAMissed: isQAMissedId,
+    qaConfirmation: qaConfirmationId,
+    release: releaseId,
+  }
+}
 
 // Fetch custom fields defined in OpenProject
 export async function fetchCustomFields(
@@ -892,15 +981,15 @@ const userCache = new Map<string, string>()
 
 async function fetchUserName(config: OpenProjectConfig, userHref: string): Promise<string> {
   if (!userHref) return 'Unknown'
-  
+
   // Check cache first
   if (userCache.has(userHref)) {
     return userCache.get(userHref)!
   }
-  
+
   const { openproject_url, openproject_api_key } = config
   if (!openproject_url || !openproject_api_key) return 'Unknown'
-  
+
   try {
     // userHref is like "/api/v3/users/145"
     let res: Response
@@ -912,7 +1001,7 @@ async function fetchUserName(config: OpenProjectConfig, userHref: string): Promi
       })
     }
     if (!res.ok) return 'Unknown'
-    
+
     const user = await res.json()
     const name = user.name || user.login || 'Unknown'
     userCache.set(userHref, name)
@@ -934,7 +1023,10 @@ export async function fetchWorkPackageActivities(
     let nextPath: string | null = `/api/v3/work_packages/${workPackageId}/activities`
     let pageCount = 0
 
-    while (nextPath && pageCount < 10) {
+    // CRITICAL FIX: Increased activity page limit from 10 to 100
+    // Long-lived tickets can have hundreds of journal entries
+    // Missing early history = missing critical forwarding transitions
+    while (nextPath && pageCount < 100) {
       pageCount++
       let cleanPath = nextPath
       if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {
@@ -957,7 +1049,7 @@ export async function fetchWorkPackageActivities(
       }
 
       if (!res.ok) {
-        console.warn(`[Ticket Bowl] Activities fetch for WP#${workPackageId} status: ${res.status}`)
+        console.warn(`[Ticket Bowl] Activities fetch for WP#${workPackageId} page ${pageCount} status: ${res.status}`)
         break
       }
 
@@ -972,6 +1064,11 @@ export async function fetchWorkPackageActivities(
       } else {
         nextPath = null
       }
+    }
+
+    // Log warning if we hit the page limit (indicates incomplete history)
+    if (pageCount >= 100 && nextPath) {
+      console.warn(`[Ticket Bowl] WP#${workPackageId} has MORE than 100 activity pages - history truncated`)
     }
 
     const activities = await Promise.all(
@@ -1185,12 +1282,12 @@ export async function debugWorkPackageActivities(
     if (!res.ok) return []
     const data = await res.json()
     const elements = data._embedded?.elements || []
-    
+
     // Search for Testing Status changes specifically
     const testingChanges: Array<{ activityId: number; date: string; user: string; raw: string }> = []
-    
-    elements.forEach((activity: { 
-      id: number; createdAt: string; 
+
+    elements.forEach((activity: {
+      id: number; createdAt: string;
       details?: Array<{ raw?: string }>;
       _links?: { user?: { title?: string } }
     }) => {
@@ -1208,7 +1305,7 @@ export async function debugWorkPackageActivities(
         })
       }
     })
-    
+
     return testingChanges
   } catch (e) {
     console.error('Debug error:', e)
@@ -1216,11 +1313,11 @@ export async function debugWorkPackageActivities(
   }
 }
 
-export type WorkPackageIdentifier = number | string | { 
+export type WorkPackageIdentifier = number | string | {
   id: number | string
   createdAt?: string | null
   author?: string | null
-  updatedAt?: string | null 
+  updatedAt?: string | null
 }
 
 // Batch fetch ALL Testing Status forwarding events for multiple work packages.
