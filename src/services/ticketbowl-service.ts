@@ -656,7 +656,7 @@ export async function syncTicketBowlData(
               // No new activities - use cached inspection result if verified
               const existing = existingWpMap.get(wp.id)
               if (existing && existing.history_verification_status === 'verified') {
-                return { wpId: wp.id, result: { transitions: [], historyStatus: 'verified' as const }, skipped: true }
+                return { wpId: wp.id, result: { allTestingStatusChanges: [], transitions: [], historyStatus: 'verified' as const }, skipped: true }
               }
             } else {
               incrementalHits++
@@ -677,12 +677,12 @@ export async function syncTicketBowlData(
       const results = await Promise.all(batchPromises)
       for (const res of results) {
         if (!res.skipped) {
-          inspectionResultsMap.set(res.wpId, res.result)
+          inspectionResultsMap.set(res.wpId, res.result as ActivityInspectionResult)
           if (res.result.transitions.length > 0) {
             allDiscoveredTransitions.push(...res.result.transitions)
           }
         }
-        if (res.result.allTestingStatusChanges.length > 0) {
+        if (res.result.allTestingStatusChanges && res.result.allTestingStatusChanges.length > 0) {
           allDiscoveredStatusChanges.push(...res.result.allTestingStatusChanges)
         }
       }
@@ -979,10 +979,10 @@ export async function syncTicketBowlData(
     const isCancelled = errorMsg.includes('SYNC_CANCELLED')
     if (isCancelled) {
       console.log('[Ticket Bowl] Sync was cancelled by user')
-      emitSyncEvent('sync:cancelled')
+      emitSyncEvent('sync:fail')
 
       await updateSyncStatusRecord(projectId, opProjectId || null, opProjectName || null, {
-        sync_status: 'cancelled',
+        sync_status: 'failed',
         started_at: startedAtIso,
         completed_at: new Date().toISOString(),
         total_fetched: 0,
@@ -1154,8 +1154,8 @@ export async function queryTicketBowlWorkPackages(
   // Guard against empty projectId
   if (!projectId || projectId.trim() === '') {
     return {
-      data: [],
-      count: 0,
+      items: [],
+      total: 0,
       page,
       pageSize,
       totalPages: 0,

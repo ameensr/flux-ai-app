@@ -7,9 +7,11 @@ import type { OpenProjectConfig } from '@/services/openproject'
 import {
   syncTicketBowlData,
   fetchTicketBowlSyncStatus,
-  type TicketBowlSyncStatus,
-  type TicketBowlSyncProgress,
 } from '@/services/ticketbowl-service'
+import type {
+  TicketBowlSyncStatus,
+  TicketBowlSyncProgress,
+} from '@/modules/TicketBowl/types'
 import {
   createSyncJob,
   getActiveSyncJob,
@@ -97,7 +99,7 @@ export function useBackgroundSync({
           showProgressIndicator: true,
           currentJob: activeJob,
           syncProgress: {
-            phase: activeJob.phase || 'fetching-tickets',
+            phase: (activeJob.phase || 'fetching-tickets') as TicketBowlSyncProgress['phase'],
             current: activeJob.progress_current,
             total: activeJob.progress_total,
             message: activeJob.progress_message || 'Synchronizing...',
@@ -120,22 +122,26 @@ export function useBackgroundSync({
     }
 
     const channel = subscribeSyncJob(jobId, (updatedJob) => {
+      // Extract totals from result_summary if available
+      const totalSynced = updatedJob.result_summary?.totalSynced ?? 0
+      const eventsFound = updatedJob.result_summary?.eventsFound ?? 0
+
       setState(prev => ({
         ...prev,
         currentJob: updatedJob,
         syncProgress: updatedJob.status === 'running' ? {
-          phase: updatedJob.phase || 'fetching-tickets',
+          phase: (updatedJob.phase || 'fetching-tickets') as TicketBowlSyncProgress['phase'],
           current: updatedJob.progress_current,
           total: updatedJob.progress_total,
           message: updatedJob.progress_message || 'Synchronizing...',
-          ticketsSaved: updatedJob.total_synced,
-          eventsFound: updatedJob.events_found,
+          ticketsSaved: totalSynced,
+          eventsFound: eventsFound,
         } : null,
       }))
 
       // Handle job completion
       if (updatedJob.status === 'completed') {
-        handleSyncSuccess(updatedJob.total_synced, updatedJob.events_found)
+        handleSyncSuccess(totalSynced, eventsFound)
       } else if (updatedJob.status === 'failed') {
         handleSyncError(updatedJob.error_message || 'Synchronization failed')
       }
@@ -325,7 +331,21 @@ export function useBackgroundSync({
 
   // Cancel an active sync job
   const cancelSync = useCallback(async () => {
-    if (!currentJobIdRef.current) return
+    // Get job ID from ref or state
+    const jobId = currentJobIdRef.current || state.currentJob?.id
+    
+    if (!jobId) {
+      console.warn('[useBackgroundSync] No active job to cancel')
+      // Still reset the UI state
+      setState(prev => ({
+        ...prev,
+        isSyncing: false,
+        showProgressIndicator: false,
+        syncProgress: null,
+        currentJob: null,
+      }))
+      return
+    }
 
     // Confirm cancellation
     const confirmed = window.confirm(
@@ -334,17 +354,20 @@ export function useBackgroundSync({
 
     if (!confirmed) return
 
-    const jobId = currentJobIdRef.current
     const success = await cancelSyncJob(jobId)
 
-    if (success) {
-      setState(prev => ({
-        ...prev,
-        isSyncing: false,
-        showProgressIndicator: false,
-        syncProgress: null,
-      }))
+    // Always reset UI state on cancel attempt
+    setState(prev => ({
+      ...prev,
+      isSyncing: false,
+      showProgressIndicator: false,
+      syncProgress: null,
+      currentJob: null,
+    }))
 
+    currentJobIdRef.current = null
+
+    if (success) {
       toast({
         title: 'Sync Cancelled',
         description: 'The synchronization has been cancelled successfully.',
@@ -352,16 +375,13 @@ export function useBackgroundSync({
 
       // Emit cancel event
       emitSyncEvent('sync:fail')
-
-      currentJobIdRef.current = null
     } else {
       toast({
-        title: 'Cannot Cancel',
-        description: 'Failed to cancel the synchronization job. It may have already completed.',
-        variant: 'destructive',
+        title: 'Sync Stopped',
+        description: 'The synchronization has been stopped. It may have already completed or failed.',
       })
     }
-  }, [toast])
+  }, [toast, state.currentJob])
 
   return {
     // State

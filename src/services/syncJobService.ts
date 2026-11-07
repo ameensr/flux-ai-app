@@ -42,36 +42,75 @@ export interface UpdateSyncJobParams {
   progress_message?: string | null
   error_message?: string | null
   result_summary?: Record<string, any> | null
+  started_at?: string | null
   completed_at?: string | null
 }
 
 /**
  * Creates a new sync job record
  */
-export async function createSyncJob(params: CreateSyncJobParams): Promise<SyncJob> {
+export async function createSyncJob(params: CreateSyncJobParams): Promise<SyncJob | null> {
   const { projectId, opProjectId, opProjectName } = params
 
-  const { data, error } = await supabase
-    .from('sync_jobs')
-    .insert({
-      project_id: projectId,
-      op_project_id: opProjectId,
-      op_project_name: opProjectName,
-      status: 'pending',
-      phase: null,
-      progress_current: 0,
-      progress_total: 0,
-      progress_message: null,
-    })
-    .select()
-    .single()
+  try {
+    // First, check if there's already an active job and clean it up if stuck
+    const existingJob = await getActiveSyncJob(projectId)
+    if (existingJob) {
+      // Check if the job is stuck (running for more than 30 minutes)
+      const jobAge = Date.now() - new Date(existingJob.created_at).getTime()
+      const thirtyMinutes = 30 * 60 * 1000
+      
+      if (jobAge > thirtyMinutes) {
+        // Mark stuck job as failed
+        await supabase
+          .from('sync_jobs')
+          .update({
+            status: 'failed',
+            error_message: 'Job timed out (stuck for more than 30 minutes)',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingJob.id)
+        console.log('[SyncJobService] Cleaned up stuck job:', existingJob.id)
+      } else {
+        // Job is still active, return it instead of creating a new one
+        console.log('[SyncJobService] Active job already exists:', existingJob.id)
+        return existingJob
+      }
+    }
 
-  if (error) {
-    console.error('[SyncJobService] Failed to create sync job:', error)
-    throw new Error(`Failed to create sync job: ${error.message}`)
+    const { data, error } = await supabase
+      .from('sync_jobs')
+      .insert({
+        project_id: projectId,
+        op_project_id: opProjectId,
+        op_project_name: opProjectName,
+        status: 'pending',
+        phase: null,
+        progress_current: 0,
+        progress_total: 0,
+        progress_message: null,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      // Handle duplicate key error gracefully
+      if (error.code === '23505') {
+        console.warn('[SyncJobService] Sync job already exists for this project')
+        // Try to get the existing active job
+        const activeJob = await getActiveSyncJob(projectId)
+        return activeJob
+      }
+      console.error('[SyncJobService] Failed to create sync job:', error)
+      return null
+    }
+
+    return data as SyncJob
+  } catch (err) {
+    console.error('[SyncJobService] Exception creating sync job:', err)
+    return null
   }
-
-  return data as SyncJob
 }
 
 /**
@@ -111,9 +150,31 @@ export async function getActiveSyncJob(projectId: string): Promise<SyncJob | nul
   }
 
   try {
-    const { data, error } = await supabase.rpc('get_active_sync_job', {
+    // Try RPC first
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_active_sync_job', {
       p_project_id: projectId,
     })
+
+    if (!rpcError && rpcData) {
+      // RPC returns an array, get the first item
+      const job = Array.isArray(rpcData) ? rpcData[0] : rpcData
+      return job as SyncJob | null
+    }
+
+    // If RPC fails, fall back to direct query
+    if (rpcError) {
+      console.warn('[SyncJobService] RPC get_active_sync_job failed, using direct query:', rpcError.message)
+    }
+
+    // Fallback: direct table query
+    const { data, error } = await supabase
+      .from('sync_jobs')
+      .select('*')
+      .eq('project_id', projectId)
+      .in('status', ['pending', 'running'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
     if (error) {
       console.error('[SyncJobService] Failed to get active sync job:', error)
@@ -122,7 +183,7 @@ export async function getActiveSyncJob(projectId: string): Promise<SyncJob | nul
 
     return data as SyncJob | null
   } catch (err) {
-    console.error('[SyncJobService] Exception calling get_active_sync_job:', err)
+    console.error('[SyncJobService] Exception calling getActiveSyncJob:', err)
     return null
   }
 }
@@ -187,16 +248,43 @@ export async function failSyncJob(jobId: string, errorMessage: string): Promise<
  * Cancels a sync job
  */
 export async function cancelSyncJob(jobId: string): Promise<boolean> {
-  const { data, error } = await supabase.rpc('cancel_sync_job', {
-    p_job_id: jobId,
-  })
+  try {
+    // Try RPC first
+    const { data, error } = await supabase.rpc('cancel_sync_job', {
+      p_job_id: jobId,
+    })
 
-  if (error) {
-    console.error('[SyncJobService] Failed to cancel sync job:', error)
+    if (!error && data?.success === true) {
+      return true
+    }
+
+    // If RPC fails, fall back to direct update
+    if (error) {
+      console.warn('[SyncJobService] RPC cancel_sync_job failed, using direct update:', error.message)
+    }
+
+    // Fallback: direct table update
+    const { error: updateError } = await supabase
+      .from('sync_jobs')
+      .update({
+        status: 'cancelled',
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        error_message: 'Cancelled by user',
+      })
+      .eq('id', jobId)
+      .in('status', ['pending', 'running'])
+
+    if (updateError) {
+      console.error('[SyncJobService] Failed to cancel sync job via direct update:', updateError)
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.error('[SyncJobService] Exception cancelling sync job:', err)
     return false
   }
-
-  return data?.success === true
 }
 
 /**
