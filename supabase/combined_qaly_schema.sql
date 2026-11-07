@@ -3825,5 +3825,664 @@ WHERE permission_key = 'can_import';
 
 
 -- ============================================================================
+-- SECTION: Ticket Bowl Module (097-103)
+-- ============================================================================
+
+-- Register 'ticket-bowl' in RBAC modules registry
+INSERT INTO modules (module_key, module_name, route_path, icon, is_active, sort_order)
+VALUES ('ticket-bowl', 'Ticket Bowl', '/ticket-bowl', 'Ticket', true, 25)
+ON CONFLICT (module_key) DO UPDATE SET
+  module_name = EXCLUDED.module_name,
+  route_path = EXCLUDED.route_path,
+  icon = EXCLUDED.icon,
+  is_active = EXCLUDED.is_active,
+  sort_order = EXCLUDED.sort_order;
+
+-- Populate role_module_permissions for 'ticket-bowl'
+DO $$
+DECLARE
+  v_module_id UUID;
+  v_perm_view UUID;
+  v_perm_dashboard UUID;
+  v_perm_export UUID;
+  v_perm_import UUID;
+  v_perm_history UUID;
+  v_role RECORD;
+BEGIN
+  SELECT id INTO v_module_id FROM modules WHERE module_key = 'ticket-bowl';
+  SELECT id INTO v_perm_view FROM permissions WHERE permission_key = 'can_view';
+  SELECT id INTO v_perm_dashboard FROM permissions WHERE permission_key = 'can_view_dashboard';
+  SELECT id INTO v_perm_export FROM permissions WHERE permission_key = 'can_export';
+  SELECT id INTO v_perm_import FROM permissions WHERE permission_key = 'can_import';
+  SELECT id INTO v_perm_history FROM permissions WHERE permission_key = 'can_view_history';
+
+  FOR v_role IN SELECT id, role_key FROM roles LOOP
+    IF v_perm_view IS NOT NULL THEN
+      INSERT INTO role_module_permissions (role_id, module_id, permission_id, is_enabled)
+      VALUES (v_role.id, v_module_id, v_perm_view, true)
+      ON CONFLICT (role_id, module_id, permission_id) DO UPDATE SET is_enabled = true;
+    END IF;
+    IF v_perm_dashboard IS NOT NULL THEN
+      INSERT INTO role_module_permissions (role_id, module_id, permission_id, is_enabled)
+      VALUES (v_role.id, v_module_id, v_perm_dashboard, v_role.role_key IN ('admin', 'super_admin', 'pro', 'manager', 'qa_lead'))
+      ON CONFLICT (role_id, module_id, permission_id) DO UPDATE SET is_enabled = EXCLUDED.is_enabled;
+    END IF;
+    IF v_perm_export IS NOT NULL THEN
+      INSERT INTO role_module_permissions (role_id, module_id, permission_id, is_enabled)
+      VALUES (v_role.id, v_module_id, v_perm_export, v_role.role_key != 'free')
+      ON CONFLICT (role_id, module_id, permission_id) DO UPDATE SET is_enabled = EXCLUDED.is_enabled;
+    END IF;
+    IF v_perm_import IS NOT NULL THEN
+      INSERT INTO role_module_permissions (role_id, module_id, permission_id, is_enabled)
+      VALUES (v_role.id, v_module_id, v_perm_import, v_role.role_key IN ('admin', 'super_admin', 'manager'))
+      ON CONFLICT (role_id, module_id, permission_id) DO UPDATE SET is_enabled = EXCLUDED.is_enabled;
+    END IF;
+    IF v_perm_history IS NOT NULL THEN
+      INSERT INTO role_module_permissions (role_id, module_id, permission_id, is_enabled)
+      VALUES (v_role.id, v_module_id, v_perm_history, v_role.role_key != 'free')
+      ON CONFLICT (role_id, module_id, permission_id) DO UPDATE SET is_enabled = EXCLUDED.is_enabled;
+    END IF;
+  END LOOP;
+END $$;
+
+-- ticket_bowl_work_packages table
+CREATE TABLE IF NOT EXISTS ticket_bowl_work_packages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  op_project_id INTEGER,
+  op_project_name TEXT,
+  work_package_id BIGINT NOT NULL,
+  subject TEXT NOT NULL,
+  description TEXT,
+  type_id INTEGER,
+  type_name TEXT NOT NULL,
+  status_id INTEGER,
+  status_name TEXT NOT NULL,
+  priority_id INTEGER,
+  priority_name TEXT NOT NULL DEFAULT 'Normal',
+  author_id INTEGER,
+  author_name TEXT,
+  assignee_id INTEGER,
+  assignee_name TEXT,
+  responsible_id INTEGER,
+  responsible_name TEXT,
+  testing_status TEXT,
+  is_qa_missed TEXT,
+  qa_confirmation TEXT,
+  release_tag TEXT,
+  version_name TEXT,
+  percentage_done INTEGER DEFAULT 0,
+  estimated_time TEXT,
+  spent_time TEXT,
+  story_points INTEGER,
+  start_date DATE,
+  due_date DATE,
+  is_overdue BOOLEAN DEFAULT FALSE,
+  created_at_op TIMESTAMPTZ,
+  updated_at_op TIMESTAMPTZ,
+  latest_forwarded_at TIMESTAMPTZ,
+  latest_forwarded_by_id INTEGER,
+  latest_forwarded_by_name TEXT,
+  forwarding_count INTEGER DEFAULT 0,
+  sync_status TEXT NOT NULL DEFAULT 'synced' CHECK (sync_status IN ('synced', 'sync_failed', 'partially_synced')),
+  history_verification_status TEXT NOT NULL DEFAULT 'unavailable' CHECK (history_verification_status IN ('verified', 'unavailable', 'unverified', 'no_matching_event')),
+  history_checked_at TIMESTAMPTZ,
+  history_error TEXT,
+  last_synced_at TIMESTAMPTZ DEFAULT NOW(),
+  raw_custom_fields JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_tb_wp_project_wpid UNIQUE (project_id, work_package_id)
+);
+
+-- ticket_bowl_forwarding_history table
+CREATE TABLE IF NOT EXISTS ticket_bowl_forwarding_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  op_project_id INTEGER,
+  work_package_id BIGINT NOT NULL,
+  activity_id BIGINT,
+  previous_testing_status TEXT,
+  new_testing_status TEXT NOT NULL DEFAULT 'Forwarded to the Testing Team',
+  changed_at TIMESTAMPTZ NOT NULL,
+  changed_by_id INTEGER,
+  changed_by_name TEXT NOT NULL,
+  verification_status TEXT NOT NULL DEFAULT 'verified',
+  source TEXT NOT NULL DEFAULT 'sync',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_tb_fwd_history UNIQUE (project_id, work_package_id, activity_id, changed_at)
+);
+
+-- ticket_bowl_sync_status table
+CREATE TABLE IF NOT EXISTS ticket_bowl_sync_status (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  op_project_id INTEGER,
+  op_project_name TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'pending',
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  total_fetched INTEGER DEFAULT 0,
+  total_inserted INTEGER DEFAULT 0,
+  total_updated INTEGER DEFAULT 0,
+  forwarding_events_found INTEGER DEFAULT 0,
+  history_verified_count INTEGER DEFAULT 0,
+  history_unavailable_count INTEGER DEFAULT 0,
+  history_unverified_count INTEGER DEFAULT 0,
+  errors_count INTEGER DEFAULT 0,
+  last_successful_sync_at TIMESTAMPTZ,
+  error_details TEXT,
+  reconciliation_status TEXT CHECK (reconciliation_status IN ('healthy', 'minor_issues', 'data_mismatch', 'critical_mismatch')),
+  last_reconciliation_at TIMESTAMPTZ,
+  missing_ticket_ids BIGINT[],
+  duplicate_ticket_ids BIGINT[],
+  openproject_total INTEGER DEFAULT 0,
+  supabase_total INTEGER DEFAULT 0,
+  missing_count INTEGER DEFAULT 0,
+  duplicate_count INTEGER DEFAULT 0,
+  verified_count INTEGER DEFAULT 0,
+  unavailable_count INTEGER DEFAULT 0,
+  unverified_count INTEGER DEFAULT 0,
+  forwarding_events_count INTEGER DEFAULT 0,
+  issues TEXT[],
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_tb_sync_status UNIQUE (project_id, op_project_id)
+);
+
+-- ticket_bowl_activity_sync_cursor table
+CREATE TABLE IF NOT EXISTS ticket_bowl_activity_sync_cursor (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  work_package_id BIGINT NOT NULL,
+  last_activity_id BIGINT NOT NULL,
+  last_activity_synced_at TIMESTAMPTZ NOT NULL,
+  total_activities_fetched INTEGER DEFAULT 0,
+  last_sync_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_activity_cursor UNIQUE (project_id, work_package_id)
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_tb_wp_proj_wp ON ticket_bowl_work_packages(project_id, work_package_id);
+CREATE INDEX IF NOT EXISTS idx_tb_wp_proj_op_proj ON ticket_bowl_work_packages(project_id, op_project_id);
+CREATE INDEX IF NOT EXISTS idx_tb_wp_proj_latest_fwd ON ticket_bowl_work_packages(project_id, latest_forwarded_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_tb_wp_proj_testing_status ON ticket_bowl_work_packages(project_id, testing_status);
+CREATE INDEX IF NOT EXISTS idx_tb_wp_proj_type ON ticket_bowl_work_packages(project_id, type_name);
+CREATE INDEX IF NOT EXISTS idx_tb_wp_proj_status ON ticket_bowl_work_packages(project_id, status_name);
+CREATE INDEX IF NOT EXISTS idx_tb_wp_proj_priority ON ticket_bowl_work_packages(project_id, priority_name);
+CREATE INDEX IF NOT EXISTS idx_tb_wp_proj_assignee ON ticket_bowl_work_packages(project_id, assignee_name);
+CREATE INDEX IF NOT EXISTS idx_tb_wp_proj_author ON ticket_bowl_work_packages(project_id, author_name);
+CREATE INDEX IF NOT EXISTS idx_tb_wp_proj_qa_missed ON ticket_bowl_work_packages(project_id, is_qa_missed);
+CREATE INDEX IF NOT EXISTS idx_tb_wp_proj_history_verif ON ticket_bowl_work_packages(project_id, history_verification_status);
+CREATE INDEX IF NOT EXISTS idx_tb_wp_subject_gin ON ticket_bowl_work_packages USING gin(to_tsvector('english', subject));
+CREATE INDEX IF NOT EXISTS idx_tb_fwd_proj_changed_at ON ticket_bowl_forwarding_history(project_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tb_fwd_wp_changed_at ON ticket_bowl_forwarding_history(work_package_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tb_fwd_changed_at ON ticket_bowl_forwarding_history(changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tb_sync_proj ON ticket_bowl_sync_status(project_id);
+CREATE INDEX IF NOT EXISTS idx_tb_sync_reconciliation ON ticket_bowl_sync_status(project_id, last_reconciliation_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_activity_cursor_project_wp ON ticket_bowl_activity_sync_cursor(project_id, work_package_id);
+
+-- RLS
+ALTER TABLE ticket_bowl_work_packages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket_bowl_forwarding_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket_bowl_sync_status ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket_bowl_activity_sync_cursor ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view ticket bowl work packages" ON ticket_bowl_work_packages FOR SELECT USING (
+  EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'super_admin', 'manager'))
+  OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = ticket_bowl_work_packages.project_id AND pm.user_id = auth.uid())
+);
+
+CREATE POLICY "Users can view ticket bowl forwarding history" ON ticket_bowl_forwarding_history FOR SELECT USING (
+  EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'super_admin', 'manager'))
+  OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = ticket_bowl_forwarding_history.project_id AND pm.user_id = auth.uid())
+);
+
+CREATE POLICY "Users can view ticket bowl sync status" ON ticket_bowl_sync_status FOR SELECT USING (
+  EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'super_admin', 'manager'))
+  OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = ticket_bowl_sync_status.project_id AND pm.user_id = auth.uid())
+);
+
+CREATE POLICY "Users can view activity sync cursors" ON ticket_bowl_activity_sync_cursor FOR SELECT USING (
+  EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'super_admin', 'manager'))
+  OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = ticket_bowl_activity_sync_cursor.project_id AND pm.user_id = auth.uid())
+);
+
+CREATE POLICY "Authorized users can manage ticket bowl work packages" ON ticket_bowl_work_packages FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM role_module_permissions rmp
+    JOIN modules m ON m.id = rmp.module_id
+    JOIN permissions p ON p.id = rmp.permission_id
+    JOIN profiles pr ON pr.id = auth.uid()
+    JOIN roles r ON r.role_key = pr.role
+    WHERE m.module_key = 'ticket-bowl' AND p.permission_key = 'can_import' AND rmp.role_id = r.id AND rmp.is_enabled = true
+  )
+);
+
+CREATE POLICY "Authorized users can manage ticket bowl forwarding history" ON ticket_bowl_forwarding_history FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM role_module_permissions rmp
+    JOIN modules m ON m.id = rmp.module_id
+    JOIN permissions p ON p.id = rmp.permission_id
+    JOIN profiles pr ON pr.id = auth.uid()
+    JOIN roles r ON r.role_key = pr.role
+    WHERE m.module_key = 'ticket-bowl' AND p.permission_key = 'can_import' AND rmp.role_id = r.id AND rmp.is_enabled = true
+  )
+);
+
+CREATE POLICY "Authorized users can manage ticket bowl sync status" ON ticket_bowl_sync_status FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM role_module_permissions rmp
+    JOIN modules m ON m.id = rmp.module_id
+    JOIN permissions p ON p.id = rmp.permission_id
+    JOIN profiles pr ON pr.id = auth.uid()
+    JOIN roles r ON r.role_key = pr.role
+    WHERE m.module_key = 'ticket-bowl' AND p.permission_key = 'can_import' AND rmp.role_id = r.id AND rmp.is_enabled = true
+  )
+);
+
+CREATE POLICY "Authorized users can manage activity sync cursors" ON ticket_bowl_activity_sync_cursor FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM role_module_permissions rmp
+    JOIN modules m ON m.id = rmp.module_id
+    JOIN permissions p ON p.id = rmp.permission_id
+    JOIN profiles pr ON pr.id = auth.uid()
+    JOIN roles r ON r.role_key = pr.role
+    WHERE m.module_key = 'ticket-bowl' AND p.permission_key = 'can_import' AND rmp.role_id = r.id AND rmp.is_enabled = true
+  )
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ticket_bowl_work_packages TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ticket_bowl_forwarding_history TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ticket_bowl_sync_status TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ticket_bowl_activity_sync_cursor TO authenticated;
+
+-- get_ticket_bowl_work_packages function
+CREATE OR REPLACE FUNCTION get_ticket_bowl_work_packages(
+  p_project_id UUID, p_op_project_id INTEGER DEFAULT NULL, p_forwarded_from TIMESTAMPTZ DEFAULT NULL,
+  p_forwarded_to TIMESTAMPTZ DEFAULT NULL, p_type_name TEXT DEFAULT NULL, p_status_name TEXT DEFAULT NULL,
+  p_priority_name TEXT DEFAULT NULL, p_testing_status TEXT DEFAULT NULL, p_is_qa_missed TEXT DEFAULT NULL,
+  p_author_name TEXT DEFAULT NULL, p_assignee_name TEXT DEFAULT NULL, p_history_verification_status TEXT DEFAULT NULL,
+  p_search TEXT DEFAULT NULL, p_limit INTEGER DEFAULT 25, p_offset INTEGER DEFAULT 0
+)
+RETURNS TABLE (
+  id UUID, project_id UUID, op_project_id INTEGER, op_project_name TEXT, work_package_id BIGINT,
+  subject TEXT, description TEXT, type_id INTEGER, type_name TEXT, status_id INTEGER, status_name TEXT,
+  priority_id INTEGER, priority_name TEXT, author_id INTEGER, author_name TEXT, assignee_id INTEGER,
+  assignee_name TEXT, responsible_id INTEGER, responsible_name TEXT, testing_status TEXT, is_qa_missed TEXT,
+  qa_confirmation TEXT, release_tag TEXT, version_name TEXT, percentage_done INTEGER, estimated_time TEXT,
+  spent_time TEXT, story_points INTEGER, start_date DATE, due_date DATE, is_overdue BOOLEAN,
+  created_at_op TIMESTAMPTZ, updated_at_op TIMESTAMPTZ, matched_forwarded_at TIMESTAMPTZ,
+  matched_forwarded_by TEXT, forwarding_count INTEGER, sync_status TEXT, history_verification_status TEXT,
+  history_checked_at TIMESTAMPTZ, last_synced_at TIMESTAMPTZ, total_matching_count BIGINT
+)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_total BIGINT;
+BEGIN
+  SELECT COUNT(DISTINCT wp.id) INTO v_total FROM ticket_bowl_work_packages wp
+  WHERE wp.project_id = p_project_id
+    AND (p_op_project_id IS NULL OR wp.op_project_id = p_op_project_id)
+    AND (p_type_name IS NULL OR wp.type_name = p_type_name)
+    AND (p_status_name IS NULL OR wp.status_name = p_status_name)
+    AND (p_priority_name IS NULL OR wp.priority_name = p_priority_name)
+    AND (p_testing_status IS NULL OR wp.testing_status = p_testing_status)
+    AND (p_is_qa_missed IS NULL OR wp.is_qa_missed = p_is_qa_missed)
+    AND (p_author_name IS NULL OR wp.author_name ILIKE '%' || p_author_name || '%')
+    AND (p_assignee_name IS NULL OR wp.assignee_name ILIKE '%' || p_assignee_name || '%')
+    AND (p_history_verification_status IS NULL OR wp.history_verification_status = p_history_verification_status)
+    AND (p_search IS NULL OR wp.subject ILIKE '%' || p_search || '%' OR wp.work_package_id::TEXT = p_search)
+    AND ((p_forwarded_from IS NULL AND p_forwarded_to IS NULL) OR EXISTS (
+      SELECT 1 FROM ticket_bowl_forwarding_history fh
+      WHERE fh.project_id = wp.project_id AND fh.work_package_id = wp.work_package_id
+        AND (p_forwarded_from IS NULL OR fh.changed_at >= p_forwarded_from)
+        AND (p_forwarded_to IS NULL OR fh.changed_at <= p_forwarded_to)
+    ));
+
+  RETURN QUERY SELECT wp.id, wp.project_id, wp.op_project_id, wp.op_project_name, wp.work_package_id,
+    wp.subject, wp.description, wp.type_id, wp.type_name, wp.status_id, wp.status_name,
+    wp.priority_id, wp.priority_name, wp.author_id, wp.author_name, wp.assignee_id, wp.assignee_name,
+    wp.responsible_id, wp.responsible_name, wp.testing_status, wp.is_qa_missed, wp.qa_confirmation,
+    wp.release_tag, wp.version_name, wp.percentage_done, wp.estimated_time, wp.spent_time,
+    wp.story_points, wp.start_date, wp.due_date, wp.is_overdue, wp.created_at_op, wp.updated_at_op,
+    COALESCE((SELECT fh.changed_at FROM ticket_bowl_forwarding_history fh
+      WHERE fh.project_id = wp.project_id AND fh.work_package_id = wp.work_package_id
+        AND (p_forwarded_from IS NULL OR fh.changed_at >= p_forwarded_from)
+        AND (p_forwarded_to IS NULL OR fh.changed_at <= p_forwarded_to)
+      ORDER BY fh.changed_at DESC LIMIT 1), wp.latest_forwarded_at) AS matched_forwarded_at,
+    COALESCE((SELECT fh.changed_by_name FROM ticket_bowl_forwarding_history fh
+      WHERE fh.project_id = wp.project_id AND fh.work_package_id = wp.work_package_id
+        AND (p_forwarded_from IS NULL OR fh.changed_at >= p_forwarded_from)
+        AND (p_forwarded_to IS NULL OR fh.changed_at <= p_forwarded_to)
+      ORDER BY fh.changed_at DESC LIMIT 1), wp.latest_forwarded_by_name) AS matched_forwarded_by,
+    wp.forwarding_count, wp.sync_status, wp.history_verification_status, wp.history_checked_at,
+    wp.last_synced_at, v_total AS total_matching_count
+  FROM ticket_bowl_work_packages wp
+  WHERE wp.project_id = p_project_id
+    AND (p_op_project_id IS NULL OR wp.op_project_id = p_op_project_id)
+    AND (p_type_name IS NULL OR wp.type_name = p_type_name)
+    AND (p_status_name IS NULL OR wp.status_name = p_status_name)
+    AND (p_priority_name IS NULL OR wp.priority_name = p_priority_name)
+    AND (p_testing_status IS NULL OR wp.testing_status = p_testing_status)
+    AND (p_is_qa_missed IS NULL OR wp.is_qa_missed = p_is_qa_missed)
+    AND (p_author_name IS NULL OR wp.author_name ILIKE '%' || p_author_name || '%')
+    AND (p_assignee_name IS NULL OR wp.assignee_name ILIKE '%' || p_assignee_name || '%')
+    AND (p_history_verification_status IS NULL OR wp.history_verification_status = p_history_verification_status)
+    AND (p_search IS NULL OR wp.subject ILIKE '%' || p_search || '%' OR wp.work_package_id::TEXT = p_search)
+    AND ((p_forwarded_from IS NULL AND p_forwarded_to IS NULL) OR EXISTS (
+      SELECT 1 FROM ticket_bowl_forwarding_history fh
+      WHERE fh.project_id = wp.project_id AND fh.work_package_id = wp.work_package_id
+        AND (p_forwarded_from IS NULL OR fh.changed_at >= p_forwarded_from)
+        AND (p_forwarded_to IS NULL OR fh.changed_at <= p_forwarded_to)
+    ))
+  ORDER BY COALESCE((SELECT fh.changed_at FROM ticket_bowl_forwarding_history fh
+    WHERE fh.project_id = wp.project_id AND fh.work_package_id = wp.work_package_id
+      AND (p_forwarded_from IS NULL OR fh.changed_at >= p_forwarded_from)
+      AND (p_forwarded_to IS NULL OR fh.changed_at <= p_forwarded_to)
+    ORDER BY fh.changed_at DESC LIMIT 1), wp.latest_forwarded_at) DESC NULLS LAST,
+    wp.updated_at_op DESC NULLS LAST, wp.work_package_id DESC
+  LIMIT p_limit OFFSET p_offset;
+END;
+$$;
+
+-- get_ticket_bowl_dashboard_stats function
+CREATE OR REPLACE FUNCTION get_ticket_bowl_dashboard_stats(
+  p_project_id UUID, p_op_project_id INTEGER DEFAULT NULL, p_forwarded_from TIMESTAMPTZ DEFAULT NULL,
+  p_forwarded_to TIMESTAMPTZ DEFAULT NULL, p_type_name TEXT DEFAULT NULL, p_status_name TEXT DEFAULT NULL,
+  p_priority_name TEXT DEFAULT NULL, p_testing_status TEXT DEFAULT NULL, p_is_qa_missed TEXT DEFAULT NULL,
+  p_author_name TEXT DEFAULT NULL, p_assignee_name TEXT DEFAULT NULL, p_history_verification_status TEXT DEFAULT NULL,
+  p_search TEXT DEFAULT NULL
+)
+RETURNS TABLE (
+  total_unique_tickets BIGINT, total_forwarding_events BIGINT, repeat_forwarded_tickets BIGINT,
+  unavailable_history_tickets BIGINT, current_testing_status_counts JSONB, qa_missed_counts JSONB,
+  type_counts JSONB, status_counts JSONB, priority_counts JSONB, history_verification_counts JSONB
+)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  RETURN QUERY
+  WITH matched_tickets AS (
+    SELECT wp.* FROM ticket_bowl_work_packages wp
+    WHERE wp.project_id = p_project_id
+      AND (p_op_project_id IS NULL OR wp.op_project_id = p_op_project_id)
+      AND (p_type_name IS NULL OR wp.type_name = p_type_name)
+      AND (p_status_name IS NULL OR wp.status_name = p_status_name)
+      AND (p_priority_name IS NULL OR wp.priority_name = p_priority_name)
+      AND (p_testing_status IS NULL OR wp.testing_status = p_testing_status)
+      AND (p_is_qa_missed IS NULL OR wp.is_qa_missed = p_is_qa_missed)
+      AND (p_author_name IS NULL OR wp.author_name ILIKE '%' || p_author_name || '%')
+      AND (p_assignee_name IS NULL OR wp.assignee_name ILIKE '%' || p_assignee_name || '%')
+      AND (p_history_verification_status IS NULL OR wp.history_verification_status = p_history_verification_status)
+      AND (p_search IS NULL OR wp.subject ILIKE '%' || p_search || '%' OR wp.work_package_id::TEXT = p_search)
+      AND ((p_forwarded_from IS NULL AND p_forwarded_to IS NULL) OR EXISTS (
+        SELECT 1 FROM ticket_bowl_forwarding_history fh
+        WHERE fh.project_id = wp.project_id AND fh.work_package_id = wp.work_package_id
+          AND (p_forwarded_from IS NULL OR fh.changed_at >= p_forwarded_from)
+          AND (p_forwarded_to IS NULL OR fh.changed_at <= p_forwarded_to)
+      ))
+  ),
+  events_in_range AS (
+    SELECT COUNT(*) AS event_count FROM ticket_bowl_forwarding_history fh
+    JOIN matched_tickets mt ON mt.project_id = fh.project_id AND mt.work_package_id = fh.work_package_id
+    WHERE (p_forwarded_from IS NULL OR fh.changed_at >= p_forwarded_from)
+      AND (p_forwarded_to IS NULL OR fh.changed_at <= p_forwarded_to)
+  )
+  SELECT
+    (SELECT COUNT(*) FROM matched_tickets)::bigint,
+    (SELECT event_count FROM events_in_range)::bigint,
+    (SELECT COUNT(*) FROM matched_tickets WHERE forwarding_count > 1)::bigint,
+    (SELECT COUNT(*) FROM matched_tickets WHERE history_verification_status = 'unavailable')::bigint,
+    COALESCE((SELECT jsonb_object_agg(COALESCE(testing_status, 'No Testing Status'), cnt) FROM (SELECT testing_status, COUNT(*)::bigint AS cnt FROM matched_tickets GROUP BY testing_status) s), '{}'::jsonb),
+    COALESCE((SELECT jsonb_object_agg(COALESCE(is_qa_missed, 'Unknown'), cnt) FROM (SELECT is_qa_missed, COUNT(*)::bigint AS cnt FROM matched_tickets GROUP BY is_qa_missed) s), '{}'::jsonb),
+    COALESCE((SELECT jsonb_object_agg(COALESCE(type_name, 'Unknown'), cnt) FROM (SELECT type_name, COUNT(*)::bigint AS cnt FROM matched_tickets GROUP BY type_name) s), '{}'::jsonb),
+    COALESCE((SELECT jsonb_object_agg(COALESCE(status_name, 'Unknown'), cnt) FROM (SELECT status_name, COUNT(*)::bigint AS cnt FROM matched_tickets GROUP BY status_name) s), '{}'::jsonb),
+    COALESCE((SELECT jsonb_object_agg(COALESCE(priority_name, 'Normal'), cnt) FROM (SELECT priority_name, COUNT(*)::bigint AS cnt FROM matched_tickets GROUP BY priority_name) s), '{}'::jsonb),
+    COALESCE((SELECT jsonb_object_agg(COALESCE(history_verification_status, 'unavailable'), cnt) FROM (SELECT history_verification_status, COUNT(*)::bigint AS cnt FROM matched_tickets GROUP BY history_verification_status) s), '{}'::jsonb);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_ticket_bowl_work_packages TO authenticated;
+GRANT EXECUTE ON FUNCTION get_ticket_bowl_dashboard_stats TO authenticated;
+
+-- sync_jobs table (102)
+CREATE TABLE IF NOT EXISTS sync_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled')) DEFAULT 'pending',
+  phase TEXT,
+  progress_current INTEGER DEFAULT 0,
+  progress_total INTEGER DEFAULT 0,
+  progress_message TEXT,
+  result_summary JSONB,
+  error_message TEXT,
+  op_project_id INTEGER,
+  op_project_name TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_jobs_project_status ON sync_jobs(project_id, status);
+CREATE INDEX IF NOT EXISTS idx_sync_jobs_user_created ON sync_jobs(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sync_jobs_status_updated ON sync_jobs(status, updated_at DESC);
+
+ALTER TABLE sync_jobs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view sync jobs" ON sync_jobs FOR SELECT USING (
+  EXISTS (SELECT 1 FROM profiles up WHERE up.id = auth.uid() AND up.role IN ('admin', 'super_admin', 'manager'))
+  OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = sync_jobs.project_id AND pm.user_id = auth.uid())
+);
+
+CREATE POLICY "Users can create sync jobs" ON sync_jobs FOR INSERT WITH CHECK (
+  auth.uid() IS NOT NULL AND user_id = auth.uid() AND (
+    EXISTS (SELECT 1 FROM profiles up WHERE up.id = auth.uid() AND up.role IN ('admin', 'super_admin', 'manager'))
+    OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = sync_jobs.project_id AND pm.user_id = auth.uid() AND pm.project_role IN ('owner', 'lead'))
+  )
+);
+
+CREATE POLICY "Users can update sync jobs" ON sync_jobs FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+GRANT SELECT, INSERT, UPDATE ON sync_jobs TO authenticated;
+
+-- get_active_sync_job function
+CREATE OR REPLACE FUNCTION get_active_sync_job(p_project_id UUID)
+RETURNS TABLE (
+  id UUID, project_id UUID, op_project_id INTEGER, op_project_name TEXT, status TEXT, phase TEXT,
+  progress_current INTEGER, progress_total INTEGER, progress_message TEXT, started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ, error_message TEXT, result_summary JSONB, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT (
+    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'super_admin', 'manager'))
+    OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p_project_id AND pm.user_id = auth.uid())
+  ) THEN RAISE EXCEPTION 'Access denied'; END IF;
+  RETURN QUERY SELECT sj.id, sj.project_id, sj.op_project_id, sj.op_project_name, sj.status, sj.phase,
+    sj.progress_current, sj.progress_total, sj.progress_message, sj.started_at, sj.completed_at,
+    sj.error_message, sj.result_summary, sj.created_at, sj.updated_at
+  FROM sync_jobs sj WHERE sj.project_id = p_project_id AND sj.status IN ('pending', 'running')
+  ORDER BY sj.created_at DESC LIMIT 1;
+END;
+$$;
+
+-- cancel_sync_job function
+CREATE OR REPLACE FUNCTION cancel_sync_job(p_job_id UUID)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_user_id UUID;
+BEGIN
+  v_user_id := auth.uid();
+  IF NOT EXISTS (
+    SELECT 1 FROM sync_jobs sj WHERE sj.id = p_job_id AND (
+      sj.user_id = v_user_id OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = v_user_id AND p.role IN ('admin', 'super_admin'))
+    )
+  ) THEN RETURN jsonb_build_object('success', false, 'message', 'Access denied'); END IF;
+  UPDATE sync_jobs SET status = 'cancelled', updated_at = NOW(), completed_at = CASE WHEN completed_at IS NULL THEN NOW() ELSE completed_at END
+  WHERE id = p_job_id AND status IN ('pending', 'running');
+  IF FOUND THEN RETURN jsonb_build_object('success', true, 'message', 'Job cancelled successfully');
+  ELSE RETURN jsonb_build_object('success', false, 'message', 'Job not found or already completed'); END IF;
+END;
+$$;
+
+-- cleanup_stuck_sync_jobs function
+CREATE OR REPLACE FUNCTION cleanup_stuck_sync_jobs()
+RETURNS INTEGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_count INTEGER;
+BEGIN
+  UPDATE sync_jobs SET status = 'failed', error_message = 'Job timed out (stuck for more than 30 minutes)',
+    completed_at = NOW(), updated_at = NOW()
+  WHERE status IN ('pending', 'running') AND created_at < NOW() - INTERVAL '30 minutes';
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_active_sync_job TO authenticated;
+GRANT EXECUTE ON FUNCTION cancel_sync_job TO authenticated;
+GRANT EXECUTE ON FUNCTION cleanup_stuck_sync_jobs TO authenticated;
+
+-- Staging tables (103)
+CREATE TABLE IF NOT EXISTS ticket_bowl_work_packages_staging (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID NOT NULL REFERENCES sync_jobs(id) ON DELETE CASCADE,
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  op_project_id INTEGER, op_project_name TEXT, work_package_id BIGINT NOT NULL, subject TEXT NOT NULL,
+  description TEXT, type_id INTEGER, type_name TEXT NOT NULL, status_id INTEGER, status_name TEXT NOT NULL,
+  priority_id INTEGER, priority_name TEXT NOT NULL DEFAULT 'Normal', author_id INTEGER, author_name TEXT,
+  assignee_id INTEGER, assignee_name TEXT, responsible_id INTEGER, responsible_name TEXT, testing_status TEXT,
+  is_qa_missed TEXT, qa_confirmation TEXT, release_tag TEXT, version_name TEXT, percentage_done INTEGER DEFAULT 0,
+  estimated_time TEXT, spent_time TEXT, story_points INTEGER, start_date DATE, due_date DATE,
+  is_overdue BOOLEAN DEFAULT FALSE, created_at_op TIMESTAMPTZ, updated_at_op TIMESTAMPTZ,
+  latest_forwarded_at TIMESTAMPTZ, latest_forwarded_by_id INTEGER, latest_forwarded_by_name TEXT,
+  forwarding_count INTEGER DEFAULT 0, sync_status TEXT NOT NULL DEFAULT 'synced',
+  history_verification_status TEXT NOT NULL DEFAULT 'unavailable', history_checked_at TIMESTAMPTZ,
+  history_error TEXT, last_synced_at TIMESTAMPTZ DEFAULT NOW(), raw_custom_fields JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_staging_job_wp UNIQUE (job_id, project_id, work_package_id)
+);
+
+CREATE TABLE IF NOT EXISTS ticket_bowl_forwarding_history_staging (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID NOT NULL REFERENCES sync_jobs(id) ON DELETE CASCADE,
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  op_project_id INTEGER, work_package_id BIGINT NOT NULL, activity_id BIGINT, previous_testing_status TEXT,
+  new_testing_status TEXT NOT NULL DEFAULT 'Forwarded to the Testing Team', changed_at TIMESTAMPTZ NOT NULL,
+  changed_by_id INTEGER, changed_by_name TEXT NOT NULL, verification_status TEXT NOT NULL DEFAULT 'verified',
+  source TEXT NOT NULL DEFAULT 'sync', created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_staging_fwd_history UNIQUE (job_id, project_id, work_package_id, activity_id, changed_at)
+);
+
+CREATE TABLE IF NOT EXISTS ticket_bowl_testing_status_history_staging (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID NOT NULL REFERENCES sync_jobs(id) ON DELETE CASCADE,
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  op_project_id INTEGER, work_package_id BIGINT NOT NULL, activity_id BIGINT, previous_testing_status TEXT,
+  new_testing_status TEXT NOT NULL, changed_at TIMESTAMPTZ NOT NULL, changed_by_id INTEGER,
+  changed_by_name TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'sync', created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_staging_status_history UNIQUE (job_id, project_id, work_package_id, activity_id, changed_at)
+);
+
+CREATE TABLE IF NOT EXISTS ticket_bowl_testing_status_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  op_project_id INTEGER, work_package_id BIGINT NOT NULL, activity_id BIGINT, previous_testing_status TEXT,
+  new_testing_status TEXT NOT NULL, changed_at TIMESTAMPTZ NOT NULL, changed_by_id INTEGER,
+  changed_by_name TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'sync', created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_tb_status_history UNIQUE (project_id, work_package_id, activity_id, changed_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_staging_wp_job_id ON ticket_bowl_work_packages_staging(job_id);
+CREATE INDEX IF NOT EXISTS idx_staging_wp_project_id ON ticket_bowl_work_packages_staging(project_id);
+CREATE INDEX IF NOT EXISTS idx_staging_fwd_job_id ON ticket_bowl_forwarding_history_staging(job_id);
+CREATE INDEX IF NOT EXISTS idx_staging_fwd_project_id ON ticket_bowl_forwarding_history_staging(project_id);
+CREATE INDEX IF NOT EXISTS idx_staging_status_job_id ON ticket_bowl_testing_status_history_staging(job_id);
+CREATE INDEX IF NOT EXISTS idx_staging_status_project_id ON ticket_bowl_testing_status_history_staging(project_id);
+
+ALTER TABLE ticket_bowl_work_packages_staging ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket_bowl_forwarding_history_staging ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket_bowl_testing_status_history_staging ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket_bowl_testing_status_history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "staging_wp_access" ON ticket_bowl_work_packages_staging FOR ALL USING (
+  project_id IN (SELECT p.id FROM projects p LEFT JOIN project_members pm ON pm.project_id = p.id
+    WHERE pm.user_id = auth.uid() OR p.created_by = auth.uid()
+    OR EXISTS (SELECT 1 FROM profiles up WHERE up.id = auth.uid() AND up.role IN ('admin', 'manager')))
+);
+CREATE POLICY "staging_fwd_access" ON ticket_bowl_forwarding_history_staging FOR ALL USING (
+  project_id IN (SELECT p.id FROM projects p LEFT JOIN project_members pm ON pm.project_id = p.id
+    WHERE pm.user_id = auth.uid() OR p.created_by = auth.uid()
+    OR EXISTS (SELECT 1 FROM profiles up WHERE up.id = auth.uid() AND up.role IN ('admin', 'manager')))
+);
+CREATE POLICY "staging_status_access" ON ticket_bowl_testing_status_history_staging FOR ALL USING (
+  project_id IN (SELECT p.id FROM projects p LEFT JOIN project_members pm ON pm.project_id = p.id
+    WHERE pm.user_id = auth.uid() OR p.created_by = auth.uid()
+    OR EXISTS (SELECT 1 FROM profiles up WHERE up.id = auth.uid() AND up.role IN ('admin', 'manager')))
+);
+CREATE POLICY "status_history_access" ON ticket_bowl_testing_status_history FOR ALL USING (
+  project_id IN (SELECT p.id FROM projects p LEFT JOIN project_members pm ON pm.project_id = p.id
+    WHERE pm.user_id = auth.uid() OR p.created_by = auth.uid()
+    OR EXISTS (SELECT 1 FROM profiles up WHERE up.id = auth.uid() AND up.role IN ('admin', 'manager')))
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ticket_bowl_work_packages_staging TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ticket_bowl_forwarding_history_staging TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ticket_bowl_testing_status_history_staging TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ticket_bowl_testing_status_history TO authenticated;
+
+-- commit_sync_data function
+CREATE OR REPLACE FUNCTION commit_sync_data(p_job_id UUID, p_project_id UUID)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_wp_inserted INT := 0; v_wp_updated INT := 0; v_fwd_inserted INT := 0; v_status_inserted INT := 0; v_job_status TEXT;
+BEGIN
+  SELECT status INTO v_job_status FROM sync_jobs WHERE id = p_job_id AND project_id = p_project_id;
+  IF v_job_status IS NULL THEN RAISE EXCEPTION 'Sync job not found: %', p_job_id; END IF;
+  IF v_job_status = 'cancelled' THEN
+    DELETE FROM ticket_bowl_work_packages_staging WHERE job_id = p_job_id;
+    DELETE FROM ticket_bowl_forwarding_history_staging WHERE job_id = p_job_id;
+    DELETE FROM ticket_bowl_testing_status_history_staging WHERE job_id = p_job_id;
+    RETURN jsonb_build_object('success', false, 'message', 'Job was cancelled', 'wp_inserted', 0, 'wp_updated', 0, 'fwd_inserted', 0, 'status_inserted', 0);
+  END IF;
+  SELECT COUNT(*) INTO v_wp_inserted FROM ticket_bowl_work_packages_staging
+  WHERE job_id = p_job_id AND project_id = p_project_id AND work_package_id NOT IN (SELECT work_package_id FROM ticket_bowl_work_packages WHERE project_id = p_project_id);
+  v_wp_updated := (SELECT COUNT(*) FROM ticket_bowl_work_packages_staging s WHERE s.job_id = p_job_id AND s.project_id = p_project_id
+    AND EXISTS (SELECT 1 FROM ticket_bowl_work_packages p WHERE p.project_id = s.project_id AND p.work_package_id = s.work_package_id));
+  INSERT INTO ticket_bowl_work_packages (project_id, op_project_id, op_project_name, work_package_id, subject, description, type_id, type_name, status_id, status_name, priority_id, priority_name, author_id, author_name, assignee_id, assignee_name, responsible_id, responsible_name, testing_status, is_qa_missed, qa_confirmation, release_tag, version_name, percentage_done, estimated_time, spent_time, story_points, start_date, due_date, is_overdue, created_at_op, updated_at_op, latest_forwarded_at, latest_forwarded_by_id, latest_forwarded_by_name, forwarding_count, sync_status, history_verification_status, history_checked_at, history_error, last_synced_at, raw_custom_fields, created_at, updated_at)
+  SELECT project_id, op_project_id, op_project_name, work_package_id, subject, description, type_id, type_name, status_id, status_name, priority_id, priority_name, author_id, author_name, assignee_id, assignee_name, responsible_id, responsible_name, testing_status, is_qa_missed, qa_confirmation, release_tag, version_name, percentage_done, estimated_time, spent_time, story_points, start_date, due_date, is_overdue, created_at_op, updated_at_op, latest_forwarded_at, latest_forwarded_by_id, latest_forwarded_by_name, forwarding_count, sync_status, history_verification_status, history_checked_at, history_error, last_synced_at, raw_custom_fields, created_at, updated_at
+  FROM ticket_bowl_work_packages_staging WHERE job_id = p_job_id AND project_id = p_project_id
+  ON CONFLICT (project_id, work_package_id) DO UPDATE SET op_project_id = EXCLUDED.op_project_id, op_project_name = EXCLUDED.op_project_name, subject = EXCLUDED.subject, description = EXCLUDED.description, type_id = EXCLUDED.type_id, type_name = EXCLUDED.type_name, status_id = EXCLUDED.status_id, status_name = EXCLUDED.status_name, priority_id = EXCLUDED.priority_id, priority_name = EXCLUDED.priority_name, author_id = EXCLUDED.author_id, author_name = EXCLUDED.author_name, assignee_id = EXCLUDED.assignee_id, assignee_name = EXCLUDED.assignee_name, responsible_id = EXCLUDED.responsible_id, responsible_name = EXCLUDED.responsible_name, testing_status = EXCLUDED.testing_status, is_qa_missed = EXCLUDED.is_qa_missed, qa_confirmation = EXCLUDED.qa_confirmation, release_tag = EXCLUDED.release_tag, version_name = EXCLUDED.version_name, percentage_done = EXCLUDED.percentage_done, estimated_time = EXCLUDED.estimated_time, spent_time = EXCLUDED.spent_time, story_points = EXCLUDED.story_points, start_date = EXCLUDED.start_date, due_date = EXCLUDED.due_date, is_overdue = EXCLUDED.is_overdue, created_at_op = EXCLUDED.created_at_op, updated_at_op = EXCLUDED.updated_at_op, latest_forwarded_at = EXCLUDED.latest_forwarded_at, latest_forwarded_by_id = EXCLUDED.latest_forwarded_by_id, latest_forwarded_by_name = EXCLUDED.latest_forwarded_by_name, forwarding_count = EXCLUDED.forwarding_count, sync_status = EXCLUDED.sync_status, history_verification_status = EXCLUDED.history_verification_status, history_checked_at = EXCLUDED.history_checked_at, history_error = EXCLUDED.history_error, last_synced_at = EXCLUDED.last_synced_at, raw_custom_fields = EXCLUDED.raw_custom_fields, updated_at = EXCLUDED.updated_at;
+  INSERT INTO ticket_bowl_forwarding_history (project_id, op_project_id, work_package_id, activity_id, previous_testing_status, new_testing_status, changed_at, changed_by_id, changed_by_name, verification_status, source, created_at)
+  SELECT project_id, op_project_id, work_package_id, activity_id, previous_testing_status, new_testing_status, changed_at, changed_by_id, changed_by_name, verification_status, source, created_at
+  FROM ticket_bowl_forwarding_history_staging WHERE job_id = p_job_id AND project_id = p_project_id
+  ON CONFLICT (project_id, work_package_id, activity_id, changed_at) DO NOTHING;
+  GET DIAGNOSTICS v_fwd_inserted = ROW_COUNT;
+  INSERT INTO ticket_bowl_testing_status_history (project_id, op_project_id, work_package_id, activity_id, previous_testing_status, new_testing_status, changed_at, changed_by_id, changed_by_name, source, created_at)
+  SELECT project_id, op_project_id, work_package_id, activity_id, previous_testing_status, new_testing_status, changed_at, changed_by_id, changed_by_name, source, created_at
+  FROM ticket_bowl_testing_status_history_staging WHERE job_id = p_job_id AND project_id = p_project_id
+  ON CONFLICT (project_id, work_package_id, activity_id, changed_at) DO NOTHING;
+  GET DIAGNOSTICS v_status_inserted = ROW_COUNT;
+  DELETE FROM ticket_bowl_work_packages_staging WHERE job_id = p_job_id;
+  DELETE FROM ticket_bowl_forwarding_history_staging WHERE job_id = p_job_id;
+  DELETE FROM ticket_bowl_testing_status_history_staging WHERE job_id = p_job_id;
+  RETURN jsonb_build_object('success', true, 'message', 'Sync data committed successfully', 'wp_inserted', v_wp_inserted, 'wp_updated', v_wp_updated, 'fwd_inserted', v_fwd_inserted, 'status_inserted', v_status_inserted);
+END;
+$$;
+
+-- cleanup_staging_data function
+CREATE OR REPLACE FUNCTION cleanup_staging_data(p_job_id UUID)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_wp_deleted INT := 0; v_fwd_deleted INT := 0; v_status_deleted INT := 0;
+BEGIN
+  DELETE FROM ticket_bowl_work_packages_staging WHERE job_id = p_job_id; GET DIAGNOSTICS v_wp_deleted = ROW_COUNT;
+  DELETE FROM ticket_bowl_forwarding_history_staging WHERE job_id = p_job_id; GET DIAGNOSTICS v_fwd_deleted = ROW_COUNT;
+  DELETE FROM ticket_bowl_testing_status_history_staging WHERE job_id = p_job_id; GET DIAGNOSTICS v_status_deleted = ROW_COUNT;
+  RETURN jsonb_build_object('success', true, 'message', 'Staging data cleaned up', 'wp_deleted', v_wp_deleted, 'fwd_deleted', v_fwd_deleted, 'status_deleted', v_status_deleted);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION commit_sync_data(UUID, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION cleanup_staging_data(UUID) TO authenticated;
+
+-- ============================================================================
 -- END OF combined_qaly_schema.sql
 -- ============================================================================
