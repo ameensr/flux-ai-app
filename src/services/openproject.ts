@@ -52,6 +52,7 @@ export interface OpenProjectWorkPackage {
 
 export interface WorkPackageFilters {
   status?: string[]
+  includeAllStatuses?: boolean // When true, overrides default OpenProject status filter to include closed tickets
   type?: string[]
   priority?: string[]
   assignee?: string
@@ -232,7 +233,10 @@ export async function fetchWorkPackages(
   // Build filter array for OpenProject API
   const apiFilters: Record<string, { operator: string; values: string[] }> = {}
 
-  if (filters?.status?.length) {
+  if (filters?.includeAllStatuses) {
+    // Wildcard operator: include ALL statuses (open + closed + rejected + done)
+    apiFilters.status = { operator: '*', values: [] }
+  } else if (filters?.status?.length) {
     apiFilters.status = { operator: '=', values: filters.status }
   }
   if (filters?.type?.length) {

@@ -336,6 +336,7 @@ export async function syncTicketBowlData(
       pageSize: 150,
       concurrency: 4,
       sortBy: '[["updatedAt","desc"]]',
+      includeAllStatuses: true, // Include closed/done/rejected tickets
       onProgress: (current, total) => {
         onProgress?.({
           phase: 'fetching-tickets',
