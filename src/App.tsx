@@ -21,7 +21,7 @@ import { useMaintenanceStore } from '@/store/useMaintenanceStore'
 import { useAIPlatformStore } from '@/store/useAIPlatformStore'
 import { useToast } from '@/hooks/use-toast'
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog'
-import { PandaIdleNotification, SmartSyncReminder, SyncStatusIndicator, SyncNotification } from '@/components/LazyPanda'
+import { PandaIdleNotification, SyncNotification } from '@/components/LazyPanda'
 import { FloatingThemeToggle } from '@/components/ui/FloatingThemeToggle'
 import { useBackgroundSync } from '@/hooks/useBackgroundSync'
 
@@ -418,14 +418,9 @@ function GlobalSyncComponents() {
   }, [isAuthenticated])
 
   const {
-    isSyncing,
-    syncProgress,
-    showProgressIndicator,
     showSuccessNotification,
     showErrorNotification,
     syncResult,
-    startSync,
-    cancelSync,
     retrySync,
     dismissSuccessNotification,
     dismissErrorNotification,
@@ -441,13 +436,6 @@ function GlobalSyncComponents() {
 
   return (
     <>
-      {/* Background Sync Progress Indicator */}
-      <SyncStatusIndicator
-        progress={syncProgress}
-        isVisible={showProgressIndicator && isSyncing}
-        onCancel={cancelSync}
-      />
-
       {/* Success Notification */}
       <SyncNotification
         type="success"
@@ -467,9 +455,6 @@ function GlobalSyncComponents() {
         errorMessage={syncResult?.errorMessage}
         autoHideDelay={0}
       />
-
-      {/* Smart Sync Reminder */}
-      <SmartSyncReminder onSyncNow={startSync} />
     </>
   )
 }

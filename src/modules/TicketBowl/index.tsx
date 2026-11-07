@@ -16,9 +16,8 @@ import { TicketBowlStatsDashboard } from './TicketBowlStatsDashboard'
 import { TicketBowlTable } from './TicketBowlTable'
 import { TicketBowlPagination } from './TicketBowlPagination'
 import { TicketForwardingHistoryModal } from './TicketForwardingHistoryModal'
-// Removed old blocking modal: import { SyncProgressModal } from './SyncProgressModal'
 import { useBackgroundSync } from '@/hooks/useBackgroundSync'
-import { SyncStatusIndicator, SyncNotification, InPageSyncAnimation } from '@/components/LazyPanda'
+import { SyncNotification } from '@/components/LazyPanda'
 
 export default function TicketBowl() {
   const { can, canView: checkCanView, role } = usePermissions()
@@ -124,14 +123,11 @@ export default function TicketBowl() {
   // 3. Background Sync Hook (replaces old blocking sync)
   const {
     isSyncing,
-    syncProgress,
-    showProgressIndicator,
     showSuccessNotification,
     showErrorNotification,
     syncResult,
     syncStatus,
     startSync,
-    cancelSync,
     retrySync,
     dismissSuccessNotification,
     dismissErrorNotification,
@@ -230,23 +226,6 @@ export default function TicketBowl() {
         canExport={canExport}
       />
 
-      {/* ── In-Page Sync Animation (Premium) ── */}
-      {(isSyncing || showSuccessNotification || showErrorNotification) && (
-        <div className="mb-2">
-          <InPageSyncAnimation
-            isVisible={isSyncing}
-            phase={syncProgress?.phase || 'fetching-tickets'}
-            current={syncProgress?.current || 0}
-            total={syncProgress?.total || 0}
-            message={syncProgress?.message}
-            onCancel={canSync ? cancelSync : undefined}
-            isCompleted={showSuccessNotification}
-            isError={showErrorNotification}
-            errorMessage={syncResult?.errorMessage}
-          />
-        </div>
-      )}
-
       {/* ── OpenProject Not Configured Banner ── */}
       {!isOpConfigured && !loadingProjects && (
         <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
@@ -330,13 +309,7 @@ export default function TicketBowl() {
         onClose={closeHistoryModal}
       />
 
-      {/* ── Non-Blocking Background Sync Components ── */}
-      <SyncStatusIndicator
-        progress={syncProgress}
-        isVisible={showProgressIndicator && isSyncing}
-        onCancel={cancelSync}
-      />
-
+      {/* ── Sync Notifications ── */}
       <SyncNotification
         type="success"
         isVisible={showSuccessNotification}
