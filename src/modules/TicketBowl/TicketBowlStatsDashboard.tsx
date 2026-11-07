@@ -153,11 +153,10 @@ export function TicketBowlStatsDashboard({
         {/* Card 4: Incomplete / Unavailable History */}
         <div
           onClick={onFilterUnavailableHistory}
-          className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-xs flex items-center justify-between ${
-            isFilteringUnavailableHistory
+          className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-xs flex items-center justify-between ${isFilteringUnavailableHistory
               ? 'border-accent bg-accent/10 ring-1 ring-accent'
               : 'border-border/70 bg-surface/80 hover:bg-surface-elevated/80'
-          }`}
+            }`}
           title="Click to toggle filter for tickets with unavailable history"
         >
           <div>
@@ -209,28 +208,31 @@ export function TicketBowlStatsDashboard({
         </div>
       </div>
 
-      {/* ── Current Testing Status Distribution (Multi-Segment Proportional Bar) ── */}
+      {/* ── Current Testing Status Distribution (Premium Compact) ── */}
       {loading ? (
-        <div className="p-3.5 rounded-xl border border-border/70 bg-surface/80 space-y-2">
-          <div className="h-4 w-48 bg-surface-elevated animate-pulse rounded" />
-          <div className="h-2.5 w-full bg-surface-elevated animate-pulse rounded-full" />
+        <div className="p-3 rounded-xl border border-border/50 bg-gradient-to-br from-surface/80 to-surface-elevated/60 backdrop-blur-sm space-y-2">
+          <div className="h-3.5 w-44 bg-surface-elevated animate-pulse rounded" />
+          <div className="h-2 w-full bg-surface-elevated animate-pulse rounded-full" />
         </div>
       ) : totalUniqueTickets > 0 && statusEntries.length > 0 ? (
-        <div className="p-3.5 rounded-xl border border-border/70 bg-surface/80 space-y-2.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-accent" />
-              <span className="text-xs font-semibold text-text-primary">
-                Current Testing Status Distribution
+        <div className="group p-3 rounded-xl border border-border/50 bg-gradient-to-br from-surface/80 via-surface/70 to-surface-elevated/60 backdrop-blur-sm shadow-sm hover:shadow-md hover:border-border/70 transition-all duration-300">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 rounded-lg bg-accent/10 group-hover:bg-accent/15 transition-colors">
+                <CheckCircle2 className="w-3.5 h-3.5 text-accent" />
+              </div>
+              <span className="text-[11px] font-semibold text-text-primary tracking-wide">
+                Testing Status Distribution
               </span>
             </div>
-            <span className="text-[11px] text-text-muted">
-              {totalUniqueTickets.toLocaleString()} unique tickets
+            <span className="text-[10px] font-medium text-text-muted bg-surface-elevated/80 px-2 py-0.5 rounded-full">
+              {totalUniqueTickets.toLocaleString()} tickets
             </span>
           </div>
 
-          {/* Proportional Status Bar */}
-          <div className="h-2.5 w-full rounded-full bg-border/40 overflow-hidden flex">
+          {/* Premium Proportional Bar */}
+          <div className="relative h-2 w-full rounded-full bg-gradient-to-r from-border/30 via-border/40 to-border/30 overflow-hidden flex shadow-inner mb-2.5">
             {statusEntries.map(([statusName, count]) => {
               const pct = (count / totalUniqueTickets) * 100
               const colorConfig = STATUS_COLORS[statusName] || DEFAULT_STATUS_COLOR
@@ -238,26 +240,29 @@ export function TicketBowlStatsDashboard({
                 <div
                   key={statusName}
                   style={{ width: `${pct}%` }}
-                  className={`h-full ${colorConfig.bar} transition-all duration-300 first:rounded-l-full last:rounded-r-full`}
+                  className={`h-full ${colorConfig.bar} transition-all duration-500 hover:opacity-90 first:rounded-l-full last:rounded-r-full relative group/segment`}
                   title={`${statusName}: ${count} (${pct.toFixed(1)}%)`}
-                />
+                >
+                  <div className="absolute inset-0 bg-gradient-to-t from-white/20 to-transparent" />
+                </div>
               )
             })}
           </div>
 
-          {/* Status Breakdown Pills */}
-          <div className="flex flex-wrap gap-2 pt-1">
+          {/* Compact Inline Status Indicators */}
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 text-[10px]">
             {statusEntries.map(([statusName, count]) => {
               const pct = ((count / totalUniqueTickets) * 100).toFixed(1)
               const colorConfig = STATUS_COLORS[statusName] || DEFAULT_STATUS_COLOR
               return (
                 <div
                   key={statusName}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border border-border/50 ${colorConfig.bg} ${colorConfig.text}`}
+                  className="flex items-center gap-1.5 group/item"
                 >
-                  <span className="font-medium">{statusName}:</span>
-                  <span className="font-bold">{count}</span>
-                  <span className="text-[10px] opacity-75">({pct}%)</span>
+                  <div className={`w-1.5 h-1.5 rounded-full ${colorConfig.bar} shadow-sm`} />
+                  <span className="text-text-secondary font-medium">{statusName}</span>
+                  <span className="text-text-primary font-semibold">{count}</span>
+                  <span className="text-text-muted font-normal">({pct}%)</span>
                 </div>
               )
             })}

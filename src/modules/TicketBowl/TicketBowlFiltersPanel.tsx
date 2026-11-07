@@ -21,20 +21,10 @@ interface TicketBowlFiltersPanelProps {
   onResetFilters: () => void
   onToggleUnavailableHistory?: () => void
   availableTypes: Array<{ id: number; name: string }>
+  availableStatuses?: string[]
   availableTestingStatuses?: string[]
   unavailableCount?: number
 }
-
-const COMMON_TESTING_STATUSES = [
-  'Forwarded to the Testing Team',
-  'Under Testing',
-  'Testing In Progress',
-  'Retesting In Progress',
-  'Testing Passed',
-  'Testing Failed',
-  'Testing Completed',
-  'Not Started',
-]
 
 const QA_MISSED_OPTIONS = [
   { value: '', label: 'All QA Missed' },
@@ -58,7 +48,8 @@ export function TicketBowlFiltersPanel({
   onResetFilters,
   onToggleUnavailableHistory,
   availableTypes,
-  availableTestingStatuses = COMMON_TESTING_STATUSES,
+  availableStatuses,
+  availableTestingStatuses,
   unavailableCount = 0,
 }: TicketBowlFiltersPanelProps) {
   // Local search state for responsive typing
@@ -189,6 +180,22 @@ export function TicketBowlFiltersPanel({
           </select>
         </div>
 
+        {/* Status Filter (Work Package Status) */}
+        <div>
+          <select
+            value={filters.statusName || ''}
+            onChange={e => onFilterChange({ statusName: e.target.value || null })}
+            className="w-full px-2.5 py-1.5 rounded-lg border border-border/70 bg-surface text-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
+          >
+            <option value="">All Statuses</option>
+            {availableStatuses?.map(status => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Current Testing Status */}
         <div>
           <select
@@ -196,8 +203,8 @@ export function TicketBowlFiltersPanel({
             onChange={e => onFilterChange({ testingStatus: e.target.value || null })}
             className="w-full px-2.5 py-1.5 rounded-lg border border-border/70 bg-surface text-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
           >
-            <option value="">Current Testing Status</option>
-            {availableTestingStatuses.map(status => (
+            <option value="">All Testing Statuses</option>
+            {availableTestingStatuses?.map(status => (
               <option key={status} value={status}>
                 {status}
               </option>

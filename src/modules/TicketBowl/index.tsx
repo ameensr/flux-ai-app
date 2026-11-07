@@ -16,7 +16,9 @@ import { TicketBowlStatsDashboard } from './TicketBowlStatsDashboard'
 import { TicketBowlTable } from './TicketBowlTable'
 import { TicketBowlPagination } from './TicketBowlPagination'
 import { TicketForwardingHistoryModal } from './TicketForwardingHistoryModal'
-import { SyncProgressModal } from './SyncProgressModal'
+// Removed old blocking modal: import { SyncProgressModal } from './SyncProgressModal'
+import { useBackgroundSync } from '@/hooks/useBackgroundSync'
+import { SyncStatusIndicator, SyncNotification, InPageSyncAnimation } from '@/components/LazyPanda'
 
 export default function TicketBowl() {
   const { can, canView: checkCanView, role } = usePermissions()
@@ -102,7 +104,8 @@ export default function TicketBowl() {
           }
         }
       } catch (err) {
-        console.warn('[Ticket Bowl] Could not load OpenProject project list:', err)
+        // Expected when OpenProject is not configured - suppress verbose error
+        console.debug('[Ticket Bowl] Could not load OpenProject projects (not configured or unreachable):', err instanceof Error ? err.message : 'Network error')
       }
     }
 
@@ -118,7 +121,30 @@ export default function TicketBowl() {
     return opProjects.find(p => p.id === selectedOpProjectId)?.name || null
   }, [opProjects, selectedOpProjectId])
 
-  // 3. Ticket Bowl Hook for data fetching and operations
+  // 3. Background Sync Hook (replaces old blocking sync)
+  const {
+    isSyncing,
+    syncProgress,
+    showProgressIndicator,
+    showSuccessNotification,
+    showErrorNotification,
+    syncResult,
+    syncStatus,
+    startSync,
+    cancelSync,
+    retrySync,
+    dismissSuccessNotification,
+    dismissErrorNotification,
+    loadSyncStatus,
+  } = useBackgroundSync({
+    projectId: selectedProjectId,
+    opProjectId: selectedOpProjectId,
+    opProjectName: currentOpProjectName,
+    config: opConfig,
+    autoRestoreJob: true,
+  })
+
+  // 4. Ticket Bowl Hook for data fetching and operations (without sync)
   const {
     filters,
     setFilters,
@@ -134,11 +160,6 @@ export default function TicketBowl() {
     loading: ticketsLoading,
     stats,
     statsLoading,
-    syncStatus,
-    syncing,
-    syncProgress,
-    dismissSyncProgress,
-    handleSyncData,
     availableTypes,
     selectedTicketForHistory,
     historyEvents,
@@ -153,6 +174,8 @@ export default function TicketBowl() {
     exportToReleaseTracker,
     exportToSupportTracker,
     exportToCsv,
+    refreshTickets: loadTickets,
+    refreshStats: loadDashboardStats,
   } = useTicketBowl({
     projectId: selectedProjectId,
     opProjectId: selectedOpProjectId,
@@ -160,6 +183,16 @@ export default function TicketBowl() {
     config: opConfig,
     autoLoad: Boolean(selectedProjectId),
   })
+
+  // Refresh data after successful sync
+  useEffect(() => {
+    if (showSuccessNotification) {
+      // Reload ticket data and stats after successful sync
+      loadSyncStatus()
+      loadTickets()
+      loadDashboardStats()
+    }
+  }, [showSuccessNotification, loadSyncStatus])
 
   // Permission Guard
   if (!canView) {
@@ -187,8 +220,8 @@ export default function TicketBowl() {
         selectedOpProjectId={selectedOpProjectId}
         onSelectOpProject={setSelectedOpProjectId}
         syncStatus={syncStatus}
-        syncing={syncing}
-        onSync={handleSyncData}
+        syncing={isSyncing}
+        onSync={startSync}
         selectedCount={selectedTicketIds.size}
         onExportRelease={() => exportToReleaseTracker()}
         onExportSupport={() => exportToSupportTracker()}
@@ -196,6 +229,23 @@ export default function TicketBowl() {
         canSync={canSync}
         canExport={canExport}
       />
+
+      {/* ── In-Page Sync Animation (Premium) ── */}
+      {(isSyncing || showSuccessNotification || showErrorNotification) && (
+        <div className="mb-2">
+          <InPageSyncAnimation
+            isVisible={isSyncing}
+            phase={syncProgress?.phase || 'fetching-tickets'}
+            current={syncProgress?.current || 0}
+            total={syncProgress?.total || 0}
+            message={syncProgress?.message}
+            onCancel={canSync ? cancelSync : undefined}
+            isCompleted={showSuccessNotification}
+            isError={showErrorNotification}
+            errorMessage={syncResult?.errorMessage}
+          />
+        </div>
+      )}
 
       {/* ── OpenProject Not Configured Banner ── */}
       {!isOpConfigured && !loadingProjects && (
@@ -236,6 +286,9 @@ export default function TicketBowl() {
         onResetFilters={resetFilters}
         onToggleUnavailableHistory={toggleViewUnavailableHistory}
         availableTypes={availableTypes}
+        availableStatuses={Object.keys(stats.statusCounts).length > 0
+          ? Object.keys(stats.statusCounts).sort()
+          : undefined}
         availableTestingStatuses={Object.keys(stats.currentTestingStatusCounts).length > 0
           ? Object.keys(stats.currentTestingStatusCounts).sort()
           : undefined}
@@ -277,10 +330,29 @@ export default function TicketBowl() {
         onClose={closeHistoryModal}
       />
 
-      <SyncProgressModal
+      {/* ── Non-Blocking Background Sync Components ── */}
+      <SyncStatusIndicator
         progress={syncProgress}
-        syncing={syncing}
-        onClose={dismissSyncProgress}
+        isVisible={showProgressIndicator && isSyncing}
+        onCancel={cancelSync}
+      />
+
+      <SyncNotification
+        type="success"
+        isVisible={showSuccessNotification}
+        onDismiss={dismissSuccessNotification}
+        totalSynced={syncResult?.totalSynced || 0}
+        eventsFound={syncResult?.eventsFound || 0}
+        autoHideDelay={8000}
+      />
+
+      <SyncNotification
+        type="error"
+        isVisible={showErrorNotification}
+        onDismiss={dismissErrorNotification}
+        onRetry={retrySync}
+        errorMessage={syncResult?.errorMessage}
+        autoHideDelay={0}
       />
     </div>
   )

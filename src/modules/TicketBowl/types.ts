@@ -135,19 +135,20 @@ export interface TicketBowlDashboardStats {
   currentTestingStatusCounts: Record<string, number>
   qaMissedCounts: Record<string, number>
   typeCounts: Record<string, number>
+  statusCounts: Record<string, number>
   priorityCounts: Record<string, number>
   historyVerificationCounts: Record<string, number>
 }
 
 export interface TicketBowlSyncProgress {
   phase:
-    | 'fetching-tickets'
-    | 'saving-snapshots'
-    | 'fetching-activities'
-    | 'saving-history'
-    | 'recalculating-counts'
-    | 'complete'
-    | 'error'
+  | 'fetching-tickets'
+  | 'saving-snapshots'
+  | 'fetching-activities'
+  | 'saving-history'
+  | 'recalculating-counts'
+  | 'complete'
+  | 'error'
   current: number
   total: number
   message: string

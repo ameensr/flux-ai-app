@@ -266,6 +266,7 @@ RETURNS TABLE (
   current_testing_status_counts JSONB,
   qa_missed_counts JSONB,
   type_counts JSONB,
+  status_counts JSONB,
   priority_counts JSONB,
   history_verification_counts JSONB
 )
@@ -350,6 +351,17 @@ BEGIN
       GROUP BY type_name
     ) s
   ),
+  status_agg AS (
+    SELECT COALESCE(
+      jsonb_object_agg(COALESCE(status_name, 'Unknown'), cnt),
+      '{}'::jsonb
+    ) AS agg
+    FROM (
+      SELECT status_name, COUNT(*)::bigint AS cnt
+      FROM matched_tickets
+      GROUP BY status_name
+    ) s
+  ),
   priority_agg AS (
     SELECT COALESCE(
       jsonb_object_agg(COALESCE(priority_name, 'Normal'), cnt),
@@ -380,6 +392,7 @@ BEGIN
     (SELECT agg FROM testing_status_agg) AS current_testing_status_counts,
     (SELECT agg FROM qa_missed_agg) AS qa_missed_counts,
     (SELECT agg FROM type_agg) AS type_counts,
+    (SELECT agg FROM status_agg) AS status_counts,
     (SELECT agg FROM priority_agg) AS priority_counts,
     (SELECT agg FROM history_verif_agg) AS history_verification_counts;
 END;

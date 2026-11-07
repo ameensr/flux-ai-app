@@ -18,6 +18,11 @@ import {
   fetchActivitiesIncremental,
   shouldReinspectActivities,
 } from './openproject-incremental-sync'
+import {
+  isSyncJobActive,
+  commitSyncData,
+  cleanupStagingData,
+} from './syncJobService'
 import type {
   TicketBowlWorkPackage,
   TicketBowlForwardingEvent,
@@ -271,7 +276,8 @@ export async function fetchAllOpenProjectTypes(
       name: el.name,
     }))
   } catch (err) {
-    console.error('[Ticket Bowl] Failed to fetch types:', err)
+    // Expected when OpenProject is not configured - suppress verbose error
+    console.debug('[Ticket Bowl] Could not fetch types (OpenProject not configured or unreachable):', err instanceof Error ? err.message : 'Network error')
     return []
   }
 }
@@ -293,6 +299,7 @@ export async function syncTicketBowlData(
   options?: {
     useIncrementalActivities?: boolean
     forceFullActivityResync?: boolean
+    jobId?: string // Enable atomic commits and cancellation support
   }
 ): Promise<{ success: boolean; message: string; totalSynced: number; eventsFound: number }> {
   const startTime = Date.now()
@@ -300,6 +307,17 @@ export async function syncTicketBowlData(
   const errors: string[] = []
   const useIncremental = options?.useIncrementalActivities ?? true
   const forceFullResync = options?.forceFullActivityResync ?? false
+
+  // Cancellation check helper - throws if job was cancelled
+  const checkCancellation = async (phase: string): Promise<void> => {
+    if (!options?.jobId) return // No job tracking, skip check
+
+    const isActive = await isSyncJobActive(options.jobId)
+    if (!isActive) {
+      console.log(`[Ticket Bowl] Sync cancelled during phase: ${phase}`)
+      throw new Error(`SYNC_CANCELLED: Sync was cancelled during ${phase}`)
+    }
+  }
 
   emitSyncEvent('sync:start')
 
@@ -382,6 +400,9 @@ export async function syncTicketBowlData(
     }
 
     const formattedWPs: FormattedWorkPackage[] = rawWorkPackages.map(wp => formatWorkPackage(wp))
+
+    // Cancellation check after fetching work packages
+    await checkCancellation('fetching-tickets')
 
     // ------------------------------------------------------------------------
     // Check existing ticket cache to enable incremental history skipping
@@ -490,11 +511,19 @@ export async function syncTicketBowlData(
     })
 
     let snapshotsSaved = 0
+    const targetTable = options?.jobId ? 'ticket_bowl_work_packages_staging' : 'ticket_bowl_work_packages'
+    const conflictKeys = options?.jobId ? 'job_id,project_id,work_package_id' : 'project_id,work_package_id'
+
     for (let i = 0; i < initialSnapshots.length; i += UPSERT_CHUNK) {
       const chunk = initialSnapshots.slice(i, i + UPSERT_CHUNK)
+      // Add job_id to each row if using staging tables
+      const chunkWithJobId = options?.jobId
+        ? chunk.map(row => ({ ...row, job_id: options.jobId }))
+        : chunk
+
       const { error } = await supabase
-        .from('ticket_bowl_work_packages')
-        .upsert(chunk, { onConflict: 'project_id,work_package_id' })
+        .from(targetTable)
+        .upsert(chunkWithJobId, { onConflict: conflictKeys })
 
       if (error) {
         errors.push(`Snapshot upsert failed: ${error.message}`)
@@ -510,6 +539,9 @@ export async function syncTicketBowlData(
         ticketsSaved: snapshotsSaved,
       })
     }
+
+    // Cancellation check after saving snapshots
+    await checkCancellation('saving-snapshots')
 
     // ------------------------------------------------------------------------
     // PHASE 3: Selective & Incremental Activity Journal Inspection
@@ -672,6 +704,9 @@ export async function syncTicketBowlData(
       console.log(`[Ticket Bowl] Incremental sync: ${incrementalHits} tickets with new activities, ${incrementalSkips} skipped (cached)`)
     }
 
+    // Cancellation check after activity inspection
+    await checkCancellation('fetching-activities')
+
     // ------------------------------------------------------------------------
     // PHASE 4: Persist History
     // 4a. Forwarding events → ticket_bowl_forwarding_history
@@ -700,13 +735,22 @@ export async function syncTicketBowlData(
       source: 'sync',
     }))
 
+    const fwdHistoryTable = options?.jobId ? 'ticket_bowl_forwarding_history_staging' : 'ticket_bowl_forwarding_history'
+    const fwdConflictKeys = options?.jobId
+      ? 'job_id,project_id,work_package_id,activity_id,changed_at'
+      : 'project_id,work_package_id,activity_id,changed_at'
+
     if (historyRows.length > 0) {
       for (let i = 0; i < historyRows.length; i += UPSERT_CHUNK) {
         const chunk = historyRows.slice(i, i + UPSERT_CHUNK)
+        const chunkWithJobId = options?.jobId
+          ? chunk.map(row => ({ ...row, job_id: options.jobId }))
+          : chunk
+
         const { error } = await supabase
-          .from('ticket_bowl_forwarding_history')
-          .upsert(chunk, {
-            onConflict: 'project_id,work_package_id,activity_id,changed_at',
+          .from(fwdHistoryTable)
+          .upsert(chunkWithJobId, {
+            onConflict: fwdConflictKeys,
             ignoreDuplicates: true,
           })
         if (error) errors.push(`Forwarding history upsert failed: ${error.message}`)
@@ -728,18 +772,30 @@ export async function syncTicketBowlData(
       source: 'sync',
     }))
 
+    const statusHistoryTable = options?.jobId ? 'ticket_bowl_testing_status_history_staging' : 'ticket_bowl_testing_status_history'
+    const statusConflictKeys = options?.jobId
+      ? 'job_id,project_id,work_package_id,activity_id,changed_at'
+      : 'project_id,work_package_id,activity_id,changed_at'
+
     if (statusHistoryRows.length > 0) {
       for (let i = 0; i < statusHistoryRows.length; i += UPSERT_CHUNK) {
         const chunk = statusHistoryRows.slice(i, i + UPSERT_CHUNK)
+        const chunkWithJobId = options?.jobId
+          ? chunk.map(row => ({ ...row, job_id: options.jobId }))
+          : chunk
+
         const { error } = await supabase
-          .from('ticket_bowl_testing_status_history')
-          .upsert(chunk, {
-            onConflict: 'project_id,work_package_id,activity_id,changed_at',
+          .from(statusHistoryTable)
+          .upsert(chunkWithJobId, {
+            onConflict: statusConflictKeys,
             ignoreDuplicates: true,
           })
         if (error) errors.push(`Testing status history upsert failed: ${error.message}`)
       }
     }
+
+    // Cancellation check after saving history
+    await checkCancellation('saving-history')
 
     // ------------------------------------------------------------------------
     // PHASE 5: Recalculate Forwarding Counts & History Status on Work Packages
@@ -833,12 +889,22 @@ export async function syncTicketBowlData(
     }
 
     // Batch update the verification fields
+    const updateTable = options?.jobId ? 'ticket_bowl_work_packages_staging' : 'ticket_bowl_work_packages'
+    const updateConflictKeys = options?.jobId ? 'job_id,project_id,work_package_id' : 'project_id,work_package_id'
+
     for (let i = 0; i < updateUpdates.length; i += UPSERT_CHUNK) {
       const chunk = updateUpdates.slice(i, i + UPSERT_CHUNK)
+      const chunkWithJobId = options?.jobId
+        ? chunk.map(row => ({ ...row, job_id: options.jobId }))
+        : chunk
+
       await supabase
-        .from('ticket_bowl_work_packages')
-        .upsert(chunk, { onConflict: 'project_id,work_package_id' })
+        .from(updateTable)
+        .upsert(chunkWithJobId, { onConflict: updateConflictKeys })
     }
+
+    // Cancellation check after count recalculation
+    await checkCancellation('recalculating-counts')
 
     // ------------------------------------------------------------------------
     // PHASE 6: Update Synchronization Status Record
@@ -871,6 +937,23 @@ export async function syncTicketBowlData(
       unavailableCount: unavailableCountTotal,
     })
 
+    // ------------------------------------------------------------------------
+    // ATOMIC COMMIT: Move staging data to production tables
+    // ------------------------------------------------------------------------
+    if (options?.jobId) {
+      console.log('[Ticket Bowl] Committing staged data to production tables...')
+      try {
+        const commitResult = await commitSyncData(options.jobId, projectId)
+        console.log('[Ticket Bowl] Atomic commit successful:', commitResult)
+      } catch (commitError) {
+        console.error('[Ticket Bowl] Failed to commit staged data:', commitError)
+        // Clean up staging data on commit failure
+        await cleanupStagingData(options.jobId)
+        const commitErrMsg = commitError instanceof Error ? commitError.message : String(commitError)
+        throw new Error(`Sync completed but failed to commit data: ${commitErrMsg}`)
+      }
+    }
+
     emitSyncEvent('sync:success')
     return {
       success: true,
@@ -881,6 +964,46 @@ export async function syncTicketBowlData(
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown synchronization failure'
     console.error('[Ticket Bowl] Sync fatal error:', err)
+
+    // Clean up staging data on error
+    if (options?.jobId) {
+      try {
+        await cleanupStagingData(options.jobId)
+        console.log('[Ticket Bowl] Staging data cleaned up after error')
+      } catch (cleanupError) {
+        console.error('[Ticket Bowl] Failed to cleanup staging data:', cleanupError)
+      }
+    }
+
+    // Check if cancellation was the cause
+    const isCancelled = errorMsg.includes('SYNC_CANCELLED')
+    if (isCancelled) {
+      console.log('[Ticket Bowl] Sync was cancelled by user')
+      emitSyncEvent('sync:cancelled')
+
+      await updateSyncStatusRecord(projectId, opProjectId || null, opProjectName || null, {
+        sync_status: 'cancelled',
+        started_at: startedAtIso,
+        completed_at: new Date().toISOString(),
+        total_fetched: 0,
+        total_inserted: 0,
+        total_updated: 0,
+        forwarding_events_found: 0,
+        history_verified_count: 0,
+        history_unavailable_count: 0,
+        history_unverified_count: 0,
+        errors_count: 1,
+        error_details: 'Synchronization was cancelled by user',
+      })
+
+      return {
+        success: false,
+        message: 'Synchronization was cancelled',
+        totalSynced: 0,
+        eventsFound: 0
+      }
+    }
+
     errors.push(errorMsg)
 
     await updateSyncStatusRecord(projectId, opProjectId || null, opProjectName || null, {
@@ -1027,6 +1150,17 @@ export async function queryTicketBowlWorkPackages(
     pageSize = 25,
     page = 1,
   } = filters
+
+  // Guard against empty projectId
+  if (!projectId || projectId.trim() === '') {
+    return {
+      data: [],
+      count: 0,
+      page,
+      pageSize,
+      totalPages: 0,
+    }
+  }
 
   const offset = (page - 1) * pageSize
 
@@ -1263,6 +1397,22 @@ export async function fetchTicketBowlDashboardStats(
     search,
   } = filters
 
+  // Guard against empty projectId
+  if (!projectId || projectId.trim() === '') {
+    return {
+      totalUniqueTickets: 0,
+      totalForwardingEvents: 0,
+      repeatForwardedTickets: 0,
+      unavailableHistoryTickets: 0,
+      currentTestingStatusCounts: {},
+      qaMissedCounts: {},
+      typeCounts: {},
+      statusCounts: {},
+      priorityCounts: {},
+      historyVerificationCounts: {},
+    }
+  }
+
   const { fromIso, toIso } = convertDateFilterToIsoRange(forwardedFrom, forwardedTo)
 
   try {
@@ -1292,6 +1442,7 @@ export async function fetchTicketBowlDashboardStats(
         currentTestingStatusCounts: (row.current_testing_status_counts || {}) as Record<string, number>,
         qaMissedCounts: (row.qa_missed_counts || {}) as Record<string, number>,
         typeCounts: (row.type_counts || {}) as Record<string, number>,
+        statusCounts: (row.status_counts || {}) as Record<string, number>,
         priorityCounts: (row.priority_counts || {}) as Record<string, number>,
         historyVerificationCounts: (row.history_verification_counts || {}) as Record<string, number>,
       }
@@ -1309,6 +1460,7 @@ export async function fetchTicketBowlDashboardStats(
     currentTestingStatusCounts: {},
     qaMissedCounts: {},
     typeCounts: {},
+    statusCounts: {},
     priorityCounts: {},
     historyVerificationCounts: {},
   }

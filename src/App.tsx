@@ -21,8 +21,9 @@ import { useMaintenanceStore } from '@/store/useMaintenanceStore'
 import { useAIPlatformStore } from '@/store/useAIPlatformStore'
 import { useToast } from '@/hooks/use-toast'
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog'
-import { PandaIdleNotification } from '@/components/LazyPanda'
+import { PandaIdleNotification, SmartSyncReminder, SyncStatusIndicator, SyncNotification } from '@/components/LazyPanda'
 import { FloatingThemeToggle } from '@/components/ui/FloatingThemeToggle'
+import { useBackgroundSync } from '@/hooks/useBackgroundSync'
 
 // ── Idle timeout context ──────────────────────────────────────────────────────
 type RegisterOperationFn = (key: string) => () => void
@@ -354,6 +355,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       <AIRestrictedModal />
       <SessionExpiredToast />
       {isAuthenticated && <PandaIdleNotification />}
+      <GlobalSyncComponents />
     </>
   )
 }
@@ -376,57 +378,153 @@ function SessionExpiredToast() {
   return null
 }
 
+// ── Wrapper for global background sync UI components ──
+function GlobalSyncComponents() {
+  const isAuthenticated = useAppStore(s => s.isAuthenticated)
+
+  // Get user's first accessible project with OpenProject configured
+  const [projectInfo, setProjectInfo] = React.useState<{
+    projectId: string
+    opConfig: any
+  } | null>(null)
+
+  React.useEffect(() => {
+    if (!isAuthenticated) return
+
+    async function loadFirstProject() {
+      try {
+        const { data } = await supabase
+          .from('projects')
+          .select('id, name, metadata')
+          .order('name', { ascending: true })
+          .limit(1)
+          .single()
+
+        if (data) {
+          const opConfig = data.metadata?.openproject || null
+          if (opConfig?.openproject_url && opConfig?.openproject_api_key) {
+            setProjectInfo({
+              projectId: data.id,
+              opConfig,
+            })
+          }
+        }
+      } catch (err) {
+        console.warn('[GlobalSync] Could not load project:', err)
+      }
+    }
+
+    loadFirstProject()
+  }, [isAuthenticated])
+
+  const {
+    isSyncing,
+    syncProgress,
+    showProgressIndicator,
+    showSuccessNotification,
+    showErrorNotification,
+    syncResult,
+    startSync,
+    cancelSync,
+    retrySync,
+    dismissSuccessNotification,
+    dismissErrorNotification,
+  } = useBackgroundSync({
+    projectId: projectInfo?.projectId || '',
+    opProjectId: projectInfo?.opConfig?.openproject_project_id ? Number(projectInfo.opConfig.openproject_project_id) : null,
+    opProjectName: null,
+    config: projectInfo?.opConfig || null,
+    autoRestoreJob: true,
+  })
+
+  if (!isAuthenticated) return null
+
+  return (
+    <>
+      {/* Background Sync Progress Indicator */}
+      <SyncStatusIndicator
+        progress={syncProgress}
+        isVisible={showProgressIndicator && isSyncing}
+        onCancel={cancelSync}
+      />
+
+      {/* Success Notification */}
+      <SyncNotification
+        type="success"
+        isVisible={showSuccessNotification}
+        onDismiss={dismissSuccessNotification}
+        totalSynced={syncResult?.totalSynced || 0}
+        eventsFound={syncResult?.eventsFound || 0}
+        autoHideDelay={8000}
+      />
+
+      {/* Error Notification */}
+      <SyncNotification
+        type="error"
+        isVisible={showErrorNotification}
+        onDismiss={dismissErrorNotification}
+        onRetry={retrySync}
+        errorMessage={syncResult?.errorMessage}
+        autoHideDelay={0}
+      />
+
+      {/* Smart Sync Reminder */}
+      <SmartSyncReminder onSyncNow={startSync} />
+    </>
+  )
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <BrowserRouter>
       <ConfirmProvider>
-      <AuthInitializer>
-        <Routes>
-          {/* Public routes */}
-          <Route path={ROUTES.landing} element={<RedirectIfAuth><LandingPage /></RedirectIfAuth>} />
-          <Route path={ROUTES.login} element={<RedirectIfAuth><AuthPage /></RedirectIfAuth>} />
-          <Route path={ROUTES.signup} element={<RedirectIfAuth><AuthPage /></RedirectIfAuth>} />
-          <Route path={ROUTES.qalyAiEngine404} element={<Suspense fallback={<FullPageLoader />}><QalyAiEngine404 /></Suspense>} />
-          <Route path={ROUTES.qalyAiEngine401} element={<Suspense fallback={<FullPageLoader />}><QalyAiEngine401 /></Suspense>} />
+        <AuthInitializer>
+          <Routes>
+            {/* Public routes */}
+            <Route path={ROUTES.landing} element={<RedirectIfAuth><LandingPage /></RedirectIfAuth>} />
+            <Route path={ROUTES.login} element={<RedirectIfAuth><AuthPage /></RedirectIfAuth>} />
+            <Route path={ROUTES.signup} element={<RedirectIfAuth><AuthPage /></RedirectIfAuth>} />
+            <Route path={ROUTES.qalyAiEngine404} element={<Suspense fallback={<FullPageLoader />}><QalyAiEngine404 /></Suspense>} />
+            <Route path={ROUTES.qalyAiEngine401} element={<Suspense fallback={<FullPageLoader />}><QalyAiEngine401 /></Suspense>} />
 
-          {/* Report Preview — standalone page, no sidebar */}
-          <Route path={ROUTES.reportPreview} element={<RequireAuth><ProtectedRoute moduleKey="qa-report"><MaintenanceGuard><ReportPreviewWrapper /></MaintenanceGuard></ProtectedRoute></RequireAuth>} />
+            {/* Report Preview — standalone page, no sidebar */}
+            <Route path={ROUTES.reportPreview} element={<RequireAuth><ProtectedRoute moduleKey="qa-report"><MaintenanceGuard><ReportPreviewWrapper /></MaintenanceGuard></ProtectedRoute></RequireAuth>} />
 
-          {/* Maintenance page — standalone, no sidebar */}
-          <Route path={ROUTES.maintenance} element={<RequireAuth><MaintenancePage /></RequireAuth>} />
+            {/* Maintenance page — standalone, no sidebar */}
+            <Route path={ROUTES.maintenance} element={<RequireAuth><MaintenancePage /></RequireAuth>} />
 
-          {/* Protected dashboard routes — uses layout with sidebar */}
-          <Route element={<RequireAuth><ProtectedRoute><DashboardWrapper /></ProtectedRoute></RequireAuth>}>
-            <Route path={ROUTES.dashboard} element={<Dashboard />} />
-            <Route path={ROUTES.projectHub} element={<ProjectHub />} />
-            <Route path={`${ROUTES.projectHub}/:projectId`} element={<ProjectDetail />} />
-            <Route path={`${ROUTES.projectHub}/:projectId/dropdown-config`} element={<ProtectedRoute moduleKey="project-hub"><ProjectDropdownConfig /></ProtectedRoute>} />
-            <Route path={ROUTES.bugRefiner} element={<BugRefiner />} />
-            <Route path={ROUTES.testGenerator} element={<TestCaseGenerator />} />
-            <Route path={ROUTES.writingAssistant} element={<WritingAssistant />} />
-            <Route path={ROUTES.qaReport} element={<QAWeeklyReport />} />
-            <Route path={ROUTES.dailyReport} element={<DailyUpdateReport />} />
-            <Route path={ROUTES.bugStatus} element={<BugStatus />} />
-            <Route path={ROUTES.ticketBowl} element={<ProtectedRoute moduleKey="ticket-bowl"><TicketBowl /></ProtectedRoute>} />
-            <Route path="/story-pot" element={<Navigate to={ROUTES.ticketBowl} replace />} />
-            <Route path={ROUTES.supportTracker} element={<ProtectedRoute moduleKey="support-tracker"><SupportIssueTracker /></ProtectedRoute>} />
-            <Route path="/support-issue-tracker" element={<Navigate to={ROUTES.supportTracker} replace />} />
-            <Route path={ROUTES.releaseTracker} element={<ProtectedRoute moduleKey="release-tracker"><ReleaseTaskTracker /></ProtectedRoute>} />
-            <Route path="/release-task-tracker" element={<Navigate to={ROUTES.releaseTracker} replace />} />
-            <Route path={ROUTES.qaReportConfig} element={<QAReportConfig />} />
+            {/* Protected dashboard routes — uses layout with sidebar */}
+            <Route element={<RequireAuth><ProtectedRoute><DashboardWrapper /></ProtectedRoute></RequireAuth>}>
+              <Route path={ROUTES.dashboard} element={<Dashboard />} />
+              <Route path={ROUTES.projectHub} element={<ProjectHub />} />
+              <Route path={`${ROUTES.projectHub}/:projectId`} element={<ProjectDetail />} />
+              <Route path={`${ROUTES.projectHub}/:projectId/dropdown-config`} element={<ProtectedRoute moduleKey="project-hub"><ProjectDropdownConfig /></ProtectedRoute>} />
+              <Route path={ROUTES.bugRefiner} element={<BugRefiner />} />
+              <Route path={ROUTES.testGenerator} element={<TestCaseGenerator />} />
+              <Route path={ROUTES.writingAssistant} element={<WritingAssistant />} />
+              <Route path={ROUTES.qaReport} element={<QAWeeklyReport />} />
+              <Route path={ROUTES.dailyReport} element={<DailyUpdateReport />} />
+              <Route path={ROUTES.bugStatus} element={<BugStatus />} />
+              <Route path={ROUTES.ticketBowl} element={<ProtectedRoute moduleKey="ticket-bowl"><TicketBowl /></ProtectedRoute>} />
+              <Route path="/story-pot" element={<Navigate to={ROUTES.ticketBowl} replace />} />
+              <Route path={ROUTES.supportTracker} element={<ProtectedRoute moduleKey="support-tracker"><SupportIssueTracker /></ProtectedRoute>} />
+              <Route path="/support-issue-tracker" element={<Navigate to={ROUTES.supportTracker} replace />} />
+              <Route path={ROUTES.releaseTracker} element={<ProtectedRoute moduleKey="release-tracker"><ReleaseTaskTracker /></ProtectedRoute>} />
+              <Route path="/release-task-tracker" element={<Navigate to={ROUTES.releaseTracker} replace />} />
+              <Route path={ROUTES.qaReportConfig} element={<QAReportConfig />} />
 
-            <Route path={ROUTES.aiNews} element={<AINews />} />
-            <Route path={ROUTES.settings} element={<Settings />} />
-            <Route path={ROUTES.admin} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
-            <Route path={`${ROUTES.admin}/*`} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
-            <Route path={`${ROUTES.enterprise}/*`} element={<ProtectedRoute adminOnly><EnterpriseAdmin /></ProtectedRoute>} />
-          </Route>
+              <Route path={ROUTES.aiNews} element={<AINews />} />
+              <Route path={ROUTES.settings} element={<Settings />} />
+              <Route path={ROUTES.admin} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
+              <Route path={`${ROUTES.admin}/*`} element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
+              <Route path={`${ROUTES.enterprise}/*`} element={<ProtectedRoute adminOnly><EnterpriseAdmin /></ProtectedRoute>} />
+            </Route>
 
-          {/* Unknown URLs — public 404 (no auth required) */}
-          <Route path="*" element={<Suspense fallback={<FullPageLoader />}><QalyAiEngine404 /></Suspense>} />
-        </Routes>
-      </AuthInitializer>
+            {/* Unknown URLs — public 404 (no auth required) */}
+            <Route path="*" element={<Suspense fallback={<FullPageLoader />}><QalyAiEngine404 /></Suspense>} />
+          </Routes>
+        </AuthInitializer>
       </ConfirmProvider>
     </BrowserRouter>
   )

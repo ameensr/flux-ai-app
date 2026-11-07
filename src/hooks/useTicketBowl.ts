@@ -57,6 +57,7 @@ const EMPTY_STATS: TicketBowlDashboardStats = {
   currentTestingStatusCounts: {},
   qaMissedCounts: {},
   typeCounts: {},
+  statusCounts: {},
   priorityCounts: {},
   historyVerificationCounts: {},
 }
