@@ -67,13 +67,13 @@ const SectionLabel = ({ label, visible }: { label: string; visible: boolean }) =
   <AnimatePresence>
     {visible && (
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.15 }}
-        className="px-3 pt-4 pb-1"
+        initial={{ opacity: 0, x: -8 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -8 }}
+        transition={{ duration: 0.18 }}
+        className="px-3 pt-4 pb-1.5"
       >
-        <span className="text-[10px] font-semibold uppercase tracking-[0.08em]"
+        <span className="text-[10px] font-semibold uppercase tracking-[0.09em]"
           style={{ color: 'var(--text-muted)' }}>
           {label}
         </span>
@@ -194,9 +194,12 @@ export const Sidebar = () => {
         {active && (
           <motion.div
             layoutId="sidebar-active"
-            className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full"
-            style={{ background: 'var(--accent)' }}
-            transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
+            className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full"
+            style={{
+              background: 'var(--accent)',
+              boxShadow: '0 0 10px rgba(99, 102, 241, 0.7), 0 0 20px rgba(99, 102, 241, 0.35)',
+            }}
+            transition={{ type: 'spring', bounce: 0.15, duration: 0.35 }}
           />
         )}
         <item.icon className={cn('shrink-0', isSidebarOpen ? (isSubItem ? 'w-3.5 h-3.5' : 'w-4 h-4') : 'w-5 h-5')} />
@@ -293,7 +296,7 @@ export const Sidebar = () => {
             exit={{ opacity: 0 }}
             onClick={() => setSidebarOpen(false)}
             className="fixed inset-0 z-30 lg:hidden"
-            style={{ backgroundColor: 'var(--overlay)', backdropFilter: 'blur(4px)' }}
+            style={{ backgroundColor: 'var(--overlay)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
           />
         )}
       </AnimatePresence>
@@ -308,9 +311,17 @@ export const Sidebar = () => {
           !isSidebarOpen && 'max-lg:-translate-x-full',
         )}
       >
+        {/* Specular top edge highlight for glass depth */}
+        <div
+          className="absolute inset-x-0 top-0 h-[1px] pointer-events-none z-10"
+          style={{
+            background: 'linear-gradient(90deg, transparent, var(--glass-highlight), transparent)',
+          }}
+        />
+
         {/* ── Header ── */}
         <div className={cn(
-          'flex items-center h-[60px] shrink-0 px-4',
+          'flex items-center h-[60px] shrink-0 px-4 relative z-10',
           isSidebarOpen ? 'justify-between' : 'justify-center',
         )}>
           <Logo size="sm" animate={false} collapsed={!isSidebarOpen} />
@@ -336,10 +347,10 @@ export const Sidebar = () => {
         </div>
 
         {/* ── Divider ── */}
-        <div style={{ height: 1, background: 'var(--divider)', margin: '0 12px' }} />
+        <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, var(--divider), transparent)', margin: '0 12px' }} />
 
         {/* ── Main nav ── */}
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 flex flex-col gap-0.5">
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 flex flex-col gap-0.5 relative z-10">
           <SectionLabel label="Workspace" visible={isSidebarOpen} />
           {mainEntries.map(entry => {
             if (entry.type === 'group') {
@@ -350,8 +361,8 @@ export const Sidebar = () => {
         </nav>
 
         {/* ── Bottom section ── */}
-        <div className="px-2 pb-3 flex flex-col gap-0.5">
-          <div style={{ height: 1, background: 'var(--divider)', margin: '4px 4px 8px' }} />
+        <div className="px-2 pb-3 flex flex-col gap-0.5 relative z-10">
+          <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, var(--divider), transparent)', margin: '4px 4px 8px' }} />
 
           {bottomEntries.map(item => <NavItem key={item.path} item={item} />)}
 
@@ -360,11 +371,11 @@ export const Sidebar = () => {
             <div className={cn('mt-1', !isSidebarOpen && 'flex flex-col items-center gap-1.5')}>
               {isSidebarOpen ? (
                 <div
-                  className="mx-1 rounded-xl overflow-hidden transition-all group/card"
+                  className="mx-1 rounded-xl overflow-hidden transition-all group/card backdrop-blur-md"
                   style={{
-                    background: 'var(--surface-secondary)',
-                    border: '1px solid var(--border)',
-                    boxShadow: 'var(--shadow-sm)',
+                    background: 'color-mix(in srgb, var(--surface-secondary) 85%, transparent)',
+                    border: '1px solid var(--glass-border)',
+                    boxShadow: 'var(--shadow-sm), inset 0 1px 0 var(--glass-highlight)',
                   }}
                 >
                   {/* Top accent — expands + soft shimmer on hover */}
@@ -376,7 +387,7 @@ export const Sidebar = () => {
                       className="absolute inset-y-0 left-0 w-0 group-hover/card:w-full transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
                       style={{
                         background:
-                          'linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent))',
+                          'linear-gradient(90deg, var(--accent), #818CF8, color-mix(in srgb, var(--accent) 35%, transparent))',
                       }}
                     />
                     <span
@@ -392,7 +403,7 @@ export const Sidebar = () => {
                     <Link
                       to={ROUTES.settings}
                       title={hasName ? `${displayName} · ${roleLabel}` : 'Add your name in Settings'}
-                      className="flex items-center gap-2.5 min-w-0 flex-1 rounded-lg px-1 py-1 -my-0.5 transition-colors"
+                      className="flex items-center gap-2.5 min-w-0 flex-1 rounded-lg px-1.5 py-1 -my-0.5 transition-colors"
                       onMouseEnter={e => {
                         e.currentTarget.style.backgroundColor = 'var(--hover)'
                       }}
@@ -404,10 +415,11 @@ export const Sidebar = () => {
                         className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-[11px] font-bold tracking-wide"
                         style={{
                           background: hasName
-                            ? 'color-mix(in srgb, var(--accent) 16%, transparent)'
+                            ? 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 25%, transparent), color-mix(in srgb, var(--accent) 10%, transparent))'
                             : 'var(--hover)',
                           color: hasName ? 'var(--accent)' : 'var(--text-muted)',
                           border: '1px solid var(--border)',
+                          boxShadow: hasName ? '0 0 12px color-mix(in srgb, var(--accent) 20%, transparent)' : 'none',
                         }}
                       >
                         {hasName ? initials : <UserRound className="w-3.5 h-3.5" />}

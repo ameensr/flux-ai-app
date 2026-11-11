@@ -96,10 +96,15 @@ export function TicketBowlTable({
   }
 
   return (
-    <div className="rounded-xl border border-border/70 bg-surface shadow-xs overflow-hidden">
+    <div className="rounded-2xl border border-glass-border bg-surface/60 backdrop-blur-xl shadow-xl overflow-hidden relative">
+      {/* Top specular highlight */}
+      <div
+        className="absolute inset-x-0 top-0 h-[1px] pointer-events-none z-10"
+        style={{ background: 'linear-gradient(90deg, transparent, var(--glass-highlight), transparent)' }}
+      />
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs text-text-primary">
-          <thead className="bg-surface-elevated/70 border-b border-border text-[11px] text-text-muted uppercase tracking-wider select-none font-semibold">
+          <thead className="bg-surface-elevated/75 border-b border-glass-border text-[11px] text-text-muted uppercase tracking-wider select-none font-semibold backdrop-blur-md">
             <tr>
               {/* Checkbox */}
               <th className="py-3 px-3 w-8">

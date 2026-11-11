@@ -24,21 +24,22 @@ const ModeCard = ({
     onClick={onClick}
     aria-pressed={active}
     className={cn(
-      'w-full text-left rounded-xl p-4 transition-all duration-200 group',
-      'flex items-start gap-4 border',
+      'w-full text-left rounded-2xl p-4 transition-all duration-200 group',
+      'flex items-start gap-4 border backdrop-blur-md',
     )}
     style={{
-      background: active ? 'rgba(99,102,241,0.08)' : 'var(--hover)',
-      borderColor: active ? 'rgba(99,102,241,0.4)' : 'var(--border)',
-      boxShadow: active ? '0 0 0 1px rgba(99,102,241,0.2)' : 'none',
+      background: active ? 'rgba(99,102,241,0.12)' : 'color-mix(in srgb, var(--surface) 40%, transparent)',
+      borderColor: active ? 'rgba(99,102,241,0.45)' : 'var(--glass-border)',
+      boxShadow: active ? '0 0 20px rgba(99,102,241,0.15), inset 0 1px 0 var(--glass-highlight)' : 'inset 0 1px 0 var(--glass-highlight)',
     }}
   >
     {/* Icon */}
     <div
-      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-colors"
+      className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 transition-colors"
       style={{
-        background: active ? 'rgba(99,102,241,0.15)' : 'var(--surface-elevated)',
+        background: active ? 'rgba(99,102,241,0.2)' : 'var(--surface-elevated)',
         color: active ? '#818CF8' : 'var(--text-muted)',
+        border: '1px solid var(--border)',
       }}
     >
       <Icon className="w-4 h-4" />
@@ -59,6 +60,7 @@ const ModeCard = ({
           style={{
             borderColor: active ? '#6366F1' : 'var(--border)',
             background: active ? '#6366F1' : 'transparent',
+            boxShadow: active ? '0 0 8px rgba(99,102,241,0.5)' : 'none',
           }}
         >
           {active && <div className="w-1.5 h-1.5 rounded-full bg-white" />}

@@ -91,7 +91,8 @@ export function TicketBowlStatsDashboard({
       {/* ── Metric Cards ── */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {/* Card 1: Unique Forwarded Tickets */}
-        <div className="p-3.5 rounded-xl border border-border/70 bg-surface/80 flex items-center justify-between shadow-xs">
+        <div className="p-3.5 rounded-2xl border border-glass-border bg-surface/60 backdrop-blur-xl flex items-center justify-between shadow-md relative overflow-hidden group hover:-translate-y-0.5 transition-transform duration-200">
+          <div className="absolute inset-x-0 top-0 h-[1px] pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, var(--glass-highlight), transparent)' }} />
           <div>
             <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
               Unique Tickets
@@ -105,13 +106,14 @@ export function TicketBowlStatsDashboard({
             )}
             <p className="text-[10px] text-text-muted mt-0.5">In filtered dataset</p>
           </div>
-          <div className="p-2.5 rounded-lg bg-accent/10 text-accent shrink-0">
+          <div className="p-2.5 rounded-xl bg-accent/15 text-accent shrink-0 shadow-inner">
             <Layers className="w-4 h-4" />
           </div>
         </div>
 
         {/* Card 2: Total Forwarding Events */}
-        <div className="p-3.5 rounded-xl border border-border/70 bg-surface/80 flex items-center justify-between shadow-xs">
+        <div className="p-3.5 rounded-2xl border border-glass-border bg-surface/60 backdrop-blur-xl flex items-center justify-between shadow-md relative overflow-hidden group hover:-translate-y-0.5 transition-transform duration-200">
+          <div className="absolute inset-x-0 top-0 h-[1px] pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, var(--glass-highlight), transparent)' }} />
           <div>
             <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
               Forwarding Events
@@ -125,13 +127,14 @@ export function TicketBowlStatsDashboard({
             )}
             <p className="text-[10px] text-text-muted mt-0.5">Total transitions</p>
           </div>
-          <div className="p-2.5 rounded-lg bg-sky-500/10 text-sky-500 shrink-0">
+          <div className="p-2.5 rounded-xl bg-sky-500/15 text-sky-400 shrink-0 shadow-inner">
             <Activity className="w-4 h-4" />
           </div>
         </div>
 
         {/* Card 3: Repeat-Forwarded Tickets */}
-        <div className="p-3.5 rounded-xl border border-border/70 bg-surface/80 flex items-center justify-between shadow-xs">
+        <div className="p-3.5 rounded-2xl border border-glass-border bg-surface/60 backdrop-blur-xl flex items-center justify-between shadow-md relative overflow-hidden group hover:-translate-y-0.5 transition-transform duration-200">
+          <div className="absolute inset-x-0 top-0 h-[1px] pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, var(--glass-highlight), transparent)' }} />
           <div>
             <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
               Repeat Forwarded
@@ -145,7 +148,7 @@ export function TicketBowlStatsDashboard({
             )}
             <p className="text-[10px] text-text-muted mt-0.5">&gt; 1 transition count</p>
           </div>
-          <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-500 shrink-0">
+          <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400 shrink-0 shadow-inner">
             <Flame className="w-4 h-4" />
           </div>
         </div>
@@ -153,12 +156,13 @@ export function TicketBowlStatsDashboard({
         {/* Card 4: Incomplete / Unavailable History */}
         <div
           onClick={onFilterUnavailableHistory}
-          className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-xs flex items-center justify-between ${isFilteringUnavailableHistory
-              ? 'border-accent bg-accent/10 ring-1 ring-accent'
-              : 'border-border/70 bg-surface/80 hover:bg-surface-elevated/80'
+          className={`p-3.5 rounded-2xl border backdrop-blur-xl transition-all cursor-pointer shadow-md flex items-center justify-between relative overflow-hidden hover:-translate-y-0.5 duration-200 ${isFilteringUnavailableHistory
+              ? 'border-accent bg-accent/15 ring-1 ring-accent'
+              : 'border-glass-border bg-surface/60 hover:bg-surface-elevated/70'
             }`}
           title="Click to toggle filter for tickets with unavailable history"
         >
+          <div className="absolute inset-x-0 top-0 h-[1px] pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, var(--glass-highlight), transparent)' }} />
           <div>
             <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider flex items-center gap-1">
               <span>Incomplete History</span>
@@ -175,7 +179,7 @@ export function TicketBowlStatsDashboard({
               {isFilteringUnavailableHistory ? 'Active filter (click to reset)' : 'Inspect separately'}
             </p>
           </div>
-          <div className="p-2.5 rounded-lg bg-slate-500/10 text-slate-500 shrink-0">
+          <div className="p-2.5 rounded-xl bg-slate-500/15 text-slate-400 shrink-0 shadow-inner">
             <FileQuestion className="w-4 h-4" />
           </div>
         </div>

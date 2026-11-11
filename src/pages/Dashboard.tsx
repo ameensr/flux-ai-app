@@ -45,9 +45,20 @@ const DateTimeWidget = () => {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.3, duration: 0.5 }}
-      className="glass-panel px-5 sm:px-6 py-4 flex flex-col items-end gap-2 min-w-[180px]"
+      transition={{ delay: 0.2, duration: 0.5 }}
+      className="glass-panel px-5 sm:px-6 py-4 flex flex-col items-end gap-2 min-w-[200px] relative overflow-hidden"
     >
+      {/* Specular top highlight */}
+      <div
+        className="absolute inset-x-0 top-0 h-[1px] pointer-events-none"
+        style={{ background: 'linear-gradient(90deg, transparent, var(--glass-highlight), transparent)' }}
+      />
+      {/* Left accent indicator line */}
+      <div
+        className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full"
+        style={{ background: 'linear-gradient(180deg, var(--accent), transparent)' }}
+      />
+
       {/* Time */}
       <div className="flex items-center gap-2">
         <Clock className="w-3.5 h-3.5 text-accent-gold" />
@@ -63,9 +74,9 @@ const DateTimeWidget = () => {
         </span>
       </div>
       {/* Motivational line */}
-      <div className="flex items-center gap-1.5 mt-1 pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
+      <div className="flex items-center gap-1.5 mt-1 pt-2 w-full justify-end" style={{ borderTop: '1px solid var(--divider)' }}>
         <Sparkles className="w-3 h-3 text-accent-gold shrink-0" />
-        <span className="text-[10px] sm:text-[11px] italic text-text-secondary leading-tight">
+        <span className="text-[10px] sm:text-[11px] italic text-text-secondary leading-tight truncate max-w-[200px]">
           {MOTIV_LINES[motivIndex]}
         </span>
       </div>
@@ -255,8 +266,15 @@ export const Dashboard = () => {
           animate={{ opacity: 1, x: 0 }}
           className="flex items-center gap-2 mb-3"
         >
-          <div className="px-3 py-1 rounded-full bg-white/5 border border-white/10 flex items-center gap-2">
-            <Zap className="w-3 h-3 text-accent-gold" />
+          <div
+            className="px-3.5 py-1.5 rounded-full flex items-center gap-2 backdrop-blur-md"
+            style={{
+              background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+              boxShadow: '0 0 16px color-mix(in srgb, var(--accent) 15%, transparent), inset 0 1px 0 rgba(255,255,255,0.1)',
+            }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-gold animate-pulse" />
             <span className="text-[10px] font-semibold uppercase tracking-wider text-accent-gold">System Operational</span>
           </div>
         </motion.div>
@@ -287,7 +305,9 @@ export const Dashboard = () => {
       <section className="space-y-3">
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-2">
-            <Zap className="w-3.5 h-3.5 text-accent-gold" />
+            <div className="p-1 rounded-md bg-accent/10 border border-accent/20">
+              <Zap className="w-3.5 h-3.5 text-accent-gold" />
+            </div>
             <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-text-primary">
               AI Launch Modules
             </h2>
@@ -308,34 +328,35 @@ export const Dashboard = () => {
                 <GlassCard
                   onClick={() => accessible && navigate(MODULE_ROUTES[module.id])}
                   className={cn(
-                    'p-4 sm:p-5 h-full group flex flex-col justify-between transition-all duration-300 relative overflow-hidden',
+                    'p-5 sm:p-6 h-full group flex flex-col justify-between transition-all duration-300 relative overflow-hidden',
                     accessible
-                      ? 'cursor-pointer hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/20 hover:border-indigo-500/50 dark:hover:border-accent-gold/50 hover:bg-indigo-50/50 dark:hover:bg-white/[0.05]'
+                      ? 'cursor-pointer hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-500/15 dark:hover:shadow-indigo-500/25 hover:border-indigo-500/50 dark:hover:border-accent/40'
                       : 'cursor-not-allowed opacity-60'
                   )}
                 >
+                  {/* Subtle ambient light pool in card */}
                   <div className={cn(
-                    'absolute top-0 right-0 w-28 h-28 bg-gradient-to-br blur-2xl opacity-0 transition-opacity duration-500 pointer-events-none',
+                    'absolute top-0 right-0 w-36 h-36 bg-gradient-to-br blur-3xl opacity-0 transition-opacity duration-500 pointer-events-none',
                     accessible && 'group-hover:opacity-100',
                     module.color,
                   )} />
 
                   <div>
                     {/* Top Row: Icon + Launch Button */}
-                    <div className="flex items-center justify-between gap-3 mb-3 relative z-10">
+                    <div className="flex items-center justify-between gap-3 mb-4 relative z-10">
                       <div className={cn(
-                        'w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center shrink-0 transition-all duration-300',
-                        accessible && 'group-hover:bg-indigo-600 dark:group-hover:bg-accent-gold group-hover:text-white dark:group-hover:text-background group-hover:border-indigo-600 dark:group-hover:border-accent-gold group-hover:shadow-md group-hover:shadow-indigo-500/25'
+                        'w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm',
+                        accessible && 'group-hover:bg-indigo-600 dark:group-hover:bg-accent group-hover:text-white dark:group-hover:text-background group-hover:border-indigo-600 dark:group-hover:border-accent group-hover:shadow-lg group-hover:shadow-indigo-500/30'
                       )}>
                         {accessible
-                          ? <module.icon className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 dark:text-accent-gold group-hover:text-white dark:group-hover:text-background transition-colors" />
+                          ? <module.icon className="w-5 h-5 text-indigo-500 dark:text-accent-gold group-hover:text-white dark:group-hover:text-background transition-colors" />
                           : <Lock className="w-4 h-4 text-text-muted" />}
                       </div>
 
                       <div className={cn(
-                        'inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-lg border transition-all duration-300 shadow-2xs',
+                        'inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold tracking-wider uppercase px-3 py-1.5 rounded-full border transition-all duration-300 shadow-xs backdrop-blur-sm',
                         accessible
-                          ? 'bg-slate-100 dark:bg-white/5 text-indigo-600 dark:text-accent-gold border-slate-200 dark:border-white/10 group-hover:bg-indigo-600 dark:group-hover:bg-accent-gold group-hover:text-white dark:group-hover:text-background group-hover:border-indigo-600 dark:group-hover:border-accent-gold group-hover:shadow-md group-hover:shadow-indigo-500/20'
+                          ? 'bg-white/[0.04] text-indigo-400 dark:text-accent-gold border-white/10 group-hover:bg-indigo-600 dark:group-hover:bg-accent group-hover:text-white dark:group-hover:text-background group-hover:border-indigo-600 dark:group-hover:border-accent group-hover:shadow-md group-hover:shadow-indigo-500/25'
                           : 'text-text-muted border-border/40'
                       )}>
                         <span>{accessible ? 'Launch' : 'Locked'}</span>
@@ -348,12 +369,12 @@ export const Dashboard = () => {
                     {/* Title & Description */}
                     <div className="relative z-10">
                       <h3 className={cn(
-                        'text-sm sm:text-base font-bold text-foreground mb-1 leading-snug transition-colors duration-300',
-                        accessible && 'group-hover:text-indigo-600 dark:group-hover:text-accent-gold'
+                        'text-base font-bold text-foreground mb-1.5 leading-snug transition-colors duration-300',
+                        accessible && 'group-hover:text-indigo-400 dark:group-hover:text-accent-gold'
                       )}>
                         {module.title}
                       </h3>
-                      <p className="text-text-secondary text-xs leading-relaxed line-clamp-2">
+                      <p className="text-text-secondary text-xs sm:text-[13px] leading-relaxed line-clamp-2">
                         {module.description}
                       </p>
                     </div>

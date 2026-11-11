@@ -119,12 +119,12 @@ export function SignOutConfirmModal({
             transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
             className="relative w-full max-w-[360px] overflow-hidden rounded-3xl"
             style={{
-              background: 'color-mix(in srgb, var(--card-bg) 92%, transparent)',
-              border: '1px solid var(--border)',
+              background: 'color-mix(in srgb, var(--surface) 88%, transparent)',
+              border: '1px solid var(--glass-border)',
               boxShadow:
-                '0 32px 64px -16px rgba(0,0,0,0.45), 0 0 0 1px color-mix(in srgb, var(--border) 60%, transparent)',
-              backdropFilter: 'blur(24px)',
-              WebkitBackdropFilter: 'blur(24px)',
+                '0 32px 64px -16px rgba(0,0,0,0.6), inset 0 1px 0 var(--glass-highlight)',
+              backdropFilter: 'blur(32px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(32px) saturate(180%)',
             }}
             onClick={e => e.stopPropagation()}
           >

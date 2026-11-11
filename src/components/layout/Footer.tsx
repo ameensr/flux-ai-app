@@ -8,8 +8,11 @@ export const Footer: React.FC = () => {
 
   return (
     <footer
-      className="mt-auto shrink-0 w-full py-4 px-4"
-      style={{ borderTop: '1px solid var(--divider)' }}
+      className="mt-auto shrink-0 w-full py-4 px-4 backdrop-blur-md"
+      style={{
+        borderTop: '1px solid var(--glass-border)',
+        background: 'color-mix(in srgb, var(--bg) 60%, transparent)',
+      }}
     >
       <div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
         <Logo size="sm" animate={false} />

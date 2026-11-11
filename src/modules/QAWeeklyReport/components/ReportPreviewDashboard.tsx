@@ -185,46 +185,46 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
   /* Premium Glassmorphic Card System */
   .glass-card {
     background: ${theme === 'dark' 
-      ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)'
-      : 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)'};
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)'};
+      ? 'linear-gradient(135deg, rgba(22, 28, 45, 0.72) 0%, rgba(12, 16, 28, 0.62) 100%)'
+      : 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(246, 248, 253, 0.86) 100%)'};
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    border: 1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(226,232,240,0.85)'};
     box-shadow: ${theme === 'dark'
-      ? '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)'
-      : '0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8)'};
+      ? '0 10px 36px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.08)'
+      : '0 10px 32px rgba(15,23,42,0.06), inset 0 1px 0 rgba(255,255,255,0.95)'};
   }
 
   .glass-card-elevated {
     background: ${theme === 'dark'
-      ? 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)'
-      : 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)'};
-    backdrop-filter: blur(24px) saturate(200%);
-    -webkit-backdrop-filter: blur(24px) saturate(200%);
-    border: 1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)'};
+      ? 'linear-gradient(135deg, rgba(26, 34, 56, 0.78) 0%, rgba(15, 20, 36, 0.68) 100%)'
+      : 'linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 255, 0.9) 100%)'};
+    backdrop-filter: blur(28px) saturate(200%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%);
+    border: 1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(226,232,240,0.95)'};
     box-shadow: ${theme === 'dark'
-      ? '0 12px 48px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08)'
-      : '0 12px 48px rgba(0,0,0,0.1), 0 4px 16px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,1)'};
+      ? '0 16px 48px rgba(0,0,0,0.45), 0 4px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.12)'
+      : '0 14px 44px rgba(15,23,42,0.08), 0 4px 16px rgba(15,23,42,0.04), inset 0 1px 0 rgba(255,255,255,1)'};
   }
 
   .glass-card-subtle {
     background: ${theme === 'dark'
-      ? 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)'
-      : 'linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.5) 100%)'};
-    backdrop-filter: blur(16px) saturate(150%);
-    -webkit-backdrop-filter: blur(16px) saturate(150%);
-    border: 1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.4)'};
+      ? 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%)'
+      : 'linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(246,248,252,0.65) 100%)'};
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border: 1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(226,232,240,0.65)'};
     box-shadow: ${theme === 'dark'
-      ? '0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03)'
-      : '0 4px 24px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.6)'};
+      ? '0 6px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)'
+      : '0 6px 24px rgba(15,23,42,0.04), inset 0 1px 0 rgba(255,255,255,0.8)'};
   }
 
   /* Glassmorphic hover effects */
   .glass-card:hover, .glass-card-elevated:hover, .glass-card-subtle:hover {
-    border-color: ${theme === 'dark' ? 'rgba(212,175,55,0.2)' : 'rgba(212,175,55,0.3)'};
+    border-color: ${theme === 'dark' ? 'rgba(99,102,241,0.35)' : 'rgba(99,102,241,0.35)'};
     box-shadow: ${theme === 'dark'
-      ? '0 12px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(212,175,55,0.1), inset 0 1px 0 rgba(255,255,255,0.08)'
-      : '0 12px 48px rgba(0,0,0,0.12), 0 0 0 1px rgba(212,175,55,0.15), inset 0 1px 0 rgba(255,255,255,1)'};
+      ? '0 16px 48px rgba(0,0,0,0.48), 0 0 24px rgba(99,102,241,0.14), inset 0 1px 0 rgba(255,255,255,0.14)'
+      : '0 16px 48px rgba(15,23,42,0.09), 0 0 24px rgba(99,102,241,0.08), inset 0 1px 0 rgba(255,255,255,1)'};
   }
 
   /* Premium inner glow for interactive elements */
@@ -476,7 +476,7 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
 import {
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
   XAxis, YAxis, Tooltip, Legend, LineChart, Line, AreaChart, Area,
-  ComposedChart
+  ComposedChart, CartesianGrid
 } from 'recharts'
 import { toast } from '@/hooks/use-toast'
 import { AI_DISABLED_BY_ADMIN, AI_PERMISSION_DENIED, useAIAccess } from '@/hooks/useAIAccess'
@@ -1600,6 +1600,7 @@ Do not return markdown wraps, only raw JSON text.
   // Work Distribution - using actual data from tables
   const supportTicketsCount = data.supportTickets?.length || 0
   const newFeaturesCount = data.releaseItems?.length || 0
+  const totalWorkUnits = supportTicketsCount + newFeaturesCount
 
   const workDistributionData = [
     { name: 'Support Tickets Fix', value: supportTicketsCount, hex: '#60a5fa' },
@@ -1638,6 +1639,10 @@ Do not return markdown wraps, only raw JSON text.
     { name: 'Fixed Defects', value: data.defectsLastWeek.fixed, hex: '#fb923c' },
     { name: 'Closed Defects', value: data.defectsLastWeek.closed, hex: '#10b981' }
   ]
+
+  const totalDefects = useMemo(() => {
+    return defectStatusData.reduce((acc: number, curr: any) => acc + (Number(curr.value) || 0), 0)
+  }, [defectStatusData])
 
   // ── Exports ──
   const exportFileBase = `${slugifyName(data.projectName || 'qa-report')}-${data.weekStart || 'report'}`
@@ -2459,7 +2464,8 @@ Do not return markdown wraps, only raw JSON text.
             </div>
 
             {/* Release Health */}
-            <div className={`flex items-center gap-4 p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+            <div className={`flex items-center gap-4 p-5 rounded-2xl border relative overflow-hidden backdrop-blur-2xl transition-all duration-300 ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 shadow-sm'}`}>
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
               <span className="text-3xl">{data.releaseBugStatus.releaseHealth.emoji}</span>
               <div>
                 <span className={`text-lg font-extrabold ${data.releaseBugStatus.releaseHealth.color}`}>{data.releaseBugStatus.releaseHealth.label}</span>
@@ -2474,9 +2480,10 @@ Do not return markdown wraps, only raw JSON text.
                 { label: 'Closed', val: data.releaseBugStatus.metrics.completedBugs, color: 'text-green-400' },
                 { label: 'Fixed', val: data.releaseBugStatus.metrics.resolvedBugs, color: 'text-emerald-400' },
                 { label: 'Open', val: data.releaseBugStatus.metrics.totalBugs - data.releaseBugStatus.metrics.completedBugs, color: 'text-red-400' },
-                { label: 'Closure %', val: `${data.releaseBugStatus.metrics.closurePercentage.toFixed(1)}%`, color: 'text-accent-gold' },
+                { label: 'Closure %', val: `${data.releaseBugStatus.metrics.closurePercentage.toFixed(1)}%`, color: 'text-indigo-400' },
               ].map(kpi => (
-                <div key={kpi.label} className={`p-4 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.02] border-white/5' : 'bg-white border-slate-200'}`}>
+                <div key={kpi.label} className={`p-4 rounded-2xl border relative overflow-hidden backdrop-blur-xl ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 shadow-sm'}`}>
+                  <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
                   <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted block">{kpi.label}</span>
                   <span className={`text-2xl font-black ${kpi.color}`}>{kpi.val}</span>
                 </div>
@@ -2484,7 +2491,8 @@ Do not return markdown wraps, only raw JSON text.
             </div>
 
             {/* Status Distribution — ranked progress bars */}
-            <div className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+            <div className={`p-5 rounded-2xl border relative overflow-hidden backdrop-blur-2xl ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 shadow-sm'}`}>
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
               <RankedProgressList
                 theme={theme}
                 hasPlayed={hasPlayed}
@@ -2498,10 +2506,11 @@ Do not return markdown wraps, only raw JSON text.
             </div>
 
             {/* AI Summary */}
-            <div className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+            <div className={`p-5 rounded-2xl border relative overflow-hidden backdrop-blur-2xl ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 shadow-sm'}`}>
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="w-4 h-4 text-accent-gold" />
-                <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Bug Analysis Summary</span>
+                <Sparkles className="w-4 h-4 text-indigo-400" />
+                <span className="text-xs font-black uppercase tracking-widest text-indigo-400">Bug Analysis Summary</span>
               </div>
               <p className={`text-sm leading-relaxed ${theme === 'dark' ? 'text-white/70' : 'text-slate-600'}`}>
                 {data.releaseBugStatus.aiSummary}
@@ -2819,8 +2828,9 @@ Do not return markdown wraps, only raw JSON text.
                   { title: 'Last Week', d: data.defectsLastWeek },
                   { title: 'Month to Date', d: data.defectsMTD }
                 ].map(({ title, d }) => (
-                  <div key={title} className={`p-6 rounded-2xl border flex flex-col gap-4 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-accent-gold">{title}</span>
+                  <div key={title} className={`p-6 rounded-2xl border relative overflow-hidden backdrop-blur-2xl flex flex-col gap-4 ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 shadow-sm'}`}>
+                    <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400">{title}</span>
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         { label: 'Reported', val: d.reported, color: theme === 'dark' ? 'text-white' : 'text-slate-800' },
@@ -2882,7 +2892,8 @@ Do not return markdown wraps, only raw JSON text.
               <h2 className="text-2xl font-extrabold font-clash">Historical Defect Optimization</h2>
             </div>
 
-            <div className={`p-6 rounded-2xl border flex flex-col gap-6 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+            <div className={`p-6 rounded-2xl border relative overflow-hidden backdrop-blur-2xl flex flex-col gap-6 ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 shadow-sm'}`}>
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
               {/* Input Values */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className={`p-4 rounded-xl border ${theme === 'dark' ? 'border-white/5 bg-white/[0.02]' : 'border-slate-100 bg-slate-50'}`}>
@@ -3148,8 +3159,9 @@ Do not return markdown wraps, only raw JSON text.
               })()}
             </div>
           ) : !prevReport ? (
-            <div className={`p-8 rounded-2xl border text-center text-sm ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 text-white/50' : 'bg-white border-slate-200 text-slate-500'}`}>
-              <p className="font-semibold text-accent-gold mb-1">No previous Final report available for comparison</p>
+            <div className={`p-8 rounded-2xl border relative overflow-hidden backdrop-blur-2xl text-center text-sm ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10 text-white/50' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 text-slate-500 shadow-sm'}`}>
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
+              <p className="font-semibold text-indigo-400 dark:text-indigo-400 mb-1">No previous Final report available for comparison</p>
               <p className="text-xs">Save and finalize your reports to start tracking week-over-week performance changes. Draft reports are excluded from WoW comparisons.</p>
             </div>
           ) : (
@@ -3179,8 +3191,9 @@ Do not return markdown wraps, only raw JSON text.
                       whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true }}
                       transition={{ delay: idx * 0.05 }}
-                      className={`p-6 rounded-2xl border flex flex-col justify-between gap-4 group transition-all duration-300 ${glowColor} ${theme === 'dark' ? 'bg-white/[0.01] hover:border-white/20 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:shadow-lg hover:border-slate-300'}`}
+                      className={`p-6 rounded-2xl border relative overflow-hidden backdrop-blur-2xl flex flex-col justify-between gap-4 group transition-all duration-300 hover:scale-[1.01] ${glowColor} ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10 hover:border-indigo-400/30' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 hover:shadow-lg hover:border-slate-300'}`}
                     >
+                      <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
                       <div className="flex items-center justify-between">
                         <span className={`text-xs font-extrabold ${theme === 'dark' ? 'text-white/80' : 'text-slate-700'}`}>{card.name}</span>
                         <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${badgeColor}`}>
@@ -3213,7 +3226,8 @@ Do not return markdown wraps, only raw JSON text.
               </div>
 
               {/* WoW AI Insights Summary box */}
-              <div className={`p-5 rounded-2xl border flex items-start gap-4 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <div className={`p-5 rounded-2xl border relative overflow-hidden backdrop-blur-2xl flex items-start gap-4 ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 shadow-sm'}`}>
+                <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
                 <div className="p-2 rounded-xl bg-accent-gold/10 text-accent-gold shrink-0">
                   <Sparkles className="w-5 h-5" />
                 </div>
@@ -3271,8 +3285,9 @@ Do not return markdown wraps, only raw JSON text.
             </div>
 
             {historicalChartsData.length < 2 ? (
-              <div className={`p-8 rounded-2xl border text-center text-sm ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 text-white/50' : 'bg-white border-slate-200 text-slate-500'}`}>
-                <p className="font-semibold text-accent-gold mb-1">Insufficient Historical Data</p>
+              <div className={`p-8 rounded-2xl border relative overflow-hidden backdrop-blur-2xl text-center text-sm ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10 text-white/50' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 text-slate-500 shadow-sm'}`}>
+                <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
+                <p className="font-semibold text-indigo-400 dark:text-indigo-400 mb-1">Insufficient Historical Data</p>
                 <p className="text-xs">At least 2 Final reports are required to calculate trend performance charts. Draft reports are excluded.</p>
                 {draftReportCount > 0 && (
                   <p className="text-xs mt-1 text-accent-gold/70">
@@ -3289,19 +3304,21 @@ Do not return markdown wraps, only raw JSON text.
                   whileInView={{ opacity: 1, y: 0, scale: 1 }}
                   viewport={{ once: true, margin: "-45px" }}
                   transition={{ duration: 0.5 }}
-                  className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                  className={`p-6 rounded-2xl border relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:scale-[1.01] ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10 hover:border-indigo-400/30 hover:shadow-[0_12px_40px_rgba(59,130,246,0.12)]' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 hover:border-indigo-400/40 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)]'}`}
                 >
-                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Monthly KPI Trend</span>
+                  <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/25 dark:via-white/15 to-transparent pointer-events-none z-20" />
+                  <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block">Monthly KPI Trend</span>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'} />
                         <XAxis dataKey="name" {...axisPreset()} />
                         <YAxis {...axisPreset()} />
                         <Tooltip content={<PremiumTooltip theme={theme} />} />
                         <Legend {...legendPreset} />
-                        <Line type="monotone" dataKey="emails" name="Support Emails" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#3b82f6', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                        <Line type="monotone" dataKey="features" name="Features Tested" stroke="#facc15" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#facc15', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                        <Line type="monotone" dataKey="fixes" name="Code Fixes" stroke="#a855f7" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#a855f7', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Line type="monotone" dataKey="emails" name="Support Emails" stroke="#3b82f6" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#3b82f6', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
+                        <Line type="monotone" dataKey="features" name="Features Tested" stroke="#facc15" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#facc15', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
+                        <Line type="monotone" dataKey="fixes" name="Code Fixes" stroke="#a855f7" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#a855f7', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -3313,9 +3330,10 @@ Do not return markdown wraps, only raw JSON text.
                   whileInView={{ opacity: 1, y: 0, scale: 1 }}
                   viewport={{ once: true, margin: "-45px" }}
                   transition={{ duration: 0.5, delay: 0.1 }}
-                  className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                  className={`p-6 rounded-2xl border relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:scale-[1.01] ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10 hover:border-indigo-400/30 hover:shadow-[0_12px_40px_rgba(59,130,246,0.12)]' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 hover:border-indigo-400/40 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)]'}`}
                 >
-                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Production Issue Categories Trend</span>
+                  <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/25 dark:via-white/15 to-transparent pointer-events-none z-20" />
+                  <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block">Production Issue Categories Trend</span>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
@@ -3324,13 +3342,14 @@ Do not return markdown wraps, only raw JSON text.
                           <StackedAreaGradient id="prodTrendSupportGrad" color="#eab308" theme={theme} />
                           <StackedAreaGradient id="prodTrendChangeGrad" color="#a855f7" theme={theme} />
                         </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'} />
                         <XAxis dataKey="name" {...axisPreset()} />
                         <YAxis {...axisPreset()} />
                         <Tooltip content={<PremiumTooltip theme={theme} />} />
                         <Legend {...legendPreset} />
-                        <Area type="monotone" dataKey="productionIssuesProd" stackId="1" name="Total Production Issues" stroke="#d4af37" fill="url(#prodTrendEscapedGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                        <Area type="monotone" dataKey="fixesForValidationProd" stackId="1" name="Fixes for Validation" stroke="#eab308" fill="url(#prodTrendSupportGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                        <Area type="monotone" dataKey="escapedDefectsProd" stackId="1" name="Escaped Defects" stroke="#a855f7" fill="url(#prodTrendChangeGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="productionIssuesProd" stackId="1" name="Total Production Issues" stroke="#d4af37" fill="url(#prodTrendEscapedGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="fixesForValidationProd" stackId="1" name="Fixes for Validation" stroke="#eab308" fill="url(#prodTrendSupportGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="escapedDefectsProd" stackId="1" name="Escaped Defects" stroke="#a855f7" fill="url(#prodTrendChangeGrad)" strokeWidth={2} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -3342,20 +3361,22 @@ Do not return markdown wraps, only raw JSON text.
                   whileInView={{ opacity: 1, y: 0, scale: 1 }}
                   viewport={{ once: true, margin: "-45px" }}
                   transition={{ duration: 0.5, delay: 0.15 }}
-                  className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                  className={`p-6 rounded-2xl border relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:scale-[1.01] ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10 hover:border-indigo-400/30 hover:shadow-[0_12px_40px_rgba(59,130,246,0.12)]' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 hover:border-indigo-400/40 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)]'}`}
                 >
-                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Weekly Support Ticket Trend</span>
+                  <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/25 dark:via-white/15 to-transparent pointer-events-none z-20" />
+                  <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block">Weekly Support Ticket Trend</span>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <defs>
                           <GlowAreaGradient id="supportTicketGrad" color="#06b6d4" theme={theme} />
                         </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'} />
                         <XAxis dataKey="name" {...axisPreset()} />
                         <YAxis {...axisPreset()} />
                         <Tooltip content={<PremiumTooltip theme={theme} />} />
                         <Legend {...legendPreset} />
-                        <Area type="monotone" dataKey="emails" name="Support tickets" stroke="#06b6d4" fill="url(#supportTicketGrad)" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#06b6d4', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Area type="monotone" dataKey="emails" name="Support tickets" stroke="#06b6d4" fill="url(#supportTicketGrad)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#06b6d4', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -3367,21 +3388,23 @@ Do not return markdown wraps, only raw JSON text.
                   whileInView={{ opacity: 1, y: 0, scale: 1 }}
                   viewport={{ once: true, margin: "-45px" }}
                   transition={{ duration: 0.5, delay: 0.2 }}
-                  className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                  className={`p-6 rounded-2xl border relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:scale-[1.01] ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10 hover:border-indigo-400/30 hover:shadow-[0_12px_40px_rgba(59,130,246,0.12)]' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 hover:border-indigo-400/40 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)]'}`}
                 >
-                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">QA Health vs Team Size Trend</span>
+                  <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/25 dark:via-white/15 to-transparent pointer-events-none z-20" />
+                  <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block">QA Health vs Team Size Trend</span>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <defs>
-                          <BarFillGradient id="teamSizeBarGrad" color="#d4af37" theme={theme} />
+                          <BarFillGradient id="teamSizeBarGrad" color="#6366f1" theme={theme} />
                         </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'} />
                         <XAxis dataKey="name" {...axisPreset()} />
                         <YAxis {...axisPreset()} />
                         <Tooltip content={<PremiumTooltip theme={theme} />} />
                         <Legend {...legendPreset} />
-                        <Bar dataKey="teamSize" name="Allocated Engineers" fill="url(#teamSizeBarGrad)" fillOpacity={0.25} radius={BAR_RADIUS} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                        <Line type="monotone" dataKey="healthScore" name="QA Health Score %" stroke="#10b981" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#10b981', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Bar dataKey="teamSize" name="Allocated Engineers" fill="url(#teamSizeBarGrad)" fillOpacity={0.35} radius={[6, 6, 0, 0]} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
+                        <Line type="monotone" dataKey="healthScore" name="QA Health Score %" stroke="#10b981" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--surface-elevated)' }} style={glowStyle('#10b981', theme)} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -3393,9 +3416,10 @@ Do not return markdown wraps, only raw JSON text.
                   whileInView={{ opacity: 1, y: 0, scale: 1 }}
                   viewport={{ once: true, margin: "-45px" }}
                   transition={{ duration: 0.5, delay: 0.25 }}
-                  className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200 hover:shadow-lg transition-shadow duration-300'}`}
+                  className={`p-6 rounded-2xl border relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:scale-[1.01] ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10 hover:border-indigo-400/30 hover:shadow-[0_12px_40px_rgba(59,130,246,0.12)]' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 hover:border-indigo-400/40 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)]'}`}
                 >
-                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block">Feature Completion Trend</span>
+                  <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/25 dark:via-white/15 to-transparent pointer-events-none z-20" />
+                  <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block">Feature Completion Trend</span>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
@@ -3404,13 +3428,14 @@ Do not return markdown wraps, only raw JSON text.
                           <BarFillGradient id="featureFailGrad" color="#f87171" theme={theme} />
                           <BarFillGradient id="featureBlockedGrad" color="#fb923c" theme={theme} />
                         </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'} />
                         <XAxis dataKey="name" {...axisPreset()} />
                         <YAxis {...axisPreset()} />
                         <Tooltip content={<PremiumTooltip theme={theme} />} />
                         <Legend {...legendPreset} />
-                        <Bar dataKey="passFeatures" name="Passed" stackId="a" fill="url(#featurePassGrad)" isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                        <Bar dataKey="failFeatures" name="Failed" stackId="a" fill="url(#featureFailGrad)" isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                        <Bar dataKey="blockedFeatures" name="Blocked" stackId="a" fill="url(#featureBlockedGrad)" radius={BAR_RADIUS} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                        <Bar dataKey="passFeatures" name="Passed" stackId="a" fill="url(#featurePassGrad)" isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
+                        <Bar dataKey="failFeatures" name="Failed" stackId="a" fill="url(#featureFailGrad)" isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
+                        <Bar dataKey="blockedFeatures" name="Blocked" stackId="a" fill="url(#featureBlockedGrad)" radius={[6, 6, 0, 0]} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -3432,7 +3457,7 @@ Do not return markdown wraps, only raw JSON text.
           style={{ display: vis.show_weeklyCharts === false ? 'none' : undefined }}
         >
           <div className="flex items-center gap-2">
-            <LayoutGrid className="w-5 h-5 text-accent-gold" />
+            <LayoutGrid className="w-5 h-5 text-indigo-400" />
             <h2 className="text-2xl font-extrabold font-clash">Weekly Charts & Distribution</h2>
           </div>
 
@@ -3445,27 +3470,43 @@ Do not return markdown wraps, only raw JSON text.
               viewport={{ once: true, margin: "-45px" }}
               transition={{ duration: 0.5 }}
               onClick={() => setShowWorkDistributionModal(true)}
-              className={`p-5 rounded-2xl border cursor-pointer group relative overflow-hidden ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 hover:border-accent-gold/30 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:border-accent-gold/40 hover:shadow-2xl'} transition-all duration-300`}
+              className={`p-6 rounded-2xl border cursor-pointer group relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:scale-[1.01] ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10 hover:border-indigo-400/30 hover:shadow-[0_12px_40px_rgba(59,130,246,0.12)]' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 hover:border-indigo-400/40 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)]'}`}
             >
+              {/* Specular top highlight */}
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/25 dark:via-white/15 to-transparent pointer-events-none z-20" />
+
               {/* Hover Glow Effect */}
-              <div className="absolute inset-0 bg-gradient-to-br from-accent-gold/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
               {/* Click Indicator */}
-              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-gold/10 border border-accent-gold/20">
-                  <span className="text-[9px] font-bold text-accent-gold uppercase tracking-wider">Click to Expand</span>
-                  <svg className="w-3 h-3 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 backdrop-blur-md">
+                  <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider">Click to Expand</span>
+                  <svg className="w-3 h-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
                 </div>
               </div>
 
-              <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block relative z-10">Work Distribution</span>
-              <div className="h-64 flex justify-center items-center">
+              <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block relative z-10">Work Distribution</span>
+              <div className="relative h-64 flex justify-center items-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={workDistributionData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={3} cornerRadius={6} stroke="none" dataKey="value" isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out">
+                    <Pie
+                      data={workDistributionData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={62}
+                      outerRadius={88}
+                      paddingAngle={4}
+                      cornerRadius={8}
+                      stroke="none"
+                      dataKey="value"
+                      isAnimationActive={chartAnimationEnabled}
+                      animationDuration={1400}
+                      animationEasing="ease-out"
+                    >
                       {workDistributionData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.hex} style={glowStyle(entry.hex, theme)} />
                       ))}
@@ -3474,6 +3515,15 @@ Do not return markdown wraps, only raw JSON text.
                     <Legend {...legendPreset} />
                   </PieChart>
                 </ResponsiveContainer>
+                {/* Center KPI Ring Metric */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-7">
+                  <span className={`text-2xl font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                    <CountUpNumber end={totalWorkUnits} />
+                  </span>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-white/45' : 'text-slate-500'}`}>
+                    Tasks
+                  </span>
+                </div>
               </div>
             </motion.div>
 
@@ -3484,23 +3534,26 @@ Do not return markdown wraps, only raw JSON text.
               viewport={{ once: true, margin: "-45px" }}
               transition={{ duration: 0.5, delay: 0.1 }}
               onClick={() => setShowProductionIssuesModal(true)}
-              className={`p-5 rounded-2xl border cursor-pointer group relative overflow-hidden ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 hover:border-accent-gold/30 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:border-accent-gold/40 hover:shadow-2xl'} transition-all duration-300`}
+              className={`p-6 rounded-2xl border cursor-pointer group relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:scale-[1.01] ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10 hover:border-indigo-400/30 hover:shadow-[0_12px_40px_rgba(59,130,246,0.12)]' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 hover:border-indigo-400/40 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)]'}`}
             >
+              {/* Specular top highlight */}
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/25 dark:via-white/15 to-transparent pointer-events-none z-20" />
+
               {/* Hover Glow Effect */}
-              <div className="absolute inset-0 bg-gradient-to-br from-accent-gold/5 via-transparent to-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
               {/* Click Indicator */}
-              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-gold/10 border border-accent-gold/20">
-                  <span className="text-[9px] font-bold text-accent-gold uppercase tracking-wider">Click to Expand</span>
-                  <svg className="w-3 h-3 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 backdrop-blur-md">
+                  <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider">Click to Expand</span>
+                  <svg className="w-3 h-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
                 </div>
               </div>
 
-              <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block relative z-10">Production Issue Categories</span>
+              <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block relative z-10">Production Issue Categories</span>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={prodIssuesData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
@@ -3508,12 +3561,13 @@ Do not return markdown wraps, only raw JSON text.
                       <BarFillGradient id="prodIssuesLastWeekGrad" color="#d4af37" theme={theme} />
                       <BarFillGradient id="prodIssuesMtdGrad" color="#3b82f6" theme={theme} />
                     </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'} />
                     <XAxis dataKey="category" {...axisPreset()} />
                     <YAxis {...axisPreset()} />
                     <Tooltip content={<PremiumTooltip theme={theme} />} />
                     <Legend {...legendPreset} />
-                    <Bar dataKey="lastWeek" name="Last Week" fill="url(#prodIssuesLastWeekGrad)" radius={BAR_RADIUS} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
-                    <Bar dataKey="mtd" name="MTD" fill="url(#prodIssuesMtdGrad)" radius={BAR_RADIUS} isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out" />
+                    <Bar dataKey="lastWeek" name="Last Week" fill="url(#prodIssuesLastWeekGrad)" radius={[8, 8, 2, 2]} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
+                    <Bar dataKey="mtd" name="MTD" fill="url(#prodIssuesMtdGrad)" radius={[8, 8, 2, 2]} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -3526,27 +3580,43 @@ Do not return markdown wraps, only raw JSON text.
               viewport={{ once: true, margin: "-45px" }}
               transition={{ duration: 0.5, delay: 0.2 }}
               onClick={() => setShowDefectModal(true)}
-              className={`p-5 rounded-2xl border cursor-pointer group relative overflow-hidden ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 hover:border-accent-gold/30 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:border-accent-gold/40 hover:shadow-2xl'} transition-all duration-300`}
+              className={`p-6 rounded-2xl border cursor-pointer group relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:scale-[1.01] ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10 hover:border-indigo-400/30 hover:shadow-[0_12px_40px_rgba(59,130,246,0.12)]' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 hover:border-indigo-400/40 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)]'}`}
             >
+              {/* Specular top highlight */}
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/25 dark:via-white/15 to-transparent pointer-events-none z-20" />
+
               {/* Hover Glow Effect */}
-              <div className="absolute inset-0 bg-gradient-to-br from-accent-gold/5 via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
               {/* Click Indicator */}
-              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-gold/10 border border-accent-gold/20">
-                  <span className="text-[9px] font-bold text-accent-gold uppercase tracking-wider">Click to Expand</span>
-                  <svg className="w-3 h-3 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 backdrop-blur-md">
+                  <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider">Click to Expand</span>
+                  <svg className="w-3 h-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
                 </div>
               </div>
 
-              <span className="text-xs font-black uppercase tracking-widest text-accent-gold mb-4 block relative z-10">Defect Status Breakdown</span>
-              <div className="h-64 relative z-10">
+              <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block relative z-10">Defect Status Breakdown</span>
+              <div className="relative h-64 flex justify-center items-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={defectStatusData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} cornerRadius={6} stroke="none" dataKey="value" isAnimationActive={chartAnimationEnabled} animationDuration={1500} animationEasing="ease-out">
+                    <Pie
+                      data={defectStatusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={62}
+                      outerRadius={88}
+                      paddingAngle={4}
+                      cornerRadius={8}
+                      stroke="none"
+                      dataKey="value"
+                      isAnimationActive={chartAnimationEnabled}
+                      animationDuration={1400}
+                      animationEasing="ease-out"
+                    >
                       {defectStatusData.map((entry: { name: string; value: number; hex: string }, index: number) => (
                         <Cell key={`cell-${index}`} fill={entry.hex} style={glowStyle(entry.hex, theme)} />
                       ))}
@@ -3555,6 +3625,15 @@ Do not return markdown wraps, only raw JSON text.
                     <Legend {...legendPreset} />
                   </PieChart>
                 </ResponsiveContainer>
+                {/* Center KPI Ring Metric */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-7">
+                  <span className={`text-2xl font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                    <CountUpNumber end={totalDefects} />
+                  </span>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-white/45' : 'text-slate-500'}`}>
+                    Defects
+                  </span>
+                </div>
               </div>
             </motion.div>
 

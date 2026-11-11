@@ -197,8 +197,9 @@ export const ExecutiveKPISection: React.FC<ExecutiveKPISectionProps> = ({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: catIdx * 0.05 }}
-              className={`rounded-2xl border overflow-hidden ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}
+              className={`rounded-2xl border relative overflow-hidden backdrop-blur-2xl ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 shadow-sm'}`}
             >
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
               {/* Category Header - Clickable */}
               <button
                 onClick={() => onToggleCategory(category.id)}
@@ -347,7 +348,7 @@ const KPICard: React.FC<KPICardProps> = ({
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: "-40px" }}
         transition={{ delay: idx * 0.08, type: 'spring', damping: 20, stiffness: 100 }}
-        className={`p-5 rounded-[24px] border flex items-center justify-between group relative overflow-hidden cursor-pointer ${compact ? 'min-h-[120px]' : 'min-h-[140px]'} ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme === 'dark' ? 'bg-[#131826] border-white/[0.08]' : 'bg-white border-slate-200/80'}`}
+        className={`p-5 rounded-[24px] border flex items-center justify-between group relative overflow-hidden cursor-pointer backdrop-blur-xl ${compact ? 'min-h-[120px]' : 'min-h-[140px]'} ${kpi.pulse ? 'ring-2 ring-red-500/30' : ''} ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.07] to-white/[0.02] border-white/10' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80'}`}
         style={{
           transformStyle: 'preserve-3d',
           transform: isHovered
@@ -363,6 +364,9 @@ const KPICard: React.FC<KPICardProps> = ({
               : '0 4px 20px rgba(0,0,0,0.05)'
         }}
       >
+        {/* Top specular reflection line */}
+        <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
+
         {/* Shine effect on hover */}
         <div
           className="absolute inset-0 rounded-[24px] pointer-events-none transition-opacity duration-300"
