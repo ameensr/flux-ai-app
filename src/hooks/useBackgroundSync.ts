@@ -276,7 +276,20 @@ export function useBackgroundSync({
         opProjectId,
         opProjectName,
         async (progress) => {
-          // Update job progress in database
+          // Update local state immediately for responsive UI
+          setState(prev => ({
+            ...prev,
+            syncProgress: {
+              phase: progress.phase,
+              current: progress.current,
+              total: progress.total,
+              message: progress.message || 'Synchronizing...',
+              ticketsSaved: progress.ticketsSaved,
+              eventsFound: progress.eventsFound,
+            },
+          }))
+
+          // Also persist to database for cross-tab sync
           await updateSyncJob(jobId, {
             phase: progress.phase,
             progress_current: progress.current,
