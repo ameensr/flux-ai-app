@@ -16,6 +16,7 @@ import { TicketBowlStatsDashboard } from './TicketBowlStatsDashboard'
 import { TicketBowlTable } from './TicketBowlTable'
 import { TicketBowlPagination } from './TicketBowlPagination'
 import { TicketForwardingHistoryModal } from './TicketForwardingHistoryModal'
+import { QuickSearchResultsTable } from './QuickSearchResultsTable'
 import { useBackgroundSync } from '@/hooks/useBackgroundSync'
 import { SyncNotification } from '@/components/LazyPanda'
 
@@ -174,6 +175,15 @@ export default function TicketBowl() {
     exportToCsv,
     refreshTickets: loadTickets,
     refreshStats: loadDashboardStats,
+    // Quick Search
+    quickSearchMode,
+    toggleQuickSearchMode,
+    quickSearchResults,
+    quickSearchLoading,
+    quickSearchProgress,
+    quickSearchError,
+    executeQuickSearch,
+    clearQuickSearch,
   } = useTicketBowl({
     projectId: selectedProjectId,
     opProjectId: selectedOpProjectId,
@@ -276,23 +286,41 @@ export default function TicketBowl() {
           ? Object.keys(stats.currentTestingStatusCounts).sort()
           : undefined}
         unavailableCount={stats.unavailableHistoryTickets}
+        quickSearchMode={quickSearchMode}
+        onToggleQuickSearchMode={toggleQuickSearchMode}
+        onExecuteQuickSearch={executeQuickSearch}
+        quickSearchLoading={quickSearchLoading}
+        quickSearchProgress={quickSearchProgress}
       />
 
-      {/* ── Results Table ── */}
-      <TicketBowlTable
-        tickets={tickets}
-        loading={ticketsLoading}
-        openprojectUrl={opConfig?.openproject_url}
-        onOpenHistory={openHistoryModal}
-        selectedIds={selectedTicketIds}
-        onToggleSelect={toggleSelectTicket}
-        onSelectAllCurrentPage={selectAllCurrentPage}
-        onClearSelection={clearSelection}
-        canViewHistory={canViewHistory}
-      />
+      {/* ── Quick Search Results (shown when in quick search mode with results) ── */}
+      {quickSearchMode && (quickSearchResults.length > 0 || quickSearchError) && (
+        <QuickSearchResultsTable
+          results={quickSearchResults}
+          loading={quickSearchLoading}
+          error={quickSearchError}
+          openprojectUrl={opConfig?.openproject_url}
+          onClearResults={clearQuickSearch}
+        />
+      )}
 
-      {/* ── Server-Side Pagination ── */}
-      {total > 0 && (
+      {/* ── Results Table (hidden when showing quick search results) ── */}
+      {(!quickSearchMode || (quickSearchMode && quickSearchResults.length === 0 && !quickSearchError)) && (
+        <TicketBowlTable
+          tickets={tickets}
+          loading={ticketsLoading}
+          openprojectUrl={opConfig?.openproject_url}
+          onOpenHistory={openHistoryModal}
+          selectedIds={selectedTicketIds}
+          onToggleSelect={toggleSelectTicket}
+          onSelectAllCurrentPage={selectAllCurrentPage}
+          onClearSelection={clearSelection}
+          canViewHistory={canViewHistory}
+        />
+      )}
+
+      {/* ── Server-Side Pagination (hidden when showing quick search results) ── */}
+      {total > 0 && (!quickSearchMode || quickSearchResults.length === 0) && (
         <TicketBowlPagination
           page={page}
           pageSize={pageSize}

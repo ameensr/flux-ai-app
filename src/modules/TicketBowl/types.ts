@@ -166,3 +166,26 @@ export interface TicketBowlQueryResult {
   page: number
   totalPages: number
 }
+
+// Quick Search by Date - fetches directly from OpenProject API
+export interface QuickSearchResult {
+  workPackageId: number
+  subject: string
+  typeName: string
+  statusName: string
+  priorityName: string
+  testingStatus: string | null
+  assigneeName: string | null
+  authorName: string | null
+  forwardedAt: string
+  forwardedBy: string
+  updatedAt: string | null
+}
+
+export interface QuickSearchProgress {
+  phase: 'fetching' | 'inspecting' | 'complete' | 'error'
+  current: number
+  total: number
+  message: string
+  foundCount?: number
+}

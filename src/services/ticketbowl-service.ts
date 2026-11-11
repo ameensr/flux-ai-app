@@ -32,6 +32,8 @@ import type {
   TicketBowlSyncProgress,
   TicketBowlQueryResult,
   ForwardingHistoryVerification,
+  QuickSearchResult,
+  QuickSearchProgress,
 } from '@/modules/TicketBowl/types'
 
 // STRICT BUSINESS RULE: Exact target value required for QA handoff
@@ -1373,6 +1375,300 @@ export async function fetchTicketTestingStatusHistory(
     console.error('[Ticket Bowl] Testing status history exception:', err)
     return []
   }
+}
+
+/**
+ * Quick Search: Fetch tickets forwarded to testing within a date range.
+ * 
+ * SIMPLIFIED & RELIABLE APPROACH:
+ * 1. First, query LOCAL DATABASE for already-synced forwarding history in date range (instant)
+ * 2. If no local data, fetch tickets from OpenProject updated in date range, then filter
+ */
+export async function quickFetchByForwardedDate(
+  config: OpenProjectConfig,
+  fromDate: string, // YYYY-MM-DD
+  toDate: string,   // YYYY-MM-DD
+  opProjectId?: number | null,
+  onProgress?: (progress: QuickSearchProgress) => void,
+  projectId?: string // Optional: for local DB query
+): Promise<{ results: QuickSearchResult[]; totalInspected: number; source: 'local' | 'api' }> {
+  if (!fromDate || !toDate) {
+    throw new Error('Both From and To dates are required for Quick Search')
+  }
+
+  const fromIso = new Date(`${fromDate}T00:00:00.000Z`).toISOString()
+  const toIso = new Date(`${toDate}T23:59:59.999Z`).toISOString()
+
+  // ============================================================
+  // STEP 1: Try LOCAL DATABASE first (instant results if synced)
+  // ============================================================
+  if (projectId) {
+    onProgress?.({
+      phase: 'fetching',
+      current: 0,
+      total: 0,
+      message: 'Checking local database...',
+    })
+
+    try {
+      const localResults = await queryLocalForwardingHistorySimple(projectId, fromIso, toIso, opProjectId)
+      
+      if (localResults.length > 0) {
+        onProgress?.({
+          phase: 'complete',
+          current: localResults.length,
+          total: localResults.length,
+          message: `Found ${localResults.length} tickets from local database (instant)`,
+          foundCount: localResults.length,
+        })
+        return { results: localResults, totalInspected: localResults.length, source: 'local' }
+      }
+    } catch (err) {
+      console.warn('[Quick Search] Local DB query failed, falling back to API:', err)
+    }
+  }
+
+  // ============================================================
+  // STEP 2: Query OpenProject API
+  // ============================================================
+  if (!config.openproject_url || !config.openproject_api_key) {
+    onProgress?.({
+      phase: 'complete',
+      current: 0,
+      total: 0,
+      message: 'No local data found. Please run a Full Sync first, or configure OpenProject.',
+      foundCount: 0,
+    })
+    return { results: [], totalInspected: 0, source: 'api' }
+  }
+
+  onProgress?.({
+    phase: 'fetching',
+    current: 0,
+    total: 0,
+    message: 'Fetching tickets from OpenProject...',
+  })
+
+  const configWithProject: OpenProjectConfig = {
+    ...config,
+    openproject_project_id: opProjectId?.toString() || config.openproject_project_id,
+  }
+
+  // Fetch tickets updated in the date range
+  const { items: candidates } = await fetchAllWorkPackages(configWithProject, {
+    pageSize: 200,
+    concurrency: 5,
+    includeAllStatuses: true,
+    sortBy: '[["updatedAt","desc"]]',
+    onProgress: (current, total) => {
+      onProgress?.({
+        phase: 'fetching',
+        current,
+        total,
+        message: `Fetching tickets: ${current} / ${total}`,
+      })
+    },
+  })
+
+  // Filter to only tickets updated within the date range
+  const fromTime = new Date(fromIso).getTime()
+  const toTime = new Date(toIso).getTime()
+  
+  const filteredCandidates = candidates.filter(wp => {
+    if (!wp.updatedAt) return false
+    const updatedTime = new Date(wp.updatedAt).getTime()
+    return updatedTime >= fromTime && updatedTime <= toTime
+  })
+
+  if (filteredCandidates.length === 0) {
+    onProgress?.({
+      phase: 'complete',
+      current: 0,
+      total: 0,
+      message: 'No tickets updated in the selected date range.',
+      foundCount: 0,
+    })
+    return { results: [], totalInspected: 0, source: 'api' }
+  }
+
+  // Further filter to only tickets with Testing Status = "Forwarded to Testing Team"
+  const forwardedCandidates = filteredCandidates.filter(wp => {
+    const formatted = formatWorkPackage(wp)
+    return formatted.testingStatus === EXACT_FORWARDED_TARGET_VALUE
+  })
+
+  if (forwardedCandidates.length === 0) {
+    onProgress?.({
+      phase: 'complete',
+      current: 0,
+      total: filteredCandidates.length,
+      message: `Checked ${filteredCandidates.length} tickets - none have "Forwarded to Testing Team" status.`,
+      foundCount: 0,
+    })
+    return { results: [], totalInspected: filteredCandidates.length, source: 'api' }
+  }
+
+  onProgress?.({
+    phase: 'inspecting',
+    current: 0,
+    total: forwardedCandidates.length,
+    message: `Verifying ${forwardedCandidates.length} forwarded tickets...`,
+  })
+
+  // ============================================================
+  // STEP 3: Inspect activities to find exact forwarding date
+  // ============================================================
+  const results: QuickSearchResult[] = []
+  const BATCH_SIZE = 10
+  let inspected = 0
+
+  for (let i = 0; i < forwardedCandidates.length; i += BATCH_SIZE) {
+    const batch = forwardedCandidates.slice(i, i + BATCH_SIZE)
+    
+    const batchPromises = batch.map(async (wp) => {
+      try {
+        const activities = await fetchWorkPackageActivities(configWithProject, wp.id)
+        const inspection = inspectWorkPackageActivities(wp.id, activities, null)
+        
+        // Find forwarding events within the date range
+        const matchingEvents = inspection.transitions.filter(t => {
+          const changedAt = new Date(t.changedAt).getTime()
+          return changedAt >= fromTime && changedAt <= toTime
+        })
+
+        if (matchingEvents.length > 0) {
+          const latestEvent = matchingEvents[0]
+          const formatted = formatWorkPackage(wp)
+          
+          return {
+            workPackageId: wp.id,
+            subject: formatted.subject,
+            typeName: formatted.type,
+            statusName: formatted.status,
+            priorityName: formatted.priority,
+            testingStatus: formatted.testingStatus,
+            assigneeName: formatted.assignee,
+            authorName: formatted.author,
+            forwardedAt: latestEvent.changedAt,
+            forwardedBy: latestEvent.changedByName,
+            updatedAt: formatted.updatedAt,
+          } as QuickSearchResult
+        }
+        return null
+      } catch (err) {
+        console.warn(`[Quick Search] Failed to inspect WP#${wp.id}:`, err)
+        return null
+      }
+    })
+
+    const batchResults = await Promise.all(batchPromises)
+    batchResults.forEach(r => { if (r) results.push(r) })
+
+    inspected += batch.length
+    onProgress?.({
+      phase: 'inspecting',
+      current: inspected,
+      total: forwardedCandidates.length,
+      message: `Verifying: ${inspected} / ${forwardedCandidates.length} (${results.length} confirmed)`,
+      foundCount: results.length,
+    })
+  }
+
+  results.sort((a, b) => new Date(b.forwardedAt).getTime() - new Date(a.forwardedAt).getTime())
+
+  onProgress?.({
+    phase: 'complete',
+    current: inspected,
+    total: forwardedCandidates.length,
+    message: `Found ${results.length} tickets forwarded between ${fromDate} and ${toDate}`,
+    foundCount: results.length,
+  })
+
+  return { results, totalInspected: inspected, source: 'api' }
+}
+
+/**
+ * Simple local database query for forwarding history (no complex joins)
+ */
+async function queryLocalForwardingHistorySimple(
+  projectId: string,
+  fromIso: string,
+  toIso: string,
+  opProjectId?: number | null
+): Promise<QuickSearchResult[]> {
+  // Step 1: Get forwarding events in date range
+  let historyQuery = supabase
+    .from('ticket_bowl_forwarding_history')
+    .select('work_package_id, changed_at, changed_by_name')
+    .eq('project_id', projectId)
+    .gte('changed_at', fromIso)
+    .lte('changed_at', toIso)
+    .order('changed_at', { ascending: false })
+
+  if (opProjectId) {
+    historyQuery = historyQuery.eq('op_project_id', opProjectId)
+  }
+
+  const { data: historyData, error: historyError } = await historyQuery
+
+  if (historyError || !historyData || historyData.length === 0) {
+    return []
+  }
+
+  // Deduplicate by work_package_id (keep first = latest)
+  const uniqueWpIds = new Map<number, { changed_at: string; changed_by_name: string }>()
+  for (const row of historyData) {
+    if (!uniqueWpIds.has(row.work_package_id)) {
+      uniqueWpIds.set(row.work_package_id, {
+        changed_at: row.changed_at,
+        changed_by_name: row.changed_by_name,
+      })
+    }
+  }
+
+  if (uniqueWpIds.size === 0) {
+    return []
+  }
+
+  // Step 2: Get work package details
+  const wpIds = Array.from(uniqueWpIds.keys())
+  const { data: wpData, error: wpError } = await supabase
+    .from('ticket_bowl_work_packages')
+    .select('work_package_id, subject, type_name, status_name, priority_name, testing_status, assignee_name, author_name, updated_at_op')
+    .eq('project_id', projectId)
+    .in('work_package_id', wpIds)
+
+  if (wpError || !wpData) {
+    return []
+  }
+
+  // Step 3: Combine data
+  const wpMap = new Map(wpData.map(wp => [wp.work_package_id, wp]))
+  
+  const results: QuickSearchResult[] = []
+  for (const [wpId, historyInfo] of uniqueWpIds) {
+    const wp = wpMap.get(wpId)
+    if (wp) {
+      results.push({
+        workPackageId: wpId,
+        subject: wp.subject || '',
+        typeName: wp.type_name || '',
+        statusName: wp.status_name || '',
+        priorityName: wp.priority_name || '',
+        testingStatus: wp.testing_status || null,
+        assigneeName: wp.assignee_name || null,
+        authorName: wp.author_name || null,
+        forwardedAt: historyInfo.changed_at,
+        forwardedBy: historyInfo.changed_by_name,
+        updatedAt: wp.updated_at_op || null,
+      })
+    }
+  }
+
+  // Sort by forwarded date (newest first)
+  results.sort((a, b) => new Date(b.forwardedAt).getTime() - new Date(a.forwardedAt).getTime())
+
+  return results
 }
 
 /**

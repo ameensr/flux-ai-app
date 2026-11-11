@@ -11,9 +11,11 @@ import {
   Flame,
   FileQuestion,
   Info,
+  Zap,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { TicketBowlFilters, ForwardingHistoryVerification } from './types'
+import type { TicketBowlFilters, ForwardingHistoryVerification, QuickSearchProgress } from './types'
 
 interface TicketBowlFiltersPanelProps {
   filters: TicketBowlFilters
@@ -24,6 +26,12 @@ interface TicketBowlFiltersPanelProps {
   availableStatuses?: string[]
   availableTestingStatuses?: string[]
   unavailableCount?: number
+  // Quick Search props
+  quickSearchMode?: boolean
+  onToggleQuickSearchMode?: () => void
+  onExecuteQuickSearch?: () => void
+  quickSearchLoading?: boolean
+  quickSearchProgress?: QuickSearchProgress | null
 }
 
 const QA_MISSED_OPTIONS = [
@@ -51,6 +59,11 @@ export function TicketBowlFiltersPanel({
   availableStatuses,
   availableTestingStatuses,
   unavailableCount = 0,
+  quickSearchMode = false,
+  onToggleQuickSearchMode,
+  onExecuteQuickSearch,
+  quickSearchLoading = false,
+  quickSearchProgress,
 }: TicketBowlFiltersPanelProps) {
   // Local search state for responsive typing
   const [localSearch, setLocalSearch] = useState(filters.search || '')
@@ -83,15 +96,21 @@ export function TicketBowlFiltersPanel({
   return (
     <div className="rounded-xl border border-border/70 bg-surface/70 p-4 space-y-3.5 shadow-xs">
       {/* ── Primary Filter: Forwarded to Testing Team Date Range ── */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 rounded-lg bg-accent/5 border border-accent/20">
+      <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 rounded-lg border ${quickSearchMode ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-accent/5 border-accent/20'}`}>
         <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-accent" />
+          <Calendar className={`w-4 h-4 ${quickSearchMode ? 'text-emerald-500' : 'text-accent'}`} />
           <span className="text-xs font-semibold text-text-primary">
             Forwarded to Testing Date Range:
           </span>
-          <span className="text-[11px] text-text-muted hidden sm:inline">
-            (Matches tickets with verified handoffs on these dates)
-          </span>
+          {quickSearchMode ? (
+            <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-medium">
+              Quick Search Mode
+            </span>
+          ) : (
+            <span className="text-[11px] text-text-muted hidden sm:inline">
+              (Matches tickets with verified handoffs on these dates)
+            </span>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -125,8 +144,83 @@ export function TicketBowlFiltersPanel({
               <X className="w-3.5 h-3.5" />
             </button>
           )}
+
+          {/* Quick Search Toggle & Execute */}
+          {onToggleQuickSearchMode && (
+            <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-border/50">
+              <Button
+                variant={quickSearchMode ? 'default' : 'outline'}
+                size="sm"
+                onClick={onToggleQuickSearchMode}
+                className={`h-7 text-xs gap-1 ${quickSearchMode ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+              >
+                <Zap className="w-3 h-3" />
+                <span>{quickSearchMode ? 'Exit Quick Search' : 'Quick Search'}</span>
+              </Button>
+
+              {quickSearchMode && onExecuteQuickSearch && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={onExecuteQuickSearch}
+                  disabled={!isDateFiltered || quickSearchLoading}
+                  className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
+                >
+                  {quickSearchLoading ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Searching...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-3 h-3" />
+                      <span>Fetch Now</span>
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Quick Search Progress */}
+      {quickSearchMode && quickSearchProgress && quickSearchLoading && (
+        <div className="px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-emerald-700 dark:text-emerald-300 font-medium">
+              {quickSearchProgress.message}
+            </span>
+            {quickSearchProgress.foundCount !== undefined && (
+              <span className="text-emerald-600 dark:text-emerald-400">
+                {quickSearchProgress.foundCount} found
+              </span>
+            )}
+          </div>
+          {quickSearchProgress.total > 0 && (
+            <div className="w-full h-1.5 bg-emerald-200 dark:bg-emerald-900 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 transition-all duration-300"
+                style={{ width: `${(quickSearchProgress.current / quickSearchProgress.total) * 100}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Quick Search Mode Info */}
+      {quickSearchMode && !quickSearchLoading && (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-700 dark:text-emerald-300">
+          <Zap className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Quick Search Mode Active</p>
+            <p className="text-emerald-600 dark:text-emerald-400 mt-0.5">
+              Select a date range and click "Fetch Now" to search OpenProject directly for tickets forwarded in that period.
+              This is faster than full sync but only shows results for the selected dates.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Notice when Date Filter is Active and there are unavailable history tickets ── */}
       {isDateFiltered && unavailableCount > 0 && (

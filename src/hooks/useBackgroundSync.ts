@@ -87,28 +87,54 @@ export function useBackgroundSync({
     if (!autoRestoreJob || !projectId) return
 
     const checkActiveJob = async () => {
+      // Check if user previously cancelled a job (stored in sessionStorage)
+      const cancelledJobId = sessionStorage.getItem(`cancelled_sync_job_${projectId}`)
+      
       const activeJob = await getActiveSyncJob(projectId)
 
-      if (activeJob && (activeJob.status === 'running' || activeJob.status === 'pending')) {
-        // Restore active job state
-        currentJobIdRef.current = activeJob.id
-
-        setState(prev => ({
-          ...prev,
-          isSyncing: true,
-          showProgressIndicator: true,
-          currentJob: activeJob,
-          syncProgress: {
-            phase: (activeJob.phase || 'fetching-tickets') as TicketBowlSyncProgress['phase'],
-            current: activeJob.progress_current,
-            total: activeJob.progress_total,
-            message: activeJob.progress_message || 'Synchronizing...',
-          },
-        }))
-
-        // Subscribe to job updates
-        subscribeToJob(activeJob.id)
+      // Don't restore if:
+      // 1. No active job found
+      // 2. Job was previously cancelled by user in this session
+      // 3. Job status is not running/pending
+      if (!activeJob) return
+      if (activeJob.status !== 'running' && activeJob.status !== 'pending') return
+      if (cancelledJobId === activeJob.id) {
+        // User cancelled this job - mark it as cancelled in DB and don't restore
+        console.log('[useBackgroundSync] Skipping restore of cancelled job:', activeJob.id)
+        await cancelSyncJob(activeJob.id)
+        sessionStorage.removeItem(`cancelled_sync_job_${projectId}`)
+        return
       }
+
+      // Check if job is stale (created more than 5 minutes ago with no recent updates)
+      const jobAge = Date.now() - new Date(activeJob.updated_at || activeJob.created_at).getTime()
+      const fiveMinutes = 5 * 60 * 1000
+      
+      if (jobAge > fiveMinutes && activeJob.status === 'running') {
+        // Job appears to be stuck/abandoned - don't restore, mark as failed
+        console.log('[useBackgroundSync] Job appears stuck, not restoring:', activeJob.id)
+        await failSyncJob(activeJob.id, 'Job was abandoned (no updates for 5+ minutes)')
+        return
+      }
+
+      // Restore active job state
+      currentJobIdRef.current = activeJob.id
+
+      setState(prev => ({
+        ...prev,
+        isSyncing: true,
+        showProgressIndicator: true,
+        currentJob: activeJob,
+        syncProgress: {
+          phase: (activeJob.phase || 'fetching-tickets') as TicketBowlSyncProgress['phase'],
+          current: activeJob.progress_current,
+          total: activeJob.progress_total,
+          message: activeJob.progress_message || 'Synchronizing...',
+        },
+      }))
+
+      // Subscribe to job updates
+      subscribeToJob(activeJob.id)
     }
 
     checkActiveJob()
@@ -236,6 +262,9 @@ export function useBackgroundSync({
     }
 
     currentJobIdRef.current = job.id
+
+    // Clear any previous cancelled job marker
+    sessionStorage.removeItem(`cancelled_sync_job_${projectId}`)
 
     setState(prev => ({
       ...prev,
@@ -367,7 +396,16 @@ export function useBackgroundSync({
 
     if (!confirmed) return
 
+    // Store cancelled job ID in sessionStorage to prevent auto-restore on refresh
+    sessionStorage.setItem(`cancelled_sync_job_${projectId}`, jobId)
+
     const success = await cancelSyncJob(jobId)
+
+    // Unsubscribe from job updates
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current()
+      unsubscribeRef.current = null
+    }
 
     // Always reset UI state on cancel attempt
     setState(prev => ({
@@ -394,7 +432,7 @@ export function useBackgroundSync({
         description: 'The synchronization has been stopped. It may have already completed or failed.',
       })
     }
-  }, [toast, state.currentJob])
+  }, [toast, state.currentJob, projectId])
 
   return {
     // State

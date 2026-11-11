@@ -12,6 +12,7 @@ import {
   fetchTicketTestingStatusHistory,
   fetchTicketBowlDashboardStats,
   fetchAllOpenProjectTypes,
+  quickFetchByForwardedDate,
 } from '@/services/ticketbowl-service'
 import type {
   TicketBowlWorkPackage,
@@ -22,6 +23,8 @@ import type {
   TicketBowlDashboardStats,
   TicketBowlSyncProgress,
   ForwardingHistoryVerification,
+  QuickSearchResult,
+  QuickSearchProgress,
 } from '@/modules/TicketBowl/types'
 
 export interface UseTicketBowlOptions {
@@ -116,6 +119,13 @@ export function useTicketBowl({
 
   // Selected Tickets for Batch Export
   const [selectedTicketIds, setSelectedTicketIds] = useState<Set<number>>(new Set())
+
+  // Quick Search State
+  const [quickSearchMode, setQuickSearchMode] = useState(false)
+  const [quickSearchResults, setQuickSearchResults] = useState<QuickSearchResult[]>([])
+  const [quickSearchLoading, setQuickSearchLoading] = useState(false)
+  const [quickSearchProgress, setQuickSearchProgress] = useState<QuickSearchProgress | null>(null)
+  const [quickSearchError, setQuickSearchError] = useState<string | null>(null)
 
   // Request race-condition guard
   const activeRequestIdRef = useRef(0)
@@ -316,6 +326,80 @@ export function useTicketBowl({
     setTestingStatusHistory([])
   }, [])
 
+  // Toggle Quick Search Mode
+  const toggleQuickSearchMode = useCallback(() => {
+    setQuickSearchMode(prev => {
+      if (prev) {
+        // Exiting quick search mode - clear results
+        setQuickSearchResults([])
+        setQuickSearchError(null)
+        setQuickSearchProgress(null)
+      }
+      return !prev
+    })
+  }, [])
+
+  // Execute Quick Search
+  const executeQuickSearch = useCallback(async () => {
+    if (!config?.openproject_url || !config?.openproject_api_key) {
+      toast({
+        title: 'OpenProject Not Configured',
+        description: 'Please configure your OpenProject API credentials first.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!filters.forwardedFrom || !filters.forwardedTo) {
+      toast({
+        title: 'Date Range Required',
+        description: 'Please select both From and To dates for Quick Search.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setQuickSearchLoading(true)
+    setQuickSearchError(null)
+    setQuickSearchResults([])
+
+    try {
+      const { results, totalInspected, source } = await quickFetchByForwardedDate(
+        config,
+        filters.forwardedFrom,
+        filters.forwardedTo,
+        opProjectId,
+        progress => setQuickSearchProgress(progress),
+        projectId // Pass projectId for local DB query
+      )
+
+      setQuickSearchResults(results)
+      const sourceText = source === 'local' ? 'from local database' : 'from OpenProject'
+      toast({
+        title: 'Quick Search Complete',
+        description: `Found ${results.length} tickets ${sourceText} (${totalInspected} checked).`,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Quick search failed'
+      setQuickSearchError(msg)
+      toast({
+        title: 'Quick Search Failed',
+        description: msg,
+        variant: 'destructive',
+      })
+    } finally {
+      setQuickSearchLoading(false)
+      setQuickSearchProgress(null)
+    }
+  }, [config, filters.forwardedFrom, filters.forwardedTo, opProjectId, projectId, toast])
+
+  // Clear Quick Search Results
+  const clearQuickSearch = useCallback(() => {
+    setQuickSearchResults([])
+    setQuickSearchError(null)
+    setQuickSearchProgress(null)
+  }, [])
+
   // Toggle Ticket Selection
   const toggleSelectTicket = useCallback((wpId: number) => {
     setSelectedTicketIds(prev => {
@@ -482,5 +566,14 @@ export function useTicketBowl({
     exportToCsv,
     refreshTickets: loadTickets,
     refreshStats: loadDashboardStats,
+    // Quick Search
+    quickSearchMode,
+    toggleQuickSearchMode,
+    quickSearchResults,
+    quickSearchLoading,
+    quickSearchProgress,
+    quickSearchError,
+    executeQuickSearch,
+    clearQuickSearch,
   }
 }
