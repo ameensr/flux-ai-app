@@ -12,7 +12,8 @@ import {
   FolderKanban,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { TicketBowlSyncStatus } from './types'
+import { SyncProgressIndicator } from './SyncProgressIndicator'
+import type { TicketBowlSyncStatus, TicketBowlSyncProgress } from './types'
 
 interface TicketBowlHeaderProps {
   projects: Array<{ id: string; name: string; metadata?: Record<string, unknown> }>
@@ -23,7 +24,9 @@ interface TicketBowlHeaderProps {
   onSelectOpProject: (id: number | null) => void
   syncStatus: TicketBowlSyncStatus | null
   syncing: boolean
+  syncProgress?: TicketBowlSyncProgress | null
   onSync: () => void
+  onCancelSync?: () => void
   selectedCount: number
   onExportRelease: () => void
   onExportSupport: () => void
@@ -41,7 +44,9 @@ export function TicketBowlHeader({
   onSelectOpProject,
   syncStatus,
   syncing,
+  syncProgress,
   onSync,
+  onCancelSync,
   selectedCount,
   onExportRelease,
   onExportSupport,
@@ -125,18 +130,25 @@ export function TicketBowlHeader({
             </div>
           )}
 
-          {/* Sync Button */}
+          {/* Sync Button + Progress */}
           {canSync && (
-            <Button
-              type="button"
-              onClick={onSync}
-              disabled={syncing}
-              size="sm"
-              className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90 shadow-sm"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-              <span>{syncing ? 'Syncing...' : 'Sync Data'}</span>
-            </Button>
+            syncing ? (
+              <SyncProgressIndicator
+                progress={syncProgress || null}
+                syncing={syncing}
+                onCancel={onCancelSync}
+              />
+            ) : (
+              <Button
+                type="button"
+                onClick={onSync}
+                size="sm"
+                className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90 shadow-sm"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Sync Data</span>
+              </Button>
+            )
           )}
         </div>
       </div>

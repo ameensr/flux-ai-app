@@ -123,11 +123,13 @@ export default function TicketBowl() {
   // 3. Background Sync Hook (replaces old blocking sync)
   const {
     isSyncing,
+    syncProgress,
     showSuccessNotification,
     showErrorNotification,
     syncResult,
     syncStatus,
     startSync,
+    cancelSync,
     retrySync,
     dismissSuccessNotification,
     dismissErrorNotification,
@@ -217,7 +219,9 @@ export default function TicketBowl() {
         onSelectOpProject={setSelectedOpProjectId}
         syncStatus={syncStatus}
         syncing={isSyncing}
+        syncProgress={syncProgress}
         onSync={startSync}
+        onCancelSync={cancelSync}
         selectedCount={selectedTicketIds.size}
         onExportRelease={() => exportToReleaseTracker()}
         onExportSupport={() => exportToSupportTracker()}
