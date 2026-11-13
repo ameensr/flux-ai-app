@@ -702,7 +702,7 @@ export const QAWeeklyReport: React.FC = () => {
       const currentSnapshot = createFormSnapshot(form)
       const matchedReport = reports.find(r => createFormSnapshot(r.form) === currentSnapshot)
       const reportId = matchedReport?.id ?? ''
-      // `launch=1` tells the new tab to play qaly.ai / RELEASE TRIAGE before revealing the dashboard
+      // `launch=1` tells the new tab to play creative loading animation before revealing the dashboard
       const params = new URLSearchParams()
       if (reportId) params.set('reportId', reportId)
       params.set('launch', '1')

@@ -11,7 +11,7 @@ import { useTheme } from '@/context/ThemeContext'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import type { ReleaseBugAnalytics } from './ReleaseBugStatus/types'
 import type { TaskWiseAnalytics } from './ReleaseBugStatus/taskWiseTypes'
-import { QATriageLoader } from './QATriageLoader'
+import { CreativeDashboardLoader } from './CreativeDashboardLoader'
 import { ContinuousQATriage } from './ContinuousQATriage'
 
 interface DefectStatusModalProps {
@@ -148,10 +148,14 @@ export function DefectStatusModal({
                 {!isAnalyzing && <ContinuousQATriage opacity="opacity-[0.15]" position="bottom" />}
 
                 {isAnalyzing ? (
-                  // Generous whitespace so the qaly.ai / QA TRIAGE sequence can breathe
-                  <div className="relative z-10 flex min-h-[440px] sm:min-h-[520px] w-full items-center justify-center px-8 py-14 sm:px-14 sm:py-20">
+                  <div className="relative z-10 flex min-h-[380px] sm:min-h-[460px] w-full items-center justify-center px-8 py-10 sm:px-14">
                     <div className="w-full max-w-md">
-                      <QATriageLoader onComplete={() => setIsAnalyzing(false)} />
+                      <CreativeDashboardLoader
+                        onComplete={() => setIsAnalyzing(false)}
+                        title="Analyzing Defect Intelligence"
+                        subtitle={dataSourceLabel}
+                        durationMs={1800}
+                      />
                     </div>
                   </div>
                 ) : (

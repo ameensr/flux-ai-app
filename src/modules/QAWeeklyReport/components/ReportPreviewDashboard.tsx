@@ -532,10 +532,7 @@ interface CountUpProps {
 }
 const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '', decimals = 0 }) => {
   const [isPrinting, setIsPrinting] = useState(false)
-  const [count, setCount] = useState(() => {
-    const hasPlayed = typeof window !== 'undefined' && sessionStorage.getItem('qaly-dashboard-entrance-played') === 'true'
-    return hasPlayed ? end : 0
-  })
+  const [count, setCount] = useState(0)
 
   useEffect(() => {
     const mediaQueryList = window.matchMedia('print')
@@ -543,7 +540,6 @@ const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '', decimals = 0 
       setIsPrinting(mql.matches)
     }
 
-    // Modern browsers
     mediaQueryList.addEventListener('change', handlePrintChange)
     if (mediaQueryList.matches) {
       setIsPrinting(true)
@@ -566,24 +562,23 @@ const CountUpNumber: React.FC<CountUpProps> = ({ end, suffix = '', decimals = 0 
       setCount(end)
       return
     }
-    const hasPlayed = typeof window !== 'undefined' && sessionStorage.getItem('qaly-dashboard-entrance-played') === 'true'
-    if (hasPlayed) {
-      setCount(end)
-      return
-    }
     let startTimestamp: number | null = null
-    const duration = 1000 // ms
+    const duration = 1200 // ms
+    let frameId: number
     const step = (timestamp: number) => {
       if (!startTimestamp) startTimestamp = timestamp
       const progress = Math.min((timestamp - startTimestamp) / duration, 1)
-      setCount(progress * end)
+      // Silky decelerating ease-out cubic curve
+      const ease = 1 - Math.pow(1 - progress, 3)
+      setCount(ease * end)
       if (progress < 1) {
-        window.requestAnimationFrame(step)
+        frameId = window.requestAnimationFrame(step)
       } else {
         setCount(end)
       }
     }
-    window.requestAnimationFrame(step)
+    frameId = window.requestAnimationFrame(step)
+    return () => window.cancelAnimationFrame(frameId)
   }, [end, isPrinting])
 
   return <span>{isPrinting ? end.toFixed(decimals) : count.toFixed(decimals)}{suffix}</span>
@@ -595,20 +590,20 @@ const containerVariants: Variants = {
     opacity: 1,
     transition: {
       staggerChildren: 0.08,
-      delayChildren: 0.1
+      delayChildren: 0.05
     }
   }
 }
 
 const sectionVariants: Variants = {
-  hidden: { opacity: 0, y: 30, scale: 0.98 },
+  hidden: { opacity: 0, y: 28, scale: 0.985 },
   show: {
     opacity: 1,
     y: 0,
     scale: 1,
     transition: {
-      duration: 0.5,
-      ease: 'easeOut'
+      duration: 0.55,
+      ease: [0.16, 1, 0.3, 1]
     }
   }
 }
@@ -665,50 +660,39 @@ const ReportPreviewDashboardContent: React.FC = () => {
     return orderedVisibleColumns(hydrated)
   }
 
-  // Fresh Launch from /qa-report → play RELEASE TRIAGE in this tab, then reveal dashboard
-  const [showLaunchTriage, setShowLaunchTriage] = useState(() => {
-    if (launchedFromForm && typeof window !== 'undefined') {
-      sessionStorage.removeItem('qaly-dashboard-entrance-played')
-    }
-    return launchedFromForm
-  })
-  const [dashboardRevealed, setDashboardRevealed] = useState(!launchedFromForm)
+  // Dot-Matrix loading animation: counts to 100% on every load/refresh, then reveals dashboard
+  const [showLaunchTriage, setShowLaunchTriage] = useState(true)
+  const [dashboardRevealed, setDashboardRevealed] = useState(false)
 
-  // Track if entrance animations have already been played (e.g. page refresh)
-  // Skip when launching from form so the dashboard entrance plays after triage.
-  const hasPlayed =
-    typeof window !== 'undefined' &&
-    !launchedFromForm &&
-    sessionStorage.getItem('qaly-dashboard-entrance-played') === 'true'
-  // Charts skip their draw-in animation once played this session, and always for reduced-motion users
-  const chartAnimationEnabled = resolveChartAnimation(hasPlayed)
+  // Fluid animations active on every loading and refresh (respecting user OS reduced motion preference)
+  const chartAnimationEnabled = resolveChartAnimation()
+  const [renderKey, setRenderKey] = useState(0)
 
   useEffect(() => {
-    if (!showLaunchTriage) {
-      sessionStorage.setItem('qaly-dashboard-entrance-played', 'true')
-    }
-  }, [showLaunchTriage])
+    // Increment render key on mount to guarantee fresh animated SVG draw-in on every load / refresh
+    setRenderKey(prev => prev + 1)
+  }, [])
 
   const containerVariants: Variants = {
-    hidden: { opacity: hasPlayed ? 1 : 0 },
+    hidden: { opacity: 0 },
     show: {
       opacity: 1,
       transition: {
-        staggerChildren: hasPlayed ? 0 : 0.08,
-        delayChildren: hasPlayed ? 0 : 0.1
+        staggerChildren: 0.08,
+        delayChildren: 0.05
       }
     }
   }
 
   const sectionVariants: Variants = {
-    hidden: hasPlayed ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.98 },
-    show: hasPlayed ? { opacity: 1, y: 0, scale: 1 } : {
+    hidden: { opacity: 0, y: 28, scale: 0.985 },
+    show: {
       opacity: 1,
       y: 0,
       scale: 1,
       transition: {
-        duration: 0.5,
-        ease: 'easeOut'
+        duration: 0.55,
+        ease: [0.16, 1, 0.3, 1]
       }
     }
   }
@@ -738,8 +722,8 @@ const ReportPreviewDashboardContent: React.FC = () => {
     }
     return ensureFormData(null)
   })
-  // isLoaded starts true only if we have localStorage data (no reportId) or will be set after fetch
-  const [isLoaded, setIsLoaded] = useState(() => !reportIdFromUrl && !!localStorage.getItem('current-qa-report-data'))
+  // isLoaded starts true immediately if we have localStorage data (fast path for Launch Executive Dashboard), or is set after fetch
+  const [isLoaded, setIsLoaded] = useState(() => !!localStorage.getItem('current-qa-report-data'))
   const isLoadedRef = useRef(isLoaded)
   isLoadedRef.current = isLoaded
   // Report metadata (generated timestamp / draft-final status) — sourced from the saved report record,
@@ -764,13 +748,13 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const handleLaunchTriageComplete = useCallback(() => {
     const reveal = () => {
       if (!isLoadedRef.current) {
-        window.setTimeout(reveal, 60)
+        window.setTimeout(reveal, 30)
         return
       }
       stripLaunchParam()
       setDashboardRevealed(true)
-      // Let the dashboard breathe in under the overlay, then dismiss triage
-      window.setTimeout(() => setShowLaunchTriage(false), 280)
+      // Fast, smooth dismiss so user enters the dashboard with zero lag
+      window.setTimeout(() => setShowLaunchTriage(false), 120)
     }
     reveal()
   }, [stripLaunchParam])
@@ -1456,7 +1440,8 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const scrollToSection = (section: string) => {
     const targetRef = (sectionsRef as any)[section]
     if (targetRef && targetRef.current) {
-      targetRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const top = targetRef.current.getBoundingClientRect().top + window.scrollY - 90
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
       setActiveSection(section)
     }
   }
@@ -1788,7 +1773,7 @@ Do not return markdown wraps, only raw JSON text.
     )
   }
 
-  if (isLoaded && !data.weekStart) {
+  if (isLoaded && !data.weekStart && !showLaunchTriage) {
     return (
       <div className={`qaly-report-preview-scope relative min-h-screen ${smoothCursorEnabled ? 'custom-cursor-active' : ''}`}>
         <SmoothDotCursor enabled={smoothCursorEnabled} theme={theme} />
@@ -1811,6 +1796,11 @@ Do not return markdown wraps, only raw JSON text.
   return (
     <div className={`qaly-report-preview-scope relative min-h-screen ${smoothCursorEnabled ? 'custom-cursor-active' : ''}`}>
       <SmoothDotCursor enabled={smoothCursorEnabled} theme={theme} />
+      <DashboardLaunchOverlay
+        open={showLaunchTriage}
+        projectName={data.projectName}
+        onComplete={handleLaunchTriageComplete}
+      />
       {(!isLoaded || !data.weekStart) && showLaunchTriage && (
         <div className={`min-h-screen ${theme === 'dark' ? 'bg-[#070a13]' : 'bg-[#f8fafc]'}`} />
       )}
@@ -1823,7 +1813,7 @@ Do not return markdown wraps, only raw JSON text.
     */}
     <motion.div
       className={`qaly-report-root min-h-screen ${tS.font} ${tS.bg} transition-colors duration-300 relative overflow-hidden pb-20 print:overflow-visible`}
-      initial={launchedFromForm ? { opacity: 0, y: 12 } : false}
+      initial={{ opacity: 0, y: 12 }}
       animate={
         dashboardRevealed
           ? { opacity: 1, y: 0 }
@@ -1861,59 +1851,64 @@ Do not return markdown wraps, only raw JSON text.
       {/* ── Immersive Background — breathing gradient aurora + mouse-parallax particle space ── */}
       <ImmersiveBackground theme={theme} enabled={enableParticles} paused={particlesPaused} />
 
-      {/* ── Sticky Top Navigation — near-opaque to avoid blurring the animated backdrop while scrolling ── */}
+      {/* ── Cinematic subtle film vignette ── */}
+      <div className="fixed inset-0 pointer-events-none z-30 shadow-[inset_0_0_80px_rgba(0,0,0,0.2)] dark:shadow-[inset_0_0_150px_rgba(0,0,0,0.65)] transition-opacity duration-500" />
+
+      {/* ── Cinematic atmospheric top lens glow ── */}
+      <div className="fixed -top-44 left-1/2 -translate-x-1/2 w-[880px] h-[360px] bg-gradient-to-b from-indigo-500/15 via-blue-500/5 to-transparent blur-[130px] pointer-events-none z-0" />
+
+      {/* ── Floating Nav Bar — Stays anchored on scroll, application color theme ── */}
       {!isPresentation && (
-        <header className="sticky top-0 z-40 transition-colors duration-300 print:hidden">
-          <div
-            className="border-b py-3"
-            style={{
-              backgroundColor: theme === 'dark' ? 'rgba(9,9,11,0.94)' : 'rgba(255,255,255,0.96)',
-              borderColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
-              boxShadow: theme === 'dark'
-                ? '0 4px 20px rgba(0,0,0,0.35)'
-                : '0 4px 16px rgba(0,0,0,0.04)',
-            }}
-          >
-            {/* Same shell as page cards: max-w-[1600px] + px-4/sm:px-6 */}
-            <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 flex items-center gap-4">
-              {/* Logo & Brand */}
-              <div className="flex items-center gap-3 shrink-0">
-                <Logo size="sm" animate={false} />
-                <div className="hidden sm:block h-6 w-px" style={{ backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }} />
-                <span className={`hidden sm:block text-[10px] uppercase font-bold tracking-[0.15em] ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>
-                  Executive Report Hub
-                </span>
-              </div>
+        <header className="fixed top-3 sm:top-4 inset-x-0 z-40 print:hidden pointer-events-none transition-all duration-300">
+          <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-6">
+            <div
+              className={`pointer-events-auto relative rounded-full p-1.5 sm:p-2 transition-all duration-300 backdrop-blur-xl ${
+                theme === 'dark'
+                  ? 'bg-[#090D1A]/85 border border-white/[0.08] shadow-[0_12px_32px_-4px_rgba(0,0,0,0.5),0_0_20px_rgba(99,102,241,0.06),inset_0_1px_1px_rgba(255,255,255,0.1)]'
+                  : 'bg-white/85 border border-slate-200/90 shadow-[0_8px_24px_-4px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.8)]'
+              }`}
+            >
+              {/* Subtle top specular hairline matching app theme */}
+              <div className="absolute inset-x-8 top-0 h-[1px] bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent pointer-events-none rounded-full" />
 
-              {/* Section Navigator — flexible, scrolls horizontally so the whole bar stays on one line */}
-              <div className="flex-1 min-w-0">
-                <ReportNavigator theme={theme} items={reportNavItems} activeSection={activeSection} onNavigate={scrollToSection} />
-              </div>
+              <div className="flex items-center justify-between gap-2 sm:gap-4 px-2 sm:px-3">
+                {/* Logo */}
+                <div className="flex items-center gap-3 shrink-0">
+                  <Logo size="sm" animate={false} />
+                </div>
 
-              <ReportActionBar
-                theme={theme}
-                cursorEnabled={smoothCursorEnabled}
-                onToggleCursor={toggleSmoothCursor}
-                onToggleTheme={toggleTheme}
-                clientMode={clientMode}
-                onToggleClientMode={() => {
-                  const next = !clientMode
-                  setClientMode(next)
-                  localStorage.setItem('qaly-client-mode', String(next))
-                  toast({
-                    title: next ? 'Client Mode Active' : 'Client Mode Disabled',
-                    description: next ? 'Confidential developer notes and internal bug metrics hidden.' : 'Restored full view.'
-                  })
-                }}
-                onPresent={togglePresentation}
-                showExportMenu={showExportMenu}
-                onToggleExportMenu={() => setShowExportMenu(v => !v)}
-                onPrint={() => { handlePrint(); setShowExportMenu(false) }}
-                onPrintFriendly={handlePrintFriendly}
-                onDownloadHTML={() => { downloadHTML(); setShowExportMenu(false) }}
-                onDownloadMarkdown={() => { downloadMarkdown(); setShowExportMenu(false) }}
-                onClose={() => window.close()}
-              />
+                {/* Section Navigator Capsule Segment */}
+                <div className="flex-1 min-w-0 max-w-[860px] mx-auto px-1">
+                  <ReportNavigator theme={theme} items={reportNavItems} activeSection={activeSection} onNavigate={scrollToSection} />
+                </div>
+
+                {/* Action Bar */}
+                <div className="shrink-0">
+                  <ReportActionBar
+                    theme={theme}
+                    cursorEnabled={smoothCursorEnabled}
+                    onToggleCursor={toggleSmoothCursor}
+                    clientMode={clientMode}
+                    onToggleClientMode={() => {
+                      const next = !clientMode
+                      setClientMode(next)
+                      localStorage.setItem('qaly-client-mode', String(next))
+                      toast({
+                        title: next ? 'Client Mode Active' : 'Client Mode Disabled',
+                        description: next ? 'Confidential developer notes and internal bug metrics hidden.' : 'Restored full view.'
+                      })
+                    }}
+                    onPresent={togglePresentation}
+                    showExportMenu={showExportMenu}
+                    onToggleExportMenu={() => setShowExportMenu(v => !v)}
+                    onPrint={() => { handlePrint(); setShowExportMenu(false) }}
+                    onPrintFriendly={handlePrintFriendly}
+                    onDownloadHTML={() => { downloadHTML(); setShowExportMenu(false) }}
+                    onDownloadMarkdown={() => { downloadMarkdown(); setShowExportMenu(false) }}
+                    onClose={() => window.close()}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </header>
@@ -1958,7 +1953,7 @@ Do not return markdown wraps, only raw JSON text.
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 relative z-10 pt-6 sm:pt-8 flex flex-col gap-10 sm:gap-12"
+        className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 relative z-10 pt-20 sm:pt-24 flex flex-col gap-10 sm:gap-12"
       >
 
         {/* ══════════════════════════════════════════════════════════
@@ -2234,25 +2229,24 @@ Do not return markdown wraps, only raw JSON text.
               </div>
               <div className={`w-full h-3 rounded-full overflow-hidden border relative ${theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-slate-100 border-slate-200'}`}>
                 <motion.div
-                  initial={{ width: hasPlayed ? `${sprintHealthScore}%` : 0 }}
+                  key={`health-${renderKey}`}
+                  initial={{ width: 0 }}
                   animate={{ width: `${sprintHealthScore}%` }}
-                  transition={{ duration: hasPlayed ? 0 : 1.2, ease: 'easeOut' }}
+                  transition={{ duration: 1.3, ease: [0.16, 1, 0.3, 1] }}
                   onAnimationComplete={() => setIsHealthBarFilled(true)}
                   className={`h-full rounded-full relative overflow-hidden ${sprintHealthScore >= 90 ? 'bg-gradient-to-r from-green-500 to-emerald-400' :
                     sprintHealthScore >= 70 ? 'bg-gradient-to-r from-amber-500 to-yellow-400' :
                       'bg-gradient-to-r from-red-500 to-rose-400'
                     }`}
                   style={{
-                    boxShadow: `0 0 ${theme === 'dark' ? 10 : 5}px ${sprintHealthScore >= 90 ? 'rgba(16,185,129,' : sprintHealthScore >= 70 ? 'rgba(245,158,11,' : 'rgba(239,68,68,'}${theme === 'dark' ? 0.45 : 0.2})`
+                    boxShadow: `0 0 ${theme === 'dark' ? 12 : 6}px ${sprintHealthScore >= 90 ? 'rgba(16,185,129,' : sprintHealthScore >= 70 ? 'rgba(245,158,11,' : 'rgba(239,68,68,'}${theme === 'dark' ? 0.5 : 0.25})`
                   }}
                 >
-                  {!isHealthBarFilled && (
-                    <motion.div
-                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                      animate={{ x: ['-100%', '100%'] }}
-                      transition={{ repeat: Infinity, duration: 1.0, ease: 'linear' }}
-                    />
-                  )}
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/35 to-transparent"
+                    animate={{ x: ['-100%', '200%'] }}
+                    transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+                  />
                 </motion.div>
               </div>
             </div>
@@ -2313,6 +2307,7 @@ Do not return markdown wraps, only raw JSON text.
                     fill="transparent"
                   />
                   <motion.circle
+                    key={`readiness-${renderKey}`}
                     cx="72"
                     cy="72"
                     r="60"
@@ -2326,10 +2321,10 @@ Do not return markdown wraps, only raw JSON text.
                     strokeDasharray={2 * Math.PI * 60}
                     initial={{ strokeDashoffset: 2 * Math.PI * 60 }}
                     animate={{ strokeDashoffset: 2 * Math.PI * 60 * (1 - releaseReadinessScore / 100) }}
-                    transition={{ duration: 1.2, ease: 'easeOut' }}
+                    transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
                     strokeLinecap="round"
                     style={{
-                      filter: `drop-shadow(0 0 ${theme === 'dark' ? 5 : 3}px ${releaseReadinessScore >= 85 ? 'rgba(16,185,129,' : releaseReadinessScore >= 70 ? 'rgba(245,158,11,' : 'rgba(239,68,68,'}${theme === 'dark' ? 0.5 : 0.25})`
+                      filter: `drop-shadow(0 0 ${theme === 'dark' ? 8 : 4}px ${releaseReadinessScore >= 85 ? 'rgba(16,185,129,' : releaseReadinessScore >= 70 ? 'rgba(245,158,11,' : 'rgba(239,68,68,'}${theme === 'dark' ? 0.6 : 0.3})`
                     }}
                   />
                 </svg>
@@ -2495,7 +2490,6 @@ Do not return markdown wraps, only raw JSON text.
               <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
               <RankedProgressList
                 theme={theme}
-                hasPlayed={hasPlayed}
                 items={data.releaseBugStatus.statusDistribution.map((row: any, idx: number) => ({
                   label: row.status,
                   count: row.count,
@@ -2565,14 +2559,14 @@ Do not return markdown wraps, only raw JSON text.
 
             {/* Overall Status Summary - Only show if Release Bug Status is NOT visible to avoid duplication */}
             {data.taskWiseStatus.overallStatus?.length > 0 && !(data.releaseBugStatus && vis.show_releaseBugStatus !== false) && (
-              <div className={`p-6 rounded-2xl border ${theme === 'dark' ? 'bg-white/[0.01] border-white/5' : 'bg-white border-slate-200'}`}>
+              <div className={`p-6 rounded-2xl border relative overflow-hidden backdrop-blur-2xl transition-all duration-300 ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 shadow-sm'}`}>
+                <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
                 <div className="flex items-center gap-2 mb-4">
-                  <BarChart3 className="w-4 h-4 text-accent-gold" />
-                  <span className="text-xs font-black uppercase tracking-widest text-accent-gold">Overall Status Summary</span>
+                  <BarChart3 className="w-4 h-4 text-indigo-400" />
+                  <span className="text-xs font-black uppercase tracking-widest text-indigo-400">Overall Status Summary</span>
                 </div>
                 <RankedProgressList
                   theme={theme}
-                  hasPlayed={hasPlayed}
                   items={data.taskWiseStatus.overallStatus.map((row: any, idx: number) => ({
                     label: row.status,
                     count: row.count,
@@ -2587,10 +2581,11 @@ Do not return markdown wraps, only raw JSON text.
             {data.taskWiseStatus.parentWiseStatus?.length > 0 && data.taskWiseStatus.uniqueStatuses?.length > 0 && (
               <div 
                 onClick={() => setShowTaskWiseStatusModal(true)}
-                className={`rounded-2xl border overflow-hidden cursor-pointer group relative transition-all duration-300 ${theme === 'dark' ? 'bg-white/[0.01] border-white/5 hover:border-accent-gold/30 hover:bg-white/[0.03]' : 'bg-white border-slate-200 hover:border-accent-gold/40 hover:shadow-2xl'}`}
+                className={`rounded-2xl border relative overflow-hidden backdrop-blur-2xl cursor-pointer group transition-all duration-300 ${theme === 'dark' ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/10 hover:border-indigo-400/30' : 'bg-gradient-to-b from-white/95 to-slate-50/90 border-slate-200/80 hover:border-indigo-400/40 hover:shadow-xl'}`}
               >
+                <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
                 {/* Hover Glow Effect */}
-                <div className="absolute inset-0 bg-gradient-to-br from-accent-gold/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-2xl" />
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-2xl" />
 
                 {/* Click Indicator */}
                 <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
@@ -2851,9 +2846,10 @@ Do not return markdown wraps, only raw JSON text.
                       </div>
                       <div className={`h-1.5 rounded-full overflow-hidden ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-100'}`}>
                         <motion.div
-                          initial={{ width: hasPlayed ? `${d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%` : 0 }}
+                          key={`defect-bar-${renderKey}`}
+                          initial={{ width: 0 }}
                           animate={{ width: `${d.reported ? Math.round((d.closed / d.reported) * 100) : 0}%` }}
-                          transition={{ duration: hasPlayed ? 0 : 0.8, ease: 'easeOut' }}
+                          transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
                           className="h-full bg-green-400 rounded-full"
                         />
                       </div>
@@ -2960,14 +2956,15 @@ Do not return markdown wraps, only raw JSON text.
                 </div>
                 <div className={`h-4 rounded-full overflow-hidden border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-slate-100 border-slate-200'}`}>
                   <motion.div
-                    initial={{ width: hasPlayed ? `${Math.min(Math.abs(data.historicalDefectOptimization.improvementPercentage!), 100)}%` : 0 }}
+                    key={`opt-bar-${renderKey}`}
+                    initial={{ width: 0 }}
                     animate={{ width: `${Math.min(Math.abs(data.historicalDefectOptimization.improvementPercentage!), 100)}%` }}
-                    transition={{ duration: hasPlayed ? 0 : 1.2, ease: 'easeOut' }}
+                    transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
                     className={`h-full rounded-full ${data.historicalDefectOptimization.improvementPercentage! >= 0 ? 'bg-gradient-to-r from-green-500 to-green-400' : 'bg-gradient-to-r from-red-500 to-red-400'}`}
                     style={{
                       boxShadow: data.historicalDefectOptimization.improvementPercentage! >= 0
-                        ? '0 0 10px rgba(34, 197, 94, 0.5)'
-                        : '0 0 10px rgba(239, 68, 68, 0.5)'
+                        ? '0 0 12px rgba(34, 197, 94, 0.5)'
+                        : '0 0 12px rgba(239, 68, 68, 0.5)'
                     }}
                   />
                 </div>
@@ -3310,7 +3307,7 @@ Do not return markdown wraps, only raw JSON text.
                   <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block">Monthly KPI Trend</span>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <LineChart key={`hist-line-${renderKey}`} data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'} />
                         <XAxis dataKey="name" {...axisPreset()} />
                         <YAxis {...axisPreset()} />
@@ -3336,7 +3333,7 @@ Do not return markdown wraps, only raw JSON text.
                   <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block">Production Issue Categories Trend</span>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <AreaChart key={`hist-area1-${renderKey}`} data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <defs>
                           <StackedAreaGradient id="prodTrendEscapedGrad" color="#d4af37" theme={theme} />
                           <StackedAreaGradient id="prodTrendSupportGrad" color="#eab308" theme={theme} />
@@ -3367,7 +3364,7 @@ Do not return markdown wraps, only raw JSON text.
                   <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block">Weekly Support Ticket Trend</span>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <AreaChart key={`hist-area2-${renderKey}`} data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <defs>
                           <GlowAreaGradient id="supportTicketGrad" color="#06b6d4" theme={theme} />
                         </defs>
@@ -3394,7 +3391,7 @@ Do not return markdown wraps, only raw JSON text.
                   <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block">QA Health vs Team Size Trend</span>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <ComposedChart key={`hist-comp-${renderKey}`} data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <defs>
                           <BarFillGradient id="teamSizeBarGrad" color="#6366f1" theme={theme} />
                         </defs>
@@ -3422,7 +3419,7 @@ Do not return markdown wraps, only raw JSON text.
                   <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block">Feature Completion Trend</span>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <BarChart key={`hist-bar-${renderKey}`} data={historicalChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <defs>
                           <BarFillGradient id="featurePassGrad" color="#10b981" theme={theme} />
                           <BarFillGradient id="featureFailGrad" color="#f87171" theme={theme} />
@@ -3492,7 +3489,7 @@ Do not return markdown wraps, only raw JSON text.
               <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block relative z-10">Work Distribution</span>
               <div className="relative h-64 flex justify-center items-center">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
+                  <PieChart key={`pie-work-${renderKey}`}>
                     <Pie
                       data={workDistributionData}
                       cx="50%"
@@ -3504,6 +3501,7 @@ Do not return markdown wraps, only raw JSON text.
                       stroke="none"
                       dataKey="value"
                       isAnimationActive={chartAnimationEnabled}
+                      animationBegin={100}
                       animationDuration={1400}
                       animationEasing="ease-out"
                     >
@@ -3556,7 +3554,7 @@ Do not return markdown wraps, only raw JSON text.
               <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block relative z-10">Production Issue Categories</span>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={prodIssuesData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                  <BarChart key={`bar-prod-${renderKey}`} data={prodIssuesData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                     <defs>
                       <BarFillGradient id="prodIssuesLastWeekGrad" color="#d4af37" theme={theme} />
                       <BarFillGradient id="prodIssuesMtdGrad" color="#3b82f6" theme={theme} />
@@ -3566,8 +3564,8 @@ Do not return markdown wraps, only raw JSON text.
                     <YAxis {...axisPreset()} />
                     <Tooltip content={<PremiumTooltip theme={theme} />} />
                     <Legend {...legendPreset} />
-                    <Bar dataKey="lastWeek" name="Last Week" fill="url(#prodIssuesLastWeekGrad)" radius={[8, 8, 2, 2]} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
-                    <Bar dataKey="mtd" name="MTD" fill="url(#prodIssuesMtdGrad)" radius={[8, 8, 2, 2]} isAnimationActive={chartAnimationEnabled} animationDuration={1400} animationEasing="ease-out" />
+                    <Bar dataKey="lastWeek" name="Last Week" fill="url(#prodIssuesLastWeekGrad)" radius={[8, 8, 2, 2]} isAnimationActive={chartAnimationEnabled} animationBegin={100} animationDuration={1400} animationEasing="ease-out" />
+                    <Bar dataKey="mtd" name="MTD" fill="url(#prodIssuesMtdGrad)" radius={[8, 8, 2, 2]} isAnimationActive={chartAnimationEnabled} animationBegin={100} animationDuration={1400} animationEasing="ease-out" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -3602,7 +3600,7 @@ Do not return markdown wraps, only raw JSON text.
               <span className="text-xs font-black uppercase tracking-widest text-indigo-400 dark:text-indigo-400 mb-4 block relative z-10">Defect Status Breakdown</span>
               <div className="relative h-64 flex justify-center items-center">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
+                  <PieChart key={`pie-defect-${renderKey}`}>
                     <Pie
                       data={defectStatusData}
                       cx="50%"
@@ -3614,6 +3612,7 @@ Do not return markdown wraps, only raw JSON text.
                       stroke="none"
                       dataKey="value"
                       isAnimationActive={chartAnimationEnabled}
+                      animationBegin={100}
                       animationDuration={1400}
                       animationEasing="ease-out"
                     >
@@ -4036,12 +4035,6 @@ Do not return markdown wraps, only raw JSON text.
       />
     </>
     )}
-
-    <DashboardLaunchOverlay
-      open={showLaunchTriage}
-      projectName={data.projectName}
-      onComplete={handleLaunchTriageComplete}
-    />
     </div>
   )
 }

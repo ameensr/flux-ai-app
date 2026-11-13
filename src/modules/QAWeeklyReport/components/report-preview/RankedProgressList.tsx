@@ -45,9 +45,9 @@ export const RankedProgressList: React.FC<RankedProgressListProps> = ({
           </div>
           <div className={`${compact ? 'h-1.5' : 'h-2'} rounded-full overflow-hidden ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-100'}`}>
             <motion.div
-              initial={{ width: hasPlayed ? `${item.percent}%` : 0 }}
+              initial={{ width: 0 }}
               animate={{ width: `${item.percent}%` }}
-              transition={{ duration: hasPlayed ? 0 : 0.8, delay: hasPlayed ? 0 : idx * 0.08, ease: 'easeOut' }}
+              transition={{ duration: 0.9, delay: idx * 0.06, ease: [0.16, 1, 0.3, 1] }}
               className={`h-full rounded-full ${item.colorClass}`}
             />
           </div>

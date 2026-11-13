@@ -20,11 +20,11 @@ export function prefersReducedMotion(): boolean {
 }
 
 /**
- * Whether a chart's entrance animation should play: skipped once per session (existing
- * `hasPlayed` convention) AND whenever the user prefers reduced motion.
+ * Whether a chart's entrance animation should play.
+ * Plays fluidly on every load and refresh unless the user has requested reduced motion.
  */
-export function resolveChartAnimation(hasPlayed: boolean): boolean {
-  return !hasPlayed && !prefersReducedMotion()
+export function resolveChartAnimation(_hasPlayed?: boolean): boolean {
+  return !prefersReducedMotion()
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -139,9 +139,13 @@ export function PremiumTooltip({ active, label, payload, theme, valueFormatter }
   if (!active || !payload || !payload.length) return null
   return (
     <div
-      className={`rounded-xl border px-3 py-2.5 text-xs backdrop-blur-xl ${theme === 'dark' ? 'bg-[#0f1420]/95 border-white/10 text-white' : 'bg-white/95 border-slate-200 text-slate-900'}`}
-      style={{ boxShadow: theme === 'dark' ? '0 8px 24px rgba(0,0,0,0.35)' : '0 8px 24px rgba(15,23,42,0.12)' }}
+      className={`relative overflow-hidden rounded-2xl border px-3.5 py-2.5 text-xs backdrop-blur-2xl transition-all duration-200 ${
+        theme === 'dark'
+          ? 'bg-[#0f1424]/95 border-white/15 text-white shadow-[0_12px_36px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.15)]'
+          : 'bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_12px_36px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,1)]'
+      }`}
     >
+      <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-indigo-400/50 to-transparent pointer-events-none" />
       {label !== undefined && label !== null && (
         <div className={`text-[10px] font-bold uppercase tracking-wider mb-1.5 ${theme === 'dark' ? 'text-white/40' : 'text-slate-400'}`}>
           {label}

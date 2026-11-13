@@ -262,13 +262,19 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
 
         {/* Title */}
         <motion.div 
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
+          transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
           className="flex flex-col gap-3"
         >
-          <span className="text-accent-gold font-clash font-extrabold uppercase text-sm tracking-[0.2em]">{projectName}</span>
-          <h1 className={`font-clash font-black text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-[1.1] ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+            </span>
+            <span className="text-accent-gold font-clash font-extrabold uppercase text-xs sm:text-sm tracking-[0.25em]">{projectName}</span>
+          </div>
+          <h1 className={`font-clash font-black text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-[1.08] drop-shadow-sm ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
             {reportTitle || 'Weekly Status Report'}
           </h1>
         </motion.div>
@@ -405,6 +411,7 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
                 />
                 {/* Progress */}
                 <motion.circle
+                  key={`hero-gauge-${qualityStats.score}`}
                   cx="50" cy="50" r="42"
                   fill="none"
                   stroke="url(#scoreGradient)"
@@ -412,8 +419,8 @@ export const ReportHero: React.FC<ReportHeroProps> = ({
                   strokeLinecap="round"
                   initial={{ strokeDasharray: '0 264' }}
                   animate={{ strokeDasharray: `${(qualityStats.score / 100) * 264} 264` }}
-                  transition={{ duration: 1.5, ease: 'easeOut' }}
-                  style={{ filter: `drop-shadow(0 0 8px rgba(212,175,55,0.5))` }}
+                  transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1] }}
+                  style={{ filter: `drop-shadow(0 0 10px rgba(212,175,55,0.65))` }}
                 />
                 <defs>
                   <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">

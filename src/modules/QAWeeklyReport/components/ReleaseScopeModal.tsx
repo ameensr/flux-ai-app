@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Layers } from 'lucide-react'
 import { useTheme } from '@/context/ThemeContext'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
-import { QATriageLoader, type LineData } from './QATriageLoader'
+import { CreativeDashboardLoader } from './CreativeDashboardLoader'
 import { ContinuousQATriage } from './ContinuousQATriage'
 
 interface ReleaseScopeModalProps {
@@ -42,16 +42,7 @@ function isStatusVisibleOnPage(visibleColumns: Record<string, boolean> | undefin
   return visibleColumns.status !== false
 }
 
-// Loading script for the shared "qaly.ai / TRIAGE" terminal loader — mirrors the
-// defect-triage script's rhythm but with release-specific phrasing.
-const RELEASE_TRIAGE_SEQUENCE: LineData[] = [
-  { id: 1, type: 'process', text: '> Loading release scope...' },
-  { id: 2, type: 'process', text: '> Reading testing records...' },
-  { id: 3, type: 'process', text: '> Mapping release status...' },
-  { id: 4, type: 'process', text: '> Cross-checking sprint coverage...' },
-  { id: 5, type: 'pass', text: '[PASS] Release records validated' },
-  { id: 6, type: 'complete', text: '[PASS] Release scope synchronized' },
-]
+
 
 export function ReleaseScopeModal({
   isOpen,
@@ -145,10 +136,11 @@ export function ReleaseScopeModal({
 
                 {isAnalyzing ? (
                   <div className="flex-1 flex items-center justify-center p-6">
-                    <QATriageLoader
+                    <CreativeDashboardLoader
                       onComplete={() => setIsAnalyzing(false)}
-                      sequence={RELEASE_TRIAGE_SEQUENCE}
-                      brandLabel="RELEASE TRIAGE"
+                      title="Analyzing Release Scope"
+                      subtitle={projectName}
+                      durationMs={1800}
                     />
                   </div>
                 ) : (
@@ -179,7 +171,7 @@ export function ReleaseScopeModal({
                           transition={{ delay: 0.2 }}
                           className="text-sm text-text-secondary mt-2 font-mono"
                         >
-                          <span className="text-accent-gold font-bold">qaly.ai / RELEASE TRIAGE</span> • {projectName}
+                          <span className="text-indigo-400 font-semibold tracking-wide">Release Verification Scope</span> • {projectName}
                         </motion.p>
                       </div>
                       <motion.button
