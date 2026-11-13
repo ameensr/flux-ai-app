@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import type { Variants } from 'framer-motion'
 import DOMPurify from 'dompurify'
 import {
   TrendingUp, TrendingDown, Mail, Zap, Wrench, Shield, Check,
   AlertTriangle, HelpCircle, Activity, Maximize2,
-  Minimize2, RefreshCw, X, ChevronRight,
+  Minimize2, RefreshCw, X, ChevronRight, ChevronLeft, Sun, Moon,
   BookOpen, Star, Sparkles, FileText, LayoutGrid, Users, History, CheckCheck,
   ArrowRightLeft, GitCompare, Palette, Lock, Unlock,
   Code2, ChevronDown, Info, CalendarDays, UserRound, Target, BarChart3
@@ -761,7 +761,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
 
   // Nav items mirror the actual rendered section order — a section only appears here if
   // its corresponding vis flag (or underlying data) means it will actually be rendered.
-  const reportNavItems: ReportNavItem[] = [
+  const reportNavItems: ReportNavItem[] = useMemo(() => [
     { id: 'overview', label: 'Overview', show: vis.show_hero !== false },
     { id: 'kpis', label: 'KPIs', show: vis.show_kpiCards !== false },
     { id: 'releaseTesting', label: 'Release', show: vis.show_releaseTable !== false },
@@ -769,7 +769,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
     { id: 'supportLog', label: 'Support', show: vis.show_supportLog !== false },
     { id: 'defects', label: 'Defects', show: vis.show_defectAnalysis !== false },
     { id: 'comparison', label: 'WoW', show: vis.show_wowComparison !== false }
-  ]
+  ], [vis, data.releaseBugStatus])
   const { theme: globalTheme, toggleTheme } = useTheme()
   const theme = globalTheme === 'light' ? 'light' : 'dark'
   const [smoothCursorEnabled, setSmoothCursorEnabled] = useState<boolean>(() => {
@@ -1380,53 +1380,123 @@ const ReportPreviewDashboardContent: React.FC = () => {
     }
   }, [])
 
-  // Keyboard navigation for Presentation
+  const scrollToSection = useCallback((section: string) => {
+    const targetRef = (sectionsRef as any)[section]
+    if (targetRef && targetRef.current) {
+      const top = targetRef.current.getBoundingClientRect().top + window.scrollY - 90
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+      setActiveSection(section)
+    }
+  }, [sectionsRef])
+
+  const presentationSections = useMemo(() => {
+    const valid = reportNavItems.filter(item => item.show !== false)
+    return valid.length > 0 ? valid : [{ id: 'overview', label: 'Overview', show: true }]
+  }, [reportNavItems])
+
+  const currentPresentationIndex = Math.max(
+    0,
+    presentationSections.findIndex(s => s.id === activeSection)
+  )
+
+  const handleNextSection = useCallback(() => {
+    const idx = presentationSections.findIndex(s => s.id === activeSection)
+    const nextIdx = Math.min((idx >= 0 ? idx : 0) + 1, presentationSections.length - 1)
+    scrollToSection(presentationSections[nextIdx].id)
+  }, [presentationSections, activeSection, scrollToSection])
+
+  const handlePrevSection = useCallback(() => {
+    const idx = presentationSections.findIndex(s => s.id === activeSection)
+    const prevIdx = Math.max((idx >= 0 ? idx : 0) - 1, 0)
+    scrollToSection(presentationSections[prevIdx].id)
+  }, [presentationSections, activeSection, scrollToSection])
+
+  const exitPresentation = useCallback(() => {
+    const isFs = !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement
+    )
+    if (isFs) {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => { })
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen()
+      }
+    }
+    setIsPresentation(false)
+  }, [])
+
+  const enterPresentation = useCallback(() => {
+    const el = document.documentElement
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(() => { })
+    } else if ((el as any).webkitRequestFullscreen) {
+      (el as any).webkitRequestFullscreen()
+    }
+    setIsPresentation(true)
+    scrollToSection('overview')
+  }, [scrollToSection])
+
+  const togglePresentation = useCallback(() => {
+    if (!isPresentation) {
+      enterPresentation()
+    } else {
+      exitPresentation()
+    }
+  }, [isPresentation, enterPresentation, exitPresentation])
+
+  // Sync presentation state when user exits fullscreen (e.g. by pressing Esc in browser)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isFs = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      )
+      if (!isFs && isPresentation) {
+        setIsPresentation(false)
+      }
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange)
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange)
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
+    }
+  }, [isPresentation])
+
+  // Keyboard navigation for Presentation (Esc, Arrow keys, Space)
   useEffect(() => {
     if (!isPresentation) return
-    const keys = Object.keys(sectionsRef)
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        exitFullscreen()
-        setIsPresentation(false)
+        e.preventDefault()
+        exitPresentation()
         return
       }
 
-      let currentIndex = keys.indexOf(activeSection)
       if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'ArrowDown') {
         e.preventDefault()
-        const nextIndex = Math.min(currentIndex + 1, keys.length - 1)
-        scrollToSection(keys[nextIndex])
+        handleNextSection()
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault()
-        const prevIndex = Math.max(currentIndex - 1, 0)
-        scrollToSection(keys[prevIndex])
+        handlePrevSection()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isPresentation, activeSection])
-
-  const requestFullscreen = () => {
-    const el = document.documentElement
-    if (el.requestFullscreen) el.requestFullscreen()
-  }
-
-  const exitFullscreen = () => {
-    if (document.exitFullscreen) document.exitFullscreen().catch(() => { })
-  }
-
-  const togglePresentation = () => {
-    if (!isPresentation) {
-      requestFullscreen()
-      setIsPresentation(true)
-      scrollToSection('overview')
-    } else {
-      exitFullscreen()
-      setIsPresentation(false)
-    }
-  }
+  }, [isPresentation, exitPresentation, handleNextSection, handlePrevSection])
 
   const toggleKPICategory = (categoryId: string) => {
     const newState = {
@@ -1435,15 +1505,6 @@ const ReportPreviewDashboardContent: React.FC = () => {
     }
     setExpandedKPICategories(newState)
     localStorage.setItem('qaly-expanded-kpi-categories', JSON.stringify(newState))
-  }
-
-  const scrollToSection = (section: string) => {
-    const targetRef = (sectionsRef as any)[section]
-    if (targetRef && targetRef.current) {
-      const top = targetRef.current.getBoundingClientRect().top + window.scrollY - 90
-      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
-      setActiveSection(section)
-    }
   }
 
   // ── Generates dynamically refined summaries (Comparing history) ───────────
@@ -1858,96 +1919,172 @@ Do not return markdown wraps, only raw JSON text.
       <div className="fixed -top-44 left-1/2 -translate-x-1/2 w-[880px] h-[360px] bg-gradient-to-b from-indigo-500/15 via-blue-500/5 to-transparent blur-[130px] pointer-events-none z-0" />
 
       {/* ── Floating Nav Bar — Stays anchored on scroll, application color theme ── */}
-      {!isPresentation && (
-        <header className="fixed top-3 sm:top-4 inset-x-0 z-40 print:hidden pointer-events-none transition-all duration-300">
-          <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-6">
-            <div
-              className={`pointer-events-auto relative rounded-full p-1.5 sm:p-2 transition-all duration-300 backdrop-blur-xl ${
-                theme === 'dark'
-                  ? 'bg-[#090D1A]/85 border border-white/[0.08] shadow-[0_12px_32px_-4px_rgba(0,0,0,0.5),0_0_20px_rgba(99,102,241,0.06),inset_0_1px_1px_rgba(255,255,255,0.1)]'
-                  : 'bg-white/85 border border-slate-200/90 shadow-[0_8px_24px_-4px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.8)]'
-              }`}
-            >
-              {/* Subtle top specular hairline matching app theme */}
-              <div className="absolute inset-x-8 top-0 h-[1px] bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent pointer-events-none rounded-full" />
+      <AnimatePresence>
+        {!isPresentation && (
+          <motion.header
+            key="floating-nav-bar"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="fixed top-3 sm:top-4 inset-x-0 z-40 print:hidden pointer-events-none transition-all duration-300"
+          >
+            <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-6">
+              <div
+                className={`pointer-events-auto relative rounded-full p-1.5 sm:p-2 transition-all duration-300 backdrop-blur-xl ${
+                  theme === 'dark'
+                    ? 'bg-[#090D1A]/85 border border-white/[0.08] shadow-[0_12px_32px_-4px_rgba(0,0,0,0.5),0_0_20px_rgba(99,102,241,0.06),inset_0_1px_1px_rgba(255,255,255,0.1)]'
+                    : 'bg-white/85 border border-slate-200/90 shadow-[0_8px_24px_-4px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.8)]'
+                }`}
+              >
+                {/* Subtle top specular hairline matching app theme */}
+                <div className="absolute inset-x-8 top-0 h-[1px] bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent pointer-events-none rounded-full" />
 
-              <div className="flex items-center justify-between gap-2 sm:gap-4 px-2 sm:px-3">
-                {/* Logo */}
-                <div className="flex items-center gap-3 shrink-0">
-                  <Logo size="sm" animate={false} />
-                </div>
+                <div className="flex items-center justify-between gap-2 sm:gap-4 px-2 sm:px-3">
+                  {/* Logo */}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <Logo size="sm" animate={false} />
+                  </div>
 
-                {/* Section Navigator Capsule Segment */}
-                <div className="flex-1 min-w-0 max-w-[860px] mx-auto px-1">
-                  <ReportNavigator theme={theme} items={reportNavItems} activeSection={activeSection} onNavigate={scrollToSection} />
-                </div>
+                  {/* Section Navigator Capsule Segment */}
+                  <div className="flex-1 min-w-0 max-w-[860px] mx-auto px-1">
+                    <ReportNavigator theme={theme} items={reportNavItems} activeSection={activeSection} onNavigate={scrollToSection} />
+                  </div>
 
-                {/* Action Bar */}
-                <div className="shrink-0">
-                  <ReportActionBar
-                    theme={theme}
-                    cursorEnabled={smoothCursorEnabled}
-                    onToggleCursor={toggleSmoothCursor}
-                    clientMode={clientMode}
-                    onToggleClientMode={() => {
-                      const next = !clientMode
-                      setClientMode(next)
-                      localStorage.setItem('qaly-client-mode', String(next))
-                      toast({
-                        title: next ? 'Client Mode Active' : 'Client Mode Disabled',
-                        description: next ? 'Confidential developer notes and internal bug metrics hidden.' : 'Restored full view.'
-                      })
-                    }}
-                    onPresent={togglePresentation}
-                    showExportMenu={showExportMenu}
-                    onToggleExportMenu={() => setShowExportMenu(v => !v)}
-                    onPrint={() => { handlePrint(); setShowExportMenu(false) }}
-                    onPrintFriendly={handlePrintFriendly}
-                    onDownloadHTML={() => { downloadHTML(); setShowExportMenu(false) }}
-                    onDownloadMarkdown={() => { downloadMarkdown(); setShowExportMenu(false) }}
-                    onClose={() => window.close()}
-                  />
+                  {/* Action Bar */}
+                  <div className="shrink-0">
+                    <ReportActionBar
+                      theme={theme}
+                      cursorEnabled={smoothCursorEnabled}
+                      onToggleCursor={toggleSmoothCursor}
+                      clientMode={clientMode}
+                      onToggleClientMode={() => {
+                        const next = !clientMode
+                        setClientMode(next)
+                        localStorage.setItem('qaly-client-mode', String(next))
+                        toast({
+                          title: next ? 'Client Mode Active' : 'Client Mode Disabled',
+                          description: next ? 'Confidential developer notes and internal bug metrics hidden.' : 'Restored full view.'
+                        })
+                      }}
+                      onPresent={togglePresentation}
+                      showExportMenu={showExportMenu}
+                      onToggleExportMenu={() => setShowExportMenu(v => !v)}
+                      onPrint={() => { handlePrint(); setShowExportMenu(false) }}
+                      onPrintFriendly={handlePrintFriendly}
+                      onDownloadHTML={() => { downloadHTML(); setShowExportMenu(false) }}
+                      onDownloadMarkdown={() => { downloadMarkdown(); setShowExportMenu(false) }}
+                      onClose={() => window.close()}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </header>
-      )}
+          </motion.header>
+        )}
+      </AnimatePresence>
 
-      {/* ── Presentation Navigation Overlay ── */}
-      {isPresentation && (
-        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 bg-black/80 backdrop-blur border border-white/10 p-2 rounded-2xl shadow-2xl print:hidden">
-          <button
-            onClick={() => {
-              const keys = Object.keys(sectionsRef)
-              const currentIndex = keys.indexOf(activeSection)
-              const prev = Math.max(currentIndex - 1, 0)
-              scrollToSection(keys[prev])
-            }}
-            className="p-2 rounded-lg hover:bg-white/10 text-white transition-colors"
+      {/* ── Presentation Navigation Overlay Capsule ── */}
+      <AnimatePresence>
+        {isPresentation && (
+          <motion.div
+            key="presentation-nav-capsule"
+            initial={{ opacity: 0, y: 24, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 24, scale: 0.95 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className={`fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-50 flex items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2 rounded-full backdrop-blur-2xl border transition-all duration-300 print:hidden ${
+              theme === 'dark'
+                ? 'bg-[#090D1A]/92 border-white/[0.12] shadow-[0_16px_40px_-6px_rgba(0,0,0,0.65),0_0_24px_rgba(99,102,241,0.12)] text-white'
+                : 'bg-white/95 border-slate-200/90 shadow-[0_16px_40px_-6px_rgba(15,23,42,0.14),0_0_24px_rgba(99,102,241,0.08)] text-slate-800'
+            }`}
           >
-            ←
-          </button>
-          <span className="text-[10px] text-white/50 uppercase font-black px-1 font-mono">{activeSection}</span>
-          <button
-            onClick={() => {
-              const keys = Object.keys(sectionsRef)
-              const currentIndex = keys.indexOf(activeSection)
-              const next = Math.min(currentIndex + 1, keys.length - 1)
-              scrollToSection(keys[next])
-            }}
-            className="p-2 rounded-lg hover:bg-white/10 text-white transition-colors"
-          >
-            →
-          </button>
-          <button
-            onClick={togglePresentation}
-            className="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors ml-2"
-          >
-            <Minimize2 className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+            {/* Previous Section Button */}
+            <button
+              type="button"
+              onClick={handlePrevSection}
+              disabled={currentPresentationIndex <= 0}
+              title="Previous section (Arrow Left / Arrow Up)"
+              aria-label="Previous section"
+              className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-200 disabled:opacity-25 disabled:pointer-events-none ${
+                theme === 'dark'
+                  ? 'bg-white/[0.05] hover:bg-white/[0.1] active:bg-white/[0.15] border-white/[0.08] text-white/80 hover:text-white'
+                  : 'bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border-slate-200 text-slate-700 hover:text-slate-900'
+              }`}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            {/* Current Section Pill & Writing — Aligned with theme & typography */}
+            <div
+              className={`flex items-center gap-2 px-3 h-8 rounded-full text-xs font-semibold select-none ${
+                theme === 'dark'
+                  ? 'bg-white/[0.05] border border-white/[0.08]'
+                  : 'bg-slate-100/90 border border-slate-200/90'
+              }`}
+            >
+              <span className="font-mono text-[10px] tracking-wider uppercase font-bold text-indigo-500 dark:text-indigo-400 shrink-0">
+                {currentPresentationIndex + 1} / {presentationSections.length}
+              </span>
+              <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-white/20 shrink-0" />
+              <span className={`text-[11px] font-bold tracking-wider uppercase truncate max-w-[130px] sm:max-w-[190px] ${
+                theme === 'dark' ? 'text-white/90' : 'text-slate-800'
+              }`}>
+                {presentationSections[currentPresentationIndex]?.label || activeSection}
+              </span>
+            </div>
+
+            {/* Next Section Button */}
+            <button
+              type="button"
+              onClick={handleNextSection}
+              disabled={currentPresentationIndex >= presentationSections.length - 1}
+              title="Next section (Arrow Right / Space / Arrow Down)"
+              aria-label="Next section"
+              className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-200 disabled:opacity-25 disabled:pointer-events-none ${
+                theme === 'dark'
+                  ? 'bg-white/[0.05] hover:bg-white/[0.1] active:bg-white/[0.15] border-white/[0.08] text-white/80 hover:text-white'
+                  : 'bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border-slate-200 text-slate-700 hover:text-slate-900'
+              }`}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+
+            {/* Hairline Divider */}
+            <div className={`w-[1px] h-4 mx-0.5 shrink-0 ${theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'}`} />
+
+            {/* Theme Toggle Button in Presentation Mode */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+              aria-label={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+              className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-200 shrink-0 ${
+                theme === 'dark'
+                  ? 'bg-white/[0.05] hover:bg-white/[0.1] active:bg-white/[0.15] border-white/[0.08] text-amber-300 hover:text-amber-200'
+                  : 'bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border-slate-200 text-slate-700 hover:text-indigo-600'
+              }`}
+            >
+              {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+            </button>
+
+            {/* Exit Presentation (Esc) Button */}
+            <button
+              type="button"
+              onClick={exitPresentation}
+              title="Exit presentation (Esc)"
+              aria-label="Exit presentation"
+              className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-200 shrink-0 ${
+                theme === 'dark'
+                  ? 'bg-red-500/10 hover:bg-red-500/20 active:bg-red-500/30 border-red-500/20 text-red-400 hover:text-red-300'
+                  : 'bg-red-50 hover:bg-red-100 active:bg-red-200 border-red-200 text-red-600 hover:text-red-700'
+              }`}
+            >
+              <Minimize2 className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <motion.div
         variants={containerVariants}

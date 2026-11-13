@@ -996,3 +996,92 @@
   color: rgba(255, 255, 255, 0.5) !important;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Butter-Smooth Cinematic Theme Transition (Luminous Dissolve & Radiant Ripple)
+───────────────────────────────────────────────────────────────────────────── */
+
+::view-transition-group(root) {
+  animation-duration: 450ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::view-transition-old(root) {
+  animation: 450ms cubic-bezier(0.16, 1, 0.3, 1) both theme-fade-out;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  animation: 450ms cubic-bezier(0.16, 1, 0.3, 1) both theme-fade-in;
+  mix-blend-mode: normal;
+}
+
+@keyframes theme-fade-out {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes theme-fade-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Ephemeral Luminous Radiant Ripple Overlay */
+.theme-luminous-ripple {
+  position: fixed;
+  width: 500px;
+  height: 500px;
+  margin-left: -250px;
+  margin-top: -250px;
+  border-radius: 9999px;
+  pointer-events: none;
+  z-index: 999999;
+  filter: blur(40px);
+  animation: theme-ripple-expand 580ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.theme-luminous-ripple-light {
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.45) 0%, rgba(99, 102, 241, 0.22) 40%, rgba(244, 246, 251, 0.08) 70%, transparent 100%);
+}
+
+.theme-luminous-ripple-dark {
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.55) 0%, rgba(79, 70, 229, 0.3) 45%, rgba(9, 13, 26, 0.12) 70%, transparent 100%);
+}
+
+@keyframes theme-ripple-expand {
+  0% {
+    transform: scale(0.12);
+    opacity: 0.95;
+  }
+  50% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: scale(4.2);
+    opacity: 0;
+  }
+}
+
+/* Fallback: silky smooth cross-element property transitions when View Transition API is not active */
+html.theme-transitioning-fallback,
+html.theme-transitioning-fallback *,
+html.theme-transitioning-fallback *::before,
+html.theme-transitioning-fallback *::after {
+  transition: background-color 480ms cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 480ms cubic-bezier(0.16, 1, 0.3, 1),
+              color 480ms cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 480ms cubic-bezier(0.16, 1, 0.3, 1),
+              fill 480ms cubic-bezier(0.16, 1, 0.3, 1),
+              stroke 480ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition-delay: 0ms !important;
+}
+
+
