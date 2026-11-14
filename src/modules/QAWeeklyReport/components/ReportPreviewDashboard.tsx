@@ -9,7 +9,7 @@ import {
   Minimize2, RefreshCw, X, ChevronRight, ChevronLeft, Sun, Moon,
   BookOpen, Star, Sparkles, FileText, LayoutGrid, Users, History, CheckCheck,
   ArrowRightLeft, GitCompare, Palette, Lock, Unlock,
-  Code2, ChevronDown, Info, CalendarDays, UserRound, Target, BarChart3
+  Code2, ChevronDown, ChevronUp, Info, CalendarDays, UserRound, Target, BarChart3
 } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
 import { BRAND } from '@/lib/brand'
@@ -764,12 +764,17 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const reportNavItems: ReportNavItem[] = useMemo(() => [
     { id: 'overview', label: 'Overview', show: vis.show_hero !== false },
     { id: 'kpis', label: 'KPIs', show: vis.show_kpiCards !== false },
+    { id: 'sprintHealth', label: 'Sprint', show: vis.show_sprintHealth !== false || vis.show_releaseReadiness !== false },
     { id: 'releaseTesting', label: 'Release', show: vis.show_releaseTable !== false },
-    { id: 'releaseBugStatus', label: 'Bug Status', show: !!data.releaseBugStatus && vis.show_releaseBugStatus !== false },
+    { id: 'releaseBugStatus', label: 'Bugs', show: !!data.releaseBugStatus && vis.show_releaseBugStatus !== false },
     { id: 'supportLog', label: 'Support', show: vis.show_supportLog !== false },
     { id: 'defects', label: 'Defects', show: vis.show_defectAnalysis !== false },
-    { id: 'comparison', label: 'WoW', show: vis.show_wowComparison !== false }
-  ], [vis, data.releaseBugStatus])
+    { id: 'comparison', label: 'WoW', show: vis.show_wowComparison !== false },
+    { id: 'historyDashboard', label: 'History', show: data.showHistoricalAnalytics !== false && vis.showHistoricalAnalytics !== false },
+    { id: 'charts', label: 'Charts', show: vis.show_weeklyCharts !== false },
+    { id: 'team', label: 'Team', show: vis.show_teamAllocation !== false },
+    { id: 'roadmap', label: 'Priorities', show: vis.show_nextPriorities !== false }
+  ], [vis, data.releaseBugStatus, data.showHistoricalAnalytics])
   const { theme: globalTheme, toggleTheme } = useTheme()
   const theme = globalTheme === 'light' ? 'light' : 'dark'
   const [smoothCursorEnabled, setSmoothCursorEnabled] = useState<boolean>(() => {
@@ -889,6 +894,10 @@ const ReportPreviewDashboardContent: React.FC = () => {
   })
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
   const [activeSection, setActiveSection] = useState('overview')
+  const [scrollBounds, setScrollBounds] = useState<{ canScrollUp: boolean; canScrollDown: boolean }>({
+    canScrollUp: false,
+    canScrollDown: true
+  })
 
   const sectionsRef = {
     overview: useRef<HTMLDivElement>(null),
@@ -1353,19 +1362,28 @@ const ReportPreviewDashboardContent: React.FC = () => {
     }
   }, [theme])
 
-  // Scroll spy — rAF-throttled to avoid setState storms while scrolling
+  // Scroll spy & scroll bounds tracking — rAF-throttled to avoid setState storms while scrolling
   useEffect(() => {
     let raf = 0
     const handleScroll = () => {
       if (raf) return
       raf = requestAnimationFrame(() => {
         raf = 0
-        const scrollPos = window.scrollY + 200
+        const scrollY = window.scrollY
+        const scrollHeight = document.documentElement.scrollHeight
+        const clientHeight = window.innerHeight
+
+        const canUp = scrollY > 20
+        const canDown = scrollY + clientHeight < scrollHeight - 20
+        setScrollBounds(prev => (prev.canScrollUp === canUp && prev.canScrollDown === canDown ? prev : { canScrollUp: canUp, canScrollDown: canDown }))
+
+        const scrollPos = scrollY + 200
         for (const [key, ref] of Object.entries(sectionsRef)) {
           if (ref.current) {
-            const offsetTop = ref.current.offsetTop
+            const rect = ref.current.getBoundingClientRect()
+            const docTop = rect.top + scrollY
             const offsetHeight = ref.current.offsetHeight
-            if (scrollPos >= offsetTop && scrollPos < offsetTop + offsetHeight) {
+            if (scrollPos >= docTop && scrollPos < docTop + offsetHeight) {
               setActiveSection(prev => (prev === key ? prev : key))
               break
             }
@@ -1374,11 +1392,14 @@ const ReportPreviewDashboardContent: React.FC = () => {
       })
     }
     window.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('resize', handleScroll, { passive: true })
+    handleScroll()
     return () => {
       window.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('resize', handleScroll)
       if (raf) cancelAnimationFrame(raf)
     }
-  }, [])
+  }, [sectionsRef])
 
   const scrollToSection = useCallback((section: string) => {
     const targetRef = (sectionsRef as any)[section]
@@ -1394,22 +1415,64 @@ const ReportPreviewDashboardContent: React.FC = () => {
     return valid.length > 0 ? valid : [{ id: 'overview', label: 'Overview', show: true }]
   }, [reportNavItems])
 
-  const currentPresentationIndex = Math.max(
-    0,
-    presentationSections.findIndex(s => s.id === activeSection)
-  )
+  // Collects all section pixel positions and document boundaries (top=0 and bottom=maxScroll)
+  const getSectionOffsets = useCallback(() => {
+    const offsets: Array<{ id: string; top: number }> = []
+    offsets.push({ id: 'top', top: 0 })
+    for (const sec of presentationSections) {
+      const ref = (sectionsRef as any)[sec.id]
+      if (ref && ref.current) {
+        const rect = ref.current.getBoundingClientRect()
+        const docTop = Math.max(0, rect.top + window.scrollY - 85)
+        offsets.push({ id: sec.id, top: Math.round(docTop) })
+      }
+    }
+    const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+    offsets.push({ id: 'bottom', top: maxScroll })
+    const sorted = offsets.sort((a, b) => a.top - b.top)
+    const unique: Array<{ id: string; top: number }> = []
+    for (const item of sorted) {
+      if (unique.length === 0 || item.top - unique[unique.length - 1].top > 50) {
+        unique.push(item)
+      } else if (item.id === 'bottom') {
+        unique[unique.length - 1] = item
+      }
+    }
+    return unique
+  }, [presentationSections, sectionsRef])
 
   const handleNextSection = useCallback(() => {
-    const idx = presentationSections.findIndex(s => s.id === activeSection)
-    const nextIdx = Math.min((idx >= 0 ? idx : 0) + 1, presentationSections.length - 1)
-    scrollToSection(presentationSections[nextIdx].id)
-  }, [presentationSections, activeSection, scrollToSection])
+    const currentY = window.scrollY
+    const offsets = getSectionOffsets()
+    // Find next offset further down than current scroll position (+35px threshold)
+    const nextTarget = offsets.find(o => o.top > currentY + 35)
+    if (nextTarget) {
+      window.scrollTo({ top: nextTarget.top, behavior: 'smooth' })
+      if (nextTarget.id !== 'top' && nextTarget.id !== 'bottom') {
+        setActiveSection(nextTarget.id)
+      }
+    } else {
+      const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+      window.scrollTo({ top: maxScroll, behavior: 'smooth' })
+    }
+  }, [getSectionOffsets])
 
   const handlePrevSection = useCallback(() => {
-    const idx = presentationSections.findIndex(s => s.id === activeSection)
-    const prevIdx = Math.max((idx >= 0 ? idx : 0) - 1, 0)
-    scrollToSection(presentationSections[prevIdx].id)
-  }, [presentationSections, activeSection, scrollToSection])
+    const currentY = window.scrollY
+    const offsets = getSectionOffsets()
+    // Find targets above current position (-35px threshold)
+    const prevTargets = offsets.filter(o => o.top < currentY - 35)
+    if (prevTargets.length > 0) {
+      const prevTarget = prevTargets[prevTargets.length - 1]
+      window.scrollTo({ top: prevTarget.top, behavior: 'smooth' })
+      if (prevTarget.id !== 'top' && prevTarget.id !== 'bottom') {
+        setActiveSection(prevTarget.id)
+      }
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      setActiveSection('overview')
+    }
+  }, [getSectionOffsets])
 
   const exitPresentation = useCallback(() => {
     const isFs = !!(
@@ -1984,74 +2047,58 @@ Do not return markdown wraps, only raw JSON text.
         )}
       </AnimatePresence>
 
-      {/* ── Presentation Navigation Overlay Capsule ── */}
+      {/* ── Presentation Navigation Overlay Capsule (Ultra-Premium Vertical Frosted Glass) ── */}
       <AnimatePresence>
         {isPresentation && (
           <motion.div
             key="presentation-nav-capsule"
-            initial={{ opacity: 0, y: 24, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 24, scale: 0.95 }}
+            initial={{ opacity: 0, x: 20, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 20, scale: 0.95 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className={`fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-50 flex items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2 rounded-full backdrop-blur-2xl border transition-all duration-300 print:hidden ${
+            className={`fixed bottom-6 right-5 sm:bottom-8 sm:right-6 z-50 flex flex-col items-center gap-1.5 p-1.5 rounded-full backdrop-blur-2xl transition-all duration-300 print:hidden ${
               theme === 'dark'
-                ? 'bg-[#090D1A]/92 border-white/[0.12] shadow-[0_16px_40px_-6px_rgba(0,0,0,0.65),0_0_24px_rgba(99,102,241,0.12)] text-white'
-                : 'bg-white/95 border-slate-200/90 shadow-[0_16px_40px_-6px_rgba(15,23,42,0.14),0_0_24px_rgba(99,102,241,0.08)] text-slate-800'
+                ? 'bg-[#090D1A]/50 border border-white/[0.15] shadow-[0_16px_40px_-6px_rgba(0,0,0,0.5),0_0_24px_rgba(99,102,241,0.15),inset_0_1px_1px_rgba(255,255,255,0.15)] text-white'
+                : 'bg-white/45 border border-white/70 shadow-[0_14px_36px_-6px_rgba(15,23,42,0.12),0_2px_8px_rgba(0,0,0,0.04),inset_0_1px_2px_rgba(255,255,255,0.9)] text-slate-800'
             }`}
           >
-            {/* Previous Section Button */}
+            {/* Top Specular Glow */}
+            <div className="absolute inset-x-2 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/80 dark:via-indigo-400/40 to-transparent pointer-events-none rounded-full" />
+
+            {/* Scroll Up Button */}
             <button
               type="button"
               onClick={handlePrevSection}
-              disabled={currentPresentationIndex <= 0}
-              title="Previous section (Arrow Left / Arrow Up)"
-              aria-label="Previous section"
-              className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-200 disabled:opacity-25 disabled:pointer-events-none ${
+              disabled={!scrollBounds.canScrollUp}
+              title="Scroll Up (Arrow Up / Arrow Left)"
+              aria-label="Scroll Up"
+              className={`flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 backdrop-blur-md disabled:opacity-20 disabled:pointer-events-none ${
                 theme === 'dark'
-                  ? 'bg-white/[0.05] hover:bg-white/[0.1] active:bg-white/[0.15] border-white/[0.08] text-white/80 hover:text-white'
-                  : 'bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border-slate-200 text-slate-700 hover:text-slate-900'
+                  ? 'bg-white/[0.06] hover:bg-white/[0.14] active:bg-white/[0.2] border border-white/[0.1] hover:border-white/[0.2] text-white/85 hover:text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]'
+                  : 'bg-white/50 hover:bg-white/80 active:bg-white/95 border border-white/75 hover:border-white text-slate-700 hover:text-slate-900 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_1px_3px_rgba(0,0,0,0.04)]'
               }`}
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronUp className="w-4 h-4" />
             </button>
 
-            {/* Current Section Pill & Writing — Aligned with theme & typography */}
-            <div
-              className={`flex items-center gap-2 px-3 h-8 rounded-full text-xs font-semibold select-none ${
-                theme === 'dark'
-                  ? 'bg-white/[0.05] border border-white/[0.08]'
-                  : 'bg-slate-100/90 border border-slate-200/90'
-              }`}
-            >
-              <span className="font-mono text-[10px] tracking-wider uppercase font-bold text-indigo-500 dark:text-indigo-400 shrink-0">
-                {currentPresentationIndex + 1} / {presentationSections.length}
-              </span>
-              <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-white/20 shrink-0" />
-              <span className={`text-[11px] font-bold tracking-wider uppercase truncate max-w-[130px] sm:max-w-[190px] ${
-                theme === 'dark' ? 'text-white/90' : 'text-slate-800'
-              }`}>
-                {presentationSections[currentPresentationIndex]?.label || activeSection}
-              </span>
-            </div>
-
-            {/* Next Section Button */}
+            {/* Scroll Down Button */}
             <button
               type="button"
               onClick={handleNextSection}
-              disabled={currentPresentationIndex >= presentationSections.length - 1}
-              title="Next section (Arrow Right / Space / Arrow Down)"
-              aria-label="Next section"
-              className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-200 disabled:opacity-25 disabled:pointer-events-none ${
+              disabled={!scrollBounds.canScrollDown}
+              title="Scroll Down (Arrow Down / Space / Arrow Right)"
+              aria-label="Scroll Down"
+              className={`flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 backdrop-blur-md disabled:opacity-20 disabled:pointer-events-none ${
                 theme === 'dark'
-                  ? 'bg-white/[0.05] hover:bg-white/[0.1] active:bg-white/[0.15] border-white/[0.08] text-white/80 hover:text-white'
-                  : 'bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border-slate-200 text-slate-700 hover:text-slate-900'
+                  ? 'bg-white/[0.06] hover:bg-white/[0.14] active:bg-white/[0.2] border border-white/[0.1] hover:border-white/[0.2] text-white/85 hover:text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]'
+                  : 'bg-white/50 hover:bg-white/80 active:bg-white/95 border border-white/75 hover:border-white text-slate-700 hover:text-slate-900 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_1px_3px_rgba(0,0,0,0.04)]'
               }`}
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronDown className="w-4 h-4" />
             </button>
 
-            {/* Hairline Divider */}
-            <div className={`w-[1px] h-4 mx-0.5 shrink-0 ${theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'}`} />
+            {/* Horizontal Hairline Divider */}
+            <div className={`w-4 h-[1px] my-0.5 shrink-0 ${theme === 'dark' ? 'bg-white/15' : 'bg-slate-300/50'}`} />
 
             {/* Theme Toggle Button in Presentation Mode */}
             <button
@@ -2059,10 +2106,10 @@ Do not return markdown wraps, only raw JSON text.
               onClick={toggleTheme}
               title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
               aria-label={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
-              className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-200 shrink-0 ${
+              className={`flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 shrink-0 backdrop-blur-md ${
                 theme === 'dark'
-                  ? 'bg-white/[0.05] hover:bg-white/[0.1] active:bg-white/[0.15] border-white/[0.08] text-amber-300 hover:text-amber-200'
-                  : 'bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border-slate-200 text-slate-700 hover:text-indigo-600'
+                  ? 'bg-white/[0.06] hover:bg-white/[0.14] active:bg-white/[0.2] border border-white/[0.1] text-amber-300 hover:text-amber-200 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]'
+                  : 'bg-white/50 hover:bg-white/80 active:bg-white/95 border border-white/75 text-slate-700 hover:text-indigo-600 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_1px_3px_rgba(0,0,0,0.04)]'
               }`}
             >
               {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
@@ -2074,10 +2121,10 @@ Do not return markdown wraps, only raw JSON text.
               onClick={exitPresentation}
               title="Exit presentation (Esc)"
               aria-label="Exit presentation"
-              className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-200 shrink-0 ${
+              className={`flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 shrink-0 backdrop-blur-md ${
                 theme === 'dark'
-                  ? 'bg-red-500/10 hover:bg-red-500/20 active:bg-red-500/30 border-red-500/20 text-red-400 hover:text-red-300'
-                  : 'bg-red-50 hover:bg-red-100 active:bg-red-200 border-red-200 text-red-600 hover:text-red-700'
+                  ? 'bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/35 border border-red-500/25 hover:border-red-500/40 text-red-400 hover:text-red-300 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
+                  : 'bg-red-500/10 hover:bg-red-500/20 active:bg-red-500/30 border border-red-500/20 hover:border-red-500/35 text-red-600 hover:text-red-700 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]'
               }`}
             >
               <Minimize2 className="w-3.5 h-3.5" />

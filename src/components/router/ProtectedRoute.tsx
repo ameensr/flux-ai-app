@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useMaintenanceStore } from '@/store/useMaintenanceStore'
 import { ROUTES, resolveModuleKey } from '@/lib/routes'
+import { QubePageLoader } from '@/components/ui/QubeLoader'
 
 interface Props {
   children: React.ReactNode
@@ -25,13 +26,9 @@ export function ProtectedRoute({ children, adminOnly = false, moduleKey }: Props
     return <Navigate to={ROUTES.login} state={{ from: location }} replace />
   }
 
-  // Permissions still loading → show spinner (prevents flash of AccessDenied)
+  // Permissions still loading → show Qube loader (prevents flash of AccessDenied)
   if (!permissionsLoaded) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
-      </div>
-    )
+    return <QubePageLoader text="Verifying permissions..." />
   }
 
   // Maintenance mode check — redirect locked roles to /maintenance

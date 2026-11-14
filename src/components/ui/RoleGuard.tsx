@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useAppStore } from '@/store/useAppStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import { ROUTES } from '@/lib/routes'
+import { QubeLoader } from './QubeLoader'
 
 interface RoleGuardProps {
   /** Check can_view on a module key */
@@ -30,9 +31,7 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({
 
   // Wait for permissions to load before blocking
   if (!permissionsLoaded) return (
-    <div className="flex items-center justify-center py-32">
-      <div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
-    </div>
+    <QubeLoader variant="page" text="Checking permissions..." />
   )
 
   let allowed = true

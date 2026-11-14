@@ -23,6 +23,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
+import { QubeLoader, QubeSpinner } from '@/components/ui/QubeLoader'
 import { AiProviderBadge } from '@/components/ui/AiProviderBadge'
 import type { AIProviderInfo } from '@/services/ai/types'
 
@@ -278,7 +279,7 @@ export const WritingAssistant = () => {
                 </>
               ) : isGenerating ? (
                 <>
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  <QubeSpinner size="xs" className="mr-2" />
                   Refining…
                 </>
               ) : (
@@ -428,11 +429,7 @@ export const WritingAssistant = () => {
               exit={{ opacity: 0 }}
               className="glass-panel p-12 flex flex-col items-center justify-center text-center border-dashed"
             >
-              <RefreshCw className="w-8 h-8 text-accent-gold animate-spin mb-5" />
-              <h3 className="text-lg font-bold text-foreground mb-2">Refining…</h3>
-              <p className="text-text-secondary text-sm">
-                Creating your {getToneLabel(selectedTone).toLowerCase()} version.
-              </p>
+              <QubeLoader variant="inline" text={`Creating ${getToneLabel(selectedTone).toLowerCase()} version...`} />
             </motion.div>
           ) : null}
         </AnimatePresence>

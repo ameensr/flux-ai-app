@@ -24,6 +24,7 @@ import { ConfirmProvider } from '@/components/ui/ConfirmDialog'
 import { PandaIdleNotification, SyncNotification } from '@/components/LazyPanda'
 import { FloatingThemeToggle } from '@/components/ui/FloatingThemeToggle'
 import { useBackgroundSync } from '@/hooks/useBackgroundSync'
+import { QubePageLoader, QubeFullPageLoader } from '@/components/ui/QubeLoader'
 
 // ── Idle timeout context ──────────────────────────────────────────────────────
 type RegisterOperationFn = (key: string) => () => void
@@ -63,19 +64,11 @@ const QalyAiEngine401 = lazy(() => import('@/pages/qalyaiengine401/App'))
 
 // ── Loaders ───────────────────────────────────────────────────────────────────
 function PageLoader() {
-  return (
-    <div className="flex items-center justify-center h-[60vh]">
-      <div className="w-6 h-6 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
-    </div>
-  )
+  return <QubePageLoader />
 }
 
 function FullPageLoader() {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
-    </div>
-  )
+  return <QubeFullPageLoader />
 }
 
 // ── Auth guard ────────────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import { ProjectCard } from './components/ProjectCard'
 import { CreateProjectModal } from './components/CreateProjectModal'
 import { ProjectStatsCards } from './components/ProjectStatsCards'
 import { PROJECT_STATUS_LABELS } from './types'
+import { QubeLoader } from '@/components/ui/QubeLoader'
 
 export function ProjectHub() {
   const { toast } = useToast()
@@ -252,17 +253,8 @@ export function ProjectHub() {
       {/* Projects Grid */}
       <div>
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map(i => (
-              <div
-                key={i}
-                className="p-4 rounded-2xl animate-pulse border border-[var(--border)] bg-[var(--surface-secondary)]/50"
-              >
-                <div className="h-5 rounded-lg mb-3" style={{ background: 'var(--hover)' }} />
-                <div className="h-3 rounded mb-2" style={{ background: 'var(--hover)' }} />
-                <div className="h-3 rounded w-2/3" style={{ background: 'var(--hover)' }} />
-              </div>
-            ))}
+          <div className="py-16">
+            <QubeLoader variant="page" text="Loading projects..." />
           </div>
         ) : projects.length === 0 ? (
           <GlassCard

@@ -27,6 +27,7 @@ import {
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { AiProviderBadge } from "@/components/ui/AiProviderBadge"
+import { QubeLoader, QubeSpinner } from "@/components/ui/QubeLoader"
 import type { AIProviderInfo } from "@/services/ai/types"
 
 export const BugRefiner = () => {
@@ -193,7 +194,7 @@ export const BugRefiner = () => {
                 className="w-full sm:w-auto"
               >
                 {isGenerating ? (
-                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  <QubeSpinner size="xs" />
                 ) : !aiEnabled ? (
                   <>
                     <Lock className="w-4 h-4 mr-2 opacity-60" />
@@ -350,21 +351,21 @@ export const BugRefiner = () => {
                 exit={{ opacity: 0 }}
                 className="h-[300px] sm:h-[460px] flex flex-col items-center justify-center text-center p-8 sm:p-12 glass-panel border-dashed"
               >
-                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-6">
-                  {isGenerating ? (
-                    <RefreshCw className="w-8 h-8 text-accent-gold animate-spin" />
-                  ) : (
-                    <Zap className="w-8 h-8 text-text-muted" />
-                  )}
-                </div>
-                <h3 className="text-xl font-bold text-foreground mb-2">
-                  {isGenerating ? 'Refining…' : 'Ready to Refine'}
-                </h3>
-                <p className="text-text-secondary">
-                  {isGenerating
-                    ? 'Generating your bug report — it will stream in shortly.'
-                    : 'Your refined report will appear here. Our AI will automatically identify severity, steps, and expected results.'}
-                </p>
+                {isGenerating ? (
+                  <QubeLoader variant="inline" text="Refining bug report with Qube AI..." />
+                ) : (
+                  <>
+                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-6">
+                      <Zap className="w-8 h-8 text-text-muted" />
+                    </div>
+                    <h3 className="text-xl font-bold text-foreground mb-2">
+                      Ready to Refine
+                    </h3>
+                    <p className="text-text-secondary">
+                      Your refined report will appear here. Our AI will automatically identify severity, steps, and expected results.
+                    </p>
+                  </>
+                )}
               </motion.div>
             )}
           </AnimatePresence>

@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { GlassCard } from "@/components/ui/GlassCard"
 import { FloatingButton } from "@/components/ui/FloatingButton"
+import { QubeLoader, QubeSpinner } from "@/components/ui/QubeLoader"
 import { CinematicHeading } from "@/components/ui/CinematicHeading"
 import { usePermissions } from "@/hooks/usePermissions"
 import { AI_DISABLED_BY_ADMIN, AI_PERMISSION_DENIED, useAIAccess } from "@/hooks/useAIAccess"
@@ -678,7 +679,7 @@ export const TestCaseGenerator = () => {
                 >
                   {isGenerating ? (
                     <>
-                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      <QubeSpinner size="xs" className="mr-2" />
                       {caseCount > 20 ? `Generating in batches…` : `Generating ${countLabel}…`}
                     </>
                   ) : !aiEnabled ? (
@@ -955,16 +956,12 @@ export const TestCaseGenerator = () => {
                 className="glass-panel p-6 sm:p-8 rounded-xl min-h-[300px]"
               >
                 <p className="text-xs font-bold uppercase tracking-widest text-accent-gold mb-3 flex items-center gap-2">
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <QubeSpinner size="xs" />
                   {streamingOutput ? `Streaming ${countLabel} suite…` : 'Analyzing requirements…'}
                 </p>
                 {!streamingOutput ? (
-                  <div className="flex flex-col items-center justify-center text-center py-16">
-                    <Sparkles className="w-8 h-8 text-accent-gold mb-4 animate-pulse" />
-                    <h3 className="text-lg font-bold text-foreground mb-2">Designing your suite</h3>
-                    <p className="text-text-secondary text-sm max-w-md">
-                      Analyzing requirements, then generating ~{countLabel} prioritized cases with gaps, edge cases, and clarifications.
-                    </p>
+                  <div className="py-12">
+                    <QubeLoader variant="inline" text={`Generating ~${countLabel} prioritized cases...`} />
                   </div>
                 ) : (
                   <pre className="text-sm text-text-secondary whitespace-pre-wrap font-montreal leading-relaxed max-h-[480px] overflow-auto">

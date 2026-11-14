@@ -21,6 +21,7 @@ import { EditProjectModal } from './components/EditProjectModal'
 import { DeleteProjectModal } from './components/DeleteProjectModal'
 import { OpenProjectConfigModal } from './components/OpenProjectConfigModal'
 import { OpenProjectPanel } from './components/OpenProjectPanel'
+import { QubePageLoader } from '@/components/ui/QubeLoader'
 
 export function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -127,14 +128,7 @@ export function ProjectDetail() {
   const statusColor = statusColors[project?.status || 'active'] || statusColors.active
 
   if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="p-4 rounded-2xl animate-pulse border border-[var(--border)] bg-[var(--surface-secondary)]/50">
-          <div className="h-6 rounded-lg mb-3" style={{ background: 'var(--hover)', width: '33%' }} />
-          <div className="h-3 rounded" style={{ background: 'var(--hover)', width: '66%' }} />
-        </div>
-      </div>
-    )
+    return <QubePageLoader text="Loading project details..." />
   }
 
   if (!project) {
