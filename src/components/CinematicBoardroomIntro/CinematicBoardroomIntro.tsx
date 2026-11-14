@@ -18,7 +18,11 @@ export interface CinematicBoardroomIntroProps {
   supportEmailsCount?: number;
   /** New Features count for Dot Matrix telemetry HUD */
   newFeaturesCount?: number;
-  /** Optional title override (defaults to "Team briefing") */
+  /** Sprint start date */
+  weekStart?: string;
+  /** Sprint end date */
+  weekEnd?: string;
+  /** Optional title override (defaults to "Executive Briefing") */
   title?: string;
   /** Optional subtitle override */
   subtitle?: string;
@@ -33,107 +37,85 @@ export interface CinematicBoardroomIntroProps {
 export interface AvatarPalette {
   id: string;
   name: string;
-  // Multi-stop gradient colors [lightTop, midColor, deepBottom]
   gradient: [string, string, string];
-  // Outer ambient glow color
   glow: string;
-  // Subtle border strokes
   strokeDark: string;
   strokeLight: string;
 }
 
 export const MEMBER_PALETTES: AvatarPalette[] = [
-  // 0. Electric Cyan / Azure (Matches User Reference 1)
+  // 0. Electric Cyan
   {
     id: 'cyan',
     name: 'Electric Cyan',
     gradient: ['#38bdf8', '#0ea5e9', '#0284c7'],
     glow: '#38bdf8',
-    strokeDark: 'rgba(56, 189, 248, 0.45)',
+    strokeDark: 'rgba(56, 189, 248, 0.55)',
     strokeLight: '#0284c7',
   },
-  // 1. Royal Violet / Deep Indigo (Matches User Reference 2)
+  // 1. Royal Violet / Purple
   {
     id: 'violet',
     name: 'Royal Violet',
-    gradient: ['#c084fc', '#a855f7', '#6366f1'],
+    gradient: ['#c084fc', '#a855f7', '#7c3aed'],
     glow: '#a855f7',
-    strokeDark: 'rgba(192, 132, 252, 0.45)',
+    strokeDark: 'rgba(192, 132, 252, 0.55)',
     strokeLight: '#7c3aed',
   },
-  // 2. Emerald / Mint Jade
+  // 2. Emerald Jade
   {
     id: 'emerald',
     name: 'Emerald Jade',
     gradient: ['#6ee7b7', '#10b981', '#059669'],
     glow: '#10b981',
-    strokeDark: 'rgba(52, 211, 153, 0.45)',
+    strokeDark: 'rgba(52, 211, 153, 0.55)',
     strokeLight: '#059669',
   },
-  // 3. Sunset Coral / Crimson
+  // 3. Sunset Coral
   {
     id: 'coral',
     name: 'Sunset Coral',
     gradient: ['#fda4af', '#f43f5e', '#e11d48'],
     glow: '#f43f5e',
-    strokeDark: 'rgba(251, 113, 133, 0.45)',
+    strokeDark: 'rgba(251, 113, 133, 0.55)',
     strokeLight: '#e11d48',
   },
-  // 4. Electric Tangerine / Amber
+  // 4. Electric Amber
   {
     id: 'amber',
     name: 'Electric Amber',
     gradient: ['#fde047', '#f59e0b', '#d97706'],
     glow: '#f59e0b',
-    strokeDark: 'rgba(251, 191, 36, 0.45)',
+    strokeDark: 'rgba(251, 191, 36, 0.55)',
     strokeLight: '#d97706',
   },
-  // 5. Cosmic Orchid / Magenta
+  // 5. Cosmic Magenta
   {
     id: 'magenta',
     name: 'Cosmic Magenta',
     gradient: ['#f472b6', '#e879f9', '#d946ef'],
     glow: '#d946ef',
-    strokeDark: 'rgba(244, 114, 182, 0.45)',
+    strokeDark: 'rgba(244, 114, 182, 0.55)',
     strokeLight: '#c026d3',
   },
-  // 6. Deep Sapphire / Marine
+  // 6. Deep Sapphire
   {
     id: 'sapphire',
     name: 'Deep Sapphire',
-    gradient: ['#93c5fd', '#3b82f6', '#1d4ed8'],
+    gradient: ['#60a5fa', '#3b82f6', '#1d4ed8'],
     glow: '#3b82f6',
-    strokeDark: 'rgba(96, 165, 250, 0.45)',
+    strokeDark: 'rgba(96, 165, 250, 0.55)',
     strokeLight: '#1d4ed8',
-  },
-  // 7. Seafoam Teal / Turquoise
-  {
-    id: 'teal',
-    name: 'Ocean Teal',
-    gradient: ['#5eead4', '#14b8a6', '#0d9488'],
-    glow: '#14b8a6',
-    strokeDark: 'rgba(45, 212, 191, 0.45)',
-    strokeLight: '#0f766e',
-  },
-  // 8. Vivid Amethyst / Plum
-  {
-    id: 'amethyst',
-    name: 'Vivid Amethyst',
-    gradient: ['#f0abfc', '#c084fc', '#9333ea'],
-    glow: '#a21caf',
-    strokeDark: 'rgba(232, 121, 249, 0.45)',
-    strokeLight: '#9333ea',
   },
 ];
 
-// Dedicated VIP Executive 24k Imperial Gold Palette for "Meeting With" senior leaders
 export const SENIOR_PALETTE: AvatarPalette = {
   id: 'senior-gold',
-  name: 'Imperial Gold',
-  gradient: ['#fef08a', '#fbbf24', '#f59e0b'],
+  name: 'Executive Gold',
+  gradient: ['#fef08a', '#f59e0b', '#b45309'],
   glow: '#f59e0b',
-  strokeDark: 'rgba(254, 240, 138, 0.65)',
-  strokeLight: '#b45309',
+  strokeDark: 'rgba(245, 158, 11, 0.7)',
+  strokeLight: '#d97706',
 };
 
 interface SeatedPerson {
@@ -144,220 +126,110 @@ interface SeatedPerson {
   angleDeg: number;
   x: number;
   y: number;
-  padX: number;
-  padY: number;
-  padOrientation: 'horizontal' | 'vertical';
+  laptopX: number;
+  laptopY: number;
+  laptopAngleDeg: number;
+  chairX: number;
+  chairY: number;
   staggerDelay: number;
   palette: AvatarPalette;
 }
 
 /**
- * Procedural Vector SVG Avatar for Boardroom Members (Ultra-High-Definition Luxury Design)
- * Matches the reference silhouette with elevated rendering fidelity:
- * - Geometric precision vector rendering
- * - Dual-layer radiant atmospheric glow
- * - Specular reflection arc on head + subtle chin ambient occlusion
- * - Sleek curved dome shoulders with top edge rim lighting
- * - Inlaid frosted monogram medallion disc for ultra-crisp initials
- * - Imperial 24k Gold dual-ring coronet & diamond star crest for Senior leaders
+ * Ultra-Premium SVG Glow Avatar (Zero-Drift Centered Base)
  */
 const AvatarGraphic: React.FC<{
   initials: string;
   palette: AvatarPalette;
   isSenior?: boolean;
   isDark?: boolean;
+  uniqueKey: string;
   size?: number;
-  uniqueKey?: string;
-}> = React.memo(({ initials, palette, isSenior = false, isDark = true, size = 52, uniqueKey = 'p' }) => {
-  const gradId = `avatar-grad-${uniqueKey}-${palette.id}`;
-  const auraInnerId = `avatar-aura-in-${uniqueKey}-${palette.id}`;
-  const auraOuterId = `avatar-aura-out-${uniqueKey}-${palette.id}`;
-  const strokeColor = isSenior
-    ? (isDark ? '#fef08a' : '#d97706')
-    : (isDark ? palette.strokeDark : palette.strokeLight);
+}> = React.memo(({ initials, palette, isSenior = false, isDark = false, uniqueKey, size = 46 }) => {
+  const gradientId = `avatar-grad-${palette.id}-${uniqueKey}`;
+  const strokeColor = isDark ? palette.strokeDark : palette.strokeLight;
 
   return (
-    <svg
-      width={size}
-      height={size * 1.15}
-      viewBox="0 0 64 74"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      shapeRendering="geometricPrecision"
-      textRendering="geometricPrecision"
-      className={isSenior ? styles.seniorAvatarSvgWrapper : styles.avatarSvgWrapper}
-      aria-hidden="true"
-    >
-      <defs>
-        {/* Layer 1: Wide Ethereal Radial Ambient Atmosphere */}
-        <radialGradient id={auraOuterId} cx="50%" cy="44%" r="56%">
-          <stop
-            offset="0%"
-            stopColor={palette.glow}
-            stopOpacity={isDark ? (isSenior ? 0.42 : 0.32) : (isSenior ? 0.24 : 0.16)}
-          />
-          <stop
-            offset="60%"
-            stopColor={palette.glow}
-            stopOpacity={isDark ? (isSenior ? 0.14 : 0.09) : (isSenior ? 0.07 : 0.04)}
-          />
-          <stop offset="100%" stopColor={palette.glow} stopOpacity="0" />
-        </radialGradient>
-
-        {/* Layer 2: Core Vibrant Volumetric Glow */}
-        <radialGradient id={auraInnerId} cx="50%" cy="38%" r="38%">
-          <stop
-            offset="0%"
-            stopColor={palette.glow}
-            stopOpacity={isDark ? (isSenior ? 0.58 : 0.48) : (isSenior ? 0.35 : 0.26)}
-          />
-          <stop offset="100%" stopColor={palette.glow} stopOpacity="0" />
-        </radialGradient>
-
-        {/* Multi-Stop Linear Colorway Gradient for Head & Bust */}
-        <linearGradient id={gradId} x1="32" y1="6" x2="32" y2="64" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor={palette.gradient[0]} />
-          <stop offset="48%" stopColor={palette.gradient[1]} />
-          <stop offset="100%" stopColor={palette.gradient[2]} />
-        </linearGradient>
-
-        {/* Specular Highlight Arc Linear Gradient */}
-        <linearGradient id={`${gradId}-spec`} x1="24" y1="8" x2="40" y2="16" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.75" />
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.15" />
-        </linearGradient>
-      </defs>
-
-      {/* 1. Dual-Layer Atmospheric Radiant Auras */}
-      <ellipse
-        cx="32"
-        cy="37"
-        rx="30"
-        ry="30"
-        fill={`url(#${auraOuterId})`}
-        pointerEvents="none"
-      />
-      <ellipse
-        cx="32"
-        cy="37"
-        rx="22"
-        ry="22"
-        fill={`url(#${auraInnerId})`}
-        pointerEvents="none"
-      />
-
-      {/* 2. Floating VIP Gold Coronet / Halo Ring for "Meeting With" Senior Leaders */}
-      {isSenior && (
-        <g>
-          {/* Outer Halo Ring */}
-          <ellipse
-            cx="32"
-            cy="5.5"
-            rx="12"
-            ry="3.4"
-            fill="none"
-            stroke="#fef08a"
-            strokeWidth="1.6"
-            opacity="0.95"
-            filter="drop-shadow(0 0 5px #f59e0b)"
-          />
-          {/* Core Light Shimmer Arc */}
-          <ellipse
-            cx="32"
-            cy="5.5"
-            rx="9.5"
-            ry="2.4"
-            fill="none"
-            stroke="#ffffff"
-            strokeWidth="0.9"
-            opacity="0.85"
-          />
-        </g>
-      )}
-
-      {/* 3. Smooth Floating Circular Head (Reference Silhouette) */}
-      <circle
-        cx="32"
-        cy={isSenior ? 19.5 : 18.5}
-        r="10.8"
-        fill={`url(#${gradId})`}
-        stroke={strokeColor}
-        strokeWidth={isSenior ? 1.4 : 1.0}
-      />
-
-      {/* Specular Light Reflection Highlight on Head */}
-      <path
-        d="M 25.5 12 C 27.5 9.2, 36.5 9.2, 38.5 12 C 35.5 10.3, 28.5 10.3, 25.5 12 Z"
-        fill={`url(#${gradId}-spec)`}
-      />
-
-      {/* Soft Ambient Shadow Beneath Head */}
-      <ellipse
-        cx="32"
-        cy={isSenior ? 31 : 30}
-        rx="5.5"
-        ry="1.4"
-        fill="rgba(0, 0, 0, 0.18)"
-      />
-
-      {/* 4. Sleek Aerodynamic Dome Shoulders with Rounded Bottom (Reference Silhouette) */}
-      <path
-        d="M 10 58 C 7 52, 9 44, 18 40 C 23 38, 27 37.5, 32 37.5 C 37 37.5, 41 38, 46 40 C 55 44, 57 52, 54 58 C 52 61, 48 61.5, 42 61.5 L 22 61.5 C 16 61.5, 12 61, 10 58 Z"
-        fill={`url(#${gradId})`}
-        stroke={strokeColor}
-        strokeWidth={isSenior ? 1.4 : 1.0}
-      />
-
-      {/* Subtle Specular Rim Light along top edge of Shoulders */}
-      <path
-        d="M 17 41.5 C 23 38.5, 27 38, 32 38 C 37 38, 41 38.5, 47 41.5"
+    <div className={styles.avatarGraphicWrapper}>
+      <svg
+        width={size}
+        height={size * 1.08}
+        viewBox="0 0 64 70"
         fill="none"
-        stroke="rgba(255, 255, 255, 0.35)"
-        strokeWidth="0.9"
-        strokeLinecap="round"
-      />
-
-      {/* 5. Senior Executive Diamond Lapel Crest */}
-      {isSenior ? (
-        <g>
-          <polygon
-            points="32,41 35.5,44.5 32,48 28.5,44.5"
-            fill="#fef08a"
-            stroke="#b45309"
-            strokeWidth="0.8"
-            filter="drop-shadow(0 0 3px rgba(245, 158, 11, 0.85))"
-          />
-          <circle cx="32" cy="44.5" r="1" fill="#ffffff" />
-        </g>
-      ) : null}
-
-      {/* 6. Inlaid Frosted Medallion Disc with Initials */}
-      <circle
-        cx="32"
-        cy={isSenior ? 54.5 : 52}
-        r="7.5"
-        fill="rgba(255, 255, 255, 0.14)"
-        stroke="rgba(255, 255, 255, 0.22)"
-        strokeWidth="0.6"
-      />
-      <text
-        x="32"
-        y={isSenior ? 57 : 54.5}
-        textAnchor="middle"
-        fontSize="8"
-        fontWeight="800"
-        fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif"
-        letterSpacing="0.05em"
-        fill="#ffffff"
-        style={{
-          textShadow: isDark
-            ? '0 1px 2px rgba(0, 0, 0, 0.55)'
-            : '0 1px 2px rgba(0, 0, 0, 0.35)',
-        }}
+        xmlns="http://www.w3.org/2000/svg"
+        className={isSenior ? styles.seniorAvatarSvg : styles.avatarSvg}
+        aria-hidden="true"
       >
-        {initials}
-      </text>
-    </svg>
+        <defs>
+          <radialGradient id={`halo-${palette.id}-${uniqueKey}`} cx="50%" cy="30%" r="70%">
+            <stop offset="0%" stopColor={palette.glow} stopOpacity={isSenior ? (isDark ? '0.5' : '0.4') : (isDark ? '0.35' : '0.25')} />
+            <stop offset="60%" stopColor={palette.glow} stopOpacity={isDark ? '0.12' : '0.08'} />
+            <stop offset="100%" stopColor={palette.glow} stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id={gradientId} x1="32" y1="4" x2="32" y2="66" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor={palette.gradient[0]} />
+            <stop offset="48%" stopColor={palette.gradient[1]} />
+            <stop offset="100%" stopColor={palette.gradient[2]} />
+          </linearGradient>
+        </defs>
+
+        {/* Outer Radiant Ambient Halo Glow */}
+        <circle cx="32" cy="20" r="26" fill={`url(#halo-${palette.id}-${uniqueKey})`} />
+
+        {/* Head Sphere */}
+        <circle
+          cx="32"
+          cy="20"
+          r={isSenior ? 13 : 11.5}
+          fill={`url(#${gradientId})`}
+          stroke={strokeColor}
+          strokeWidth={isSenior ? "1.4" : "1"}
+        />
+        <circle
+          cx="32"
+          cy="20"
+          r={isSenior ? 12 : 10.5}
+          stroke="rgba(255, 255, 255, 0.45)"
+          strokeWidth="0.8"
+        />
+
+        {/* Floating Shoulders & Torso Dome */}
+        <path
+          d={isSenior
+            ? "M 10 66 C 10 44, 20 38, 32 38 C 44 38, 54 44, 54 66 Z"
+            : "M 13 64 C 13 46, 21 40, 32 40 C 43 40, 51 46, 51 64 Z"
+          }
+          fill={`url(#${gradientId})`}
+          stroke={strokeColor}
+          strokeWidth={isSenior ? "1.4" : "1"}
+        />
+        <path
+          d={isSenior
+            ? "M 12 65 C 12 46, 21 40, 32 40 C 43 40, 52 46, 52 65"
+            : "M 15 63 C 15 48, 22 42, 32 42 C 42 42, 49 48, 49 63"
+          }
+          stroke="rgba(255, 255, 255, 0.4)"
+          strokeWidth="0.8"
+        />
+
+        {/* Centered Initials */}
+        <text
+          x="32"
+          y={isSenior ? 57 : 54.5}
+          textAnchor="middle"
+          fontSize="8"
+          fontWeight="800"
+          fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif"
+          letterSpacing="0.05em"
+          fill="#ffffff"
+          style={{
+            textShadow: '0 1px 3px rgba(0, 0, 0, 0.55)',
+          }}
+        >
+          {initials}
+        </text>
+      </svg>
+    </div>
   );
 });
 
@@ -371,7 +243,9 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   teamMembers: propTeamMembers,
   supportEmailsCount = 0,
   newFeaturesCount = 0,
-  title = 'Team briefing',
+  weekStart,
+  weekEnd,
+  title = 'Executive Briefing',
   subtitle = 'Executive QA & Engineering Overview',
   isDark: propIsDark,
   onComplete,
@@ -379,7 +253,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
+  const dioramaRef = useRef<HTMLDivElement>(null);
   const cameraRigRef = useRef<HTMLDivElement>(null);
   const introLayerRef = useRef<HTMLDivElement>(null);
   const presentationSlotRef = useRef<HTMLDivElement>(null);
@@ -387,8 +261,8 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   const titleBoxRef = useRef<HTMLDivElement>(null);
   const hintRef = useRef<HTMLDivElement>(null);
 
-  // Theme resolution: props > ThemeContext > document.documentElement
-  let contextIsDark = true;
+  // Theme resolution: default to Light Mode matching reference image
+  let contextIsDark = false;
   try {
     const themeContext = useTheme();
     if (themeContext && typeof themeContext.isDark === 'boolean') {
@@ -396,12 +270,11 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
     }
   } catch {
     if (typeof document !== 'undefined') {
-      contextIsDark = !document.documentElement.classList.contains('light');
+      contextIsDark = document.documentElement.classList.contains('dark');
     }
   }
   const isDark = propIsDark !== undefined ? propIsDark : contextIsDark;
 
-  // Resolve meetingWith names ONLY - if empty, NO senior avatar is shown
   const initialSeniorNames = useMemo(() => {
     return parseMeetingWithNames(meetingWith);
   }, [meetingWith]);
@@ -417,54 +290,40 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
     typeof window !== 'undefined' ? window.innerWidth : 1200
   );
 
-  // Keep senior names synced when meetingWith prop changes
   useEffect(() => {
     const mw = parseMeetingWithNames(meetingWith);
     setSeniorNames(mw);
   }, [meetingWith]);
 
-  // Keep team members synced when prop changes
   useEffect(() => {
     if (propTeamMembers && propTeamMembers.length > 0) {
       setTeamMembers(propTeamMembers);
     }
   }, [propTeamMembers]);
 
-  // Measure responsive rectangular table dimensions dynamically based on attendee count
+  // Spacious Boardroom Table Dimensions to Guarantee Zero Crowding
   const { tableWidth, tableLength } = useMemo(() => {
     const totalAttendees = seniorNames.length + teamMembers.length;
-    let maxSideSeats = Math.ceil(teamMembers.length / 2);
+    let maxSideSeats = Math.max(1, Math.ceil(teamMembers.length / 2));
     if (seniorNames.length === 0 && teamMembers.length % 2 !== 0 && teamMembers.length > 2) {
       maxSideSeats = Math.floor(teamMembers.length / 2);
     }
-    maxSideSeats = Math.max(1, maxSideSeats);
-
-    const seatPitch = windowWidth <= 480 ? 46 : windowWidth <= 768 ? 56 : 64;
-    const baseLength = windowWidth <= 480 ? 130 : 170;
+    const seatPitch = windowWidth <= 480 ? 52 : 60;
+    const baseLength = windowWidth <= 480 ? 160 : 200;
     const calculatedLength = baseLength + maxSideSeats * seatPitch;
 
-    let finalLength = Math.max(windowWidth <= 480 ? 250 : 340, calculatedLength);
-    let finalWidth = windowWidth <= 480 ? 150 : windowWidth <= 768 ? 190 : 240;
-
-    if (totalAttendees <= 2) {
-      finalLength = windowWidth <= 480 ? 220 : 280;
-      finalWidth = windowWidth <= 480 ? 140 : 180;
-    } else if (totalAttendees <= 4) {
-      finalLength = windowWidth <= 480 ? 260 : 340;
-      finalWidth = windowWidth <= 480 ? 150 : 200;
-    }
+    const finalLength = Math.max(windowWidth <= 480 ? 280 : 360, calculatedLength);
+    const finalWidth = windowWidth <= 480 ? 180 : 240;
 
     return { tableWidth: finalWidth, tableLength: finalLength };
   }, [windowWidth, seniorNames.length, teamMembers.length]);
 
-  // Handle Window Resize
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize, { passive: true });
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Check prefers-reduced-motion
   const prefersReducedMotionRef = useRef<boolean>(false);
   useEffect(() => {
     if (typeof window !== 'undefined' && window.matchMedia) {
@@ -478,14 +337,12 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
     }
   }, []);
 
-  // Fetch Team Names on mount as fallback if not explicitly passed
   useEffect(() => {
     if (!autoFetchNames || (propTeamMembers && propTeamMembers.length > 0)) return;
     let active = true;
 
     getTeamNames(undefined, 24).then(result => {
       if (!active) return;
-      // ONLY set seniorNames if meetingWith was explicitly provided
       const mw = parseMeetingWithNames(meetingWith);
       setSeniorNames(mw);
       if (result.members && result.members.length > 0 && (!propTeamMembers || propTeamMembers.length === 0)) {
@@ -498,19 +355,15 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
     };
   }, [autoFetchNames, meetingWith, propTeamMembers]);
 
-  // Auto-align attendees around the Rectangular 3D Boardroom table:
-  // - If seniorCount > 0 ("Meeting With" provided):
-  //     Senior attendee(s) sit at the North head of the table.
-  //     Team members auto-align along the sides (West & East), with foot seat if odd.
-  // - If seniorCount === 0 ("Meeting With" is EMPTY):
-  //     NO avatar is rendered at the senior position.
-  //     Team members auto-align with perfect balance around the table.
+  // Flawless Symmetrical Seat, Laptop & Chair Alignment
   const seats: SeatedPerson[] = useMemo(() => {
     const list: SeatedPerson[] = [];
     const seniorCount = seniorNames.length;
     const halfW = tableWidth / 2;
     const halfL = tableLength / 2;
-    const seatOffset = 42; // Distance from table perimeter to chair center
+    const seatOffset = 40;  // Attendee sits 40px outside table edge
+    const laptopInset = 26; // Laptop sits 26px inside table surface
+    const chairOffset = 42; // Chair sits behind attendee
 
     // 1. Head of Table (North, Y < 0): Senior Leader(s) ONLY IF seniorCount > 0
     if (seniorCount === 1) {
@@ -519,17 +372,19 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
         name: seniorNames[0],
         initials: getInitials(seniorNames[0]),
         isSenior: true,
-        angleDeg: -90,
+        angleDeg: 0,
         x: 0,
         y: Math.round(-halfL - seatOffset),
-        padX: 0,
-        padY: Math.round(-halfL + 20),
-        padOrientation: 'horizontal',
+        laptopX: 0,
+        laptopY: Math.round(-halfL + laptopInset),
+        laptopAngleDeg: 180, // Screen opens facing North directly at Senior person
+        chairX: 0,
+        chairY: Math.round(-halfL - chairOffset),
         staggerDelay: 0,
         palette: SENIOR_PALETTE,
       });
     } else if (seniorCount > 1) {
-      const seniorSpacing = seniorCount > 2 ? 46 : 56;
+      const seniorSpacing = seniorCount > 2 ? 48 : 58;
       const seniorHalfSpan = ((seniorCount - 1) * seniorSpacing) / 2;
       seniorNames.forEach((name, sIdx) => {
         const xPos = -seniorHalfSpan + sIdx * seniorSpacing;
@@ -538,319 +393,111 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
           name: name,
           initials: getInitials(name),
           isSenior: true,
-          angleDeg: -90,
+          angleDeg: 0,
           x: Math.round(xPos),
           y: Math.round(-halfL - seatOffset),
-          padX: Math.round(xPos),
-          padY: Math.round(-halfL + 20),
-          padOrientation: 'horizontal',
-          staggerDelay: sIdx * 0.18,
+          laptopX: Math.round(xPos),
+          laptopY: Math.round(-halfL + laptopInset),
+          laptopAngleDeg: 180,
+          chairX: Math.round(xPos),
+          chairY: Math.round(-halfL - chairOffset),
+          staggerDelay: sIdx * 0.15,
           palette: SENIOR_PALETTE,
         });
       });
     }
 
-    // 2. Team Members Auto-Alignment
+    // 2. Team Members Symmetrical Alignment along West & East Sides
     const teamCount = teamMembers.length;
     if (teamCount > 0) {
-      if (seniorCount > 0) {
-        // CASE A: Meeting With attendee(s) present at North head
-        const hasFootSeat = teamCount % 2 !== 0 && teamCount >= 3;
-        const sideMembersCount = hasFootSeat ? teamCount - 1 : teamCount;
-        const halfCount = Math.floor(sideMembersCount / 2);
+      const hasFootSeat = seniorCount === 0 && teamCount % 2 !== 0 && teamCount >= 3;
+      const sideMembersCount = hasFootSeat ? teamCount - 1 : teamCount;
+      const halfCount = Math.ceil(sideMembersCount / 2);
+      const leftMembers = teamMembers.slice(0, halfCount);
+      const rightMembers = teamMembers.slice(halfCount, sideMembersCount);
+      const footMember = hasFootSeat ? teamMembers[teamMembers.length - 1] : null;
 
-        const leftMembers = teamMembers.slice(0, halfCount);
-        const rightMembers = teamMembers.slice(halfCount, sideMembersCount);
-        const footMember = hasFootSeat ? teamMembers[teamCount - 1] : null;
+      const margin = 40;
+      const usableSpan = Math.max(0, tableLength - margin * 2);
+      const maxSideCount = Math.max(leftMembers.length, rightMembers.length, 1);
+      const pitch = maxSideCount > 1 ? usableSpan / (maxSideCount - 1) : 0;
 
-        const margin = Math.min(54, halfL * 0.28);
-        const usableSpan = (halfL - margin) * 2;
-
-        leftMembers.forEach((member, i) => {
-          const yPos = halfCount === 1 ? 0 : -halfL + margin + (i / (halfCount - 1)) * usableSpan;
-          list.push({
-            id: `member-left-${i + 1}`,
-            name: member,
-            initials: getInitials(member),
-            isSenior: false,
-            angleDeg: 180,
-            x: Math.round(-halfW - seatOffset),
-            y: Math.round(yPos),
-            padX: Math.round(-halfW + 18),
-            padY: Math.round(yPos),
-            padOrientation: 'vertical',
-            staggerDelay: (seniorCount * 0.18) + (i + 1) * 0.18,
-            palette: MEMBER_PALETTES[i % MEMBER_PALETTES.length],
-          });
+      // West (Left) Side: Facing East towards Table Center
+      leftMembers.forEach((member, i) => {
+        const yPos = maxSideCount === 1 ? 0 : -halfL + margin + i * pitch;
+        list.push({
+          id: `member-left-${i + 1}`,
+          name: member,
+          initials: getInitials(member),
+          isSenior: false,
+          angleDeg: 90,
+          x: Math.round(-halfW - seatOffset),
+          y: Math.round(yPos),
+          laptopX: Math.round(-halfW + laptopInset),
+          laptopY: Math.round(yPos),
+          laptopAngleDeg: 90, // Screen opens facing West directly at left attendee
+          chairX: Math.round(-halfW - chairOffset),
+          chairY: Math.round(yPos),
+          staggerDelay: 0.15 + i * 0.12,
+          palette: MEMBER_PALETTES[i % MEMBER_PALETTES.length],
         });
+      });
 
-        rightMembers.forEach((member, i) => {
-          const yPos = halfCount === 1 ? 0 : -halfL + margin + (i / (halfCount - 1)) * usableSpan;
-          list.push({
-            id: `member-right-${i + 1}`,
-            name: member,
-            initials: getInitials(member),
-            isSenior: false,
-            angleDeg: 0,
-            x: Math.round(halfW + seatOffset),
-            y: Math.round(yPos),
-            padX: Math.round(halfW - 18),
-            padY: Math.round(yPos),
-            padOrientation: 'vertical',
-            staggerDelay: (seniorCount * 0.18) + (leftMembers.length + i + 1) * 0.18,
-            palette: MEMBER_PALETTES[(leftMembers.length + i) % MEMBER_PALETTES.length],
-          });
+      // East (Right) Side: Directly Opposite Left Side in Perfect Symmetrical Alignment
+      rightMembers.forEach((member, i) => {
+        const yPos = maxSideCount === 1 ? 0 : -halfL + margin + i * pitch;
+        list.push({
+          id: `member-right-${i + 1}`,
+          name: member,
+          initials: getInitials(member),
+          isSenior: false,
+          angleDeg: -90,
+          x: Math.round(halfW + seatOffset),
+          y: Math.round(yPos),
+          laptopX: Math.round(halfW - laptopInset),
+          laptopY: Math.round(yPos),
+          laptopAngleDeg: -90, // Screen opens facing East directly at right attendee
+          chairX: Math.round(halfW + chairOffset),
+          chairY: Math.round(yPos),
+          staggerDelay: 0.15 + (leftMembers.length + i) * 0.12,
+          palette: MEMBER_PALETTES[(leftMembers.length + i) % MEMBER_PALETTES.length],
         });
+      });
 
-        if (footMember) {
-          list.push({
-            id: 'member-foot',
-            name: footMember,
-            initials: getInitials(footMember),
-            isSenior: false,
-            angleDeg: 90,
-            x: 0,
-            y: Math.round(halfL + seatOffset),
-            padX: 0,
-            padY: Math.round(halfL - 20),
-            padOrientation: 'horizontal',
-            staggerDelay: (seniorCount * 0.18) + teamCount * 0.18,
-            palette: MEMBER_PALETTES[(leftMembers.length + rightMembers.length) % MEMBER_PALETTES.length],
-          });
-        }
-      } else {
-        // CASE B: Meeting With is EMPTY (seniorCount === 0)
-        // Auto-align team members with perfect balance around the table
-        if (teamCount === 1) {
-          list.push({
-            id: 'member-head',
-            name: teamMembers[0],
-            initials: getInitials(teamMembers[0]),
-            isSenior: false,
-            angleDeg: -90,
-            x: 0,
-            y: Math.round(-halfL - seatOffset),
-            padX: 0,
-            padY: Math.round(-halfL + 20),
-            padOrientation: 'horizontal',
-            staggerDelay: 0.18,
-            palette: MEMBER_PALETTES[0],
-          });
-        } else if (teamCount === 2) {
-          list.push({
-            id: 'member-left-1',
-            name: teamMembers[0],
-            initials: getInitials(teamMembers[0]),
-            isSenior: false,
-            angleDeg: 180,
-            x: Math.round(-halfW - seatOffset),
-            y: 0,
-            padX: Math.round(-halfW + 18),
-            padY: 0,
-            padOrientation: 'vertical',
-            staggerDelay: 0.18,
-            palette: MEMBER_PALETTES[0],
-          });
-          list.push({
-            id: 'member-right-1',
-            name: teamMembers[1],
-            initials: getInitials(teamMembers[1]),
-            isSenior: false,
-            angleDeg: 0,
-            x: Math.round(halfW + seatOffset),
-            y: 0,
-            padX: Math.round(halfW - 18),
-            padY: 0,
-            padOrientation: 'vertical',
-            staggerDelay: 0.36,
-            palette: MEMBER_PALETTES[1],
-          });
-        } else if (teamCount === 3) {
-          list.push({
-            id: 'member-head',
-            name: teamMembers[0],
-            initials: getInitials(teamMembers[0]),
-            isSenior: false,
-            angleDeg: -90,
-            x: 0,
-            y: Math.round(-halfL - seatOffset),
-            padX: 0,
-            padY: Math.round(-halfL + 20),
-            padOrientation: 'horizontal',
-            staggerDelay: 0.18,
-            palette: MEMBER_PALETTES[0],
-          });
-          list.push({
-            id: 'member-left-1',
-            name: teamMembers[1],
-            initials: getInitials(teamMembers[1]),
-            isSenior: false,
-            angleDeg: 180,
-            x: Math.round(-halfW - seatOffset),
-            y: 0,
-            padX: Math.round(-halfW + 18),
-            padY: 0,
-            padOrientation: 'vertical',
-            staggerDelay: 0.36,
-            palette: MEMBER_PALETTES[1],
-          });
-          list.push({
-            id: 'member-right-1',
-            name: teamMembers[2],
-            initials: getInitials(teamMembers[2]),
-            isSenior: false,
-            angleDeg: 0,
-            x: Math.round(halfW + seatOffset),
-            y: 0,
-            padX: Math.round(halfW - 18),
-            padY: 0,
-            padOrientation: 'vertical',
-            staggerDelay: 0.54,
-            palette: MEMBER_PALETTES[2],
-          });
-        } else if (teamCount === 4) {
-          list.push({
-            id: 'member-head',
-            name: teamMembers[0],
-            initials: getInitials(teamMembers[0]),
-            isSenior: false,
-            angleDeg: -90,
-            x: 0,
-            y: Math.round(-halfL - seatOffset),
-            padX: 0,
-            padY: Math.round(-halfL + 20),
-            padOrientation: 'horizontal',
-            staggerDelay: 0.18,
-            palette: MEMBER_PALETTES[0],
-          });
-          list.push({
-            id: 'member-left-1',
-            name: teamMembers[1],
-            initials: getInitials(teamMembers[1]),
-            isSenior: false,
-            angleDeg: 180,
-            x: Math.round(-halfW - seatOffset),
-            y: 0,
-            padX: Math.round(-halfW + 18),
-            padY: 0,
-            padOrientation: 'vertical',
-            staggerDelay: 0.36,
-            palette: MEMBER_PALETTES[1],
-          });
-          list.push({
-            id: 'member-right-1',
-            name: teamMembers[2],
-            initials: getInitials(teamMembers[2]),
-            isSenior: false,
-            angleDeg: 0,
-            x: Math.round(halfW + seatOffset),
-            y: 0,
-            padX: Math.round(halfW - 18),
-            padY: 0,
-            padOrientation: 'vertical',
-            staggerDelay: 0.54,
-            palette: MEMBER_PALETTES[2],
-          });
-          list.push({
-            id: 'member-foot',
-            name: teamMembers[3],
-            initials: getInitials(teamMembers[3]),
-            isSenior: false,
-            angleDeg: 90,
-            x: 0,
-            y: Math.round(halfL + seatOffset),
-            padX: 0,
-            padY: Math.round(halfL - 20),
-            padOrientation: 'horizontal',
-            staggerDelay: 0.72,
-            palette: MEMBER_PALETTES[3],
-          });
-        } else {
-          // teamCount >= 5:
-          // If odd: 1 at North head, remaining split equally between West and East
-          // If even: split equally between West and East
-          const isOdd = teamCount % 2 !== 0;
-          const headMember = isOdd ? teamMembers[0] : null;
-          const sideMembers = isOdd ? teamMembers.slice(1) : teamMembers;
-          const halfCount = sideMembers.length / 2;
-
-          const leftMembers = sideMembers.slice(0, halfCount);
-          const rightMembers = sideMembers.slice(halfCount);
-
-          if (headMember) {
-            list.push({
-              id: 'member-head',
-              name: headMember,
-              initials: getInitials(headMember),
-              isSenior: false,
-              angleDeg: -90,
-              x: 0,
-              y: Math.round(-halfL - seatOffset),
-              padX: 0,
-              padY: Math.round(-halfL + 20),
-              padOrientation: 'horizontal',
-              staggerDelay: 0.18,
-              palette: MEMBER_PALETTES[0],
-            });
-          }
-
-          const margin = Math.min(50, halfL * 0.25);
-          const usableSpan = (halfL - margin) * 2;
-
-          leftMembers.forEach((member, i) => {
-            const yPos = halfCount === 1 ? 0 : -halfL + margin + (i / (halfCount - 1)) * usableSpan;
-            list.push({
-              id: `member-left-${i + 1}`,
-              name: member,
-              initials: getInitials(member),
-              isSenior: false,
-              angleDeg: 180,
-              x: Math.round(-halfW - seatOffset),
-              y: Math.round(yPos),
-              padX: Math.round(-halfW + 18),
-              padY: Math.round(yPos),
-              padOrientation: 'vertical',
-              staggerDelay: (headMember ? 0.36 : 0.18) + i * 0.18,
-              palette: MEMBER_PALETTES[(headMember ? i + 1 : i) % MEMBER_PALETTES.length],
-            });
-          });
-
-          rightMembers.forEach((member, i) => {
-            const yPos = halfCount === 1 ? 0 : -halfL + margin + (i / (halfCount - 1)) * usableSpan;
-            list.push({
-              id: `member-right-${i + 1}`,
-              name: member,
-              initials: getInitials(member),
-              isSenior: false,
-              angleDeg: 0,
-              x: Math.round(halfW + seatOffset),
-              y: Math.round(yPos),
-              padX: Math.round(halfW - 18),
-              padY: Math.round(yPos),
-              padOrientation: 'vertical',
-              staggerDelay: (headMember ? 0.36 : 0.18) + (leftMembers.length + i) * 0.18,
-              palette: MEMBER_PALETTES[(headMember ? leftMembers.length + i + 1 : leftMembers.length + i) % MEMBER_PALETTES.length],
-            });
-          });
-        }
+      // Foot Member (South, if odd and no senior)
+      if (footMember) {
+        list.push({
+          id: 'member-foot',
+          name: footMember,
+          initials: getInitials(footMember),
+          isSenior: false,
+          angleDeg: 180,
+          x: 0,
+          y: Math.round(halfL + seatOffset),
+          laptopX: 0,
+          laptopY: Math.round(halfL - laptopInset),
+          laptopAngleDeg: 0, // Screen opens facing South directly at foot attendee
+          chairX: 0,
+          chairY: Math.round(halfL + chairOffset),
+          staggerDelay: 0.15 + teamCount * 0.1,
+          palette: MEMBER_PALETTES[teamCount % MEMBER_PALETTES.length],
+        });
       }
     }
 
     return list;
   }, [seniorNames, teamMembers, tableWidth, tableLength]);
 
-  // Refs for requestAnimationFrame scroll driving
+  // RequestAnimationFrame scroll choreography:
+  // Rotates the whole diorama assembly in unison while billboards counter-rotate
   const targetProgressRef = useRef<number>(0);
   const currentProgressRef = useRef<number>(0);
-  const currentCameraTiltRef = useRef<number>(60);
   const ambientAngleRef = useRef<number>(0);
+  const currentCameraTiltRef = useRef<number>(56);
   const rafIdRef = useRef<number>(0);
+  const billboardsRef = useRef<(HTMLDivElement | null)[]>([]);
   const onCompleteCalledRef = useRef<boolean>(false);
 
-  // Billboards ref collection for counter-rotation
-  const billboardsRef = useRef<(HTMLDivElement | null)[]>([]);
-
-  // Smooth RAF update loop
   useEffect(() => {
     const onScroll = () => {
       if (!trackRef.current) return;
@@ -872,7 +519,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
 
     const updateChoreography = () => {
       const reducedMotion = prefersReducedMotionRef.current;
-      const lerpSpeed = reducedMotion ? 1 : 0.065; // High-inertia cinema camera feel
+      const lerpSpeed = reducedMotion ? 1 : 0.075;
 
       currentProgressRef.current +=
         (targetProgressRef.current - currentProgressRef.current) * lerpSpeed;
@@ -884,53 +531,45 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
         progressBarRef.current.style.width = `${p * 100}%`;
       }
 
-      // 2. 0% to 20%: Title fades & drifts up
+      // 2. Title drifts up cleanly
       if (titleBoxRef.current) {
         const titleNorm = Math.min(1, p / 0.2);
-        const titleOpacity = Math.max(0, 1 - titleNorm);
-        const titleTranslateY = -titleNorm * 36;
-        titleBoxRef.current.style.opacity = titleOpacity.toFixed(3);
-        titleBoxRef.current.style.transform = `translateY(${titleTranslateY.toFixed(1)}px)`;
+        titleBoxRef.current.style.opacity = Math.max(0, 1 - titleNorm).toFixed(3);
+        titleBoxRef.current.style.transform = `translate(-50%, ${(-titleNorm * 32).toFixed(1)}px)`;
       }
 
-      // "Scroll to begin" hint
+      // 3. Scroll hint fades
       if (hintRef.current) {
         const hintNorm = Math.min(1, p / 0.04);
         hintRef.current.style.opacity = Math.max(0, 1 - hintNorm).toFixed(3);
       }
 
-      // 3. Full-time continuous circulation across the ENTIRE scroll range (0% to 100%)
-      // Ambient slow drift so the 3D room is always alive and turning even while paused
+      // 4. Smooth Architectural Diorama Island Rotation
       if (!reducedMotion) {
-        ambientAngleRef.current = (ambientAngleRef.current + 0.15) % 360;
+        ambientAngleRef.current = (ambientAngleRef.current + 0.12) % 360;
       }
-      // Expansive 600-degree continuous rotation driven smoothly all the way through the end
-      const scrollRotation = p * 600;
-      const tableRotation = scrollRotation + ambientAngleRef.current;
+      const scrollRotation = p * 420;
+      const dioramaRotation = scrollRotation + ambientAngleRef.current;
 
-      if (tableRef.current) {
-        tableRef.current.style.transform = `translate(-50%, -50%) rotateZ(${tableRotation.toFixed(2)}deg)`;
+      // Rotate the unified Diorama Assembly (Table & Podium in 100% synchrony!)
+      if (dioramaRef.current) {
+        dioramaRef.current.style.transform = `translate(-50%, -50%) rotateZ(${dioramaRotation.toFixed(2)}deg)`;
       }
 
-      // 4. Dynamic 3-Axis Camera Crane: Large Cinematic Zoom in the Last Stage
-      // Phase 1 (0% to 40%): Gentle framing (1.0x to 1.30x) giving ample time to view all attendees,
-      // floating name tags, and the senior gold space at the head of the table.
-      // Phase 2 (40% to 95%): "Last time" surging zoom that plunges in to a LARGE scale (up to 3.85x)
-      // while rotation actively continues, creating a breathtaking cinematic fly-in into the dashboard.
+      // 5. Dynamic Camera Crane Tilt & Zoom
       let cameraScale = 1.0;
-      let cameraTilt = 60;
+      let cameraTilt = 56;
 
-      if (p < 0.40) {
-        const norm1 = p / 0.40;
+      if (p < 0.45) {
+        const norm1 = p / 0.45;
         const ease1 = norm1 * norm1;
-        cameraScale = 1.0 + ease1 * 0.30; // 1.0x -> 1.30x
-        cameraTilt = 60 - ease1 * 4;      // 60deg -> 56deg
+        cameraScale = 1.0 + ease1 * 0.25;
+        cameraTilt = 56 - ease1 * 6;
       } else {
-        const norm2 = Math.min(1, (p - 0.40) / 0.55);
-        // Smooth cubic ease for surging acceleration in the final push
+        const norm2 = Math.min(1, (p - 0.45) / 0.50);
         const ease2 = norm2 * norm2 * (3 - 2 * norm2);
-        cameraScale = 1.30 + ease2 * 2.55; // 1.30x surging to 3.85x (large cinematic zoom at the end!)
-        cameraTilt = 56 - ease2 * 14;      // 56deg -> 42deg
+        cameraScale = 1.25 + ease2 * 1.50;
+        cameraTilt = 50 - ease2 * 14;
       }
       currentCameraTiltRef.current = cameraTilt;
 
@@ -938,30 +577,27 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
         cameraRigRef.current.style.transform = `rotateX(${cameraTilt.toFixed(2)}deg) scale3d(${cameraScale.toFixed(3)}, ${cameraScale.toFixed(3)}, ${cameraScale.toFixed(3)})`;
       }
 
-      // Counter-rotate all avatar billboards on both axes so they ALWAYS face camera and stay upright
-      const counterRotation = -tableRotation;
+      // 6. Zero-Drift Counter-Rotation of Avatars:
+      // Because billboards have fixed base center origin (24px 56px), rotating on Z & X has ZERO swing drift!
+      const counterRotation = -dioramaRotation;
       const counterTilt = -cameraTilt;
       for (let i = 0; i < billboardsRef.current.length; i++) {
         const billboard = billboardsRef.current[i];
         if (billboard) {
-          billboard.style.transform = `translate(-50%, 0) rotateZ(${counterRotation.toFixed(2)}deg) rotateX(${counterTilt.toFixed(2)}deg)`;
+          billboard.style.transform = `rotateZ(${counterRotation.toFixed(2)}deg) rotateX(${counterTilt.toFixed(2)}deg)`;
         }
       }
 
-      // 5. 55% to 95%: Intro dissolves while presentation window fades in
-      const dissolveNorm = Math.min(1, Math.max(0, (p - 0.55) / 0.4));
+      // 7. Dissolve into presentation dashboard
+      const dissolveNorm = Math.min(1, Math.max(0, (p - 0.60) / 0.35));
       const introOpacity = Math.max(0, 1 - dissolveNorm);
       const presOpacity = dissolveNorm;
-      const presBlur = (1 - dissolveNorm) * 14;
-      const presScale = 0.86 + dissolveNorm * 0.14;
+      const presBlur = (1 - dissolveNorm) * 12;
+      const presScale = 0.9 + dissolveNorm * 0.1;
 
       if (introLayerRef.current) {
         introLayerRef.current.style.opacity = introOpacity.toFixed(3);
-        if (dissolveNorm >= 0.98) {
-          introLayerRef.current.style.pointerEvents = 'none';
-        } else {
-          introLayerRef.current.style.pointerEvents = 'auto';
-        }
+        introLayerRef.current.style.pointerEvents = dissolveNorm >= 0.98 ? 'none' : 'auto';
       }
 
       if (presentationSlotRef.current) {
@@ -977,11 +613,10 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
         }
       }
 
-      // Completion check
       if (p >= 0.96 && !onCompleteCalledRef.current) {
         onCompleteCalledRef.current = true;
         setIsCompleted(true);
-        onComplete?.();
+        if (onComplete) onComplete();
       }
 
       rafIdRef.current = requestAnimationFrame(updateChoreography);
@@ -991,301 +626,434 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
 
     return () => {
       window.removeEventListener('scroll', onScroll);
-      cancelAnimationFrame(rafIdRef.current);
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     };
-  }, [onComplete, hasScrolled]);
+  }, [hasScrolled, onComplete]);
 
-  // Skip Button Handler
   const handleSkip = useCallback(() => {
-    if (!trackRef.current) return;
-    const targetScroll = trackRef.current.scrollHeight - window.innerHeight;
-    window.scrollTo({
-      top: targetScroll,
-      behavior: prefersReducedMotionRef.current ? 'auto' : 'smooth',
-    });
-
-    targetProgressRef.current = 1;
-    currentProgressRef.current = 1;
-
-    if (!onCompleteCalledRef.current) {
+    setIsCompleted(true);
+    if (introLayerRef.current) {
+      introLayerRef.current.style.opacity = '0';
+      introLayerRef.current.style.pointerEvents = 'none';
+    }
+    if (presentationSlotRef.current) {
+      presentationSlotRef.current.style.opacity = '1';
+      presentationSlotRef.current.style.filter = 'none';
+      presentationSlotRef.current.style.transform = 'none';
+      presentationSlotRef.current.classList.add(styles.presentationInteractive);
+    }
+    if (onComplete && !onCompleteCalledRef.current) {
       onCompleteCalledRef.current = true;
-      setIsCompleted(true);
-      onComplete?.();
+      onComplete();
     }
   }, [onComplete]);
-
-  // Render header subtitle with meeting with names if available
-  const displaySubtitle = useMemo(() => {
-    if (seniorNames.length > 0 && seniorNames[0] !== DEMO_SENIOR) {
-      return `Meeting with ${seniorNames.join(' & ')} • Executive QA Overview`;
-    }
-    return subtitle;
-  }, [seniorNames, subtitle]);
 
   return (
     <div
       ref={trackRef}
-      className={`${styles.scrollTrack} ${isDark ? styles.darkTheme : styles.lightTheme}`}
+      className={`${styles.boardroomContainer} ${isDark ? styles.darkTheme : styles.lightTheme}`}
     >
-      {/* Top Thin Progress Bar */}
-      <div className={styles.progressBarTrack} aria-hidden="true">
-        <div ref={progressBarRef} className={styles.progressBarFill} />
-      </div>
+      <div className={styles.scrollTrack}>
+        <div ref={stageRef} className={styles.stickyStage}>
+          {/* Progress Bar */}
+          <div ref={progressBarRef} className={styles.progressBar} />
 
-      {/* Skip Intro Button */}
-      {!isCompleted && (
-        <button
-          type="button"
-          onClick={handleSkip}
-          className={styles.skipButton}
-          aria-label="Skip cinematic intro to presentation"
-        >
-          <span>Skip Intro</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polyline points="13 17 18 12 13 7" />
-            <polyline points="6 17 11 12 6 7" />
-          </svg>
-        </button>
-      )}
+          {/* Skip Button */}
+          <button
+            type="button"
+            className={styles.skipButton}
+            onClick={handleSkip}
+            aria-label="Skip intro to report"
+          >
+            <span>Skip to Report</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
 
-      {/* Sticky 100vh Stage */}
-      <div ref={stageRef} className={styles.stage}>
-        {/* Presentation Window in Slot Beneath Intro */}
-        <div
-          ref={presentationSlotRef}
-          className={styles.presentationSlot}
-          style={{ opacity: 0, filter: 'blur(14px)', transform: 'scale(0.86)' }}
-          aria-hidden={!isCompleted}
-        >
-          {children}
-        </div>
-
-        {/* Cinematic Intro 3D Overlay Layer */}
-        <div
-          ref={introLayerRef}
-          className={`${styles.introLayer} ${isCompleted ? styles.introLayerCompleted : ''}`}
-        >
-          {/* Ceiling Soft Light */}
-          <div className={styles.ceilingLight} aria-hidden="true" />
-          {/* Volumetric Theater Light Rays */}
-          <div className={styles.lightRays} aria-hidden="true" />
-          {/* Floor Reflection Atmosphere */}
-          <div className={styles.roomFloor} aria-hidden="true" />
-          {/* 3D Perspective Floor Grid Plane */}
-          <div className={styles.floorGridPlane} aria-hidden="true" />
-
-          {/* Header Title: Project Name Only */}
-          <div ref={titleBoxRef} className={styles.briefingHeader}>
-            <h1 className={styles.briefingTitle}>{escapeHtml(projectName || title)}</h1>
+          {/* Presentation Slot */}
+          <div ref={presentationSlotRef} className={styles.presentationSlot}>
+            {children}
           </div>
 
-          {/* Dot Matrix Creative HUD in Left Bottom Corner */}
-          <div className={styles.dotMatrixHud} aria-label="Executive Metrics">
-            <div className={styles.dotMatrixGridBackdrop} aria-hidden="true" />
-            <div className={styles.dotMatrixHeader}>
-              <div className={styles.dotMatrixBeacon} />
-              <span className={styles.dotMatrixTag}>SYS // METRICS HUD</span>
+          {/* Cinematic Intro 3D Overlay Layer */}
+          <div
+            ref={introLayerRef}
+            className={`${styles.introLayer} ${isCompleted ? styles.introLayerCompleted : ''}`}
+          >
+            {/* Header Title: Project Name Only */}
+            <div ref={titleBoxRef} className={styles.briefingHeader}>
+              <h1 className={styles.briefingTitle}>{escapeHtml(projectName || title)}</h1>
             </div>
-            <div className={styles.dotMatrixBody}>
-              <div className={styles.dotMatrixItem}>
-                <div className={styles.dotMatrixMeta}>
-                  <span className={styles.dotMatrixLabel}>New Features</span>
-                  <div className={styles.dotMatrixLedBar} aria-hidden="true">
-                    {[...Array(6)].map((_, i) => (
-                      <span
-                        key={i}
-                        className={`${styles.dotMatrixLedDot} ${i < Math.min(6, Math.max(1, newFeaturesCount)) ? styles.ledCyan : ''}`}
-                      />
-                    ))}
+
+            {/* Dot Matrix Creative HUD (Rules 1, 2, 3: Blue/Purple Palette, 15% Opacity, Static Background) */}
+            <div className={styles.dotMatrixHud} aria-label="Executive Metrics">
+              <div className={styles.dotMatrixGridBackdrop} aria-hidden="true" />
+              <div className={styles.dotMatrixHeader}>
+                <div className={styles.dotMatrixBeacon} />
+                <span className={styles.dotMatrixTag}>SYS // METRICS HUD</span>
+              </div>
+              <div className={styles.dotMatrixBody}>
+                <div className={styles.dotMatrixItem}>
+                  <div className={styles.dotMatrixMeta}>
+                    <span className={styles.dotMatrixLabel}>New Features</span>
+                    <div className={styles.dotMatrixLedBar} aria-hidden="true">
+                      {[...Array(6)].map((_, i) => (
+                        <span
+                          key={i}
+                          className={`${styles.dotMatrixLedDot} ${i < Math.min(6, Math.max(1, newFeaturesCount)) ? styles.ledCyan : ''}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className={styles.dotMatrixDigitBoxCyan}>
+                    <span className={styles.dotMatrixDigit}>{String(newFeaturesCount).padStart(2, '0')}</span>
                   </div>
                 </div>
-                <div className={styles.dotMatrixDigitBoxCyan}>
-                  <span className={styles.dotMatrixDigit}>{String(newFeaturesCount).padStart(2, '0')}</span>
-                </div>
-              </div>
 
-              <div className={styles.dotMatrixItem}>
-                <div className={styles.dotMatrixMeta}>
-                  <span className={styles.dotMatrixLabel}>Support Emails</span>
-                  <div className={styles.dotMatrixLedBar} aria-hidden="true">
-                    {[...Array(6)].map((_, i) => (
-                      <span
-                        key={i}
-                        className={`${styles.dotMatrixLedDot} ${i < Math.min(6, Math.max(1, supportEmailsCount)) ? styles.ledAmber : ''}`}
-                      />
-                    ))}
+                <div className={styles.dotMatrixItem}>
+                  <div className={styles.dotMatrixMeta}>
+                    <span className={styles.dotMatrixLabel}>Support Emails</span>
+                    <div className={styles.dotMatrixLedBar} aria-hidden="true">
+                      {[...Array(6)].map((_, i) => (
+                        <span
+                          key={i}
+                          className={`${styles.dotMatrixLedDot} ${i < Math.min(6, Math.max(1, supportEmailsCount)) ? styles.ledPurple : ''}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className={styles.dotMatrixDigitBoxPurple}>
+                    <span className={styles.dotMatrixDigit}>{String(supportEmailsCount).padStart(2, '0')}</span>
                   </div>
                 </div>
-                <div className={styles.dotMatrixDigitBoxAmber}>
-                  <span className={styles.dotMatrixDigit}>{String(supportEmailsCount).padStart(2, '0')}</span>
-                </div>
+              </div>
+              <div className={styles.dotMatrixFooter}>
+                <span className={styles.dotMatrixPulseDot} />
+                <span className={styles.dotMatrixFooterText}>TELEMETRY SYNCHRONIZED</span>
               </div>
             </div>
-            <div className={styles.dotMatrixFooter}>
-              <span className={styles.dotMatrixPulseDot} />
-              <span className={styles.dotMatrixFooterText}>TELEMETRY SYNCHRONIZED</span>
-            </div>
-          </div>
 
-          {/* 3D Viewport with Dynamic Camera Tilt & Optical Centering */}
-          <div className={styles.viewport3D}>
-            <div ref={cameraRigRef} className={styles.cameraRig}>
-              {/* Spatial Floor Holographic Orbit Reticle */}
-              <div className={styles.floorHoloReticle} aria-hidden="true">
-                <div className={styles.floorReticleRingOuter}>
-                  <span className={styles.floorReticleTickN}>000° N</span>
-                  <span className={styles.floorReticleTickE}>090° E</span>
-                  <span className={styles.floorReticleTickS}>180° S</span>
-                  <span className={styles.floorReticleTickW}>270° W</span>
-                </div>
-                <div className={styles.floorReticleRingInner} />
-              </div>
+            {/* 3D Viewport with Cinematic Diorama Rig */}
+            <div className={styles.viewport3D}>
+              <div ref={cameraRigRef} className={styles.cameraRig}>
 
-              {/* 3D Parallax Horizon Light Batons */}
-              <div className={styles.roomHorizonColumns} aria-hidden="true">
-                <div className={styles.lightColumn1} />
-                <div className={styles.lightColumn2} />
-                <div className={styles.lightColumn3} />
-                <div className={styles.lightColumn4} />
-              </div>
+                {/* 1. Surrounding Studio Ground Floor (Z = -60px) */}
+                <div className={styles.floorPlane}>
+                  <div className={styles.floorGridOverlay} />
 
-              {/* 1. Ground Cast Shadow (Z -85px) for Rectangular Boardroom Table */}
-              <div
-                className={styles.tableFloorShadow}
-                style={{
-                  ['--table-width' as any]: `${tableWidth}px`,
-                  ['--table-length' as any]: `${tableLength}px`,
-                }}
-                aria-hidden="true"
-              />
+                  {/* Dual Glowing Energy Conduits (Mint-Cyan & Coral-Amber) */}
+                  <svg className={styles.neonTrackMint} viewBox="0 0 520 420" fill="none">
+                    <path
+                      d="M 30 30 L 440 30 Q 480 30 480 70 L 480 380"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <svg className={styles.neonTrackCoral} viewBox="0 0 520 420" fill="none">
+                    <path
+                      d="M 490 390 L 80 390 Q 40 390 40 350 L 40 40"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                  </svg>
 
-              {/* 2. Dual Architectural Pedestal Columns (Z -48px) */}
-              <div
-                className={styles.tablePedestals}
-                style={{
-                  ['--table-width' as any]: `${tableWidth}px`,
-                  ['--table-length' as any]: `${tableLength}px`,
-                }}
-                aria-hidden="true"
-              >
-                <div className={styles.tablePedestalColumn} />
-                <div className={styles.tablePedestalColumn} />
-              </div>
+                  {/* Floor Blueprint Documents (Bottom-Left - Actual Project Data) */}
+                  <div className={styles.floorDocGroup}>
+                    <div className={styles.floorDocCard}>
+                      <span className={styles.floorDocTitle}>{escapeHtml(projectName || 'QA Report')}</span>
+                      <div className={styles.floorDocLine} />
+                      <div className={`${styles.floorDocLine} ${styles.floorDocLineShort}`} />
+                      <span className={styles.floorDocBadge}>{teamMembers.length} Engineers</span>
+                    </div>
+                    <div className={styles.floorDocCard}>
+                      <span className={styles.floorDocTitle}>Features</span>
+                      <div className={styles.floorDocLine} />
+                      <div className={`${styles.floorDocLine} ${styles.floorDocLineShort}`} />
+                      <span className={styles.floorDocBadge}>{newFeaturesCount} Items</span>
+                    </div>
+                  </div>
 
-              {/* 3. Rectangular Boardroom Tabletop & Assembly (Rotates smoothly around Z) */}
-              <div
-                ref={tableRef}
-                className={styles.boardroomTable}
-                style={{
-                  ['--table-width' as any]: `${tableWidth}px`,
-                  ['--table-length' as any]: `${tableLength}px`,
-                }}
-              >
-                {/* Under-Rim Chamfer Layer (Z -16px) rotates with table assembly */}
-                <div
-                  className={styles.tableUnderRim}
-                  style={{
-                    ['--table-width' as any]: `${tableWidth}px`,
-                    ['--table-length' as any]: `${tableLength}px`,
-                  }}
-                  aria-hidden="true"
-                />
-
-                {/* Central Conference Media Runner & Holographic Core */}
-                <div className={styles.tableMediaRunner}>
-                  <div className={styles.tableRunnerMic} />
-                  <div className={styles.tableRunnerLine} />
-                  <div className={styles.tableCenterEmblem}>
-                    <div className={styles.tableCenterEmblemRing} />
-                    <div className={styles.centerHoloBeam} />
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  {/* Floor 3D Pie Chart Disc (Bottom-Right - Real Proportions) */}
+                  <div className={styles.floorPieGroup}>
+                    <svg className={styles.floorPieSvg} viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="40" fill="#a855f7" />
+                      <path d="M 50 50 L 50 10 A 40 40 0 0 1 88 62 Z" fill="#38bdf8" />
+                      <path d="M 50 50 L 88 62 A 40 40 0 0 1 35 88 Z" fill="#10b981" />
+                      <circle cx="50" cy="50" r="18" fill={isDark ? "#060911" : "#ffffff"} />
                     </svg>
+                    <div className={styles.floorPieBadge}>
+                      <span className={styles.floorPieBadgeVal}>
+                        {newFeaturesCount + supportEmailsCount}
+                      </span>
+                      <span className={styles.floorPieBadgeLabel}>Tracked Items</span>
+                    </div>
                   </div>
-                  <div className={styles.tableRunnerLine} />
-                  <div className={styles.tableRunnerMic} />
+
+                  {/* Floor Security Shield Badge (Bottom-Center) */}
+                  <div className={styles.floorShieldBadge}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                    <span className={styles.floorShieldText}>SOC-2 QA ASSURED</span>
+                  </div>
                 </div>
 
-                {/* Micro Holo-Desk Pads on Table Surface in front of each seat */}
-                {seats.map(person => (
+                {/* 2. Unified 3D Diorama Island Assembly (Rotates Together as One Solid Unit!) */}
+                <div ref={dioramaRef} className={styles.dioramaAssembly}>
+
+                  {/* Elevated Floating Podium Island */}
                   <div
-                    key={`pad-${person.id}`}
-                    className={`${styles.deskPad} ${person.isSenior ? styles.seniorDeskPad : ''} ${
-                      person.padOrientation === 'vertical' ? styles.deskPadVertical : styles.deskPadHorizontal
-                    }`}
+                    className={styles.podiumIsland}
                     style={{
-                      transform: `translate(calc(-50% + ${person.padX}px), calc(-50% + ${person.padY}px)) translateZ(4px)`,
+                      ['--table-width' as any]: `${tableWidth}px`,
+                      ['--table-length' as any]: `${tableLength}px`,
                     }}
                   >
-                    <div className={styles.holoTablet}>
-                      <div className={styles.holoTabletLine} />
-                    </div>
+                    <div className={styles.podiumSurfaceGrid} />
                   </div>
-                ))}
 
-                {/* Seated Members & Executive Luxury Chairs around Table */}
-                {seats.map((person, idx) => {
-                  const reducedMotion = prefersReducedMotionRef.current;
-                  const delay = reducedMotion ? 0 : person.staggerDelay;
+                  {/* Architectural Pedestals beneath Table */}
+                  <div
+                    className={styles.tablePedestals}
+                    style={{
+                      ['--table-width' as any]: `${tableWidth}px`,
+                      ['--table-length' as any]: `${tableLength}px`,
+                    }}
+                  >
+                    <div className={styles.tablePedestalColumn} />
+                    <div className={styles.tablePedestalColumn} />
+                  </div>
 
-                  return (
-                    <div
-                      key={person.id}
-                      className={styles.seatAnchor}
-                      style={{
-                        transform: `translate3d(${person.x}px, ${person.y}px, 0px)`,
-                      }}
-                    >
-                      {/* Billboard: counter-rotates and stands upright */}
+                  {/* Boardroom Table Assembly */}
+                  <div
+                    className={styles.boardroomTable}
+                    style={{
+                      ['--table-width' as any]: `${tableWidth}px`,
+                      ['--table-length' as any]: `${tableLength}px`,
+                    }}
+                  >
+                    {/* Under-Rim Chamfer Layer */}
+                    <div className={styles.tableUnderRim} />
+
+                    {/* Central Media Runner with Glowing "QA" Emblem Disc */}
+                    <div className={styles.tableMediaRunner}>
+                      <div className={styles.tableRunnerLine} />
+                      <div className={styles.tableCenterEmblem}>
+                        <span className={styles.tableCenterQaText}>QA</span>
+                      </div>
+                      <div className={styles.tableRunnerLine} />
+                    </div>
+
+                    {/* 3D Open Executive Laptops (Sitting Exactly on Table Surface facing each attendee!) */}
+                    {seats.map(person => (
                       <div
-                        ref={el => {
-                          billboardsRef.current[idx] = el;
-                        }}
-                        className={`${styles.avatarBillboard} ${person.isSenior ? styles.seniorBillboard : ''}`}
+                        key={`laptop-${person.id}`}
+                        className={styles.laptopAnchor}
                         style={{
-                          animationDelay: `${delay}s`,
+                          transform: `translate3d(${person.laptopX}px, ${person.laptopY}px, 3px) rotateZ(${person.laptopAngleDeg}deg)`,
                         }}
                       >
-                        {/* Minimalist Floating Name Tag (Ultra-Clean & Refined) */}
-                        <div className={styles.nameTagWrapper}>
-                          <div
-                            className={`${styles.nameTagPill} ${person.isSenior ? styles.seniorTagPill : ''}`}
-                          >
-                            <span
-                              className={`${styles.nameTagStatusDot} ${person.isSenior ? styles.seniorTagStatusDot : ''}`}
-                              style={!person.isSenior ? { backgroundColor: person.palette.glow, boxShadow: `0 0 5px ${person.palette.glow}` } : undefined}
-                            />
-                            <span
-                              className={`${styles.nameTagText} ${person.isSenior ? styles.seniorTagText : ''}`}
-                              style={{ animationDelay: `${delay + 0.1}s` }}
-                            >
-                              {person.name.replace(/\s*\([^)]*\)/g, '').trim() || person.name}
-                            </span>
+                        <div className={styles.laptopContainer}>
+                          <div className={styles.laptopBase}>
+                            <div className={styles.laptopKeyboard} />
+                            <div className={styles.laptopTrackpad} />
+                          </div>
+                          <div className={styles.laptopScreen}>
+                            <div className={styles.laptopScreenGlow} />
+                            <div className={styles.laptopScreenBack}>
+                              <div className={styles.laptopAppleLogo} />
+                            </div>
                           </div>
                         </div>
+                      </div>
+                    ))}
 
-                        {/* Ultra-Premium SVG Avatar (Reference Design, Distinct Palette per Member) */}
-                        <AvatarGraphic
-                          initials={person.initials}
-                          palette={person.palette}
-                          isSenior={person.isSenior}
-                          isDark={isDark}
-                          uniqueKey={person.id}
-                          size={person.isSenior ? (windowWidth <= 480 ? 46 : 58) : (windowWidth <= 480 ? 38 : 48)}
-                        />
+                    {/* Cantilever Wireframe Executive Chairs behind each attendee */}
+                    {seats.map(person => (
+                      <div
+                        key={`chair-${person.id}`}
+                        className={styles.chairAnchor}
+                        style={{
+                          transform: `translate3d(${person.chairX}px, ${person.chairY}px, 0px) rotateZ(${person.angleDeg}deg)`,
+                        }}
+                      >
+                        <div className={styles.chairFrame} />
+                        <div className={styles.chairBackrest} />
+                      </div>
+                    ))}
+
+                    {/* Seated Members (Zero-Drift Centered Base Origin!) */}
+                    {seats.map((person, idx) => (
+                      <div
+                        key={person.id}
+                        className={styles.seatAnchor}
+                        style={{
+                          transform: `translate3d(${person.x}px, ${person.y}px, 0px)`,
+                        }}
+                      >
+                        <div
+                          ref={el => {
+                            billboardsRef.current[idx] = el;
+                          }}
+                          className={styles.avatarBillboard}
+                        >
+                          {/* Centered Name Tag above Avatar */}
+                          <div className={styles.nameTagWrapper}>
+                            <div className={`${styles.nameTagPill} ${person.isSenior ? styles.seniorTagPill : ''}`}>
+                              <span
+                                className={styles.nameTagStatusDot}
+                                style={{
+                                  backgroundColor: person.palette.glow,
+                                  boxShadow: `0 0 5px ${person.palette.glow}`,
+                                }}
+                              />
+                              <span className={`${styles.nameTagText} ${person.isSenior ? styles.seniorTagText : ''}`}>
+                                {person.name.replace(/\s*\([^)]*\)/g, '').trim() || person.name}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Ultra-Premium SVG Glow Avatar */}
+                          <AvatarGraphic
+                            initials={person.initials}
+                            palette={person.palette}
+                            isSenior={person.isSenior}
+                            isDark={isDark}
+                            uniqueKey={person.id}
+                          />
+                        </div>
+                      </div>
+                    ))}
+
+                  </div>
+                </div>
+
+                {/* 3. Floating Holographic Glass Screens (Spatial Clearance - Unobstructed!) */}
+
+                {/* SCREEN 1: Real Executive Release Board (Back-Right) */}
+                <div className={`${styles.holoScreenWrapper} ${styles.screenExecutiveBoard}`}>
+                  <div className={styles.holoScreenBase}>
+                    <div className={styles.execBoardHeader}>
+                      <span className={styles.execBoardTitle}>{escapeHtml(projectName || title)}</span>
+                      <span className={styles.execBoardBadge}>
+                        {weekStart && weekEnd ? `${weekStart} – ${weekEnd}` : 'Live Overview'}
+                      </span>
+                    </div>
+                    <div className={styles.execBoardRows}>
+                      <div className={styles.execRowItem}>
+                        <span className={styles.execRowLabel}>New Features</span>
+                        <span className={styles.execRowVal}>{newFeaturesCount} Recorded</span>
+                      </div>
+                      <div className={styles.execRowItem}>
+                        <span className={styles.execRowLabel}>Support Tickets</span>
+                        <span className={styles.execRowVal}>{supportEmailsCount} Inquiries</span>
+                      </div>
+                      <div className={styles.execRowItem}>
+                        <span className={styles.execRowLabel}>Team Allocated</span>
+                        <span className={styles.execRowVal}>{teamMembers.length} Members</span>
+                      </div>
+                      <div className={styles.execRowItem}>
+                        <span className={styles.execRowLabel}>Meeting With</span>
+                        <span className={styles.execRowVal} style={{ color: '#38bdf8' }}>
+                          {seniorNames.length > 0 ? seniorNames.join(', ') : 'All Team'}
+                        </span>
                       </div>
                     </div>
-                  );
-                })}
+                    <div className={styles.execProgressBar}>
+                      <div
+                        className={styles.execProgressFill}
+                        style={{
+                          width: `${Math.min(100, Math.max(20, Math.round(((newFeaturesCount + 1) / (newFeaturesCount + supportEmailsCount + 1)) * 100)))}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* SCREEN 2: Real Sprint Metric Distribution (Back-Left) */}
+                <div className={`${styles.holoScreenWrapper} ${styles.screenVelocity}`}>
+                  <div className={styles.holoScreenBase}>
+                    <div className={styles.execBoardHeader}>
+                      <span className={styles.execBoardTitle}>Sprint Metrics</span>
+                      <span className={styles.execBoardBadge} style={{ background: 'rgba(168, 85, 247, 0.18)', color: '#c084fc' }}>
+                        Live
+                      </span>
+                    </div>
+                    <div className={styles.velocityBarGroup}>
+                      <div className={styles.velocityBarCol}>
+                        <div
+                          className={styles.velocityBarPillar}
+                          style={{
+                            height: Math.min(44, Math.max(14, newFeaturesCount * 7)),
+                            background: 'linear-gradient(180deg, #38bdf8 0%, #0284c7 100%)',
+                          }}
+                        />
+                        <span className={styles.velocityBarLabel}>FEAT</span>
+                      </div>
+                      <div className={styles.velocityBarCol}>
+                        <div
+                          className={styles.velocityBarPillar}
+                          style={{
+                            height: Math.min(44, Math.max(14, supportEmailsCount * 4)),
+                            background: 'linear-gradient(180deg, #a855f7 0%, #7c3aed 100%)',
+                          }}
+                        />
+                        <span className={styles.velocityBarLabel}>SUP</span>
+                      </div>
+                      <div className={styles.velocityBarCol}>
+                        <div
+                          className={styles.velocityBarPillar}
+                          style={{
+                            height: Math.min(44, Math.max(14, teamMembers.length * 5)),
+                            background: 'linear-gradient(180deg, #34d399 0%, #059669 100%)',
+                          }}
+                        />
+                        <span className={styles.velocityBarLabel}>TEAM</span>
+                      </div>
+                      <div className={styles.velocityBarCol}>
+                        <div
+                          className={styles.velocityBarPillar}
+                          style={{
+                            height: Math.min(44, Math.max(14, (newFeaturesCount + supportEmailsCount) * 3)),
+                            background: 'linear-gradient(180deg, #f59e0b 0%, #d97706 100%)',
+                          }}
+                        />
+                        <span className={styles.velocityBarLabel}>TOTAL</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SCREEN 3: Support Inquiries (Far-Left) */}
+                <div className={`${styles.holoScreenWrapper} ${styles.screenSupportHealth}`}>
+                  <div className={styles.holoScreenBase}>
+                    <span className={styles.execBoardTitle}>Support Tickets</span>
+                    <span className={styles.kpiBigNumber} style={{ color: '#a855f7' }}>{supportEmailsCount}</span>
+                    <span className={styles.kpiSubtitle}>Inquiries Logged</span>
+                  </div>
+                </div>
+
+                {/* SCREEN 4: Team Resources (Far-Right) */}
+                <div className={`${styles.holoScreenWrapper} ${styles.screenTestMatrix}`}>
+                  <div className={styles.holoScreenBase}>
+                    <span className={styles.execBoardTitle}>Team Resources</span>
+                    <span className={styles.kpiBigNumber} style={{ color: '#38bdf8' }}>{teamMembers.length}</span>
+                    <span className={styles.kpiSubtitle}>Active Allocations</span>
+                  </div>
+                </div>
+
               </div>
             </div>
-          </div>
 
-          {/* "Scroll to begin" hint */}
-          <div ref={hintRef} className={styles.scrollHint} aria-hidden={hasScrolled}>
-            <span className={styles.scrollHintText}>Scroll to begin</span>
-            <div className={styles.mouseIcon}>
-              <div className={styles.mouseWheel} />
+            {/* "Scroll to begin" hint */}
+            <div ref={hintRef} className={styles.scrollHint} aria-hidden={hasScrolled}>
+              <span className={styles.scrollHintText}>Scroll to begin</span>
+              <div className={styles.mouseIcon}>
+                <div className={styles.mouseWheel} />
+              </div>
             </div>
           </div>
         </div>

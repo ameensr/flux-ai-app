@@ -1,170 +1,156 @@
 /* ==========================================================================
-   Ultra-Premium 3D Boardroom Cinematic Experience
-   - True Physical 3D Extrusion & Volumetric Lighting
-   - Herman Miller / Luxury Presidential Ergonomic Chairs
-   - Dynamic 3-Axis Camera Crane Motion (Tilt & Push-In)
-   - Dynamic Light & Dark Mode Luxury Themes
+   Ultra-Premium 3D Cinematic Boardroom - Isometric Executive Tech Diorama
+   - Flawless Architectural Alignment of Podium, Table, Chairs & Laptops
+   - Zero-Drift Fixed-Origin Counter-Rotating Glowing Avatars
+   - Dual-Sided Laptops Facing Seated Attendees with Mathematical Precision
+   - Blue / Purple Tech Dot Matrix Palette (10–20% Opacity)
+   - Spatial Peripheral Holographic Screens with Unobstructed Team Center
+   - Full Light Mode & Dark Mode High-Fidelity
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   Themes: Dark (Midnight Obsidian) & Light (Executive Alabaster)
+   Themes: Light Mode (Pristine Studio Diorama) & Dark Mode (Midnight Cyber)
    -------------------------------------------------------------------------- */
-.darkTheme {
-  --bg-page: #060911;
-  --bg-gradient-top: radial-gradient(ellipse at 50% 10%, rgba(56, 189, 248, 0.28) 0%, rgba(99, 102, 241, 0.12) 45%, transparent 75%);
-  --bg-floor: radial-gradient(ellipse at 50% 70%, rgba(20, 32, 58, 0.7) 0%, #060911 80%);
-  --floor-grid-line: rgba(56, 189, 248, 0.08);
-  --floor-grid-glow: rgba(56, 189, 248, 0.25);
-  --light-ray-bg: conic-gradient(from 180deg at 50% 0%, transparent 42%, rgba(56, 189, 248, 0.06) 47%, rgba(56, 189, 248, 0.12) 50%, rgba(56, 189, 248, 0.06) 53%, transparent 58%);
-  --table-surface: linear-gradient(180deg, #152238 0%, #0d1624 50%, #070c16 100%);
-  --table-rim: rgba(56, 189, 248, 0.75);
-  --table-rim-glow: 0 0 35px rgba(56, 189, 248, 0.4), inset 0 0 35px rgba(56, 189, 248, 0.2);
-  --table-under-rim: #09101d;
-  --table-under-border: rgba(56, 189, 248, 0.35);
-  --table-shadow-color: rgba(0, 0, 0, 0.92);
-  --runner-bg: rgba(5, 9, 18, 0.68);
-  --runner-border: rgba(56, 189, 248, 0.5);
-  --runner-inset-shadow: rgba(0, 0, 0, 0.75);
-  --pedestal-bg: linear-gradient(180deg, #1e2c48 0%, #090e18 100%);
-  --pedestal-border: rgba(56, 189, 248, 0.45);
-  --inner-ring: rgba(56, 189, 248, 0.5);
-  --emblem-bg: #0b1324;
-  --emblem-glow: rgba(56, 189, 248, 0.45);
-  --deskpad-bg: rgba(56, 189, 248, 0.08);
-  --deskpad-border: rgba(56, 189, 248, 0.35);
-  --deskpad-glow: rgba(56, 189, 248, 0.25);
-  --tag-bg: rgba(15, 23, 42, 0.65);
-  --tag-border: rgba(255, 255, 255, 0.12);
-  --tag-text: #f8fafc;
-  --tag-glow: rgba(56, 189, 248, 0.15);
-  --tag-dot: #10b981;
-  --tag-dot-glow: #10b981;
-  --stem-color: rgba(56, 189, 248, 0.7);
-  --chair-back: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-  --chair-border: rgba(56, 189, 248, 0.3);
-  --chair-stitch: rgba(56, 189, 248, 0.15);
-  --chair-shadow: rgba(0, 0, 0, 0.75);
-  --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --badge-bg: rgba(56, 189, 248, 0.09);
-  --badge-border: rgba(56, 189, 248, 0.3);
-  --badge-text: #38bdf8;
-  --skip-btn-bg: rgba(22, 34, 60, 0.85);
-  --skip-btn-border: rgba(56, 189, 248, 0.4);
-  --skip-btn-text: #f8fafc;
-  --skip-btn-hover-bg: rgba(30, 48, 86, 0.95);
-  --progress-track: rgba(255, 255, 255, 0.08);
-  --senior-gold: #f59e0b;
-  --senior-gold-bright: #fbbf24;
-  --senior-halo: rgba(245, 158, 11, 0.5);
-  --senior-tag-bg: rgba(26, 18, 6, 0.75);
-  --senior-tag-border: rgba(245, 158, 11, 0.45);
-  --senior-tag-text: #fef08a;
-  --senior-chair-back: linear-gradient(180deg, #2b1f0c 0%, #150f05 100%);
-  --senior-chair-border: #f59e0b;
-  --senior-chair-stitch: rgba(245, 158, 11, 0.3);
-  --senior-deskpad-bg: rgba(245, 158, 11, 0.12);
-  --senior-deskpad-border: rgba(245, 158, 11, 0.5);
-  --avatar-shadow: rgba(0, 0, 0, 0.45);
-  --senior-avatar-shadow: rgba(0, 0, 0, 0.55);
+.lightTheme {
+  --bg-page: #edf2f5;
+  --bg-studio-gradient: radial-gradient(ellipse at 50% 35%, #f8fbfb 0%, #e8eef0 60%, #dfe7ea 100%);
+  --floor-grid: rgba(15, 23, 42, 0.04);
+  --podium-surface: linear-gradient(135deg, #eaf1f1 0%, #dde6e7 50%, #d4dfe0 100%);
+  --podium-border: rgba(255, 255, 255, 0.9);
+  --podium-shadow: rgba(15, 23, 42, 0.12);
+  --table-surface: linear-gradient(180deg, #ffffff 0%, #f9fafb 55%, #edf2f7 100%);
+  --table-rim: #3b82f6;
+  --table-rim-glow: 0 0 20px rgba(59, 130, 246, 0.18), inset 0 0 24px rgba(255, 255, 255, 0.95);
+  --table-under-rim: #cbd5e1;
+  --table-under-border: rgba(37, 99, 235, 0.3);
+  --table-shadow: rgba(15, 23, 42, 0.18);
+  --table-runner: #f1f5f9;
+  --table-runner-border: rgba(37, 99, 235, 0.2);
+  --pedestal-bg: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
+  --pedestal-border: rgba(37, 99, 235, 0.3);
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.95);
+  --glass-border-subtle: rgba(15, 23, 42, 0.08);
+  --glass-shadow: 0 16px 36px rgba(15, 23, 42, 0.12);
+  --glass-text-primary: #0f172a;
+  --glass-text-secondary: #475569;
+  --glass-text-muted: #64748b;
+  --glass-card-bg: rgba(255, 255, 255, 0.65);
+  --holo-cyan: #0284c7;
+  --holo-purple: #7c3aed;
+  --neon-mint-tube: #10b981;
+  --neon-coral-tube: #f43f5e;
+  --floor-doc-bg: #ffffff;
+  --floor-doc-border: rgba(15, 23, 42, 0.08);
+  --floor-doc-shadow: rgba(15, 23, 42, 0.08);
+  --tag-bg: rgba(255, 255, 255, 0.94);
+  --tag-border: rgba(15, 23, 42, 0.12);
+  --tag-text: #0f172a;
+  --senior-tag-bg: rgba(255, 251, 235, 0.95);
+  --senior-tag-border: rgba(245, 158, 11, 0.5);
+  --senior-tag-text: #92400e;
+  --chair-back: #334155;
+  --chair-frame: #64748b;
+  --skip-btn-bg: rgba(255, 255, 255, 0.92);
+  --skip-btn-border: rgba(15, 23, 42, 0.15);
+  --skip-btn-text: #0f172a;
+  --title-color: #0f172a;
 }
 
-.lightTheme {
-  --bg-page: #f8fafc;
-  --bg-gradient-top: radial-gradient(ellipse at 50% 10%, rgba(37, 99, 235, 0.15) 0%, rgba(99, 102, 241, 0.06) 45%, transparent 75%);
-  --bg-floor: radial-gradient(ellipse at 50% 70%, rgba(241, 245, 249, 0.95) 0%, #f8fafc 80%);
-  --floor-grid-line: rgba(30, 41, 59, 0.06);
-  --floor-grid-glow: rgba(37, 99, 235, 0.12);
-  --light-ray-bg: conic-gradient(from 180deg at 50% 0%, transparent 42%, rgba(255, 255, 255, 0.7) 47%, rgba(37, 99, 235, 0.07) 50%, rgba(255, 255, 255, 0.7) 53%, transparent 58%);
-  --table-surface: linear-gradient(180deg, #ffffff 0%, #f8fafc 45%, #edf2f7 100%);
-  --table-rim: #3b82f6;
-  --table-rim-glow: 0 0 24px rgba(59, 130, 246, 0.2), inset 0 0 30px rgba(255, 255, 255, 0.95);
-  --table-under-rim: #e2e8f0;
-  --table-under-border: rgba(37, 99, 235, 0.35);
-  --table-shadow-color: rgba(15, 23, 42, 0.16);
-  --runner-bg: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
-  --runner-border: rgba(37, 99, 235, 0.35);
-  --runner-inset-shadow: rgba(15, 23, 42, 0.08);
-  --pedestal-bg: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
-  --pedestal-border: rgba(37, 99, 235, 0.35);
-  --inner-ring: rgba(37, 99, 235, 0.45);
-  --emblem-bg: #ffffff;
-  --emblem-glow: rgba(37, 99, 235, 0.25);
-  --deskpad-bg: rgba(30, 41, 59, 0.06);
-  --deskpad-border: rgba(30, 41, 59, 0.2);
-  --deskpad-glow: rgba(37, 99, 235, 0.1);
-  --tag-bg: rgba(255, 255, 255, 0.88);
-  --tag-border: rgba(15, 23, 42, 0.08);
-  --tag-text: #0f172a;
-  --tag-glow: rgba(0, 0, 0, 0.04);
-  --tag-dot: #10b981;
-  --tag-dot-glow: #10b981;
-  --stem-color: rgba(37, 99, 235, 0.65);
-  --chair-back: linear-gradient(180deg, #334155 0%, #1e293b 100%);
-  --chair-border: #475569;
-  --chair-stitch: rgba(255, 255, 255, 0.15);
-  --chair-shadow: rgba(15, 23, 42, 0.25);
-  --text-primary: #0f172a;
-  --text-secondary: rgba(15, 23, 42, 0.72);
-  --badge-bg: rgba(37, 99, 235, 0.08);
-  --badge-border: rgba(37, 99, 235, 0.25);
-  --badge-text: #1d4ed8;
-  --skip-btn-bg: rgba(255, 255, 255, 0.94);
-  --skip-btn-border: rgba(148, 163, 184, 0.45);
-  --skip-btn-text: #0f172a;
-  --skip-btn-hover-bg: #f1f5f9;
-  --progress-track: rgba(15, 23, 42, 0.08);
-  --senior-gold: #d97706;
-  --senior-gold-bright: #b45309;
-  --senior-halo: rgba(217, 119, 6, 0.35);
-  --senior-tag-bg: rgba(254, 243, 199, 0.88);
-  --senior-tag-border: rgba(217, 119, 6, 0.35);
-  --senior-tag-text: #78350f;
-  --senior-chair-back: linear-gradient(180deg, #78350f 0%, #451a03 100%);
-  --senior-chair-border: #d97706;
-  --senior-chair-stitch: rgba(251, 191, 36, 0.3);
-  --senior-deskpad-bg: rgba(180, 83, 9, 0.08);
-  --senior-deskpad-border: rgba(180, 83, 9, 0.4);
-  --avatar-shadow: rgba(15, 23, 42, 0.18);
-  --senior-avatar-shadow: rgba(180, 83, 9, 0.25);
+.darkTheme {
+  --bg-page: #060911;
+  --bg-studio-gradient: radial-gradient(ellipse at 50% 35%, #0f182c 0%, #070c17 65%, #04070e 100%);
+  --floor-grid: rgba(56, 189, 248, 0.06);
+  --podium-surface: linear-gradient(135deg, #152238 0%, #0f1a2c 50%, #0a111e 100%);
+  --podium-border: rgba(56, 189, 248, 0.28);
+  --podium-shadow: rgba(0, 0, 0, 0.85);
+  --table-surface: linear-gradient(180deg, #18263e 0%, #101a2c 55%, #090f1a 100%);
+  --table-rim: rgba(56, 189, 248, 0.7);
+  --table-rim-glow: 0 0 25px rgba(56, 189, 248, 0.35), inset 0 0 25px rgba(56, 189, 248, 0.15);
+  --table-under-rim: #09101d;
+  --table-under-border: rgba(56, 189, 248, 0.35);
+  --table-shadow: rgba(0, 0, 0, 0.92);
+  --table-runner: rgba(5, 9, 18, 0.75);
+  --table-runner-border: rgba(56, 189, 248, 0.4);
+  --pedestal-bg: linear-gradient(180deg, #1e2c48 0%, #090e18 100%);
+  --pedestal-border: rgba(56, 189, 248, 0.45);
+  --glass-bg: rgba(15, 23, 42, 0.76);
+  --glass-border: rgba(56, 189, 248, 0.35);
+  --glass-border-subtle: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+  --glass-text-primary: #f8fafc;
+  --glass-text-secondary: #cbd5e1;
+  --glass-text-muted: #94a3b8;
+  --glass-card-bg: rgba(30, 41, 59, 0.6);
+  --holo-cyan: #38bdf8;
+  --holo-purple: #a855f7;
+  --neon-mint-tube: #34d399;
+  --neon-coral-tube: #fb7185;
+  --floor-doc-bg: #1e293b;
+  --floor-doc-border: rgba(56, 189, 248, 0.2);
+  --floor-doc-shadow: rgba(0, 0, 0, 0.5);
+  --tag-bg: rgba(15, 23, 42, 0.85);
+  --tag-border: rgba(255, 255, 255, 0.16);
+  --tag-text: #f8fafc;
+  --senior-tag-bg: rgba(26, 18, 6, 0.88);
+  --senior-tag-border: rgba(245, 158, 11, 0.5);
+  --senior-tag-text: #fef08a;
+  --chair-back: #0f172a;
+  --chair-frame: #475569;
+  --skip-btn-bg: rgba(15, 23, 42, 0.85);
+  --skip-btn-border: rgba(56, 189, 248, 0.35);
+  --skip-btn-text: #f8fafc;
+  --title-color: #ffffff;
 }
 
 /* --------------------------------------------------------------------------
-   Scroll Track & Sticky 100vh Stage
+   Container & Scroll Track
    -------------------------------------------------------------------------- */
+.boardroomContainer {
+  position: relative;
+  width: 100%;
+  background-color: var(--bg-page);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif;
+  overflow: clip;
+}
+
 .scrollTrack {
   position: relative;
   width: 100%;
-  height: 500vh;
-  background-color: var(--bg-page);
-  transition: background-color 0.35s ease;
+  height: 240vh;
 }
 
-.stage {
+.stickyStage {
   position: sticky;
   top: 0;
   left: 0;
-  width: 100%;
+  width: 100vw;
   height: 100vh;
-  height: 100dvh;
   overflow: hidden;
-  background-color: var(--bg-page);
-  contain: layout paint;
-  transition: background-color 0.35s ease;
+  background: var(--bg-studio-gradient);
 }
 
-/* Presentation window mounted in background slot */
+.introLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: auto;
+  transition: opacity 0.25s ease-out;
+}
+
+.introLayerCompleted {
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
 .presentationSlot {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 10;
-  overflow: auto;
-  will-change: opacity, transform, filter;
-  transform-origin: center center;
+  inset: 0;
+  z-index: 20;
   pointer-events: none;
+  opacity: 0;
+  will-change: opacity, transform, filter;
+  transition: opacity 0.3s ease-out;
 }
 
 .presentationInteractive {
@@ -172,873 +158,113 @@
 }
 
 /* --------------------------------------------------------------------------
-   Top Progress Bar & Controls
+   Progress Bar & Skip Controls
    -------------------------------------------------------------------------- */
-.progressBarTrack {
-  position: fixed;
+.progressBar {
+  position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
   height: 3px;
-  background: var(--progress-track);
+  background: linear-gradient(90deg, #38bdf8, #a855f7, #10b981);
   z-index: 100;
-  pointer-events: none;
-}
-
-.progressBarFill {
-  height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, #38bdf8 0%, #818cf8 50%, var(--senior-gold) 100%);
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
-  transition: width 0.05s linear;
+  transition: width 0.06s linear;
 }
 
 .skipButton {
-  position: fixed;
-  top: 24px;
+  position: absolute;
+  top: 22px;
   right: 28px;
-  z-index: 90;
+  z-index: 50;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--skip-btn-text);
+  gap: 7px;
+  padding: 8px 16px;
   background: var(--skip-btn-bg);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--skip-btn-border);
   border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--skip-btn-text);
+  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 14px rgba(56, 189, 248, 0.2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s ease;
 }
 
 .skipButton:hover {
-  background: var(--skip-btn-hover-bg);
-  border-color: #38bdf8;
   transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25), 0 0 20px rgba(56, 189, 248, 0.4);
-}
-
-.skipButton:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--bg-page), 0 0 0 5px var(--senior-gold);
 }
 
 /* --------------------------------------------------------------------------
-   Atmospheric Volumetric Lighting & Floor
-   -------------------------------------------------------------------------- */
-.introLayer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  pointer-events: auto;
-  will-change: opacity;
-}
-
-.introLayerCompleted {
-  pointer-events: none !important;
-  visibility: hidden !important;
-}
-
-.ceilingLight {
-  position: absolute;
-  top: -12%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 90vw;
-  max-width: 1000px;
-  height: 60vh;
-  background: var(--bg-gradient-top);
-  filter: blur(40px);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.roomFloor {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 65%;
-  background: var(--bg-floor);
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* Volumetric Light Rays (Subtle theater light) */
-.lightRays {
-  position: absolute;
-  top: -10%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 80vw;
-  max-width: 850px;
-  height: 70vh;
-  background: var(--light-ray-bg);
-  filter: blur(20px);
-  pointer-events: none;
-  z-index: 2;
-}
-
-/* Architectural Perspective Grid Floor */
-.floorGridPlane {
-  position: absolute;
-  bottom: -25%;
-  left: 50%;
-  width: 150vw;
-  height: 110vh;
-  transform: translateX(-50%) rotateX(68deg);
-  background-image:
-    linear-gradient(to right, var(--floor-grid-line) 1.5px, transparent 1.5px),
-    linear-gradient(to bottom, var(--floor-grid-line) 1.5px, transparent 1.5px);
-  background-size: 45px 45px;
-  mask-image: radial-gradient(ellipse at 50% 60%, black 30%, transparent 75%);
-  -webkit-mask-image: radial-gradient(ellipse at 50% 60%, black 30%, transparent 75%);
-  pointer-events: none;
-  z-index: 2;
-}
-
-/* --------------------------------------------------------------------------
-   Header Briefing (Apple Keynote Quality)
+   Header Title (Project Name Only)
    -------------------------------------------------------------------------- */
 .briefingHeader {
   position: absolute;
-  top: 6%;
-  left: 0;
-  width: 100%;
+  top: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  z-index: 25;
   pointer-events: none;
-  padding: 0 20px;
-}
-
-.briefingBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 14px;
-  background: var(--badge-bg);
-  border: 1px solid var(--badge-border);
-  border-radius: 9999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--badge-text);
-  margin-bottom: 10px;
-  backdrop-filter: blur(10px);
-}
-
-.briefingBadgeDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--badge-text);
-  box-shadow: 0 0 10px var(--badge-text);
-  animation: pulseDot 2s infinite ease-in-out;
-}
-
-@keyframes pulseDot {
-  0%, 100% { opacity: 0.5; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.25); }
 }
 
 .briefingTitle {
-  margin: 0;
-  font-size: clamp(26px, 3.8vw, 44px);
+  font-size: clamp(20px, 3.2vw, 32px);
   font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--text-primary);
-  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
-}
-
-.briefingSubtitle {
-  margin: 6px 0 0 0;
-  font-size: clamp(12px, 1.3vw, 15px);
-  font-weight: 500;
-  color: var(--text-secondary);
-  max-width: 540px;
+  letter-spacing: -0.025em;
+  color: var(--title-color);
+  margin: 0;
+  padding: 0;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 }
 
 /* --------------------------------------------------------------------------
-   Scroll Hint
+   Creative Dot Matrix HUD (Left Bottom Corner)
+   - Rules 1, 2, 3: Blue/Purple Palette, 15% Opacity, Static Background Grid
    -------------------------------------------------------------------------- */
-.scrollHint {
-  position: absolute;
-  bottom: 28px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  z-index: 25;
-  pointer-events: none;
-  transition: opacity 0.3s ease;
-}
-
-.scrollHintText {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
-.mouseIcon {
-  width: 22px;
-  height: 34px;
-  border: 2px solid var(--table-rim);
-  border-radius: 12px;
-  display: flex;
-  justify-content: center;
-  padding-top: 6px;
-}
-
-.mouseWheel {
-  width: 3px;
-  height: 6px;
-  background-color: var(--badge-text);
-  border-radius: 2px;
-  animation: mouseWheelSlide 1.8s infinite ease-in-out;
-}
-
-@keyframes mouseWheelSlide {
-  0% { transform: translateY(0); opacity: 1; }
-  60% { transform: translateY(12px); opacity: 0; }
-  61% { transform: translateY(0); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-
-/* ==========================================================================
-   True 3D Boardroom Environment & Dynamic 3-Axis Camera Crane
-   ========================================================================== */
-
-.viewport3D {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1250px;
-  perspective-origin: 50% 50%;
-  overflow: visible;
-  z-index: 5;
-}
-
-/*
-  The Camera Rig:
-  Optical center compensated with -28px translateY so the tilted 3D boardroom
-  is positioned commanding and centered in the viewport.
-*/
-.cameraRig {
-  position: relative;
-  width: 600px;
-  height: 600px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform-style: preserve-3d;
-  margin-top: -28px;
-  will-change: transform;
-}
-
-/* --------------------------------------------------------------------------
-   Table Physical 3D Extrusion & Ground Shadows (Rectangular Boardroom Table)
-   -------------------------------------------------------------------------- */
-
-/* 1. Ground Cast Shadow (Z -85px) */
-.tableFloorShadow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: calc(var(--table-width, 250px) * 1.34);
-  height: calc(var(--table-length, 500px) * 1.15);
-  border-radius: 46px;
-  background: var(--table-shadow-color);
-  transform: translate(-50%, -50%) translateZ(-85px);
-  filter: blur(34px);
-  pointer-events: none;
-}
-
-/* 2. Dual Architectural Pedestal Columns (Z -48px) */
-.tablePedestals {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: calc(var(--table-width, 250px) * 0.52);
-  height: calc(var(--table-length, 500px) * 0.72);
-  transform: translate(-50%, -50%) translateZ(-48px);
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.tablePedestalColumn {
-  width: 100%;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--pedestal-bg);
-  border: 2px solid var(--pedestal-border);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
-}
-
-/* 3. Under-Rim Chamfer Layer (Z -16px) */
-.tableUnderRim {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: calc(var(--table-width, 250px) * 0.985);
-  height: calc(var(--table-length, 500px) * 0.985);
-  border-radius: 26px;
-  background: var(--table-under-rim);
-  border: 2px solid var(--table-under-border);
-  box-shadow: 0 18px 45px var(--table-shadow-color);
-  transform: translate(-50%, -50%) translateZ(-16px);
-  pointer-events: none;
-}
-
-/* 4. Rectangular Executive Boardroom Table (Z 0px) */
-.boardroomTable {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: var(--table-width, 250px);
-  height: var(--table-length, 500px);
-  border-radius: 28px;
-  background: var(--table-surface);
-  border: 2px solid var(--table-rim);
-  box-shadow:
-    var(--table-rim-glow),
-    0 30px 70px var(--table-shadow-color);
-  transform-style: preserve-3d;
-  will-change: transform;
-}
-
-/* Subtle Inset Hairline Bezel */
-.boardroomTable::before {
-  content: '';
-  position: absolute;
-  inset: 5px;
-  border-radius: 22px;
-  border: 1px solid var(--inner-ring);
-  opacity: 0.35;
-  pointer-events: none;
-}
-
-/* Central Conference Media Runner */
-.tableMediaRunner {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 52px;
-  height: 66%;
-  border-radius: 16px;
-  background: var(--runner-bg);
-  border: 1.5px solid var(--runner-border);
-  box-shadow:
-    inset 0 0 16px var(--runner-inset-shadow),
-    0 0 14px var(--inner-ring);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 0;
-  pointer-events: none;
-}
-
-.tableRunnerLine {
-  width: 1px;
-  height: 26%;
-  background: linear-gradient(180deg, transparent 0%, var(--inner-ring) 50%, transparent 100%);
-  opacity: 0.7;
-}
-
-.tableRunnerMic {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--badge-text);
-  box-shadow: 0 0 8px var(--badge-text);
-}
-
-/* Hologram Center Floating 3D Orb & Emblem (Z +16px) */
-.tableCenterEmblem {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) translateZ(16px);
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--emblem-bg);
-  border: 2px solid var(--table-rim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--badge-text);
-  box-shadow: 0 4px 20px var(--emblem-glow), inset 0 0 10px var(--emblem-glow);
-  pointer-events: none;
-  animation: emblemPulse 4s infinite ease-in-out;
-}
-
-@keyframes emblemPulse {
-  0%, 100% { transform: translate(-50%, -50%) translateZ(16px) scale(1); }
-  50% { transform: translate(-50%, -50%) translateZ(20px) scale(1.06); }
-}
-
-/* Rotating Gyroscopic Reticle Ring around Center Emblem */
-.tableCenterEmblemRing {
-  position: absolute;
-  top: -6px;
-  left: -6px;
-  right: -6px;
-  bottom: -6px;
-  border-radius: 50%;
-  border: 1.5px dashed var(--table-rim);
-  animation: gyroSpin 12s infinite linear;
-  pointer-events: none;
-}
-
-@keyframes gyroSpin {
-  0% { transform: rotateZ(0deg); }
-  100% { transform: rotateZ(360deg); }
-}
-
-/* Individual Minimal Desk-Pad in front of each seat (Z +4px) */
-.deskPad {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  background: var(--deskpad-bg);
-  border: 1px solid var(--deskpad-border);
-  border-radius: 4px;
-  box-shadow: 0 0 10px var(--deskpad-glow);
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform-style: preserve-3d;
-}
-
-.deskPadHorizontal {
-  width: 44px;
-  height: 20px;
-}
-
-.deskPadVertical {
-  width: 20px;
-  height: 38px;
-}
-
-.seniorDeskPad {
-  width: 54px;
-  height: 24px;
-  background: var(--senior-deskpad-bg);
-  border: 1.5px solid var(--senior-deskpad-border);
-  box-shadow: 0 0 14px var(--senior-halo);
-}
-
-/* ==========================================================================
-   Luxury Executive Chairs (Herman Miller / Poltrona Frau)
-   ========================================================================== */
-
-.seatAnchor {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  transform-style: preserve-3d;
-  will-change: transform;
-}
-
-/*
-  Avatar Billboard:
-  Counter-rotates table Z and counter-tilts camera X.
-*/
-.avatarBillboard {
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  transform-origin: bottom center;
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  will-change: transform, opacity;
-  animation: avatarRise 0.9s cubic-bezier(0.16, 1, 0.3, 1) backwards;
-}
-
-@keyframes avatarRise {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, 50px) scale(0.6);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(-50%, 0) scale(1);
-  }
-}
-
-/* --------------------------------------------------------------------------
-   Sculpted Executive High-Back Chair (Physical 3D layers)
-   -------------------------------------------------------------------------- */
-.chairBackrest {
-  position: absolute;
-  bottom: 4px;
-  left: 50%;
-  transform: translateX(-50%) translateZ(-16px);
-  width: 56px;
-  height: 68px;
-  background: var(--chair-back);
-  border: 1.5px solid var(--chair-border);
-  border-radius: 14px 14px 6px 6px;
-  box-shadow:
-    0 10px 24px var(--chair-shadow),
-    inset 0 2px 5px rgba(255, 255, 255, 0.12);
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* Executive Headrest Cushion */
-.chairHeadrest {
-  position: absolute;
-  top: -12px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 32px;
-  height: 13px;
-  background: var(--chair-back);
-  border: 1.5px solid var(--chair-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 10px var(--chair-shadow);
-}
-
-/* Left & Right Sculpted Armrests */
-.chairArmrestLeft {
-  position: absolute;
-  bottom: 10px;
-  left: -8px;
-  width: 8px;
-  height: 28px;
-  background: var(--chair-back);
-  border: 1.5px solid var(--chair-border);
-  border-radius: 4px 2px 2px 4px;
-}
-
-.chairArmrestRight {
-  position: absolute;
-  bottom: 10px;
-  right: -8px;
-  width: 8px;
-  height: 28px;
-  background: var(--chair-back);
-  border: 1.5px solid var(--chair-border);
-  border-radius: 2px 4px 4px 2px;
-}
-
-/* Chair Swivel Base under seat */
-.chairBase {
-  position: absolute;
-  bottom: -14px;
-  left: 50%;
-  transform: translateX(-50%) translateZ(-20px);
-  width: 30px;
-  height: 5px;
-  background: var(--pedestal-bg);
-  border: 1px solid var(--pedestal-border);
-  border-radius: 3px;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
-}
-
-/* Presidential Senior Chair (24k Gold Trim) */
-.seniorChairBackrest {
-  width: 66px;
-  height: 78px;
-  background: var(--senior-chair-back);
-  border: 2px solid var(--senior-gold);
-  border-radius: 16px 16px 8px 8px;
-  box-shadow:
-    0 12px 30px rgba(0, 0, 0, 0.5),
-    0 0 16px var(--senior-halo);
-}
-
-.seniorChairHeadrest {
-  width: 38px;
-  height: 15px;
-  border: 2px solid var(--senior-gold);
-  box-shadow: 0 4px 12px var(--senior-halo);
-}
-
-.seniorChairArmrestLeft,
-.seniorChairArmrestRight {
-  border-color: var(--senior-gold);
-  height: 32px;
-}
-
-/* --------------------------------------------------------------------------
-   Floating Minimalist Executive Name Tags (Ultra-Minimal Spatial Micro-Pill)
-   -------------------------------------------------------------------------- */
-.nameTagWrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 5px;
-  pointer-events: none;
-  z-index: 10;
-}
-
-.nameTagPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 7.5px;
-  background: var(--tag-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 0.5px solid var(--tag-border);
-  border-radius: 9999px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  white-space: nowrap;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-
-/* Minimal Status Beacon Micro-Dot */
-.nameTagStatusDot {
-  width: 3.5px;
-  height: 3.5px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.nameTagText {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif;
-  font-size: 9.5px;
-  font-weight: 500;
-  color: var(--tag-text);
-  letter-spacing: 0.03em;
-  line-height: 1.25;
-  text-transform: capitalize;
-}
-
-/* Senior VIP Gold Minimal Tag */
-.seniorBillboard {
-  z-index: 15;
-}
-
-.seniorTagPill {
-  background: var(--senior-tag-bg);
-  border: 0.5px solid var(--senior-tag-border);
-  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.22);
-}
-
-.seniorTagStatusDot {
-  background-color: var(--senior-gold-bright);
-  box-shadow: 0 0 5px var(--senior-gold-bright);
-}
-
-.seniorTagText {
-  color: var(--senior-tag-text);
-  font-weight: 600;
-  letter-spacing: 0.035em;
-}
-
-/* Avatar Graphics (SVG) */
-.avatarSvgWrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  filter: drop-shadow(0 6px 14px var(--avatar-shadow));
-  z-index: 5;
-}
-
-.seniorAvatarSvgWrapper {
-  filter:
-    drop-shadow(0 0 18px var(--senior-halo))
-    drop-shadow(0 8px 18px var(--senior-avatar-shadow));
-  z-index: 5;
-}
-
-/* --------------------------------------------------------------------------
-   3D Executive Open Laptop (In front of Meeting With Person)
-   -------------------------------------------------------------------------- */
-.executiveLaptop {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 42px;
-  height: 26px;
-  transform-style: preserve-3d;
-  pointer-events: none;
-  z-index: 8;
-}
-
-/* Base Keyboard Deck on Table Surface */
-.laptopBase {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(180deg, #94a3b8 0%, #64748b 50%, #334155 100%);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 3px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 2.5px;
-}
-
-.laptopKeyboard {
-  width: 84%;
-  height: 52%;
-  background: #0f172a;
-  border-radius: 1.5px;
-  box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.8);
-}
-
-.laptopTrackpad {
-  width: 30%;
-  height: 24%;
-  margin-top: 1.5px;
-  background: rgba(255, 255, 255, 0.15);
-  border: 0.5px solid rgba(255, 255, 255, 0.25);
-  border-radius: 1px;
-}
-
-/* Tilted Open Display Screen (Open ~105 deg facing the Senior leader) */
-.laptopScreen {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 25px;
-  transform-origin: bottom center;
-  transform: rotateX(-105deg);
-  transform-style: preserve-3d;
-}
-
-/* Front Glowing Display Screen */
-.laptopDisplay {
-  position: absolute;
-  inset: 0;
-  background: #030712;
-  border: 1px solid var(--senior-gold, #f59e0b);
-  border-radius: 2.5px;
-  padding: 2.5px 3px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  backface-visibility: hidden;
-  box-shadow: inset 0 0 8px rgba(245, 158, 11, 0.4), 0 0 12px rgba(245, 158, 11, 0.3);
-}
-
-.laptopChartLine {
-  width: 100%;
-  height: 1.5px;
-  background: linear-gradient(90deg, #f59e0b 0%, #38bdf8 50%, #34d399 100%);
-  box-shadow: 0 0 4px rgba(245, 158, 11, 0.7);
-}
-
-.laptopChartBars {
-  width: 100%;
-  height: 9px;
-  display: flex;
-  align-items: flex-end;
-  gap: 1.5px;
-}
-
-.laptopChartBars span {
-  flex: 1;
-  background: #38bdf8;
-  border-radius: 0.5px;
-  opacity: 0.85;
-}
-
-.laptopIndicatorDot {
-  width: 2.5px;
-  height: 2.5px;
-  border-radius: 50%;
-  background: #34d399;
-  box-shadow: 0 0 4px #34d399;
-  align-self: flex-end;
-}
-
-/* Back Aluminum Lid with Glowing Logo */
-.laptopBackLid {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, #475569 0%, #1e293b 100%);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 2.5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform: rotateY(180deg);
-  backface-visibility: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-}
-
-.laptopLogo {
-  color: var(--senior-gold, #f59e0b);
-  filter: drop-shadow(0 0 4px var(--senior-gold, #f59e0b));
-  opacity: 0.95;
-}
-
-/* ==========================================================================
-   Creative Dot Matrix Telemetry HUD (Bottom-Left Corner)
-   ========================================================================== */
 .dotMatrixHud {
   position: absolute;
-  bottom: 28px;
-  left: 28px;
+  bottom: 24px;
+  left: 24px;
   z-index: 30;
-  width: 210px;
+  width: 204px;
   padding: 12px 14px;
   border-radius: 12px;
-  background: rgba(10, 16, 30, 0.78);
+  background: rgba(10, 16, 30, 0.82);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  border: 1px solid rgba(56, 189, 248, 0.28);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), inset 0 0 16px rgba(56, 189, 248, 0.05);
   font-family: 'SF Mono', 'Courier New', monospace;
   pointer-events: none;
   overflow: hidden;
-  transition: opacity 0.3s ease;
 }
 
+.lightTheme .dotMatrixHud {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+/* Rule 2: Decorative dots at 10-20% opacity (0.15) */
 .dotMatrixGridBackdrop {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgba(56, 189, 248, 0.12) 1px, transparent 1px);
-  background-size: 5px 5px;
+  background-image: radial-gradient(rgba(56, 189, 248, 0.15) 1px, transparent 1px);
+  background-size: 6px 6px;
   pointer-events: none;
-  opacity: 0.7;
+  opacity: 0.15;
+}
+
+.lightTheme .dotMatrixGridBackdrop {
+  background-image: radial-gradient(rgba(168, 85, 247, 0.15) 1px, transparent 1px);
+  opacity: 0.15;
 }
 
 .dotMatrixHeader {
@@ -1046,23 +272,24 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 9px;
-  padding-bottom: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 5px;
   border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Rule 3: Animate ONLY this selected telemetry beacon dot, NOT the background */
 .dotMatrixBeacon {
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: #38bdf8;
   box-shadow: 0 0 6px #38bdf8;
-  animation: dotMatrixBeaconPulse 2s infinite ease-in-out;
+  animation: dotMatrixBeaconPulse 2.4s infinite ease-in-out;
 }
 
 @keyframes dotMatrixBeaconPulse {
-  0%, 100% { opacity: 0.6; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.15); }
+  0%, 100% { transform: scale(1); opacity: 0.75; }
+  50% { transform: scale(1.3); opacity: 1; }
 }
 
 .dotMatrixTag {
@@ -1077,31 +304,35 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
 }
 
 .dotMatrixItem {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 8px;
+  padding: 4px 8px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid rgba(255, 255, 255, 0.06);
 }
 
 .dotMatrixMeta {
   display: flex;
   flex-direction: column;
-  gap: 3.5px;
+  gap: 3px;
 }
 
 .dotMatrixLabel {
   font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.08em;
-  color: rgba(248, 250, 252, 0.8);
+  color: rgba(248, 250, 252, 0.85);
   text-transform: uppercase;
+}
+
+.lightTheme .dotMatrixLabel {
+  color: #334155;
 }
 
 .dotMatrixLedBar {
@@ -1114,22 +345,22 @@
   width: 4px;
   height: 4px;
   border-radius: 1px;
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: none;
+  background: rgba(255, 255, 255, 0.12);
 }
 
+/* Rule 1: Blue / Purple Dot Palette */
 .ledCyan {
   background: #38bdf8;
   box-shadow: 0 0 5px #38bdf8;
 }
 
-.ledAmber {
-  background: #f59e0b;
-  box-shadow: 0 0 5px #f59e0b;
+.ledPurple {
+  background: #a855f7;
+  box-shadow: 0 0 5px #a855f7;
 }
 
 .dotMatrixDigitBoxCyan,
-.dotMatrixDigitBoxAmber {
+.dotMatrixDigitBoxPurple {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1140,12 +371,17 @@
   background: rgba(0, 0, 0, 0.45);
 }
 
-.dotMatrixDigitBoxCyan {
-  border: 0.5px solid rgba(56, 189, 248, 0.4);
+.lightTheme .dotMatrixDigitBoxCyan,
+.lightTheme .dotMatrixDigitBoxPurple {
+  background: #0f172a;
 }
 
-.dotMatrixDigitBoxAmber {
-  border: 0.5px solid rgba(245, 158, 11, 0.4);
+.dotMatrixDigitBoxCyan {
+  border: 0.5px solid rgba(56, 189, 248, 0.45);
+}
+
+.dotMatrixDigitBoxPurple {
+  border: 0.5px solid rgba(168, 85, 247, 0.45);
 }
 
 .dotMatrixDigit {
@@ -1161,9 +397,9 @@
   text-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
 }
 
-.dotMatrixDigitBoxAmber .dotMatrixDigit {
-  color: #f59e0b;
-  text-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+.dotMatrixDigitBoxPurple .dotMatrixDigit {
+  color: #c084fc;
+  text-shadow: 0 0 6px rgba(168, 85, 247, 0.6);
 }
 
 .dotMatrixFooter {
@@ -1171,7 +407,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  margin-top: 8px;
+  margin-top: 7px;
   padding-top: 5px;
   border-top: 0.5px solid rgba(255, 255, 255, 0.06);
 }
@@ -1180,8 +416,8 @@
   width: 3.5px;
   height: 3.5px;
   border-radius: 50%;
-  background: #34d399;
-  box-shadow: 0 0 5px #34d399;
+  background: #a855f7;
+  box-shadow: 0 0 5px #a855f7;
 }
 
 .dotMatrixFooterText {
@@ -1191,203 +427,821 @@
   text-transform: uppercase;
 }
 
-/* Light theme adaptations for Dot Matrix HUD */
-.lightTheme .dotMatrixHud {
-  background: rgba(255, 255, 255, 0.88);
-  border-color: rgba(37, 99, 235, 0.25);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
-}
-.lightTheme .dotMatrixGridBackdrop {
-  background-image: radial-gradient(rgba(37, 99, 235, 0.12) 1px, transparent 1px);
-}
-.lightTheme .dotMatrixLabel {
-  color: #334155;
-}
-.lightTheme .dotMatrixDigitBoxCyan,
-.lightTheme .dotMatrixDigitBoxAmber {
-  background: #0f172a;
-}
-
-/* ==========================================================================
-   3D Spatial Environment Elements (Rich Atmosphere)
-   ========================================================================== */
-
-/* Concentric Floor Orbit Compass Reticle (Z -75px) */
-.floorHoloReticle {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) translateZ(-75px);
-  width: 720px;
-  height: 720px;
-  pointer-events: none;
-}
-
-.floorReticleRingOuter {
+/* --------------------------------------------------------------------------
+   3D Viewport & Isometric Camera Rig
+   -------------------------------------------------------------------------- */
+.viewport3D {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
-  border: 1px dashed rgba(56, 189, 248, 0.18);
-  animation: floorReticleOrbit 36s infinite linear;
-}
-
-.floorReticleRingInner {
-  position: absolute;
-  inset: 80px;
-  border-radius: 50%;
-  border: 1px solid rgba(56, 189, 248, 0.1);
-}
-
-@keyframes floorReticleOrbit {
-  0% { transform: rotateZ(0deg); }
-  100% { transform: rotateZ(360deg); }
-}
-
-.floorReticleTickN,
-.floorReticleTickE,
-.floorReticleTickS,
-.floorReticleTickW {
-  position: absolute;
-  font-family: 'SF Mono', 'Courier New', monospace;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  color: rgba(56, 189, 248, 0.35);
-}
-
-.floorReticleTickN { top: 12px; left: 50%; transform: translateX(-50%); }
-.floorReticleTickS { bottom: 12px; left: 50%; transform: translateX(-50%); }
-.floorReticleTickW { left: 12px; top: 50%; transform: translateY(-50%) rotateZ(-90deg); }
-.floorReticleTickE { right: 12px; top: 50%; transform: translateY(-50%) rotateZ(90deg); }
-
-/* 3D Horizon Light Batons (Parallax Pillars in corners) */
-.roomHorizonColumns {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform-style: preserve-3d;
-  pointer-events: none;
-}
-
-.lightColumn1,
-.lightColumn2,
-.lightColumn3,
-.lightColumn4 {
-  position: absolute;
-  width: 2px;
-  height: 180px;
-  background: linear-gradient(180deg, transparent 0%, rgba(56, 189, 248, 0.45) 50%, transparent 100%);
-  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.5));
-  transform-style: preserve-3d;
-}
-
-.lightColumn1 { transform: translate3d(-340px, -360px, -20px); }
-.lightColumn2 { transform: translate3d(340px, -360px, -20px); }
-.lightColumn3 { transform: translate3d(-340px, 360px, -20px); }
-.lightColumn4 { transform: translate3d(340px, 360px, -20px); }
-
-/* Central Table Uplight Beam */
-.centerHoloBeam {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) translateZ(10px);
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.8) 0%, transparent 70%);
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.6);
-  pointer-events: none;
-}
-
-/* Translucent Glass Holo-Data Tablet on Table Pads */
-.holoTablet {
-  position: absolute;
-  inset: 2px;
-  border-radius: 2px;
-  background: rgba(56, 189, 248, 0.08);
-  border: 0.5px solid rgba(56, 189, 248, 0.25);
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: visible;
+}
+
+.cameraRig {
+  position: relative;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* --------------------------------------------------------------------------
+   Floor Plane (Z = -60px) with Circuit Conduits & Decorative Blueprints
+   -------------------------------------------------------------------------- */
+.floorPlane {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) translateZ(-60px);
+  width: 1100px;
+  height: 900px;
+  transform-style: preserve-3d;
   pointer-events: none;
 }
 
-.holoTabletLine {
+.floorGridOverlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--floor-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--floor-grid) 1px, transparent 1px);
+  background-size: 40px 40px;
+  border-radius: 60px;
+  opacity: 0.15; /* Kept at 10-20% opacity */
+}
+
+/* Dual Neon Energy Conduits (Mint-Cyan & Coral-Amber) */
+.neonTrackMint,
+.neonTrackCoral {
+  position: absolute;
+  pointer-events: none;
+  filter: drop-shadow(0 0 8px currentColor);
+}
+
+.neonTrackMint {
+  top: 40px;
+  left: 60px;
+  width: 520px;
+  height: 420px;
+  color: var(--neon-mint-tube);
+}
+
+.neonTrackCoral {
+  bottom: 40px;
+  right: 60px;
+  width: 520px;
+  height: 420px;
+  color: var(--neon-coral-tube);
+}
+
+/* Floor Blueprint Report Sheets (Bottom-Left - Real Data) */
+.floorDocGroup {
+  position: absolute;
+  bottom: 90px;
+  left: 120px;
+  display: flex;
+  gap: 12px;
+  transform: translateZ(2px);
+}
+
+.floorDocCard {
+  width: 105px;
+  padding: 8px 10px;
+  background: var(--floor-doc-bg);
+  border: 1px solid var(--floor-doc-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px var(--floor-doc-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.floorDocTitle {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--glass-text-primary);
+  text-transform: uppercase;
+}
+
+.floorDocLine {
+  height: 2px;
+  background: rgba(100, 116, 139, 0.2);
+  border-radius: 1px;
+}
+
+.floorDocLineShort {
   width: 60%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(56, 189, 248, 0.6) 50%, transparent 100%);
 }
 
-@media (max-width: 768px) {
-  .dotMatrixHud { bottom: 18px; left: 18px; width: 175px; padding: 10px 12px; }
-  .dotMatrixDigit { font-size: 11px; }
-  .floorHoloReticle { width: 520px; height: 520px; }
+.floorDocBadge {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 6.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(56, 189, 248, 0.15);
+  color: #0284c7;
 }
 
-@media (max-width: 480px) {
-  .dotMatrixHud { bottom: 14px; left: 14px; width: 155px; padding: 8px 10px; }
-  .floorHoloReticle { display: none; }
-  .roomHorizonColumns { display: none; }
+/* Floor 3D Pie Chart Disc (Bottom-Right - Real Proportions) */
+.floorPieGroup {
+  position: absolute;
+  bottom: 80px;
+  right: 140px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transform: translateZ(2px);
 }
 
-/* ==========================================================================
-   Responsive Adaptations
-   ========================================================================== */
-@media (max-width: 768px) {
-  .boardroomTable { --table-width: 200px; --table-length: 420px; }
-  .tableFloorShadow { width: calc(200px * 1.34); height: calc(420px * 1.15); }
-  .nameTagPill { padding: 1.5px 6.5px; gap: 4px; }
-  .nameTagText { font-size: 8.5px; letter-spacing: 0.02em; }
-  .chairBackrest { width: 48px; height: 58px; }
-  .seniorChairBackrest { width: 62px; height: 72px; }
-  .deskPadHorizontal { width: 36px; height: 16px; }
-  .deskPadVertical { width: 16px; height: 32px; }
-  .seniorDeskPad { width: 44px; height: 20px; }
-  .executiveLaptop { width: 34px; height: 22px; }
-  .laptopScreen { height: 20px; }
-  .skipButton { top: 16px; right: 16px; padding: 8px 14px; font-size: 11px; }
+.floorPieSvg {
+  width: 68px;
+  height: 68px;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.12));
 }
 
-@media (max-width: 480px) {
-  .boardroomTable { --table-width: 160px; --table-length: 340px; }
-  .tableFloorShadow { width: calc(160px * 1.34); height: calc(340px * 1.15); }
-  .nameTagPill { padding: 1px 5.5px; gap: 3.5px; }
-  .nameTagText { font-size: 8px; letter-spacing: 0.015em; }
-  .chairBackrest { width: 38px; height: 46px; }
-  .seniorChairBackrest { width: 48px; height: 56px; }
-  .deskPadHorizontal { width: 28px; height: 13px; }
-  .deskPadVertical { width: 13px; height: 26px; }
-  .seniorDeskPad { width: 36px; height: 16px; }
-  .executiveLaptop { width: 28px; height: 18px; }
-  .laptopScreen { height: 16px; }
+.floorPieBadge {
+  padding: 6px 9px;
+  background: var(--floor-doc-bg);
+  border: 1px solid var(--floor-doc-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px var(--floor-doc-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-@media (max-width: 360px) {
-  .boardroomTable { --table-width: 140px; --table-length: 300px; }
-  .tableFloorShadow { width: calc(140px * 1.34); height: calc(300px * 1.15); }
-  .nameTagText { font-size: 8px; }
+.floorPieBadgeVal {
+  font-size: 11px;
+  font-weight: 800;
+  color: #38bdf8;
 }
 
-/* ==========================================================================
-   Accessibility: prefers-reduced-motion
-   ========================================================================== */
-@media (prefers-reduced-motion: reduce) {
-  .avatarBillboard {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: translate(-50%, 0) scale(1) !important;
-  }
-  .nameTagText {
-    animation: none !important;
-    opacity: 1 !important;
-  }
-  .mouseWheel,
-  .briefingBadgeDot,
-  .tableRadarRing,
-  .tableCenterEmblem,
-  .tableCenterEmblemRing,
-  .nameTagLaserPulse {
-    animation: none !important;
-  }
+.floorPieBadgeLabel {
+  font-size: 7px;
+  font-weight: 600;
+  color: var(--glass-text-secondary);
+  text-transform: uppercase;
+}
+
+/* Floor Security Shield (Bottom-Center) */
+.floorShieldBadge {
+  position: absolute;
+  bottom: 85px;
+  left: 50%;
+  transform: translateX(-50%) translateZ(4px);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  background: var(--floor-doc-bg);
+  border: 1px solid var(--floor-doc-border);
+  border-radius: 9999px;
+  box-shadow: 0 4px 10px var(--floor-doc-shadow);
+}
+
+.floorShieldText {
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--glass-text-primary);
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   Unified Diorama Island Assembly (Rotates Together as One Architectural Unit!)
+   -------------------------------------------------------------------------- */
+.dioramaAssembly {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* Elevated Floating Podium Island (Z = -26px) */
+.podiumIsland {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) translateZ(-26px);
+  width: calc(var(--table-width, 240px) + 240px);
+  height: calc(var(--table-length, 360px) + 160px);
+  border-radius: 52px;
+  background: var(--podium-surface);
+  border: 1.5px solid var(--podium-border);
+  box-shadow: 0 24px 60px var(--podium-shadow);
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.podiumSurfaceGrid {
+  position: absolute;
+  inset: 12px;
+  border-radius: 40px;
+  border: 1px dashed rgba(100, 116, 139, 0.2);
+  pointer-events: none;
+}
+
+/* Architectural Pedestals beneath Table (Z = -20px) */
+.tablePedestals {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) translateZ(-20px);
+  width: calc(var(--table-width, 240px) * 0.55);
+  height: calc(var(--table-length, 360px) * 0.65);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+  transform-style: preserve-3d;
+}
+
+.tablePedestalColumn {
+  width: 56px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--pedestal-bg);
+  border: 1px solid var(--pedestal-border);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* --------------------------------------------------------------------------
+   Boardroom Table Assembly (Z = 0)
+   -------------------------------------------------------------------------- */
+.boardroomTable {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--table-width, 240px);
+  height: var(--table-length, 360px);
+  border-radius: 36px;
+  background: var(--table-surface);
+  border: 1.2px solid var(--table-rim);
+  box-shadow: var(--table-rim-glow), 0 20px 50px var(--table-shadow);
+  transform-style: preserve-3d;
+}
+
+/* Table Under-Rim Chamfer (Z = -10px) */
+.tableUnderRim {
+  position: absolute;
+  inset: -2px;
+  border-radius: 38px;
+  transform: translateZ(-10px);
+  background: var(--table-under-rim);
+  border: 1px solid var(--table-under-border);
+  box-shadow: 0 10px 24px var(--table-shadow);
+  pointer-events: none;
+}
+
+/* Central Conference Media Runner & Glowing "QA" Emblem Disc */
+.tableMediaRunner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 50px;
+  height: 70%;
+  background: var(--table-runner);
+  border: 0.5px solid var(--table-runner-border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.tableRunnerLine {
+  width: 1.5px;
+  height: 25%;
+  background: rgba(100, 116, 139, 0.25);
+}
+
+/* Central "QA" Emblem Disc */
+.tableCenterEmblem {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) translateZ(12px);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 24px rgba(244, 63, 94, 0.35), 0 2px 8px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+  animation: centerQaHover 3s infinite ease-in-out;
+}
+
+@keyframes centerQaHover {
+  0%, 100% { transform: translate(-50%, -50%) translateZ(12px); }
+  50% { transform: translate(-50%, -50%) translateZ(18px); }
+}
+
+.tableCenterQaText {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  background: linear-gradient(135deg, #f43f5e 0%, #ea580c 50%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1;
+}
+
+/* --------------------------------------------------------------------------
+   3D Open Executive Laptops (Positioned with 100% Mathematical Precision)
+   -------------------------------------------------------------------------- */
+.laptopAnchor {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.laptopContainer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 32px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  transform-style: preserve-3d;
+}
+
+/* Keyboard deck lying flat on table (Z = 2px) */
+.laptopBase {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #334155 0%, #475569 50%, #64748b 100%);
+  border: 0.8px solid rgba(255, 255, 255, 0.45);
+  border-radius: 2.5px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end; /* Trackpad nearest to attendee (+Y) */
+  padding: 2px;
+}
+
+.laptopKeyboard {
+  width: 86%;
+  height: 52%;
+  background: #0f172a;
+  border-radius: 1.5px;
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+.laptopTrackpad {
+  width: 32%;
+  height: 22%;
+  margin-top: 1.5px;
+  background: rgba(255, 255, 255, 0.22);
+  border: 0.5px solid rgba(255, 255, 255, 0.35);
+  border-radius: 1px;
+}
+
+/* Screen hinged at top: 0 (the back edge) and tilts open facing the attendee (+Y) */
+.laptopScreen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 22px;
+  transform-origin: top center;
+  transform: rotateX(74deg);
+  transform-style: preserve-3d;
+  background: #030712;
+  border: 0.8px solid #94a3b8;
+  border-radius: 2.5px 2.5px 0 0;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Front Glowing Display Face (Pointing directly at the attendee!) */
+.laptopScreenGlow {
+  position: absolute;
+  inset: 1.5px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.9) 0%, rgba(99, 102, 241, 0.8) 50%, rgba(14, 165, 233, 0.95) 100%);
+  border-radius: 1.5px;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+}
+
+/* Metallic Screen Lid Back */
+.laptopScreenBack {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #64748b 0%, #475569 50%, #334155 100%);
+  border: 0.8px solid rgba(255, 255, 255, 0.35);
+  border-radius: 2.5px 2.5px 0 0;
+  transform: rotateY(180deg) translateZ(0.5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.laptopAppleLogo {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.85);
+}
+
+/* Cantilever Wireframe Executive Chairs behind each seat */
+.chairAnchor {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.chairFrame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 34px;
+  height: 34px;
+  transform: translate(-50%, -50%) translateZ(-4px);
+  border-radius: 5px;
+  border: 1px solid var(--chair-frame);
+  background: rgba(100, 116, 139, 0.08);
+}
+
+.chairBackrest {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 30px;
+  height: 26px;
+  transform: translate(-50%, -100%) rotateX(-75deg);
+  transform-origin: bottom center;
+  background: var(--chair-back);
+  border: 1px solid var(--chair-frame);
+  border-radius: 4px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* --------------------------------------------------------------------------
+   Seated Members - Zero-Drift Fixed-Origin Counter-Rotating Avatars
+   -------------------------------------------------------------------------- */
+.seatAnchor {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+}
+
+/* Fixed 48px width and base center origin ensures ZERO orbit drift */
+.avatarBillboard {
+  position: absolute;
+  bottom: 0;
+  left: -24px;
+  width: 48px;
+  height: 56px;
+  transform-origin: 24px 56px;
+  transform-style: preserve-3d;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  pointer-events: auto;
+  will-change: transform;
+}
+
+/* Name tag centered above avatar without affecting billboard width */
+.nameTagWrapper {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.nameTagPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4.5px;
+  padding: 1.5px 7px;
+  background: var(--tag-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 0.5px solid var(--tag-border);
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
+}
+
+.nameTagStatusDot {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.nameTagText {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--tag-text);
+  letter-spacing: 0.025em;
+  line-height: 1.25;
+}
+
+.seniorTagPill {
+  background: var(--senior-tag-bg);
+  border-color: var(--senior-tag-border);
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.25);
+}
+
+.seniorTagText {
+  color: var(--senior-tag-text);
+  font-weight: 700;
+}
+
+/* Ultra-Premium Glowing SVG Avatars */
+.avatarGraphicWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatarSvg {
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.22));
+}
+
+.seniorAvatarSvg {
+  filter:
+    drop-shadow(0 0 16px rgba(245, 158, 11, 0.5))
+    drop-shadow(0 8px 18px rgba(0, 0, 0, 0.3));
+}
+
+/* --------------------------------------------------------------------------
+   Floating Holographic Glass Screens (Spatial Room Perimeter - Unobstructed!)
+   - Rule 5: Keep the central 3D team visualization unobstructed
+   - Rule 6: Responsive scaling and graceful hiding on smaller viewports
+   -------------------------------------------------------------------------- */
+.holoScreenWrapper {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.holoScreenBase {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  box-shadow:
+    var(--glass-shadow),
+    inset 0 1px 1px rgba(255, 255, 255, 0.8);
+  padding: 12px 14px;
+  color: var(--glass-text-primary);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  transition: transform 0.25s ease;
+}
+
+/* SCREEN 1: Large Executive Release Board (Back-Right, Spacious Clearance) */
+.screenExecutiveBoard {
+  transform: translate3d(320px, -220px, 80px) rotateY(-18deg) rotateX(12deg);
+  width: 235px;
+}
+
+.execBoardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 7px;
+  border-bottom: 0.5px solid var(--glass-border-subtle);
+  margin-bottom: 8px;
+}
+
+.execBoardTitle {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--glass-text-primary);
+  text-transform: uppercase;
+}
+
+.execBoardBadge {
+  font-size: 7px;
+  font-weight: 700;
+  padding: 1.5px 5px;
+  border-radius: 3px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #0284c7;
+  text-transform: uppercase;
+}
+
+.execBoardRows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.execRowItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: var(--glass-card-bg);
+  border: 0.5px solid var(--glass-border-subtle);
+}
+
+.execRowLabel {
+  font-size: 7.5px;
+  font-weight: 600;
+  color: var(--glass-text-secondary);
+}
+
+.execRowVal {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--glass-text-primary);
+}
+
+.execProgressBar {
+  width: 100%;
+  height: 3px;
+  background: rgba(100, 116, 139, 0.15);
+  border-radius: 2px;
+  margin-top: 5px;
+  overflow: hidden;
+}
+
+.execProgressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #a855f7);
+  border-radius: 2px;
+}
+
+/* SCREEN 2: Sprint Resource & Metric Distribution (Back-Left, Spacious Clearance) */
+.screenVelocity {
+  transform: translate3d(-340px, -200px, 70px) rotateY(18deg) rotateX(12deg);
+  width: 180px;
+}
+
+.velocityBarGroup {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 48px;
+  padding: 6px 4px 2px;
+  margin-top: 4px;
+  border-bottom: 1px solid var(--glass-border-subtle);
+}
+
+.velocityBarCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 18px;
+}
+
+.velocityBarPillar {
+  width: 12px;
+  border-radius: 2px 2px 0 0;
+}
+
+.velocityBarLabel {
+  font-size: 6.5px;
+  font-weight: 700;
+  color: var(--glass-text-muted);
+}
+
+/* SCREEN 3: Support Inquiries (Far-Left) */
+.screenSupportHealth {
+  transform: translate3d(-420px, 80px, 60px) rotateY(28deg);
+  width: 145px;
+}
+
+.kpiBigNumber {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 3px 0;
+}
+
+.kpiSubtitle {
+  font-size: 7px;
+  font-weight: 600;
+  color: var(--glass-text-muted);
+  text-transform: uppercase;
+}
+
+/* SCREEN 4: Team Resources (Far-Right) */
+.screenTestMatrix {
+  transform: translate3d(400px, 90px, 60px) rotateY(-28deg);
+  width: 145px;
+}
+
+/* --------------------------------------------------------------------------
+   Scroll Hint ("Scroll to begin")
+   -------------------------------------------------------------------------- */
+.scrollHint {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.scrollHintText {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--glass-text-secondary);
+  text-transform: uppercase;
+}
+
+.mouseIcon {
+  width: 16px;
+  height: 24px;
+  border: 1.5px solid var(--glass-text-secondary);
+  border-radius: 9999px;
+  display: flex;
+  justify-content: center;
+  padding-top: 3px;
+}
+
+.mouseWheel {
+  width: 2.5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--glass-text-secondary);
+  animation: mouseWheelSlide 1.5s infinite ease-in-out;
+}
+
+@keyframes mouseWheelSlide {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(6px); opacity: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   Rule 6: Responsive Adaptations
+   -------------------------------------------------------------------------- */
+@media (max-width: 1200px) {
+  .screenSupportHealth { display: none; }
+  .screenTestMatrix { display: none; }
+  .screenExecutiveBoard { transform: translate3d(260px, -200px, 70px) rotateY(-16deg) scale(0.9); }
+  .screenVelocity { transform: translate3d(-280px, -180px, 60px) rotateY(16deg) scale(0.9); }
+}
+
+@media (max-width: 860px) {
+  .screenVelocity { display: none; }
+  .screenExecutiveBoard { transform: translate3d(180px, -180px, 50px) rotateY(-12deg) scale(0.85); }
+  .floorDocGroup { display: none; }
+  .floorPieGroup { display: none; }
+}
+
+@media (max-width: 540px) {
+  .screenExecutiveBoard { display: none; }
+  .dotMatrixHud { bottom: 12px; left: 12px; width: 155px; padding: 8px 10px; }
+  .skipButton { top: 16px; right: 16px; padding: 6px 12px; font-size: 11px; }
+  .briefingTitle { font-size: 20px; }
 }
