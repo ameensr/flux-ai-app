@@ -106,6 +106,7 @@ export interface QAReportForm {
   projectId?: string
   projectName: string
   reportTitle: string
+  meetingWith?: string
   weekStart: string
   weekEnd: string
   subtitle: string
@@ -219,6 +220,7 @@ export const ensureFormData = (form: any): QAReportForm => {
     projectId: f.projectId || '',
     projectName: f.projectName || '',
     reportTitle: f.reportTitle || 'Weekly QA Status Report',
+    meetingWith: f.meetingWith || '',
     weekStart: f.weekStart || '',
     weekEnd: f.weekEnd || '',
     subtitle: f.subtitle || '',

@@ -753,8 +753,8 @@ const ReportPreviewDashboardContent: React.FC = () => {
       }
       stripLaunchParam()
       setDashboardRevealed(true)
-      // Fast, smooth dismiss so user enters the dashboard with zero lag
-      window.setTimeout(() => setShowLaunchTriage(false), 120)
+      window.scrollTo({ top: 0, behavior: 'instant' })
+      setShowLaunchTriage(false)
     }
     reveal()
   }, [stripLaunchParam])
@@ -1753,6 +1753,21 @@ Do not return markdown wraps, only raw JSON text.
     return defectStatusData.reduce((acc: number, curr: any) => acc + (Number(curr.value) || 0), 0)
   }, [defectStatusData])
 
+  // Extract all team members from "Team Resource Allocation" (Feature, Support, Automation, and Capacity)
+  const allTeamMembers = useMemo(() => {
+    const list: string[] = []
+    if (Array.isArray(data.newFeatureTeam)) list.push(...data.newFeatureTeam)
+    if (Array.isArray(data.supportTeam)) list.push(...data.supportTeam)
+    if (Array.isArray(data.automationTeam)) list.push(...data.automationTeam)
+    if ((data as any).teamCapacity?.records && Array.isArray((data as any).teamCapacity.records)) {
+      (data as any).teamCapacity.records.forEach((r: any) => {
+        if (r?.employeeName) list.push(r.employeeName)
+      })
+    }
+    const cleanList = list.map(n => String(n || '').trim()).filter(Boolean)
+    return Array.from(new Set(cleanList))
+  }, [data.newFeatureTeam, data.supportTeam, data.automationTeam, (data as any).teamCapacity])
+
   // ── Exports ──
   const exportFileBase = `${slugifyName(data.projectName || 'qa-report')}-${data.weekStart || 'report'}`
 
@@ -1923,27 +1938,33 @@ Do not return markdown wraps, only raw JSON text.
       <DashboardLaunchOverlay
         open={showLaunchTriage}
         projectName={data.projectName}
+        meetingWith={data.meetingWith}
+        teamMembers={allTeamMembers}
+        supportEmailsCount={typeof data.supportEmails === 'number' ? data.supportEmails : (data.supportTickets?.length || 0)}
+        newFeaturesCount={typeof data.newFeatures === 'number' ? data.newFeatures : (data.releaseItems?.length || 0)}
+        weekStart={data.weekStart}
+        weekEnd={data.weekEnd}
         onComplete={handleLaunchTriageComplete}
-      />
-      {(!isLoaded || !data.weekStart) && showLaunchTriage && (
-        <div className={`min-h-screen ${theme === 'dark' ? 'bg-[#070a13]' : 'bg-[#f8fafc]'}`} />
-      )}
-      {isLoaded && !!data.weekStart && (
-    <>
-    {/*
-      Reveal uses opacity/translate only — avoid filter/scale on this root.
-      Those create a containing block that breaks position:fixed modals
-      (Release Scope, Defect Status, etc.) and their entrance animations.
-    */}
-    <motion.div
-      className={`qaly-report-root min-h-screen ${tS.font} ${tS.bg} transition-colors duration-300 relative overflow-hidden pb-20 print:overflow-visible`}
-      initial={{ opacity: 0, y: 12 }}
-      animate={
-        dashboardRevealed
-          ? { opacity: 1, y: 0 }
-          : { opacity: 0, y: 8 }
-      }
-      transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+      >
+        {(!isLoaded || !data.weekStart) && showLaunchTriage && (
+          <div className={`min-h-screen ${theme === 'dark' ? 'bg-[#070a13]' : 'bg-[#f8fafc]'}`} />
+        )}
+        {isLoaded && !!data.weekStart && (
+          <>
+            {/*
+              Reveal uses opacity/translate only — avoid filter/scale on this root.
+              Those create a containing block that breaks position:fixed modals
+              (Release Scope, Defect Status, etc.) and their entrance animations.
+            */}
+            <motion.div
+              className={`qaly-report-root min-h-screen ${tS.font} ${tS.bg} transition-colors duration-300 relative overflow-hidden pb-20 print:overflow-visible`}
+              initial={{ opacity: 0, y: 12 }}
+              animate={
+                (dashboardRevealed || showLaunchTriage)
+                  ? { opacity: 1, y: 0 }
+                  : { opacity: 0, y: 8 }
+              }
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
     >
       {/* ── React Confetti "Popper" Layer ── */}
       {confetti.length > 0 && (
@@ -4219,6 +4240,7 @@ Do not return markdown wraps, only raw JSON text.
       />
     </>
     )}
+      </DashboardLaunchOverlay>
     </div>
   )
 }

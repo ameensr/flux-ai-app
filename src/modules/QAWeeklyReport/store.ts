@@ -7,7 +7,7 @@ import type { QAReportForm, SavedReport, ProjectConfig } from './types'
 
 const defaultForm = (): QAReportForm => ({
   projectId: '',
-  projectName: '', reportTitle: 'Weekly QA Status Report', weekStart: '', weekEnd: '', subtitle: '',
+  projectName: '', reportTitle: 'Weekly QA Status Report', meetingWith: '', weekStart: '', weekEnd: '', subtitle: '',
   supportEmails: 0, newFeatures: 0, codeFixes: 0,
   lastWeek: { productionIssues: 0, fixesForValidation: 0, escapedDefects: 0, support: 0 },
   monthToDate: { productionIssues: 0, fixesForValidation: 0, escapedDefects: 0, support: 0 },

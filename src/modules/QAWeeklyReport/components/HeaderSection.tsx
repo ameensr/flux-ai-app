@@ -53,6 +53,17 @@ export const HeaderSection: React.FC = () => {
           <label className={lbl}>Week End <span className="text-red-400">*</span></label>
           <input type="date" className={inp} value={form.weekEnd} onChange={e => setForm({ weekEnd: e.target.value })} />
         </div>
+        <div className="sm:col-span-2">
+          <label className={lbl}>
+            Meeting With <span className="text-text-muted text-[11px] font-normal font-sans">(Allocate multiple names separated by commas, e.g. Subiya, Abhin)</span>
+          </label>
+          <input
+            className={inp}
+            value={form.meetingWith || ''}
+            onChange={e => setForm({ meetingWith: e.target.value })}
+            placeholder="e.g. Subiya, Abhin"
+          />
+        </div>
       </div>
       <div>
         <label className={lbl}>Description</label>
