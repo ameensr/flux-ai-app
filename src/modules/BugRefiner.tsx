@@ -352,7 +352,7 @@ export const BugRefiner = () => {
                 className="h-[300px] sm:h-[460px] flex flex-col items-center justify-center text-center p-8 sm:p-12 glass-panel border-dashed"
               >
                 {isGenerating ? (
-                  <QubeLoader variant="inline" text="Refining bug report with Qube AI..." />
+                  <QubeLoader variant="inline" text="Refining bug report with AI..." />
                 ) : (
                   <>
                     <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-6">

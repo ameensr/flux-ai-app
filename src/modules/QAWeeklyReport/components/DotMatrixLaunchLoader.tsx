@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
@@ -197,21 +197,21 @@ export const DotMatrixLaunchLoader: React.FC<DotMatrixLoaderProps> = ({
   const subtextColor = isDark ? '#A4B3CD' : '#64748B'
 
   return (
-    <AnimatePresence>
-      <motion.div
-        key="dot-matrix-loader"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0, y: -16 }}
-        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-        className="fixed inset-0 z-[9999] flex flex-col justify-between p-6 sm:p-12 lg:p-20 select-none overflow-hidden transition-colors duration-500"
-        style={{
-          backgroundColor: isDark ? '#090D1A' : '#F4F6FB',
-        }}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Loading report"
-      >
+    <motion.div
+      key="dot-matrix-loader"
+      initial={{ opacity: 1 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, y: -16 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      className="fixed inset-0 z-[9999] flex flex-col justify-between p-6 sm:p-12 lg:p-20 select-none overflow-hidden transition-colors duration-500"
+      style={{
+        backgroundColor: isDark ? '#090D1A' : '#F4F6FB',
+        opacity: 1,
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Loading report"
+    >
         {/* Subtle Ambient Radial UI Glow in Dark Mode */}
         {isDark && (
           <div className="absolute top-1/2 right-1/4 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-[140px] pointer-events-none opacity-25 bg-indigo-500" />
@@ -325,6 +325,5 @@ export const DotMatrixLaunchLoader: React.FC<DotMatrixLoaderProps> = ({
           </motion.div>
         </div>
       </motion.div>
-    </AnimatePresence>
   )
 }

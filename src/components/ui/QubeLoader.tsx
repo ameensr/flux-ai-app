@@ -13,15 +13,17 @@ export interface QubeLoaderProps {
   variant?: QubeLoaderVariant
   /** Size multiplier */
   size?: QubeLoaderSize
-  /** Optional custom status message displayed beneath QUBE */
+  /** Optional custom status message displayed beneath the loader */
   text?: string
-  /** Whether to show the QUBE wordmark below the icon (defaults to true except for 'micro') */
+  /** Optional wordmark text below the icon (omitted by default) */
+  wordmark?: string
+  /** Whether to show a wordmark below the icon (defaults to false) */
   showWordmark?: boolean
   /** Whether to show the animated micro hairline progress pulse */
   showProgress?: boolean
   /** Additional container styling */
   className?: string
-  /** Subtitle descriptor below the wordmark (defaults to 'AI ENGINE') */
+  /** Subtitle descriptor below the wordmark */
   subtitle?: string
 }
 
@@ -35,16 +37,17 @@ const SIZE_CONFIG = {
 
 /**
  * ─── Main QubeLoader Component ────────────────────────────────────────────────
- * Combines MorphingInfinity with QUBE brand typography and progressive indicator.
+ * Combines MorphingInfinity with progressive indicator and contextual status.
  */
 export const QubeLoader: React.FC<QubeLoaderProps> = ({
   variant = 'page',
   size,
   text,
-  showWordmark = true,
+  wordmark,
+  showWordmark = false,
   showProgress = true,
   className,
-  subtitle = 'AI ENGINE',
+  subtitle,
 }) => {
   const effectiveSize: QubeLoaderSize = size || (
     variant === 'fullscreen' ? 'lg' :
@@ -94,8 +97,8 @@ export const QubeLoader: React.FC<QubeLoaderProps> = ({
         </motion.div>
       </div>
 
-      {/* Brand Wordmark: Q U B E */}
-      {showWordmark && (
+      {/* Optional Wordmark (only if explicitly supplied via props) */}
+      {(showWordmark || Boolean(wordmark)) && wordmark && (
         <div className="flex flex-col items-center mt-1">
           <div className="flex items-center tracking-[0.35em] font-extrabold font-inter">
             <motion.span
@@ -105,7 +108,7 @@ export const QubeLoader: React.FC<QubeLoaderProps> = ({
               className="bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 bg-clip-text text-transparent drop-shadow-sm font-black"
               style={{ fontSize: effectiveSize === 'lg' || effectiveSize === 'xl' ? '1.15rem' : '0.92rem' }}
             >
-              QUBE
+              {wordmark}
             </motion.span>
           </div>
 

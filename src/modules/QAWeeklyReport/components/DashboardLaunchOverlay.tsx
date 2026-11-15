@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { DotMatrixLaunchLoader } from './DotMatrixLaunchLoader'
 import { CinematicBoardroomIntro } from '@/components/CinematicBoardroomIntro'
 
@@ -22,6 +23,9 @@ interface DashboardLaunchOverlayProps {
  * 1. Dot-Matrix Loader (Swiss 0% -> 100% telemetry counter)
  * 2. Cinematic 3D Boardroom Intro (Scroll-driven table rotation, 3D chairs & avatars)
  * 3. Interactive Executive Dashboard
+ *
+ * Sequence is strictly staged to guarantee zero flash of the 3D diorama before Stage 1:
+ * Stage 1 (Dot-Matrix) -> Stage 2 (Cinematic 3D Intro) -> Dashboard Content
  */
 export const DashboardLaunchOverlay: React.FC<DashboardLaunchOverlayProps> = ({
   open,
@@ -58,30 +62,37 @@ export const DashboardLaunchOverlay: React.FC<DashboardLaunchOverlayProps> = ({
   return (
     <>
       {/* ── STAGE 1: Dot-Matrix Telemetry Counter (0% -> 100%) ── */}
-      <DotMatrixLaunchLoader
-        open={!dotMatrixDone}
-        onComplete={() => setDotMatrixDone(true)}
-        durationMs={1100}
-        label="INITIALIZING..."
-        sublabel={projectName ? `SP • DEV  //  ${projectName.toUpperCase()}` : 'SP • DEV'}
-      />
+      <AnimatePresence>
+        {!dotMatrixDone && (
+          <DotMatrixLaunchLoader
+            open={!dotMatrixDone}
+            onComplete={() => setDotMatrixDone(true)}
+            durationMs={1100}
+            label="INITIALIZING..."
+            sublabel={projectName ? `SP • DEV  //  ${projectName.toUpperCase()}` : 'SP • DEV'}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── STAGE 2: Cinematic 3D Boardroom Scene with Scroll Transition ── */}
-      <CinematicBoardroomIntro
-        projectName={projectName}
-        seniorPersonName={seniorName}
-        meetingWith={meetingWith}
-        teamMembers={teamMembers}
-        supportEmailsCount={supportEmailsCount}
-        newFeaturesCount={newFeaturesCount}
-        weekStart={weekStart}
-        weekEnd={weekEnd}
-        title={title}
-        subtitle={subtitle}
-        onComplete={onComplete}
-      >
-        {children}
-      </CinematicBoardroomIntro>
+      {/* Mounts ONLY after Stage 1 (Dot-Matrix) completes — 100% eliminating any flash of the 3D diorama! */}
+      {dotMatrixDone && (
+        <CinematicBoardroomIntro
+          projectName={projectName}
+          seniorPersonName={seniorName}
+          meetingWith={meetingWith}
+          teamMembers={teamMembers}
+          supportEmailsCount={supportEmailsCount}
+          newFeaturesCount={newFeaturesCount}
+          weekStart={weekStart}
+          weekEnd={weekEnd}
+          title={title}
+          subtitle={subtitle}
+          onComplete={onComplete}
+        >
+          {children}
+        </CinematicBoardroomIntro>
+      )}
     </>
   )
 }
