@@ -617,6 +617,8 @@
 
 /* --------------------------------------------------------------------------
    Unified Diorama Island Assembly (Rotates Together as One Architectural Unit!)
+   - Rule 5: Keep the central 3D team visualization unobstructed
+   - Z-Index 50: Table and seated members always remain on top of background layer
    -------------------------------------------------------------------------- */
 .dioramaAssembly {
   position: absolute;
@@ -626,6 +628,7 @@
   height: 0;
   transform-style: preserve-3d;
   will-change: transform;
+  z-index: 50;
 }
 
 /* Elevated Floating Podium Island (Z = -26px) */
@@ -1057,6 +1060,7 @@
 /* --------------------------------------------------------------------------
    Floating Holographic Glass Screens (Spatial Room Perimeter - Unobstructed!)
    - Rule 5: Keep the central 3D team visualization unobstructed
+   - Z-Index 10: Sits cleanly beneath the elevated 3D boardroom table
    - Rule 6: Responsive scaling and graceful hiding on smaller viewports
    -------------------------------------------------------------------------- */
 .holoScreenWrapper {
@@ -1065,6 +1069,7 @@
   left: 50%;
   transform-style: preserve-3d;
   pointer-events: none;
+  z-index: 10;
 }
 
 .holoScreenBase {
@@ -1084,10 +1089,10 @@
   transition: transform 0.25s ease;
 }
 
-/* SCREEN 1: Large Executive Release Board (Back-Right, Spacious Clearance) */
+/* SCREEN 1: Large Executive Release Board (Back-Right, Floor Plane Z = -52px beneath table) */
 .screenExecutiveBoard {
-  transform: translate3d(380px, -260px, 110px) rotateY(-18deg) rotateX(12deg);
-  width: 235px;
+  transform: translate3d(380px, -230px, -52px);
+  width: 220px;
 }
 
 .execBoardHeader {
@@ -1160,10 +1165,10 @@
   border-radius: 2px;
 }
 
-/* SCREEN 2: Sprint Resource & Metric Distribution (Back-Left, Spacious Clearance) */
+/* SCREEN 2: Sprint Resource & Metric Distribution (Back-Left, Floor Plane Z = -52px beneath table) */
 .screenVelocity {
-  transform: translate3d(-400px, -240px, 100px) rotateY(18deg) rotateX(12deg);
-  width: 180px;
+  transform: translate3d(-460px, -180px, -52px);
+  width: 175px;
 }
 
 .velocityBarGroup {
@@ -1195,30 +1200,32 @@
   color: var(--glass-text-muted);
 }
 
-/* SCREEN 3: Support Inquiries (Far-Left) */
+/* SCREEN 3: Support Inquiries (Mid-Left, Floor Plane Z = -52px beneath table) */
 .screenSupportHealth {
-  transform: translate3d(-460px, 120px, 90px) rotateY(26deg);
-  width: 145px;
+  transform: translate3d(-460px, 80px, -52px);
+  width: 155px;
 }
 
 .kpiBigNumber {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 3px 0;
+  line-height: 1.1;
 }
 
 .kpiSubtitle {
   font-size: 7px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--glass-text-muted);
   text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-/* SCREEN 4: Team Resources (Far-Right) */
+/* SCREEN 4: Team Resources (Mid-Right, Floor Plane Z = -52px beneath table) */
 .screenTestMatrix {
-  transform: translate3d(450px, 130px, 90px) rotateY(-26deg);
-  width: 145px;
+  transform: translate3d(380px, 80px, -52px);
+  width: 155px;
 }
 
 /* --------------------------------------------------------------------------
@@ -1275,13 +1282,13 @@
 @media (max-width: 1200px) {
   .screenSupportHealth { display: none; }
   .screenTestMatrix { display: none; }
-  .screenExecutiveBoard { transform: translate3d(260px, -200px, 70px) rotateY(-16deg) scale(0.9); }
-  .screenVelocity { transform: translate3d(-280px, -180px, 60px) rotateY(16deg) scale(0.9); }
+  .screenExecutiveBoard { transform: translate3d(240px, -180px, -52px) scale(0.9); }
+  .screenVelocity { transform: translate3d(-320px, -160px, -52px) scale(0.9); }
 }
 
 @media (max-width: 860px) {
   .screenVelocity { display: none; }
-  .screenExecutiveBoard { transform: translate3d(180px, -180px, 50px) rotateY(-12deg) scale(0.85); }
+  .screenExecutiveBoard { transform: translate3d(180px, -160px, -52px) scale(0.85); }
   .floorDocGroup { display: none; }
   .floorPieGroup { display: none; }
 }

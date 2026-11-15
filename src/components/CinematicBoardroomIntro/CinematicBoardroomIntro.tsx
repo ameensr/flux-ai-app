@@ -934,7 +934,121 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
                   </div>
                 </div>
 
-                {/* 2. Unified 3D Diorama Island Assembly (Rotates Together as One Solid Unit!) */}
+                {/* 2. Perimeter Holographic Glass Screens (Background Layer beneath rotating 3D table!) */}
+
+                {/* SCREEN 1: Real Executive Release Board (Back-Right) */}
+                <div className={`${styles.holoScreenWrapper} ${styles.screenExecutiveBoard}`}>
+                  <div className={styles.holoScreenBase}>
+                    <div className={styles.execBoardHeader}>
+                      <span className={styles.execBoardTitle}>{escapeHtml(projectName || title)}</span>
+                      <span className={styles.execBoardBadge}>
+                        {weekStart && weekEnd ? `${weekStart} – ${weekEnd}` : 'Live Overview'}
+                      </span>
+                    </div>
+                    <div className={styles.execBoardRows}>
+                      <div className={styles.execRowItem}>
+                        <span className={styles.execRowLabel}>New Features</span>
+                        <span className={styles.execRowVal}>{newFeaturesCount} Recorded</span>
+                      </div>
+                      <div className={styles.execRowItem}>
+                        <span className={styles.execRowLabel}>Support Tickets</span>
+                        <span className={styles.execRowVal}>{supportEmailsCount} Inquiries</span>
+                      </div>
+                      <div className={styles.execRowItem}>
+                        <span className={styles.execRowLabel}>Team Allocated</span>
+                        <span className={styles.execRowVal}>{teamMembers.length} Members</span>
+                      </div>
+                      <div className={styles.execRowItem}>
+                        <span className={styles.execRowLabel}>Meeting With</span>
+                        <span className={styles.execRowVal} style={{ color: '#38bdf8' }}>
+                          {seniorNames.length > 0 ? seniorNames.join(', ') : 'All Team'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className={styles.execProgressBar}>
+                      <div
+                        className={styles.execProgressFill}
+                        style={{
+                          width: `${Math.min(100, Math.max(20, Math.round(((newFeaturesCount + 1) / (newFeaturesCount + supportEmailsCount + 1)) * 100)))}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* SCREEN 2: Real Sprint Metric Distribution (Back-Left) */}
+                <div className={`${styles.holoScreenWrapper} ${styles.screenVelocity}`}>
+                  <div className={styles.holoScreenBase}>
+                    <div className={styles.execBoardHeader}>
+                      <span className={styles.execBoardTitle}>Sprint Metrics</span>
+                      <span className={styles.execBoardBadge} style={{ background: 'rgba(168, 85, 247, 0.18)', color: '#c084fc' }}>
+                        Live
+                      </span>
+                    </div>
+                    <div className={styles.velocityBarGroup}>
+                      <div className={styles.velocityBarCol}>
+                        <div
+                          className={styles.velocityBarPillar}
+                          style={{
+                            height: Math.min(44, Math.max(14, newFeaturesCount * 7)),
+                            background: 'linear-gradient(180deg, #38bdf8 0%, #0284c7 100%)',
+                          }}
+                        />
+                        <span className={styles.velocityBarLabel}>FEAT</span>
+                      </div>
+                      <div className={styles.velocityBarCol}>
+                        <div
+                          className={styles.velocityBarPillar}
+                          style={{
+                            height: Math.min(44, Math.max(14, supportEmailsCount * 4)),
+                            background: 'linear-gradient(180deg, #a855f7 0%, #7c3aed 100%)',
+                          }}
+                        />
+                        <span className={styles.velocityBarLabel}>SUP</span>
+                      </div>
+                      <div className={styles.velocityBarCol}>
+                        <div
+                          className={styles.velocityBarPillar}
+                          style={{
+                            height: Math.min(44, Math.max(14, teamMembers.length * 5)),
+                            background: 'linear-gradient(180deg, #34d399 0%, #059669 100%)',
+                          }}
+                        />
+                        <span className={styles.velocityBarLabel}>TEAM</span>
+                      </div>
+                      <div className={styles.velocityBarCol}>
+                        <div
+                          className={styles.velocityBarPillar}
+                          style={{
+                            height: Math.min(44, Math.max(14, (newFeaturesCount + supportEmailsCount) * 3)),
+                            background: 'linear-gradient(180deg, #f59e0b 0%, #d97706 100%)',
+                          }}
+                        />
+                        <span className={styles.velocityBarLabel}>TOTAL</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SCREEN 3: Support Inquiries (Far-Left) */}
+                <div className={`${styles.holoScreenWrapper} ${styles.screenSupportHealth}`}>
+                  <div className={styles.holoScreenBase}>
+                    <span className={styles.execBoardTitle}>Support Tickets</span>
+                    <span className={styles.kpiBigNumber} style={{ color: '#a855f7' }}>{supportEmailsCount}</span>
+                    <span className={styles.kpiSubtitle}>Inquiries Logged</span>
+                  </div>
+                </div>
+
+                {/* SCREEN 4: Team Resources (Far-Right) */}
+                <div className={`${styles.holoScreenWrapper} ${styles.screenTestMatrix}`}>
+                  <div className={styles.holoScreenBase}>
+                    <span className={styles.execBoardTitle}>Team Resources</span>
+                    <span className={styles.kpiBigNumber} style={{ color: '#38bdf8' }}>{teamMembers.length}</span>
+                    <span className={styles.kpiSubtitle}>Active Allocations</span>
+                  </div>
+                </div>
+
+                {/* 3. Unified 3D Diorama Island Assembly (ON TOP OF THE LAYER! Z-Index 50) */}
                 <div ref={dioramaRef} className={styles.dioramaAssembly}>
 
                   {/* Elevated Floating Podium Island */}
@@ -1076,120 +1190,6 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
                       </div>
                     ))}
 
-                  </div>
-                </div>
-
-                {/* 3. Floating Holographic Glass Screens (Spatial Clearance - Unobstructed!) */}
-
-                {/* SCREEN 1: Real Executive Release Board (Back-Right) */}
-                <div className={`${styles.holoScreenWrapper} ${styles.screenExecutiveBoard}`}>
-                  <div className={styles.holoScreenBase}>
-                    <div className={styles.execBoardHeader}>
-                      <span className={styles.execBoardTitle}>{escapeHtml(projectName || title)}</span>
-                      <span className={styles.execBoardBadge}>
-                        {weekStart && weekEnd ? `${weekStart} – ${weekEnd}` : 'Live Overview'}
-                      </span>
-                    </div>
-                    <div className={styles.execBoardRows}>
-                      <div className={styles.execRowItem}>
-                        <span className={styles.execRowLabel}>New Features</span>
-                        <span className={styles.execRowVal}>{newFeaturesCount} Recorded</span>
-                      </div>
-                      <div className={styles.execRowItem}>
-                        <span className={styles.execRowLabel}>Support Tickets</span>
-                        <span className={styles.execRowVal}>{supportEmailsCount} Inquiries</span>
-                      </div>
-                      <div className={styles.execRowItem}>
-                        <span className={styles.execRowLabel}>Team Allocated</span>
-                        <span className={styles.execRowVal}>{teamMembers.length} Members</span>
-                      </div>
-                      <div className={styles.execRowItem}>
-                        <span className={styles.execRowLabel}>Meeting With</span>
-                        <span className={styles.execRowVal} style={{ color: '#38bdf8' }}>
-                          {seniorNames.length > 0 ? seniorNames.join(', ') : 'All Team'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className={styles.execProgressBar}>
-                      <div
-                        className={styles.execProgressFill}
-                        style={{
-                          width: `${Math.min(100, Math.max(20, Math.round(((newFeaturesCount + 1) / (newFeaturesCount + supportEmailsCount + 1)) * 100)))}%`
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* SCREEN 2: Real Sprint Metric Distribution (Back-Left) */}
-                <div className={`${styles.holoScreenWrapper} ${styles.screenVelocity}`}>
-                  <div className={styles.holoScreenBase}>
-                    <div className={styles.execBoardHeader}>
-                      <span className={styles.execBoardTitle}>Sprint Metrics</span>
-                      <span className={styles.execBoardBadge} style={{ background: 'rgba(168, 85, 247, 0.18)', color: '#c084fc' }}>
-                        Live
-                      </span>
-                    </div>
-                    <div className={styles.velocityBarGroup}>
-                      <div className={styles.velocityBarCol}>
-                        <div
-                          className={styles.velocityBarPillar}
-                          style={{
-                            height: Math.min(44, Math.max(14, newFeaturesCount * 7)),
-                            background: 'linear-gradient(180deg, #38bdf8 0%, #0284c7 100%)',
-                          }}
-                        />
-                        <span className={styles.velocityBarLabel}>FEAT</span>
-                      </div>
-                      <div className={styles.velocityBarCol}>
-                        <div
-                          className={styles.velocityBarPillar}
-                          style={{
-                            height: Math.min(44, Math.max(14, supportEmailsCount * 4)),
-                            background: 'linear-gradient(180deg, #a855f7 0%, #7c3aed 100%)',
-                          }}
-                        />
-                        <span className={styles.velocityBarLabel}>SUP</span>
-                      </div>
-                      <div className={styles.velocityBarCol}>
-                        <div
-                          className={styles.velocityBarPillar}
-                          style={{
-                            height: Math.min(44, Math.max(14, teamMembers.length * 5)),
-                            background: 'linear-gradient(180deg, #34d399 0%, #059669 100%)',
-                          }}
-                        />
-                        <span className={styles.velocityBarLabel}>TEAM</span>
-                      </div>
-                      <div className={styles.velocityBarCol}>
-                        <div
-                          className={styles.velocityBarPillar}
-                          style={{
-                            height: Math.min(44, Math.max(14, (newFeaturesCount + supportEmailsCount) * 3)),
-                            background: 'linear-gradient(180deg, #f59e0b 0%, #d97706 100%)',
-                          }}
-                        />
-                        <span className={styles.velocityBarLabel}>TOTAL</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* SCREEN 3: Support Inquiries (Far-Left) */}
-                <div className={`${styles.holoScreenWrapper} ${styles.screenSupportHealth}`}>
-                  <div className={styles.holoScreenBase}>
-                    <span className={styles.execBoardTitle}>Support Tickets</span>
-                    <span className={styles.kpiBigNumber} style={{ color: '#a855f7' }}>{supportEmailsCount}</span>
-                    <span className={styles.kpiSubtitle}>Inquiries Logged</span>
-                  </div>
-                </div>
-
-                {/* SCREEN 4: Team Resources (Far-Right) */}
-                <div className={`${styles.holoScreenWrapper} ${styles.screenTestMatrix}`}>
-                  <div className={styles.holoScreenBase}>
-                    <span className={styles.execBoardTitle}>Team Resources</span>
-                    <span className={styles.kpiBigNumber} style={{ color: '#38bdf8' }}>{teamMembers.length}</span>
-                    <span className={styles.kpiSubtitle}>Active Allocations</span>
                   </div>
                 </div>
 
