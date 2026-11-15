@@ -136,7 +136,9 @@ interface SeatedPerson {
 }
 
 /**
- * Ultra-Premium SVG Glow Avatar (Zero-Drift Centered Base)
+ * Ultra-Premium SVG Figurine Avatar
+ * - Meeting With / Senior: Bespoke Executive VIP style (Crown Star, Gold Orbit Halo, Midnight Suit & Gold Tie)
+ * - Size: Noticeably larger (58px) for "Meeting With" leaders compared to standard members (46px)
  */
 const AvatarGraphic: React.FC<{
   initials: string;
@@ -145,10 +147,141 @@ const AvatarGraphic: React.FC<{
   isDark?: boolean;
   uniqueKey: string;
   size?: number;
-}> = React.memo(({ initials, palette, isSenior = false, isDark = false, uniqueKey, size = 46 }) => {
+}> = React.memo(({ initials, palette, isSenior = false, isDark = false, uniqueKey, size: propSize }) => {
+  // Noticeably larger size for "Meeting With" Executive Leader (58px vs 46px)
+  const size = propSize || (isSenior ? 58 : 46);
   const gradientId = `avatar-grad-${palette.id}-${uniqueKey}`;
   const strokeColor = isDark ? palette.strokeDark : palette.strokeLight;
 
+  if (isSenior) {
+    // ── EXECUTIVE VIP / "MEETING WITH" BESPOKE STYLE ────────────────────────
+    return (
+      <div className={styles.avatarGraphicWrapper}>
+        <svg
+          width={size}
+          height={size * 1.14}
+          viewBox="0 0 64 74"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={styles.seniorAvatarSvg}
+          aria-hidden="true"
+        >
+          <defs>
+            <radialGradient id={`halo-senior-${uniqueKey}`} cx="50%" cy="30%" r="75%">
+              <stop offset="0%" stopColor="#f59e0b" stopOpacity={isDark ? '0.65' : '0.45'} />
+              <stop offset="50%" stopColor="#f59e0b" stopOpacity={isDark ? '0.22' : '0.14'} />
+              <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+            </radialGradient>
+            <linearGradient id={`senior-gold-grad-${uniqueKey}`} x1="32" y1="4" x2="32" y2="68" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#fef08a" />
+              <stop offset="35%" stopColor="#f59e0b" />
+              <stop offset="75%" stopColor="#d97706" />
+              <stop offset="100%" stopColor="#78350f" />
+            </linearGradient>
+            <linearGradient id={`suit-grad-${uniqueKey}`} x1="16" y1="36" x2="48" y2="68" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#1e293b" />
+              <stop offset="50%" stopColor="#0f172a" />
+              <stop offset="100%" stopColor="#020617" />
+            </linearGradient>
+            <linearGradient id={`gold-trim-${uniqueKey}`} x1="20" y1="36" x2="44" y2="68" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#fde68a" />
+              <stop offset="50%" stopColor="#f59e0b" />
+              <stop offset="100%" stopColor="#b45309" />
+            </linearGradient>
+          </defs>
+
+          {/* Grounding Contact Shadow Beneath Executive Base */}
+          <ellipse cx="32" cy="69" rx="20" ry="3.8" fill="rgba(15, 23, 42, 0.28)" />
+
+          {/* Outer Warm Golden Radial Halo */}
+          <circle cx="32" cy="22" r="28" fill={`url(#halo-senior-${uniqueKey})`} />
+
+          {/* Executive Dashed Orbital Ring */}
+          <circle
+            cx="32"
+            cy="22"
+            r="17"
+            fill="none"
+            stroke="rgba(245, 158, 11, 0.55)"
+            strokeWidth="1.1"
+            strokeDasharray="3.5 2.5"
+          />
+
+          {/* Executive 4-Point Golden Star Crest above Head */}
+          <path
+            d="M 32 1.5 L 33.3 4.2 L 36 5.5 L 33.3 6.8 L 32 9.5 L 30.7 6.8 L 28 5.5 L 30.7 4.2 Z"
+            fill="#fbbf24"
+            stroke="#d97706"
+            strokeWidth="0.5"
+          />
+          <circle cx="32" cy="5.5" r="1.1" fill="#ffffff" />
+
+          {/* Head Sphere (Polished Executive Gold) */}
+          <circle
+            cx="32"
+            cy="22"
+            r="12.5"
+            fill={`url(#senior-gold-grad-${uniqueKey})`}
+            stroke="#d97706"
+            strokeWidth="1.2"
+          />
+          <circle
+            cx="32"
+            cy="22"
+            r="11.5"
+            stroke="rgba(255, 255, 255, 0.6)"
+            strokeWidth="0.8"
+          />
+
+          {/* Sculpted Executive Tailored Suit Jacket (Authoritative Shoulders & Rounded Base) */}
+          <path
+            d="M 9 58 C 9 42, 19 37, 32 37 C 45 37, 55 42, 55 58 C 55 65, 44 67, 32 67 C 20 67, 9 65, 9 58 Z"
+            fill={`url(#suit-grad-${uniqueKey})`}
+            stroke={`url(#gold-trim-${uniqueKey})`}
+            strokeWidth="1.2"
+          />
+
+          {/* Crisp White Dress Shirt V-Neck Collar */}
+          <polygon points="26,37 38,37 32,49" fill="#ffffff" />
+
+          {/* Executive Golden Tie / Ascot */}
+          <polygon
+            points="30.5,39 33.5,39 33.2,51 32,54 30.8,51"
+            fill={`url(#senior-gold-grad-${uniqueKey})`}
+            stroke="#b45309"
+            strokeWidth="0.6"
+          />
+
+          {/* Tailored Jacket Lapel Folds with Gold Trim */}
+          <path
+            d="M 18 39 L 27 49 L 32 57 L 37 49 L 46 39"
+            stroke="rgba(245, 158, 11, 0.65)"
+            strokeWidth="1"
+            fill="none"
+          />
+
+          {/* Centered Executive Initials */}
+          <text
+            x="32"
+            y="63"
+            textAnchor="middle"
+            fontSize="8"
+            fontWeight="900"
+            fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif"
+            letterSpacing="0.08em"
+            fill="#ffffff"
+            style={{
+              textShadow: '0 1px 3px rgba(0, 0, 0, 0.85), 0 0 6px rgba(245, 158, 11, 0.8)',
+            }}
+          >
+            {initials}
+          </text>
+        </svg>
+      </div>
+    );
+  }
+
+  // ── STANDARD TEAM MEMBER STYLE ───────────────────────────────────────────
   return (
     <div className={styles.avatarGraphicWrapper}>
       <svg
@@ -157,12 +290,12 @@ const AvatarGraphic: React.FC<{
         viewBox="0 0 64 70"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className={isSenior ? styles.seniorAvatarSvg : styles.avatarSvg}
+        className={styles.avatarSvg}
         aria-hidden="true"
       >
         <defs>
           <radialGradient id={`halo-${palette.id}-${uniqueKey}`} cx="50%" cy="30%" r="70%">
-            <stop offset="0%" stopColor={palette.glow} stopOpacity={isSenior ? (isDark ? '0.5' : '0.4') : (isDark ? '0.35' : '0.25')} />
+            <stop offset="0%" stopColor={palette.glow} stopOpacity={isDark ? '0.35' : '0.25'} />
             <stop offset="60%" stopColor={palette.glow} stopOpacity={isDark ? '0.12' : '0.08'} />
             <stop offset="100%" stopColor={palette.glow} stopOpacity="0" />
           </radialGradient>
@@ -173,6 +306,9 @@ const AvatarGraphic: React.FC<{
           </linearGradient>
         </defs>
 
+        {/* Grounding Contact Shadow Beneath Figurine Base */}
+        <ellipse cx="32" cy="65" rx="16" ry="3.5" fill="rgba(15, 23, 42, 0.22)" />
+
         {/* Outer Radiant Ambient Halo Glow */}
         <circle cx="32" cy="20" r="26" fill={`url(#halo-${palette.id}-${uniqueKey})`} />
 
@@ -180,42 +316,36 @@ const AvatarGraphic: React.FC<{
         <circle
           cx="32"
           cy="20"
-          r={isSenior ? 13 : 11.5}
+          r={11.5}
           fill={`url(#${gradientId})`}
           stroke={strokeColor}
-          strokeWidth={isSenior ? "1.4" : "1"}
+          strokeWidth="1"
         />
         <circle
           cx="32"
           cy="20"
-          r={isSenior ? 12 : 10.5}
+          r={10.5}
           stroke="rgba(255, 255, 255, 0.45)"
           strokeWidth="0.8"
         />
 
-        {/* Floating Shoulders & Torso Dome */}
+        {/* Fully Sculpted Seated Torso (Curved Rounded Base - NEVER Cut-Off!) */}
         <path
-          d={isSenior
-            ? "M 10 66 C 10 44, 20 38, 32 38 C 44 38, 54 44, 54 66 Z"
-            : "M 13 64 C 13 46, 21 40, 32 40 C 43 40, 51 46, 51 64 Z"
-          }
+          d="M 14 55 C 14 43, 21 38, 32 38 C 43 38, 50 43, 50 55 C 50 62, 42 64, 32 64 C 22 64, 14 62, 14 55 Z"
           fill={`url(#${gradientId})`}
           stroke={strokeColor}
-          strokeWidth={isSenior ? "1.4" : "1"}
+          strokeWidth="1"
         />
         <path
-          d={isSenior
-            ? "M 12 65 C 12 46, 21 40, 32 40 C 43 40, 52 46, 52 65"
-            : "M 15 63 C 15 48, 22 42, 32 42 C 42 42, 49 48, 49 63"
-          }
-          stroke="rgba(255, 255, 255, 0.4)"
+          d="M 17 53 C 17 45, 23 40, 32 40 C 41 40, 47 45, 47 53"
+          stroke="rgba(255, 255, 255, 0.45)"
           strokeWidth="0.8"
         />
 
         {/* Centered Initials */}
         <text
           x="32"
-          y={isSenior ? 57 : 54.5}
+          y={52}
           textAnchor="middle"
           fontSize="8"
           fontWeight="800"
@@ -308,12 +438,12 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
     if (seniorNames.length === 0 && teamMembers.length % 2 !== 0 && teamMembers.length > 2) {
       maxSideSeats = Math.floor(teamMembers.length / 2);
     }
-    const seatPitch = windowWidth <= 480 ? 52 : 60;
-    const baseLength = windowWidth <= 480 ? 160 : 200;
+    const seatPitch = windowWidth <= 480 ? 64 : 78;
+    const baseLength = windowWidth <= 480 ? 200 : 260;
     const calculatedLength = baseLength + maxSideSeats * seatPitch;
 
-    const finalLength = Math.max(windowWidth <= 480 ? 280 : 360, calculatedLength);
-    const finalWidth = windowWidth <= 480 ? 180 : 240;
+    const finalLength = Math.max(windowWidth <= 480 ? 320 : 420, calculatedLength);
+    const finalWidth = windowWidth <= 480 ? 200 : 260;
 
     return { tableWidth: finalWidth, tableLength: finalLength };
   }, [windowWidth, seniorNames.length, teamMembers.length]);
@@ -355,15 +485,18 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
     };
   }, [autoFetchNames, meetingWith, propTeamMembers]);
 
-  // Flawless Symmetrical Seat, Laptop & Chair Alignment
+  // Flawless Symmetrical Seat, Laptop & Chair Alignment (Clean Physical Clearance)
   const seats: SeatedPerson[] = useMemo(() => {
     const list: SeatedPerson[] = [];
     const seniorCount = seniorNames.length;
     const halfW = tableWidth / 2;
     const halfL = tableLength / 2;
-    const seatOffset = 40;  // Attendee sits 40px outside table edge
-    const laptopInset = 26; // Laptop sits 26px inside table surface
-    const chairOffset = 42; // Chair sits behind attendee
+    const seatOffset = 56;       // Attendee sits 56px outside table edge
+    const laptopInset = 32;      // Workstation deskpad sits 32px inside table surface
+    const chairOffset = 70;      // Chair frame sits 14px BEHIND attendee (zero collision)
+    const seatOffsetHead = 60;   // Head/Foot attendee clearance
+    const laptopInsetHead = 34;  // Head/Foot device placement
+    const chairOffsetHead = 74;  // Head/Foot chair position (cleanly behind attendee)
 
     // 1. Head of Table (North, Y < 0): Senior Leader(s) ONLY IF seniorCount > 0
     if (seniorCount === 1) {
@@ -374,17 +507,17 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
         isSenior: true,
         angleDeg: 0,
         x: 0,
-        y: Math.round(-halfL - seatOffset),
+        y: Math.round(-halfL - seatOffsetHead),
         laptopX: 0,
-        laptopY: Math.round(-halfL + laptopInset),
+        laptopY: Math.round(-halfL + laptopInsetHead),
         laptopAngleDeg: 180, // Screen opens facing North directly at Senior person
         chairX: 0,
-        chairY: Math.round(-halfL - chairOffset),
+        chairY: Math.round(-halfL - chairOffsetHead),
         staggerDelay: 0,
         palette: SENIOR_PALETTE,
       });
     } else if (seniorCount > 1) {
-      const seniorSpacing = seniorCount > 2 ? 48 : 58;
+      const seniorSpacing = seniorCount > 2 ? 52 : 62;
       const seniorHalfSpan = ((seniorCount - 1) * seniorSpacing) / 2;
       seniorNames.forEach((name, sIdx) => {
         const xPos = -seniorHalfSpan + sIdx * seniorSpacing;
@@ -395,12 +528,12 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
           isSenior: true,
           angleDeg: 0,
           x: Math.round(xPos),
-          y: Math.round(-halfL - seatOffset),
+          y: Math.round(-halfL - seatOffsetHead),
           laptopX: Math.round(xPos),
-          laptopY: Math.round(-halfL + laptopInset),
+          laptopY: Math.round(-halfL + laptopInsetHead),
           laptopAngleDeg: 180,
           chairX: Math.round(xPos),
-          chairY: Math.round(-halfL - chairOffset),
+          chairY: Math.round(-halfL - chairOffsetHead),
           staggerDelay: sIdx * 0.15,
           palette: SENIOR_PALETTE,
         });
@@ -417,7 +550,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
       const rightMembers = teamMembers.slice(halfCount, sideMembersCount);
       const footMember = hasFootSeat ? teamMembers[teamMembers.length - 1] : null;
 
-      const margin = 40;
+      const margin = 46;
       const usableSpan = Math.max(0, tableLength - margin * 2);
       const maxSideCount = Math.max(leftMembers.length, rightMembers.length, 1);
       const pitch = maxSideCount > 1 ? usableSpan / (maxSideCount - 1) : 0;
@@ -473,12 +606,12 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
           isSenior: false,
           angleDeg: 180,
           x: 0,
-          y: Math.round(halfL + seatOffset),
+          y: Math.round(halfL + seatOffsetHead),
           laptopX: 0,
-          laptopY: Math.round(halfL - laptopInset),
+          laptopY: Math.round(halfL - laptopInsetHead),
           laptopAngleDeg: 0, // Screen opens facing South directly at foot attendee
           chairX: 0,
-          chairY: Math.round(halfL + chairOffset),
+          chairY: Math.round(halfL + chairOffsetHead),
           staggerDelay: 0.15 + teamCount * 0.1,
           palette: MEMBER_PALETTES[teamCount % MEMBER_PALETTES.length],
         });
@@ -847,15 +980,19 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
                       <div className={styles.tableRunnerLine} />
                     </div>
 
-                    {/* 3D Open Executive Laptops (Sitting Exactly on Table Surface facing each attendee!) */}
+                    {/* 3D Open Executive Workstations (Deskpad + Laptop, 88px clearance from attendees) */}
                     {seats.map(person => (
                       <div
                         key={`laptop-${person.id}`}
                         className={styles.laptopAnchor}
                         style={{
-                          transform: `translate3d(${person.laptopX}px, ${person.laptopY}px, 3px) rotateZ(${person.laptopAngleDeg}deg)`,
+                          transform: `translate3d(${person.laptopX}px, ${person.laptopY}px, 1.5px) rotateZ(${person.laptopAngleDeg}deg)`,
                         }}
                       >
+                        {/* Executive Deskpad Mat */}
+                        <div className={styles.deskpadMat} />
+
+                        {/* Sleek Executive 3D Laptop */}
                         <div className={styles.laptopContainer}>
                           <div className={styles.laptopBase}>
                             <div className={styles.laptopKeyboard} />
@@ -871,7 +1008,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
                       </div>
                     ))}
 
-                    {/* Cantilever Wireframe Executive Chairs behind each attendee */}
+                    {/* Cantilever Wireframe Executive Chairs (Offset 14px BEHIND each attendee, zero collision) */}
                     {seats.map(person => (
                       <div
                         key={`chair-${person.id}`}
@@ -885,31 +1022,42 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
                       </div>
                     ))}
 
-                    {/* Seated Members (Zero-Drift Centered Base Origin!) */}
+                    {/* Seated Members (Zero-Drift Centered Base Origin, Elevated at Z = 6px) */}
                     {seats.map((person, idx) => (
                       <div
                         key={person.id}
                         className={styles.seatAnchor}
                         style={{
-                          transform: `translate3d(${person.x}px, ${person.y}px, 0px)`,
+                          transform: `translate3d(${person.x}px, ${person.y}px, 6px)`,
                         }}
                       >
                         <div
                           ref={el => {
                             billboardsRef.current[idx] = el;
                           }}
-                          className={styles.avatarBillboard}
+                          className={`${styles.avatarBillboard} ${person.isSenior ? styles.seniorBillboard : ''}`}
                         >
                           {/* Centered Name Tag above Avatar */}
                           <div className={styles.nameTagWrapper}>
                             <div className={`${styles.nameTagPill} ${person.isSenior ? styles.seniorTagPill : ''}`}>
-                              <span
-                                className={styles.nameTagStatusDot}
-                                style={{
-                                  backgroundColor: person.palette.glow,
-                                  boxShadow: `0 0 5px ${person.palette.glow}`,
-                                }}
-                              />
+                              {person.isSenior ? (
+                                <svg
+                                  className={styles.seniorTagIcon}
+                                  viewBox="0 0 24 24"
+                                  fill="currentColor"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
+                                </svg>
+                              ) : (
+                                <span
+                                  className={styles.nameTagStatusDot}
+                                  style={{
+                                    backgroundColor: person.palette.glow,
+                                    boxShadow: `0 0 5px ${person.palette.glow}`,
+                                  }}
+                                />
+                              )}
                               <span className={`${styles.nameTagText} ${person.isSenior ? styles.seniorTagText : ''}`}>
                                 {person.name.replace(/\s*\([^)]*\)/g, '').trim() || person.name}
                               </span>
