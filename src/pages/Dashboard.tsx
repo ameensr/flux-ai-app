@@ -264,7 +264,7 @@ export const Dashboard = () => {
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="flex items-center gap-2 mb-3"
+          className="flex flex-wrap items-center gap-2.5 mb-3"
         >
           <div
             className="px-3.5 py-1.5 rounded-full flex items-center gap-2 backdrop-blur-md"
@@ -277,6 +277,15 @@ export const Dashboard = () => {
             <span className="w-1.5 h-1.5 rounded-full bg-accent-gold animate-pulse" />
             <span className="text-[10px] font-semibold uppercase tracking-wider text-accent-gold">System Operational</span>
           </div>
+
+          <button
+            onClick={() => navigate(ROUTES.cinematicIntro)}
+            className="px-3.5 py-1.5 rounded-full flex items-center gap-2 backdrop-blur-md bg-white/5 hover:bg-white/10 border border-white/15 text-foreground hover:border-accent-gold/40 text-[10px] font-semibold uppercase tracking-wider transition group cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-accent-gold animate-pulse" />
+            <span>Launch 3D Command Centre</span>
+            <ArrowRight className="w-3 h-3 text-accent-gold transition-transform group-hover:translate-x-0.5" />
+          </button>
         </motion.div>
 
         <div className="flex flex-col gap-5 sm:gap-6 md:flex-row md:items-end md:justify-between">

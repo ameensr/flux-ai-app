@@ -20,7 +20,7 @@ import { DefectAnalysis, HistoricalProgress, NextPriorities, HistoricalDefectOpt
 import { DashboardWidgets, DefectChart, ReportHistory } from './components/Widgets'
 import { toast } from '@/hooks/use-toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
-import { FileText, RefreshCw, RotateCcw, AlertCircle, Plus, Trash, History as HistoryIcon, Settings, Eye, Lock } from 'lucide-react'
+import { FileText, RefreshCw, RotateCcw, AlertCircle, Plus, Trash, History as HistoryIcon, Settings, Eye, Lock, Sparkles } from 'lucide-react'
 import type { QAReportForm, TimelineNode } from './types'
 import { createFormSnapshot, isPassStatus } from './types'
 import { ROUTES } from '@/lib/routes'
@@ -530,6 +530,7 @@ export const QAWeeklyReport: React.FC = () => {
   const canGenerateAI = canGenerate('qa-report')
   const [errors, setErrors] = useState<string[]>([])
   const [isLaunching, setIsLaunching] = useState(false)
+  const [isLaunching3D, setIsLaunching3D] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [isPreviewed, setIsPreviewed] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
@@ -736,6 +737,62 @@ export const QAWeeklyReport: React.FC = () => {
     }
   }
 
+  const handleLaunch3DDashboard = () => {
+    if (!isSaved) return
+    if (!form.projectId) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing Project',
+        description: 'Please select a project before launching the 3D dashboard.',
+      })
+      return
+    }
+
+    try {
+      setIsLaunching3D(true)
+      // Save report form data to browser storage for 3D command center
+      localStorage.setItem('current-qa-report-data', JSON.stringify(form))
+      localStorage.setItem('current-3d-qa-report-data', JSON.stringify(form))
+
+      const { savedReports: reports } = useQAReportStore.getState()
+      const currentSnapshot = createFormSnapshot(form)
+      const matchedReport = reports.find(r => createFormSnapshot(r.form) === currentSnapshot)
+      const reportId = matchedReport?.id ?? ''
+
+      const params = new URLSearchParams()
+      if (form.projectId) params.set('projectId', form.projectId)
+      if (reportId) params.set('reportId', reportId)
+      params.set('source', 'qa-report')
+      params.set('launch', '1')
+
+      const url = `${window.location.origin}${ROUTES.cinematicIntro}?${params.toString()}`
+      const newWindow = window.open(url, '_blank')
+      setIsLaunching3D(false)
+
+      if (!newWindow) {
+        toast({
+          variant: 'destructive',
+          title: 'Popup Blocked',
+          description: 'Please allow popups to open the 3D Dashboard.',
+        })
+        return
+      }
+
+      toast({
+        title: '3D Command Centre Launching',
+        description: `Opening 3D Dashboard with live QA Report data for ${form.projectName || 'selected project'}.`,
+      })
+    } catch (error) {
+      console.error('3D Launch error:', error)
+      setIsLaunching3D(false)
+      toast({
+        variant: 'destructive',
+        title: 'Launch Failed',
+        description: error instanceof Error ? error.message : 'Could not launch 3D dashboard.',
+      })
+    }
+  }
+
   const handleReset = async () => {
     if (!await confirm({
       title: 'Reset all form data?',
@@ -936,6 +993,42 @@ export const QAWeeklyReport: React.FC = () => {
               )}
             </div>
 
+            {/* Launch 3D Dashboard Button - disabled until saved */}
+            <div className="relative group">
+              <button
+                onClick={handleLaunch3DDashboard}
+                disabled={isLaunching3D || !isSaved}
+                className={`flex items-center gap-2 px-4 py-3 rounded-full text-xs font-bold transition-all active:scale-[0.97] ${
+                  !isSaved
+                    ? 'bg-white/5 border border-white/10 text-text-secondary opacity-60 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-accent-gold/25 via-teal-500/20 to-accent-gold/25 border border-accent-gold/40 text-foreground hover:border-accent-gold hover:shadow-[0_0_24px_rgba(212,175,55,0.25)]'
+                }`}
+                title={!isSaved ? 'Save report first to launch 3D Dashboard' : 'Launch 3D Command Centre Dashboard'}
+              >
+                {isLaunching3D ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-3.5 h-3.5 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
+                    Launching...
+                  </span>
+                ) : !isSaved ? (
+                  <>
+                    <Lock className="w-3.5 h-3.5 opacity-60" />
+                    <span>Launch 3D Dashboard</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-accent-gold animate-pulse" />
+                    <span>Launch 3D Dashboard</span>
+                  </>
+                )}
+              </button>
+              {!isSaved && (
+                <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-2 rounded-lg bg-black/95 border border-white/10 text-[11px] text-white/90 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl z-10">
+                  Save report first to enable 3D Dashboard
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleReset}
               className="flex items-center gap-2 px-4 py-3 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-white hover:bg-white/10 transition-all"
@@ -993,7 +1086,7 @@ export const QAWeeklyReport: React.FC = () => {
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    <span className="font-semibold">Click "Launch Executive Dashboard" to view</span>
+                    <span className="font-semibold">Click "Launch Executive Dashboard" or "Launch 3D Dashboard"</span>
                   </div>
                 </motion.div>
               ) : loadedFromHistory && hasChangedSinceLoad ? (
@@ -1061,7 +1154,7 @@ export const QAWeeklyReport: React.FC = () => {
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    <span className="font-semibold">Click "Launch Executive Dashboard" to view</span>
+                    <span className="font-semibold">Click "Launch Executive Dashboard" or "Launch 3D Dashboard"</span>
                   </div>
                 </motion.div>
               ) : (

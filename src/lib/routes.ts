@@ -7,6 +7,7 @@ export const ROUTES = {
   landing: '/',
   login: '/login',
   signup: '/signup',
+  cinematicIntro: '/cinematic-intro',
   maintenance: '/maintenance',
   qalyAiEngine404: '/qalyaiengine-404',
   qalyAiEngine401: '/qalyaiengine-401',
