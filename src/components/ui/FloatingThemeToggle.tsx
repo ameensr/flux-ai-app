@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sun, Moon } from 'lucide-react'
-import { useLocation } from 'react-router-dom'
 import { useTheme } from '@/context/ThemeContext'
 import { useAIAccess } from '@/hooks/useAIAccess'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
@@ -41,10 +40,8 @@ export const FloatingThemeToggle: React.FC = () => {
     }
   }, [])
 
-  const location = useLocation()
-
-  // Hide in presentation fullscreen mode or full cinematic 3D intro to avoid overlapping controls
-  if (isFullscreen || location.pathname.startsWith('/cinematic-intro')) return null
+  // Hide in presentation fullscreen mode to avoid overlapping controls
+  if (isFullscreen) return null
 
   return (
     <div

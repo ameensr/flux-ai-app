@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Edit, Archive, Trash2, Users, Calendar, Tag, Clock, FolderKanban, Settings2, Link2, Sparkles } from 'lucide-react'
+import { ArrowLeft, Edit, Archive, Trash2, Users, Calendar, Tag, Clock, FolderKanban, Settings2, Link2 } from 'lucide-react'
 import { ProjectDataArchive } from './components/ProjectDataArchive'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { useToast } from '@/hooks/use-toast'
@@ -193,14 +193,6 @@ export function ProjectDetail() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => navigate(`${ROUTES.cinematicIntro}?projectId=${project.id}`)}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-accent-gold/40 bg-accent-gold/10 text-accent-gold hover:bg-accent-gold/20 transition-all font-bold text-sm uppercase tracking-wider"
-            title="Experience 3D AI Command Centre"
-          >
-            <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-            3D Command Centre
-          </button>
           {canEdit && (
             <button
               onClick={() => setShowOpenProjectConfig(true)}

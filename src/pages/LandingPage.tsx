@@ -3,7 +3,7 @@ import { motion } from "framer-motion"
 import { useNavigate } from 'react-router-dom'
 import { FloatingButton } from "@/components/ui/FloatingButton"
 import { AmbientGlow } from "@/components/ui/AmbientGlow"
-import { Zap, Shield, Globe, ChevronRight, Sparkles } from "lucide-react"
+import { Zap, Shield, Globe, ChevronRight } from "lucide-react"
 import { Logo } from "@/components/ui/Logo"
 import { BRAND } from "@/lib/brand"
 import { ROUTES } from '@/lib/routes'
@@ -49,9 +49,6 @@ export const LandingPage = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
-            <FloatingButton onClick={() => navigate(ROUTES.cinematicIntro)} className="h-14 px-8 sm:px-10 text-sm w-full sm:w-auto max-w-xs bg-gradient-to-r from-accent-gold via-amber-400 to-accent-gold text-slate-950 font-bold shadow-lg shadow-accent-gold/20 hover:brightness-110">
-              <Sparkles className="w-4 h-4 mr-2" /> Launch 3D Command Centre
-            </FloatingButton>
             <FloatingButton onClick={() => navigate(ROUTES.login)} className="h-14 px-8 sm:px-10 text-sm w-full sm:w-auto max-w-xs bg-white/10 hover:bg-white/20 border border-white/20">
               Get Started for Free <ChevronRight className="w-4 h-4 ml-2" />
             </FloatingButton>

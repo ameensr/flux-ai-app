@@ -61,7 +61,6 @@ const AINews = lazy(() => import('@/pages/AINews').then(m => ({ default: m.AINew
 const MaintenancePage = lazy(() => import('@/pages/MaintenancePage').then(m => ({ default: m.MaintenancePage })))
 const QalyAiEngine404 = lazy(() => import('@/pages/qalyaiengine404/App'))
 const QalyAiEngine401 = lazy(() => import('@/pages/qalyaiengine401/App'))
-const CinematicIntroView = lazy(() => import('@/modules/CinematicIntro').then(m => ({ default: m.CinematicIntroView })))
 
 // ── Loaders ───────────────────────────────────────────────────────────────────
 function PageLoader() {
@@ -464,8 +463,6 @@ export default function App() {
             <Route path={ROUTES.landing} element={<RedirectIfAuth><LandingPage /></RedirectIfAuth>} />
             <Route path={ROUTES.login} element={<RedirectIfAuth><AuthPage /></RedirectIfAuth>} />
             <Route path={ROUTES.signup} element={<RedirectIfAuth><AuthPage /></RedirectIfAuth>} />
-            <Route path={ROUTES.cinematicIntro} element={<Suspense fallback={<FullPageLoader />}><CinematicIntroView /></Suspense>} />
-            <Route path="/intro" element={<Navigate to={ROUTES.cinematicIntro} replace />} />
             <Route path={ROUTES.qalyAiEngine404} element={<Suspense fallback={<FullPageLoader />}><QalyAiEngine404 /></Suspense>} />
             <Route path={ROUTES.qalyAiEngine401} element={<Suspense fallback={<FullPageLoader />}><QalyAiEngine401 /></Suspense>} />
 
