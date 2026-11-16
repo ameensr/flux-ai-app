@@ -96,7 +96,7 @@ export function TicketBowlTable({
   }
 
   return (
-    <div className="rounded-2xl border border-glass-border bg-surface/60 backdrop-blur-xl shadow-xl overflow-hidden relative">
+    <div className="relative overflow-hidden rounded-xl border border-border/60 bg-surface/80 shadow-xs">
       {/* Top specular highlight */}
       <div
         className="absolute inset-x-0 top-0 h-[1px] pointer-events-none z-10"
@@ -104,7 +104,7 @@ export function TicketBowlTable({
       />
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs text-text-primary">
-          <thead className="bg-surface-elevated/75 border-b border-glass-border text-[11px] text-text-muted uppercase tracking-wider select-none font-semibold backdrop-blur-md">
+          <thead className="select-none border-b border-border/60 bg-surface-secondary/60 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             <tr>
               {/* Checkbox */}
               <th className="py-3 px-3 w-8">

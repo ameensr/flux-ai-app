@@ -89,9 +89,9 @@ export function TicketBowlStatsDashboard({
   return (
     <div className="space-y-3">
       {/* ── Metric Cards ── */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {/* Card 1: Unique Forwarded Tickets */}
-        <div className="p-3.5 rounded-2xl border border-glass-border bg-surface/60 backdrop-blur-xl flex items-center justify-between shadow-md relative overflow-hidden group hover:-translate-y-0.5 transition-transform duration-200">
+        <div className="relative flex items-center justify-between overflow-hidden rounded-xl border border-border/60 bg-surface/80 p-4 shadow-xs transition-colors hover:border-accent/30">
           <div className="absolute inset-x-0 top-0 h-[1px] pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, var(--glass-highlight), transparent)' }} />
           <div>
             <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
@@ -112,7 +112,7 @@ export function TicketBowlStatsDashboard({
         </div>
 
         {/* Card 2: Total Forwarding Events */}
-        <div className="p-3.5 rounded-2xl border border-glass-border bg-surface/60 backdrop-blur-xl flex items-center justify-between shadow-md relative overflow-hidden group hover:-translate-y-0.5 transition-transform duration-200">
+        <div className="relative flex items-center justify-between overflow-hidden rounded-xl border border-border/60 bg-surface/80 p-4 shadow-xs transition-colors hover:border-accent/30">
           <div className="absolute inset-x-0 top-0 h-[1px] pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, var(--glass-highlight), transparent)' }} />
           <div>
             <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
@@ -133,7 +133,7 @@ export function TicketBowlStatsDashboard({
         </div>
 
         {/* Card 3: Repeat-Forwarded Tickets */}
-        <div className="p-3.5 rounded-2xl border border-glass-border bg-surface/60 backdrop-blur-xl flex items-center justify-between shadow-md relative overflow-hidden group hover:-translate-y-0.5 transition-transform duration-200">
+        <div className="relative flex items-center justify-between overflow-hidden rounded-xl border border-border/60 bg-surface/80 p-4 shadow-xs transition-colors hover:border-accent/30">
           <div className="absolute inset-x-0 top-0 h-[1px] pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, var(--glass-highlight), transparent)' }} />
           <div>
             <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
@@ -154,11 +154,13 @@ export function TicketBowlStatsDashboard({
         </div>
 
         {/* Card 4: Incomplete / Unavailable History */}
-        <div
+        <button
+          type="button"
           onClick={onFilterUnavailableHistory}
-          className={`p-3.5 rounded-2xl border backdrop-blur-xl transition-all cursor-pointer shadow-md flex items-center justify-between relative overflow-hidden hover:-translate-y-0.5 duration-200 ${isFilteringUnavailableHistory
-              ? 'border-accent bg-accent/15 ring-1 ring-accent'
-              : 'border-glass-border bg-surface/60 hover:bg-surface-elevated/70'
+          aria-pressed={isFilteringUnavailableHistory}
+          className={`relative flex w-full items-center justify-between overflow-hidden rounded-xl border p-4 text-left shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${isFilteringUnavailableHistory
+              ? 'border-accent bg-accent/10 ring-1 ring-accent/30'
+              : 'border-border/60 bg-surface/80 hover:border-accent/30'
             }`}
           title="Click to toggle filter for tickets with unavailable history"
         >
@@ -182,10 +184,10 @@ export function TicketBowlStatsDashboard({
           <div className="p-2.5 rounded-xl bg-slate-500/15 text-slate-400 shrink-0 shadow-inner">
             <FileQuestion className="w-4 h-4" />
           </div>
-        </div>
+        </button>
 
         {/* Card 5: QA Missed Tracking */}
-        <div className="p-3.5 rounded-xl border border-border/70 bg-surface/80 flex items-center justify-between shadow-xs">
+        <div className="flex items-center justify-between rounded-xl border border-border/60 bg-surface/80 p-4 shadow-xs transition-colors hover:border-accent/30">
           <div>
             <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
               QA Missed
@@ -214,12 +216,12 @@ export function TicketBowlStatsDashboard({
 
       {/* ── Current Testing Status Distribution (Premium Compact) ── */}
       {loading ? (
-        <div className="p-3 rounded-xl border border-border/50 bg-gradient-to-br from-surface/80 to-surface-elevated/60 backdrop-blur-sm space-y-2">
+        <div className="space-y-2 rounded-xl border border-border/60 bg-surface/80 p-4 shadow-xs">
           <div className="h-3.5 w-44 bg-surface-elevated animate-pulse rounded" />
           <div className="h-2 w-full bg-surface-elevated animate-pulse rounded-full" />
         </div>
       ) : totalUniqueTickets > 0 && statusEntries.length > 0 ? (
-        <div className="group p-3 rounded-xl border border-border/50 bg-gradient-to-br from-surface/80 via-surface/70 to-surface-elevated/60 backdrop-blur-sm shadow-sm hover:shadow-md hover:border-border/70 transition-all duration-300">
+        <div className="rounded-xl border border-border/60 bg-surface/80 p-4 shadow-xs">
           {/* Header */}
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-1.5">

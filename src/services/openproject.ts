@@ -1138,7 +1138,7 @@ export async function fetchWorkPackageActivities(
           }
         })
 
-        let userName = (activity._links?.user?.title || '').trim()
+        let userName = (activity._links?.user?.title || activity.user?.name || '').trim()
         if (!userName && activity._links?.user?.href) {
           userName = await fetchUserName(config, activity._links.user.href)
         }
@@ -1149,7 +1149,7 @@ export async function fetchWorkPackageActivities(
           createdAt: activity.createdAt,
           user: {
             name: userName || 'Unknown',
-            id: parseInt(activity._links?.user?.href?.split('/').pop() || '0'),
+            id: parseInt(activity._links?.user?.href?.split('/').pop() || String(activity.user?.id || '0')),
           },
           details: parsedDetails,
         }

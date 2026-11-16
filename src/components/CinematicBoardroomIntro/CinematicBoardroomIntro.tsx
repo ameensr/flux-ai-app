@@ -1173,7 +1173,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
                                 />
                               )}
                               <span className={`${styles.nameTagText} ${person.isSenior ? styles.seniorTagText : ''}`}>
-                                {person.name.replace(/\s*\([^)]*\)/g, '').trim() || person.name}
+                                {person.name}
                               </span>
                             </div>
                           </div>

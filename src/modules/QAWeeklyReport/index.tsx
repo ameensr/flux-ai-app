@@ -28,7 +28,6 @@ import { calculateQAScore } from './utils/qualityCalculator'
 import { useColumnConfigStore } from '@/modules/DailyUpdateReport/columnConfigStore'
 import {
   hydrateSchemaFromLegacy,
-  orderedVisibleColumns,
   type QAReportTableColumn,
 } from './qaReportColumnSchema'
 
@@ -55,8 +54,8 @@ function cellValueForColumn(
   row: Record<string, any>,
   col: QAReportTableColumn,
 ): string {
-  if (col.kind === 'custom') return String(row.customFields?.[col.id] ?? '')
-  return String(row[col.id] ?? '')
+  const value = col.kind === 'custom' ? row.customFields?.[col.id] : row[col.id]
+  return String(value ?? '').replace(/\|/g, '&#124;').replace(/\r?\n/g, ' ')
 }
 
 function buildMarkdown(f: QAReportForm): string {
@@ -73,6 +72,7 @@ function buildMarkdown(f: QAReportForm): string {
   lines.push(`# ${cleanTitle || 'Weekly QA Status Report'}`)
   lines.push(`**Project:** ${f.projectName || '—'}  |  **Period:** ${fmt(f.weekStart)} – ${fmt(f.weekEnd)}`)
   if (f.subtitle) lines.push(`\n> ${f.subtitle}`)
+  if (f.meetingWith) lines.push(`\n**Meeting with:** ${f.meetingWith}`)
   lines.push('\n---')
 
   // Executive Summary
@@ -101,6 +101,7 @@ function buildMarkdown(f: QAReportForm): string {
   lines.push(`| Total Production Issues | ${f.lastWeek.productionIssues} |`)
   lines.push(`| Fixes for Validation | ${f.lastWeek.fixesForValidation} |`)
   lines.push(`| Escaped Defects | ${f.lastWeek.escapedDefects} |`)
+  lines.push(`| Total Support | ${f.lastWeek.support} |`)
 
   lines.push('\n### Month To Date')
   lines.push('| Category | Count |')
@@ -108,6 +109,7 @@ function buildMarkdown(f: QAReportForm): string {
   lines.push(`| Total Production Issues | ${f.monthToDate.productionIssues} |`)
   lines.push(`| Fixes for Validation | ${f.monthToDate.fixesForValidation} |`)
   lines.push(`| Escaped Defects | ${f.monthToDate.escapedDefects} |`)
+  lines.push(`| Total Support | ${f.monthToDate.support} |`)
 
   // Team Allocation
   lines.push('\n## Team Resource Allocation')
@@ -128,7 +130,7 @@ function buildMarkdown(f: QAReportForm): string {
       f.visibleSupportColumns,
       collectCustomFieldLabels(f.supportTickets, dupSupportColumns, f.supportColumnSchema),
     )
-    const visibleSupportColumnsList = orderedVisibleColumns(supportSchema)
+    const visibleSupportColumnsList = [...supportSchema].sort((a, b) => a.order - b.order)
 
     const header = visibleSupportColumnsList.map(col => col.label).join(' | ')
     const separator = visibleSupportColumnsList.map(() => '---').join('|')
@@ -151,7 +153,7 @@ function buildMarkdown(f: QAReportForm): string {
       f.visibleReleaseColumns,
       collectCustomFieldLabels(f.releaseItems, dupReleaseColumns, f.releaseColumnSchema),
     )
-    const visibleReleaseColumnsList = orderedVisibleColumns(releaseSchema)
+    const visibleReleaseColumnsList = [...releaseSchema].sort((a, b) => a.order - b.order)
     const statusVisible = visibleReleaseColumnsList.some(c => c.id === 'status')
 
     if (statusVisible) {
@@ -174,6 +176,8 @@ function buildMarkdown(f: QAReportForm): string {
     const rbs = f.releaseBugStatus
     lines.push('\n## Release Bug Status')
     if (rbs.uploadedFileName) lines.push(`**Source:** ${rbs.uploadedFileName}`)
+    if (rbs.uploadedAt) lines.push(`**Uploaded:** ${fmt(rbs.uploadedAt)}`)
+    if (rbs.rawRowCount != null) lines.push(`**Imported rows:** ${rbs.rawRowCount}`)
     if (rbs.metrics) {
       const m = rbs.metrics
       lines.push(`\n**Release Health:** ${rbs.releaseHealth?.emoji || ''} ${rbs.releaseHealth?.label || 'N/A'} (Score: ${rbs.releaseHealth?.score ?? '—'}%)`)
@@ -183,6 +187,7 @@ function buildMarkdown(f: QAReportForm): string {
       lines.push(`| Closed | ${m.completedBugs} (${m.closurePercentage}%) |`)
       lines.push(`| Resolved (Ready for QA) | ${m.resolvedBugs} |`)
       lines.push(`| Active (Open/In Progress) | ${m.activeBugs} (${m.activePercentage}%) |`)
+      lines.push(`| Open (All non-closed) | ${m.openBugs} |`)
       lines.push(`| Deferred | ${m.deferredBugs} (${m.deferredPercentage}%) |`)
       lines.push(`| Invalid/Rejected | ${m.invalidBugs} (${m.invalidPercentage}%) |`)
     }
@@ -215,7 +220,10 @@ function buildMarkdown(f: QAReportForm): string {
     const tws = f.taskWiseStatus
     lines.push('\n## Task-Wise Status')
     if (tws.uploadedFileName) lines.push(`**Source:** ${tws.uploadedFileName}`)
+    if (tws.uploadedAt) lines.push(`**Uploaded:** ${fmt(tws.uploadedAt)}`)
     lines.push(`**Total Records:** ${tws.rawRowCount} | **Unique Parents:** ${tws.uniqueParents} | **Unique Statuses:** ${tws.uniqueStatuses?.length || 0}`)
+    if (tws.detectedColumns?.length) lines.push(`**Detected Columns:** ${tws.detectedColumns.join(', ')}`)
+    if (tws.parentColumn || tws.statusColumn) lines.push(`**Parent Column:** ${tws.parentColumn || '—'} | **Status Column:** ${tws.statusColumn || '—'}`)
     
     // Overall Status Summary
     if (tws.overallStatus?.length) {
@@ -251,6 +259,7 @@ function buildMarkdown(f: QAReportForm): string {
       if (v.blankParentCount > 0) {
         lines.push(`- Records with blank parent: ${v.blankParentCount}`)
       }
+      if (v.missingFields?.length) lines.push(`- Missing fields: ${v.missingFields.join(', ')}`)
     }
   }
 
@@ -263,17 +272,55 @@ function buildMarkdown(f: QAReportForm): string {
   lines.push(`| Fixed | ${f.defectsLastWeek.fixed} | ${f.defectsMTD.fixed} |`)
   lines.push(`| Closed | ${f.defectsLastWeek.closed} | ${f.defectsMTD.closed} |`)
 
+  // Uploaded team capacity, including the member-level values shown in the form.
+  if (f.teamCapacity) {
+    const capacity = f.teamCapacity
+    lines.push('\n## Team Capacity Overview')
+    if (capacity.file_name) lines.push(`**Source:** ${capacity.file_name}`)
+    if (capacity.period_start || capacity.period_end) {
+      lines.push(`**Period:** ${fmt(capacity.period_start)} – ${fmt(capacity.period_end)}`)
+    }
+    if (capacity.stats) {
+      const stats = capacity.stats
+      lines.push('\n| Metric | Value |')
+      lines.push('|---|---|')
+      const metrics: Array<[string, unknown]> = [
+        ['Team members', stats.total_members],
+        ['Available', stats.available],
+        ['On leave', stats.on_leave],
+        ['No logs', stats.no_logs],
+        ['Average hours', stats.average_hours],
+        ['Average utilization', stats.average_utilization_percent ?? stats.estimated_capacity_percent],
+        ['Logged hours', stats.total_logged_hours],
+        ['Available hours', stats.total_available_hours],
+        ['Leave hours', stats.total_leave_hours],
+        ['Effective work hours', stats.total_effective_work],
+        ['Highest utilization', stats.highest_utilization ? `${stats.highest_utilization.name} (${stats.highest_utilization.percent}%)` : null],
+        ['Lowest utilization', stats.lowest_utilization ? `${stats.lowest_utilization.name} (${stats.lowest_utilization.percent}%)` : null],
+      ]
+      metrics.forEach(([label, value]) => {
+        if (value != null) lines.push(`| ${label} | ${value} |`)
+      })
+    }
+    if (Array.isArray(capacity.members) && capacity.members.length) {
+      lines.push('\n### Team Member Capacity')
+      lines.push('| Name | Employee ID | Logged | Leave | Available | Effective work | Utilization | Status |')
+      lines.push('|---|---|---|---|---|---|---|---|')
+      capacity.members.forEach((m: any) => lines.push(`| ${m.name ?? ''} | ${m.employee_id ?? ''} | ${m.logged_hours ?? ''} | ${m.leave_hours ?? ''} | ${m.available_hours ?? ''} | ${m.effective_work ?? ''} | ${m.utilization_percent ?? ''} | ${m.status ?? ''} |`))
+    }
+  }
+
   // Historical Defect Optimization
-  if (f.historicalDefectOptimization?.executiveSummary) {
+  if (f.historicalDefectOptimization) {
     lines.push('\n## Historical Defect Optimization')
     lines.push(`**Previous Fixed Bug Count:** ${f.historicalDefectOptimization.previousFixedBugCount}`)
     lines.push(`**Latest Fixed Bug Count:** ${f.historicalDefectOptimization.latestFixedBugCount}`)
     if (f.historicalDefectOptimization.trackingSince) {
       lines.push(`**Tracking Since:** ${fmt(f.historicalDefectOptimization.trackingSince)}`)
     }
-    lines.push(`\n**Reduced Bugs:** ${f.historicalDefectOptimization.reducedBugs}`)
-    lines.push(`**Improvement Percentage:** ${f.historicalDefectOptimization.improvementPercentage}%`)
-    lines.push(`\n${f.historicalDefectOptimization.executiveSummary}`)
+    lines.push(`\n**Reduced Bugs:** ${f.historicalDefectOptimization.reducedBugs ?? '—'}`)
+    lines.push(`**Improvement Percentage:** ${f.historicalDefectOptimization.improvementPercentage ?? '—'}%`)
+    if (f.historicalDefectOptimization.executiveSummary) lines.push(`\n${f.historicalDefectOptimization.executiveSummary}`)
   }
 
   // Historical Progress
@@ -300,6 +347,13 @@ function buildMarkdown(f: QAReportForm): string {
       if (p.dueDate) meta.push(`**Due:** ${fmt(p.dueDate)}`)
       if (meta.length) lines.push(meta.join('  |  '))
     })
+  }
+
+  if (f.customTimeline?.length) {
+    lines.push('\n## Weekly Timeline')
+    lines.push('| Week | Health Score | Emails | Features | Fixes | Open Defects | Closed Defects | Email Change |')
+    lines.push('|---|---|---|---|---|---|---|---|')
+    f.customTimeline.forEach(node => lines.push(`| ${node.week} | ${node.healthScore} | ${node.emails} | ${node.features} | ${node.fixes} | ${node.openDefects} | ${node.closedDefects} | ${node.emailChange ?? ''} |`))
   }
 
   lines.push('\n---')
@@ -908,7 +962,7 @@ export const QAWeeklyReport: React.FC = () => {
               onClick={handlePreview}
               className="flex items-center gap-2 px-5 py-3 rounded-full bg-white/5 border border-accent-gold/30 text-sm font-bold text-accent-gold hover:bg-accent-gold/10 transition-all active:scale-[0.97]"
             >
-              <Eye className="w-4 h-4" /> Preview
+              <Eye className="w-4 h-4" /> Preview &amp; Verify
             </button>
 
             {/* Launch Button - disabled until saved */}
@@ -1107,6 +1161,17 @@ export const QAWeeklyReport: React.FC = () => {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={isLaunching || !isSaved}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:border-accent-gold/40 hover:bg-accent-gold/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-white/5"
+              title={!isSaved ? 'Save report first to launch the Executive Dashboard' : undefined}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              {isLaunching ? 'Launching...' : 'Launch Executive Dashboard'}
+            </button>
 
             {/* Info box about display toggles */}
             <div className="w-full px-3 py-2.5 rounded-lg bg-white/5 border border-white/10">

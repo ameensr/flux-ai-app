@@ -1002,6 +1002,7 @@
   border: 1px solid var(--senior-tag-border);
   box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35), 0 0 10px rgba(245, 158, 11, 0.2);
   padding: 2px 8px;
+  max-width: 220px;
 }
 
 .seniorTagIcon {
@@ -1035,7 +1036,7 @@
   color: var(--senior-tag-text);
   font-weight: 800;
   font-size: 9px;
-  max-width: 115px;
+  max-width: 190px;
   letter-spacing: 0.03em;
 }
 

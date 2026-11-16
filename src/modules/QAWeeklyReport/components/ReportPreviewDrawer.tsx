@@ -53,23 +53,23 @@ const drawerStyles = `
   .drw-content {
     font-family: system-ui, -apple-system, sans-serif;
     line-height: 1.6;
-    text-align: justify;
-    hyphens: auto;
+    text-align: left;
+    overflow-wrap: anywhere;
   }
   .drw-h1 {
-    font-size: 1.4rem;
+    font-size: 1.8rem;
     font-weight: 800;
     color: var(--text-primary);
-    margin: 1.2rem 0 0.6rem;
+    margin: 0 0 0.8rem;
     line-height: 1.25;
     letter-spacing: -0.02em;
   }
   .drw-h2 {
-    font-size: 1.05rem;
+    font-size: 1.1rem;
     font-weight: 700;
     color: var(--accent);
-    margin: 1.4rem 0 0.5rem;
-    padding-bottom: 0.4rem;
+    margin: 2rem 0 0.8rem;
+    padding: 0.5rem 0 0.75rem;
     border-bottom: 1px solid var(--border);
   }
   .drw-h3 {
@@ -102,14 +102,14 @@ const drawerStyles = `
   .drw-table {
     width: 100%;
     border-collapse: collapse;
-    margin: 0.8rem 0;
+    margin: 1rem 0 1.5rem;
     font-size: 0.78rem;
-    border-radius: 8px;
-    overflow: hidden;
+    display: block;
+    overflow-x: auto;
     border: 1px solid var(--border);
   }
   .drw-th {
-    padding: 0.5rem 0.7rem;
+    padding: 0.7rem 0.85rem;
     text-align: left;
     font-weight: 700;
     font-size: 0.72rem;
@@ -120,10 +120,11 @@ const drawerStyles = `
     border-bottom: 1px solid var(--border);
   }
   .drw-td {
-    padding: 0.45rem 0.7rem;
+    padding: 0.65rem 0.85rem;
     border-bottom: 1px solid var(--divider);
     color: var(--text-primary);
     vertical-align: top;
+    max-width: 22rem;
   }
   .drw-table tbody tr:last-child .drw-td {
     border-bottom: none;
@@ -156,6 +157,7 @@ const drawerStyles = `
     color: var(--text-muted);
     font-style: italic;
   }
+  .drw-content > :first-child { margin-top: 0; }
 `
 
 interface ReportPreviewDrawerProps {
@@ -178,6 +180,15 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
   const [savedName, setSavedName] = useState<string | null>(null)
   const [nameModalOpen, setNameModalOpen] = useState(false)
   const [zoomLevel, setZoomLevel] = useState(100)
+  const [recordPage, setRecordPage] = useState(0)
+  const previewHtml = useMemo(() => open ? DOMPurify.sanitize(mdToHtml(markdown)) : '', [open, markdown])
+  const taskRecords: Record<string, unknown>[] = Array.isArray(form.taskWiseStatus?.allRecords) ? form.taskWiseStatus.allRecords : []
+  const taskRecordColumns = useMemo(() => {
+    const detected: string[] = Array.isArray(form.taskWiseStatus?.detectedColumns) ? form.taskWiseStatus.detectedColumns : []
+    return [...new Set([...detected, ...taskRecords.flatMap(row => Object.keys(row || {}))])]
+  }, [form.taskWiseStatus])
+  const recordPageCount = Math.max(1, Math.ceil(taskRecords.length / 50))
+  const currentRecordPage = Math.min(recordPage, recordPageCount - 1)
 
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 10, 150))
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 10, 70))
@@ -245,8 +256,6 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
         status: payload.status,
       })
 
-      await useQAReportStore.getState().fetchReports(form.projectId)
-
       setSaved(true)
       setSavedName(payload.name)
       onSaved()
@@ -280,26 +289,29 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
     <GestureSheet
       open={open}
       onClose={handleClose}
-      width={580}
+      width={760}
       labelledBy="report-preview-title"
       className="flex flex-col shadow-2xl"
-      style={{ background: 'var(--surface)', borderLeft: '1px solid var(--border)' }}
+      style={{ background: 'var(--surface-secondary)', borderLeft: '1px solid var(--border)' }}
     >
             {/* Header */}
             <div
-              className="flex items-center justify-between px-6 py-4 shrink-0 pl-7"
-              style={{ borderBottom: '1px solid var(--border)' }}
+              className="relative shrink-0 overflow-hidden px-6 py-5 sm:px-8"
+              style={{ borderBottom: '1px solid var(--border)', background: 'linear-gradient(125deg, color-mix(in srgb, var(--accent) 13%, var(--surface)) 0%, var(--surface) 70%)' }}
             >
+              <div className="pointer-events-none absolute -right-12 -top-24 h-56 w-56 rounded-full blur-3xl" style={{ background: 'color-mix(in srgb, var(--accent) 18%, transparent)' }} />
+              <div className="relative flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center"
-                  style={{ background: 'var(--hover)', border: '1px solid var(--border)' }}
+                  className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm"
+                  style={{ background: 'color-mix(in srgb, var(--accent) 16%, var(--surface))', border: '1px solid color-mix(in srgb, var(--accent) 30%, var(--border))' }}
                 >
-                  <Eye className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+                  <Eye className="w-5 h-5" style={{ color: 'var(--accent)' }} />
                 </div>
                 <div>
-                  <h2 id="report-preview-title" className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Report Preview</h2>
-                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Review and save before launching</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--accent)' }}>QA weekly report</p>
+                  <h2 id="report-preview-title" className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Report Preview</h2>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Verify the complete report before saving</p>
                 </div>
               </div>
               <button
@@ -314,12 +326,18 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
               >
                 <X className="w-4 h-4" />
               </button>
+              </div>
+              <div className="relative mt-5 flex flex-wrap gap-2 text-[11px] font-semibold">
+                <span className="rounded-full px-3 py-1.5" style={{ background: 'var(--hover)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>{form.projectName || 'Project not selected'}</span>
+                <span className="rounded-full px-3 py-1.5" style={{ background: 'var(--hover)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>{form.weekStart || 'Start date'} → {form.weekEnd || 'End date'}</span>
+                <span className="rounded-full px-3 py-1.5" style={{ background: saved ? 'rgba(34,197,94,0.12)' : 'var(--hover)', color: saved ? '#22c55e' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>{saved ? 'Saved' : 'Ready to verify'}</span>
+              </div>
             </div>
 
             {/* Zoom Controls */}
             <div
               className="flex items-center justify-between px-6 py-2.5 shrink-0"
-              style={{ borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)' }}
+              style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}
             >
               <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                 Font Size
@@ -378,13 +396,38 @@ export const ReportPreviewDrawer: React.FC<ReportPreviewDrawerProps> = ({
             </div>
 
             {/* Content - scrollable */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
+            <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-7">
               <style>{drawerStyles}</style>
               <div
-                className="drw-content"
-                style={{ fontSize: `${zoomLevel}%` }}
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(mdToHtml(markdown)) }}
+                className="drw-content mx-auto max-w-3xl rounded-2xl border p-5 shadow-sm sm:p-8"
+                style={{ fontSize: `${zoomLevel}%`, background: 'var(--surface)', borderColor: 'var(--border)' }}
+                dangerouslySetInnerHTML={{ __html: previewHtml }}
               />
+              {taskRecords.length > 0 && (
+                <details className="mx-auto mt-4 max-w-3xl rounded-2xl border p-5 shadow-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+                  <summary className="cursor-pointer text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                    Inspect imported task records ({taskRecords.length})
+                  </summary>
+                  <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>All uploaded task rows are available here, 50 at a time.</p>
+                  <div className="mt-4 overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--border)' }}>
+                    <table className="min-w-full text-xs" style={{ color: 'var(--text-primary)' }}>
+                      <thead style={{ background: 'var(--hover)' }}><tr>{taskRecordColumns.map(column => <th key={column} className="whitespace-nowrap px-3 py-2 text-left font-bold">{column}</th>)}</tr></thead>
+                      <tbody>{taskRecords.slice(currentRecordPage * 50, (currentRecordPage + 1) * 50).map((row, index) => (
+                        <tr key={currentRecordPage * 50 + index} className="border-t" style={{ borderColor: 'var(--divider)' }}>
+                          {taskRecordColumns.map(column => <td key={column} className="max-w-72 px-3 py-2 align-top">{String(row?.[column] ?? '')}</td>)}
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                  {recordPageCount > 1 && (
+                    <div className="mt-3 flex items-center justify-between gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <button type="button" onClick={() => setRecordPage(Math.max(0, currentRecordPage - 1))} disabled={currentRecordPage === 0} className="rounded-lg border px-3 py-1.5 disabled:opacity-40" style={{ borderColor: 'var(--border)' }}>Previous</button>
+                      <span>Page {currentRecordPage + 1} of {recordPageCount}</span>
+                      <button type="button" onClick={() => setRecordPage(Math.min(recordPageCount - 1, currentRecordPage + 1))} disabled={currentRecordPage >= recordPageCount - 1} className="rounded-lg border px-3 py-1.5 disabled:opacity-40" style={{ borderColor: 'var(--border)' }}>Next</button>
+                    </div>
+                  )}
+                </details>
+              )}
             </div>
 
             {/* Footer Actions */}

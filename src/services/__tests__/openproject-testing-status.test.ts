@@ -2,29 +2,28 @@
 // Unit tests for Testing Status change detection
 // Tests the findTestingStatusChange function to ensure it:
 // 1. Only uses "Testing Status" custom field, not standard "Status" field
-// 2. Returns the FIRST occurrence when forwarded multiple times
+// 2. Returns the latest occurrence when forwarded multiple times
 // 3. Returns null when Testing Status was never set to "Forwarded to the Testing Team"
 // 4. Uses the journal entry's user, not the ticket author
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock the fetchWorkPackageActivities function
-const mockFetchWorkPackageActivities = vi.fn()
+// Mock the transport; mocking an export from the module under test does not
+// replace references to that function inside the same module.
+const mockFetch = vi.fn()
+const mockFetchWorkPackageActivities = {
+  mockResolvedValue: (activities: unknown[]) => mockFetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({ _embedded: { elements: activities } }),
+  }),
+}
 
-vi.mock('../openproject', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../openproject')>()
-  return {
-    ...actual,
-    fetchWorkPackageActivities: (...args: unknown[]) => mockFetchWorkPackageActivities(...args),
-  }
-})
-
-// Import after mocking
 import { findTestingStatusChange } from '../openproject'
 
 describe('findTestingStatusChange', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubGlobal('fetch', mockFetch)
   })
 
   /**
@@ -108,9 +107,9 @@ describe('findTestingStatusChange', () => {
   })
 
   /**
-   * Test Case C: Forwarded more than once - should return the FIRST occurrence
+   * Test Case C: Forwarded more than once - cache stores the latest occurrence
    */
-  it('should return the FIRST occurrence when Testing Status is set to Forwarded multiple times', async () => {
+  it('should return the LATEST occurrence when Testing Status is set to Forwarded multiple times', async () => {
     mockFetchWorkPackageActivities.mockResolvedValue([
       {
         id: 1,
@@ -168,10 +167,10 @@ describe('findTestingStatusChange', () => {
       'Forwarded to the Testing Team'
     )
 
-    // Should return the FIRST occurrence (Person2 on March 12)
+    // The cache displays the most recent handoff.
     expect(result).not.toBeNull()
-    expect(result?.changedAt).toBe('2026-03-12T10:00:00Z')
-    expect(result?.changedBy).toBe('Person2')
+    expect(result?.changedAt).toBe('2026-03-15T16:00:00Z')
+    expect(result?.changedBy).toBe('Person4')
   })
 
   /**

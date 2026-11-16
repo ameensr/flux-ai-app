@@ -1,9 +1,8 @@
 // src/modules/TicketBowl/index.tsx
 // Main Ticket Bowl module component
 
-import React, { useState, useEffect, useMemo } from 'react'
-import { motion } from 'framer-motion'
-import { Ticket, AlertCircle, ExternalLink, Settings } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { AlertCircle, BarChart3, ListFilter, Settings } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -140,7 +139,7 @@ export default function TicketBowl() {
     opProjectId: selectedOpProjectId,
     opProjectName: currentOpProjectName,
     config: opConfig,
-    autoRestoreJob: true,
+    autoRestoreJob: false,
   })
 
   // 4. Ticket Bowl Hook for data fetching and operations (without sync)
@@ -157,8 +156,10 @@ export default function TicketBowl() {
     total,
     totalPages,
     loading: ticketsLoading,
+    error: ticketsError,
     stats,
     statsLoading,
+    statsError,
     availableTypes,
     selectedTicketForHistory,
     historyEvents,
@@ -187,7 +188,6 @@ export default function TicketBowl() {
   } = useTicketBowl({
     projectId: selectedProjectId,
     opProjectId: selectedOpProjectId,
-    opProjectName: currentOpProjectName,
     config: opConfig,
     autoLoad: Boolean(selectedProjectId),
   })
@@ -218,7 +218,7 @@ export default function TicketBowl() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto space-y-5">
+    <div className="mx-auto max-w-[1680px] space-y-6 p-4 md:p-6 lg:p-8">
       {/* ── Header ── */}
       <TicketBowlHeader
         projects={projects}
@@ -263,16 +263,35 @@ export default function TicketBowl() {
       )}
 
       {/* ── Testing Status Dashboard ── */}
+      {(ticketsError || statsError) && (
+        <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-300">
+          {ticketsError && <p>Tickets could not be loaded: {ticketsError}</p>}
+          {statsError && <p>Dashboard statistics could not be loaded: {statsError}</p>}
+        </div>
+      )}
       {canViewDashboard && (
-        <TicketBowlStatsDashboard
-          stats={stats}
-          loading={statsLoading}
-          onFilterUnavailableHistory={toggleViewUnavailableHistory}
-          isFilteringUnavailableHistory={filters.historyVerificationStatus === 'unavailable'}
-        />
+        <section aria-label="Handoff overview" className="space-y-3">
+          <div className="flex items-center gap-2 text-text-primary">
+            <BarChart3 className="h-4 w-4 text-accent" />
+            <h2 className="text-sm font-semibold">Handoff overview</h2>
+          </div>
+          <TicketBowlStatsDashboard
+            stats={stats}
+            loading={statsLoading}
+            onFilterUnavailableHistory={toggleViewUnavailableHistory}
+            isFilteringUnavailableHistory={filters.historyVerificationStatus === 'unavailable'}
+          />
+        </section>
       )}
 
       {/* ── Primary & Secondary Filters ── */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-text-primary">
+          <ListFilter className="h-4 w-4 text-accent" />
+          <h2 className="text-sm font-semibold">Ticket records</h2>
+        </div>
+        <span className="text-xs text-text-muted">{total.toLocaleString()} matching tickets</span>
+      </div>
       <TicketBowlFiltersPanel
         filters={filters}
         onFilterChange={setFilters}

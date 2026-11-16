@@ -147,6 +147,7 @@ export interface TicketBowlSyncProgress {
   | 'fetching-activities'
   | 'saving-history'
   | 'recalculating-counts'
+  | 'committing'
   | 'complete'
   | 'error'
   current: number

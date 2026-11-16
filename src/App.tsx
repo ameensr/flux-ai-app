@@ -21,9 +21,8 @@ import { useMaintenanceStore } from '@/store/useMaintenanceStore'
 import { useAIPlatformStore } from '@/store/useAIPlatformStore'
 import { useToast } from '@/hooks/use-toast'
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog'
-import { PandaIdleNotification, SyncNotification } from '@/components/LazyPanda'
+import { PandaIdleNotification } from '@/components/LazyPanda'
 import { FloatingThemeToggle } from '@/components/ui/FloatingThemeToggle'
-import { useBackgroundSync } from '@/hooks/useBackgroundSync'
 import { QubePageLoader, QubeFullPageLoader } from '@/components/ui/QubeLoader'
 
 // ── Idle timeout context ──────────────────────────────────────────────────────
@@ -348,7 +347,6 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       <AIRestrictedModal />
       <SessionExpiredToast />
       {isAuthenticated && <PandaIdleNotification />}
-      <GlobalSyncComponents />
     </>
   )
 }
@@ -369,87 +367,6 @@ function SessionExpiredToast() {
     } catch { /* ignore */ }
   }, [toast])
   return null
-}
-
-// ── Wrapper for global background sync UI components ──
-function GlobalSyncComponents() {
-  const isAuthenticated = useAppStore(s => s.isAuthenticated)
-
-  // Get user's first accessible project with OpenProject configured
-  const [projectInfo, setProjectInfo] = React.useState<{
-    projectId: string
-    opConfig: any
-  } | null>(null)
-
-  React.useEffect(() => {
-    if (!isAuthenticated) return
-
-    async function loadFirstProject() {
-      try {
-        const { data } = await supabase
-          .from('projects')
-          .select('id, name, metadata')
-          .order('name', { ascending: true })
-          .limit(1)
-          .single()
-
-        if (data) {
-          const opConfig = data.metadata?.openproject || null
-          if (opConfig?.openproject_url && opConfig?.openproject_api_key) {
-            setProjectInfo({
-              projectId: data.id,
-              opConfig,
-            })
-          }
-        }
-      } catch (err) {
-        console.warn('[GlobalSync] Could not load project:', err)
-      }
-    }
-
-    loadFirstProject()
-  }, [isAuthenticated])
-
-  const {
-    showSuccessNotification,
-    showErrorNotification,
-    syncResult,
-    retrySync,
-    dismissSuccessNotification,
-    dismissErrorNotification,
-  } = useBackgroundSync({
-    projectId: projectInfo?.projectId || '',
-    opProjectId: projectInfo?.opConfig?.openproject_project_id ? Number(projectInfo.opConfig.openproject_project_id) : null,
-    opProjectName: null,
-    config: projectInfo?.opConfig || null,
-    autoRestoreJob: true,
-  })
-
-  if (!isAuthenticated) return null
-
-  return (
-    <>
-      {/* Success Notification */}
-      <SyncNotification
-        type="success"
-        isVisible={showSuccessNotification}
-        onDismiss={dismissSuccessNotification}
-        totalSynced={syncResult?.totalSynced || 0}
-        eventsFound={syncResult?.eventsFound || 0}
-        autoHideDelay={8000}
-      />
-
-      {/* Error Notification */}
-      <SyncNotification
-        type="error"
-        isVisible={showErrorNotification}
-        onDismiss={dismissErrorNotification}
-        onRetry={retrySync}
-        errorMessage={syncResult?.errorMessage}
-        autoHideDelay={0}
-      />
-    </>
-  )
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────

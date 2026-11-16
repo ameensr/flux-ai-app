@@ -21,7 +21,7 @@ import {
   failSyncJob,
   cancelSyncJob,
   subscribeSyncJob,
-  progressToJobUpdate,
+  unsubscribeSyncJob,
   type SyncJob,
 } from '@/services/syncJobService'
 import { emitSyncEvent } from '@/lib/syncReminderEvents'
@@ -172,6 +172,7 @@ export function useBackgroundSync({
         handleSyncError(updatedJob.error_message || 'Synchronization failed')
       }
     })
+    unsubscribeRef.current = () => unsubscribeSyncJob(channel)
   }, [])
 
   // Cleanup subscription on unmount
@@ -279,21 +280,19 @@ export function useBackgroundSync({
       },
     }))
 
-    // Subscribe to job updates
-    subscribeToJob(job.id)
-
     // Emit sync start event
     emitSyncEvent('sync:start')
 
     // Start actual synchronization in background
     performSync(job.id, config)
-  }, [config, projectId, opProjectId, opProjectName, state.isSyncing, toast, subscribeToJob])
+  }, [config, projectId, opProjectId, opProjectName, state.isSyncing, toast])
 
   // Perform actual synchronization
   const performSync = async (
     jobId: string,
     syncConfig: OpenProjectConfig
   ) => {
+    let progressWriteQueue = Promise.resolve()
     try {
       // Mark job as started
       await startSyncJob(jobId)
@@ -319,11 +318,15 @@ export function useBackgroundSync({
           }))
 
           // Also persist to database for cross-tab sync
-          await updateSyncJob(jobId, {
-            phase: progress.phase,
-            progress_current: progress.current,
-            progress_total: progress.total,
-            progress_message: progress.message || null,
+          progressWriteQueue = progressWriteQueue.then(async () => {
+            await updateSyncJob(jobId, {
+              phase: progress.phase,
+              progress_current: progress.current,
+              progress_total: progress.total,
+              progress_message: progress.message || null,
+            })
+          }).catch(error => {
+            console.warn('[useBackgroundSync] Could not save sync progress:', error)
           })
         },
         {
@@ -332,19 +335,24 @@ export function useBackgroundSync({
         }
       )
 
+      await progressWriteQueue
       if (result.success) {
         // Mark job as completed
         await completeSyncJob(jobId, {
           totalSynced: result.totalSynced,
           eventsFound: result.eventsFound,
         })
+        handleSyncSuccess(result.totalSynced, result.eventsFound)
       } else {
         // Mark job as failed
         await failSyncJob(jobId, result.message)
+        handleSyncError(result.message)
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Synchronization failed'
+      await progressWriteQueue
       await failSyncJob(jobId, errorMsg)
+      handleSyncError(errorMsg)
     }
   }
 

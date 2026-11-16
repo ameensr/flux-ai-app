@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Bot, X } from 'lucide-react'
 import { PandaPanel } from '@/features/panda-copilot/components/PandaPanel'
 import { useAIAccess } from '@/hooks/useAIAccess'
 
@@ -14,30 +13,27 @@ export const AICopilot = () => {
 
   return (
     <>
-      {/* FAB */}
+      {/* Compact launcher aligned with the theme control */}
       <div className="fixed bottom-6 right-6 z-[60]">
         <motion.button
           type="button"
           onClick={() => setIsOpen(prev => !prev)}
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
+          whileHover={{ y: -2 }}
+          whileTap={{ scale: 0.96 }}
           aria-label={isOpen ? 'Close QA Pilot' : 'Open QA Pilot'}
           aria-expanded={isOpen}
-          className={cn(
-            "h-11 rounded-xl flex items-center justify-center border transition-all duration-200 relative cursor-pointer select-none",
-            isOpen ? "w-11 px-0" : "px-3.5"
-          )}
+          className="group relative flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border backdrop-blur-xl transition-[background-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2"
           style={{
             background: isOpen
               ? 'var(--surface-elevated)'
-              : 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, var(--surface-elevated)), var(--surface-elevated))',
+              : 'linear-gradient(145deg, color-mix(in srgb, var(--accent) 15%, var(--surface-elevated)), var(--surface-elevated))',
             borderColor: isOpen
               ? 'var(--border)'
-              : 'color-mix(in srgb, var(--accent) 40%, transparent)',
+              : 'color-mix(in srgb, var(--accent) 36%, var(--border))',
             color: 'var(--accent)',
             boxShadow: isOpen
-              ? 'var(--shadow)'
-              : '0 4px 16px -2px color-mix(in srgb, var(--accent) 25%, transparent), 0 1px 4px rgba(0,0,0,0.12)',
+              ? '0 6px 18px rgba(0,0,0,0.16)'
+              : '0 6px 18px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.14)',
           }}
         >
           <AnimatePresence mode="wait" initial={false}>
@@ -50,7 +46,7 @@ export const AICopilot = () => {
                 transition={{ duration: 0.15 }}
                 className="flex items-center justify-center"
               >
-                <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                <X className="h-[18px] w-[18px]" style={{ color: 'var(--text-secondary)' }} />
               </motion.span>
             ) : (
               <motion.span
@@ -62,13 +58,14 @@ export const AICopilot = () => {
                 className="flex items-center justify-center select-none"
                 aria-hidden
               >
-                <span className="font-bold text-[13px] tracking-tight whitespace-nowrap">
-                  <span style={{ color: 'var(--text-primary)' }}>QA</span>{' '}
-                  <span style={{ color: 'var(--accent)' }}>Pilot</span>
-                </span>
+                <Bot className="h-[19px] w-[19px]" strokeWidth={1.8} />
               </motion.span>
             )}
           </AnimatePresence>
+          <span className="pointer-events-none absolute -top-10 right-0 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-medium opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+            style={{ background: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
+            {isOpen ? 'Close QA Pilot' : 'QA Pilot'}
+          </span>
         </motion.button>
       </div>
 

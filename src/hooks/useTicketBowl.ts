@@ -5,7 +5,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useToast } from '@/hooks/use-toast'
 import type { OpenProjectConfig } from '@/services/openproject'
 import {
-  syncTicketBowlData,
   queryTicketBowlWorkPackages,
   fetchTicketBowlSyncStatus,
   fetchTicketForwardingHistory,
@@ -21,7 +20,6 @@ import type {
   TicketBowlSyncStatus,
   TicketBowlFilters,
   TicketBowlDashboardStats,
-  TicketBowlSyncProgress,
   ForwardingHistoryVerification,
   QuickSearchResult,
   QuickSearchProgress,
@@ -30,7 +28,6 @@ import type {
 export interface UseTicketBowlOptions {
   projectId: string
   opProjectId?: number | null
-  opProjectName?: string | null
   config?: OpenProjectConfig | null
   autoLoad?: boolean
 }
@@ -68,7 +65,6 @@ const EMPTY_STATS: TicketBowlDashboardStats = {
 export function useTicketBowl({
   projectId,
   opProjectId,
-  opProjectName,
   config,
   autoLoad = true,
 }: UseTicketBowlOptions) {
@@ -101,11 +97,10 @@ export function useTicketBowl({
   // Dashboard Stats State
   const [stats, setStats] = useState<TicketBowlDashboardStats>(EMPTY_STATS)
   const [statsLoading, setStatsLoading] = useState(false)
+  const [statsError, setStatsError] = useState<string | null>(null)
 
-  // Sync Status & Progress State
+  // Sync status; active syncs are managed by useBackgroundSync.
   const [syncStatus, setSyncStatus] = useState<TicketBowlSyncStatus | null>(null)
-  const [syncing, setSyncing] = useState(false)
-  const [syncProgress, setSyncProgress] = useState<TicketBowlSyncProgress | null>(null)
 
   // Dynamic OpenProject Types
   const [availableTypes, setAvailableTypes] = useState<Array<{ id: number; name: string }>>([])
@@ -167,6 +162,9 @@ export function useTicketBowl({
       if (currentRequestId === activeRequestIdRef.current) {
         const msg = err instanceof Error ? err.message : 'Failed to query tickets'
         setError(msg)
+        setTickets([])
+        setTotal(0)
+        setTotalPages(1)
       }
     } finally {
       if (currentRequestId === activeRequestIdRef.current) {
@@ -179,11 +177,14 @@ export function useTicketBowl({
   const loadDashboardStats = useCallback(async () => {
     if (!projectId) return
     setStatsLoading(true)
+    setStatsError(null)
     try {
       const statsData = await fetchTicketBowlDashboardStats(filters)
       setStats(statsData)
     } catch (err) {
       console.warn('[Ticket Bowl] Failed to load dashboard stats:', err)
+      setStatsError(err instanceof Error ? err.message : 'Failed to load dashboard statistics')
+      setStats(EMPTY_STATS)
     } finally {
       setStatsLoading(false)
     }
@@ -237,72 +238,10 @@ export function useTicketBowl({
     setFiltersState(prev => ({ ...prev, page: Math.max(1, newPage) }))
   }, [])
 
-  const dismissSyncProgress = useCallback(() => {
-    setSyncProgress(null)
-  }, [])
-
   // Page size selection (10, 25, 50, 100)
   const setPageSize = useCallback((newPageSize: number) => {
     setFiltersState(prev => ({ ...prev, pageSize: newPageSize, page: 1 }))
   }, [])
-
-  // Sync Data Action
-  const handleSyncData = useCallback(async () => {
-    if (!config?.openproject_url || !config?.openproject_api_key) {
-      toast({
-        title: 'OpenProject Not Configured',
-        description: 'Please configure your OpenProject API credentials in Project Hub first.',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    setSyncing(true)
-    setSyncProgress({
-      phase: 'fetching-tickets',
-      current: 0,
-      total: 0,
-      message: 'Starting Ticket Bowl synchronization...',
-    })
-
-    try {
-      const result = await syncTicketBowlData(
-        config,
-        projectId,
-        opProjectId,
-        opProjectName,
-        progress => {
-          setSyncProgress(progress)
-        }
-      )
-
-      if (result.success) {
-        toast({
-          title: 'Sync Successful',
-          description: result.message,
-        })
-        await loadSyncStatus()
-        await loadTickets()
-        await loadDashboardStats()
-      } else {
-        toast({
-          title: 'Sync Completed With Warnings',
-          description: result.message,
-          variant: 'destructive',
-        })
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Synchronization failed'
-      toast({
-        title: 'Sync Failed',
-        description: msg,
-        variant: 'destructive',
-      })
-    } finally {
-      setSyncing(false)
-      setSyncProgress(null)
-    }
-  }, [config, projectId, opProjectId, opProjectName, toast, loadSyncStatus, loadTickets, loadDashboardStats])
 
   // PROGRESSIVE STEP 4: On-demand Forwarding History inspection
   const openHistoryModal = useCallback(async (wp: TicketBowlWorkPackage) => {
@@ -479,12 +418,9 @@ export function useTicketBowl({
     window.location.href = '/support-tracker?import=ticketbowl'
   }, [tickets, selectedTicketIds, toast])
 
-  // Export to CSV
-  const exportToCsv = useCallback(() => {
-    if (tickets.length === 0) {
-      toast({ title: 'No Data', description: 'No tickets to export.' })
-      return
-    }
+  // Export every ticket matching the current filters, not just the visible page.
+  const exportToCsv = useCallback(async () => {
+    const csvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
 
     const headers = [
       'Ticket ID',
@@ -502,9 +438,25 @@ export function useTicketBowl({
       'Assignee',
     ]
 
-    const rows = tickets.map(t => [
+    try {
+      const allTickets: TicketBowlWorkPackage[] = []
+      let exportPage = 1
+      let totalPages = 1
+      do {
+        const result = await queryTicketBowlWorkPackages({ ...filters, page: exportPage, pageSize: 500 })
+        allTickets.push(...result.items)
+        totalPages = result.totalPages
+        exportPage++
+      } while (exportPage <= totalPages)
+
+      if (allTickets.length === 0) {
+        toast({ title: 'No Data', description: 'No tickets match the current filters.' })
+        return
+      }
+
+    const rows = allTickets.map(t => [
       t.work_package_id,
-      `"${(t.subject || '').replace(/"/g, '""')}"`,
+      t.subject,
       t.type_name,
       t.priority_name,
       t.status_name,
@@ -518,15 +470,19 @@ export function useTicketBowl({
       t.assignee_name || '',
     ])
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
-    const encodedUri = encodeURI(csvContent)
+    const csvContent = '\uFEFF' + [headers.map(csvCell).join(','), ...rows.map(r => r.map(csvCell).join(','))].join('\r\n')
+    const url = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8' }))
     const link = document.createElement('a')
-    link.setAttribute('href', encodedUri)
+    link.setAttribute('href', url)
     link.setAttribute('download', `ticket_bowl_export_${new Date().toISOString().split('T')[0]}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-  }, [tickets, toast])
+    URL.revokeObjectURL(url)
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'CSV Export Failed', description: err instanceof Error ? err.message : 'Could not export tickets.' })
+    }
+  }, [filters, toast])
 
   return {
     filters,
@@ -544,11 +500,8 @@ export function useTicketBowl({
     error,
     stats,
     statsLoading,
+    statsError,
     syncStatus,
-    syncing,
-    syncProgress,
-    dismissSyncProgress,
-    handleSyncData,
     availableTypes,
     loadingTypes,
     selectedTicketForHistory,

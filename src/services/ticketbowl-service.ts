@@ -137,7 +137,8 @@ export function inspectWorkPackageActivities(
       if (prop === 'status') continue
 
       const rawText = (detail.raw || anyDetail.html || '').trim()
-      const cleanRaw = rawText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
+      const cleanText = rawText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      const cleanRaw = cleanText.toLowerCase()
 
       // Identify Testing Status field (customField14)
       const isTestingStatusField =
@@ -174,12 +175,12 @@ export function inspectWorkPackageActivities(
 
       // Fallback: parse from raw text
       if (!extractedNewValue && cleanRaw) {
-        const changedMatch = cleanRaw.match(/(?:testing\s+status|customfield14|custom_field_14|cf_14)\s+changed\s+from\s+(.+?)\s+to\s+(.+)/i)
+        const changedMatch = cleanText.match(/(?:testing\s+status|customfield14|custom_field_14|cf_14)\s+changed\s+from\s+(.+?)\s+to\s+(.+)/i)
         if (changedMatch) {
           extractedOldValue = changedMatch[1].replace(/<[^>]*>/g, '').replace(/\.+$/, '').trim()
           extractedNewValue = changedMatch[2].replace(/<[^>]*>/g, '').replace(/\.+$/, '').trim()
         } else {
-          const setMatch = cleanRaw.match(/(?:testing\s+status|customfield14|custom_field_14|cf_14)\s+set\s+to\s+(.+)/i)
+          const setMatch = cleanText.match(/(?:testing\s+status|customfield14|custom_field_14|cf_14)\s+set\s+to\s+(.+)/i)
           if (setMatch) {
             extractedNewValue = setMatch[1].replace(/<[^>]*>/g, '').replace(/\.+$/, '').trim()
           }
@@ -398,6 +399,7 @@ export async function syncTicketBowlData(
         error_details: null,
       })
       emitSyncEvent('sync:success')
+      onProgress?.({ phase: 'complete', current: 1, total: 1, message: 'Sync complete: no tickets found.' })
       return { success: true, message: 'No tickets found in the selected project.', totalSynced: 0, eventsFound: 0 }
     }
 
@@ -718,7 +720,7 @@ export async function syncTicketBowlData(
     onProgress?.({
       phase: 'saving-history',
       current: 0,
-      total: allDiscoveredTransitions.length,
+      total: allDiscoveredTransitions.length + allDiscoveredStatusChanges.length,
       message: 'Persisting verified forwarding events and complete Testing Status history...',
     })
 
@@ -756,6 +758,12 @@ export async function syncTicketBowlData(
             ignoreDuplicates: true,
           })
         if (error) errors.push(`Forwarding history upsert failed: ${error.message}`)
+        onProgress?.({
+          phase: 'saving-history',
+          current: Math.min(i + UPSERT_CHUNK, historyRows.length),
+          total: historyRows.length + allDiscoveredStatusChanges.length,
+          message: `Saving history: ${Math.min(i + UPSERT_CHUNK, historyRows.length)} / ${historyRows.length + allDiscoveredStatusChanges.length}`,
+        })
       }
     }
 
@@ -793,6 +801,13 @@ export async function syncTicketBowlData(
             ignoreDuplicates: true,
           })
         if (error) errors.push(`Testing status history upsert failed: ${error.message}`)
+        const savedHistory = historyRows.length + Math.min(i + UPSERT_CHUNK, statusHistoryRows.length)
+        onProgress?.({
+          phase: 'saving-history',
+          current: savedHistory,
+          total: historyRows.length + statusHistoryRows.length,
+          message: `Saving history: ${savedHistory} / ${historyRows.length + statusHistoryRows.length}`,
+        })
       }
     }
 
@@ -903,6 +918,13 @@ export async function syncTicketBowlData(
       await supabase
         .from(updateTable)
         .upsert(chunkWithJobId, { onConflict: updateConflictKeys })
+      const recalculated = Math.min(i + UPSERT_CHUNK, updateUpdates.length)
+      onProgress?.({
+        phase: 'recalculating-counts',
+        current: recalculated,
+        total: updateUpdates.length,
+        message: `Updating verification counts: ${recalculated} / ${updateUpdates.length}`,
+      })
     }
 
     // Cancellation check after count recalculation
@@ -928,21 +950,11 @@ export async function syncTicketBowlData(
       error_details: errors.length > 0 ? errors.join('; ') : null,
     })
 
-    onProgress?.({
-      phase: 'complete',
-      current: snapshotsSaved,
-      total: rawWorkPackages.length,
-      message: `Sync complete: ${snapshotsSaved} tickets saved (${verifiedCountTotal} verified, ${unavailableCountTotal} with incomplete/unavailable history).`,
-      ticketsSaved: snapshotsSaved,
-      eventsFound: allDiscoveredTransitions.length,
-      verifiedCount: verifiedCountTotal,
-      unavailableCount: unavailableCountTotal,
-    })
-
     // ------------------------------------------------------------------------
     // ATOMIC COMMIT: Move staging data to production tables
     // ------------------------------------------------------------------------
     if (options?.jobId) {
+      onProgress?.({ phase: 'committing', current: 0, total: 1, message: 'Publishing synced tickets...' })
       console.log('[Ticket Bowl] Committing staged data to production tables...')
       try {
         const commitResult = await commitSyncData(options.jobId, projectId)
@@ -955,6 +967,17 @@ export async function syncTicketBowlData(
         throw new Error(`Sync completed but failed to commit data: ${commitErrMsg}`)
       }
     }
+
+    onProgress?.({
+      phase: 'complete',
+      current: 1,
+      total: 1,
+      message: `Sync complete: ${snapshotsSaved} tickets saved (${verifiedCountTotal} verified, ${unavailableCountTotal} with incomplete/unavailable history).`,
+      ticketsSaved: snapshotsSaved,
+      eventsFound: allDiscoveredTransitions.length,
+      verifiedCount: verifiedCountTotal,
+      unavailableCount: unavailableCountTotal,
+    })
 
     emitSyncEvent('sync:success')
     return {
@@ -1250,7 +1273,8 @@ async function fallbackQueryTicketBowl(
     if (fromIso) histQuery = histQuery.gte('changed_at', fromIso)
     if (toIso) histQuery = histQuery.lte('changed_at', toIso)
 
-    const { data: histData } = await histQuery
+    const { data: histData, error: historyError } = await histQuery
+    if (historyError) throw historyError
     if (!histData || histData.length === 0) {
       return { items: [], total: 0, pageSize, page, totalPages: 1 }
     }
@@ -1282,8 +1306,7 @@ async function fallbackQueryTicketBowl(
 
   const { data, count, error } = await query
   if (error) {
-    console.error('[Ticket Bowl] Direct query error:', error)
-    return { items: [], total: 0, pageSize, page, totalPages: 1 }
+    throw error
   }
 
   const items = (data || []).map(row => ({
@@ -1728,7 +1751,8 @@ export async function fetchTicketBowlDashboardStats(
       p_search: search || null,
     })
 
-    if (!error && Array.isArray(data) && data.length > 0) {
+    if (error) throw error
+    if (Array.isArray(data) && data.length > 0) {
       const row = data[0]
       return {
         totalUniqueTickets: Number(row.total_unique_tickets || 0),
@@ -1743,21 +1767,9 @@ export async function fetchTicketBowlDashboardStats(
         historyVerificationCounts: (row.history_verification_counts || {}) as Record<string, number>,
       }
     }
+    throw new Error('Ticket Bowl statistics returned no data')
   } catch (e) {
-    console.warn('[Ticket Bowl] Stats RPC failed, using client aggregation:', e)
-  }
-
-  // Fallback
-  return {
-    totalUniqueTickets: 0,
-    totalForwardingEvents: 0,
-    repeatForwardedTickets: 0,
-    unavailableHistoryTickets: 0,
-    currentTestingStatusCounts: {},
-    qaMissedCounts: {},
-    typeCounts: {},
-    statusCounts: {},
-    priorityCounts: {},
-    historyVerificationCounts: {},
+    console.warn('[Ticket Bowl] Stats RPC failed:', e)
+    throw e
   }
 }

@@ -94,9 +94,9 @@ export function TicketBowlFiltersPanel({
   )
 
   return (
-    <div className="rounded-xl border border-border/70 bg-surface/70 p-4 space-y-3.5 shadow-xs">
+    <div className="space-y-3.5 rounded-xl border border-border/60 bg-surface/80 p-4 shadow-xs">
       {/* ── Primary Filter: Forwarded to Testing Team Date Range ── */}
-      <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 rounded-lg border ${quickSearchMode ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-accent/5 border-accent/20'}`}>
+      <div className={`flex flex-col justify-between gap-3 rounded-lg border p-3 lg:flex-row lg:items-center ${quickSearchMode ? 'border-emerald-500/25 bg-emerald-500/5' : 'border-border/50 bg-surface-secondary/40'}`}>
         <div className="flex items-center gap-2">
           <Calendar className={`w-4 h-4 ${quickSearchMode ? 'text-emerald-500' : 'text-accent'}`} />
           <span className="text-xs font-semibold text-text-primary">

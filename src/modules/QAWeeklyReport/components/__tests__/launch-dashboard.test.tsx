@@ -46,4 +46,11 @@ describe('Dashboard Launch Components', () => {
     )
     expect(html).toContain('INITIALIZING...')
   })
+
+  it('keeps the role in the boardroom attendee label', () => {
+    const html = renderToString(
+      <CinematicBoardroomIntro meetingWith="Abhin(VP)" teamMembers={['QA Member']} />
+    )
+    expect(html).toMatch(/<span class="[^"]*nameTagText[^"]*">Abhin\(VP\)<\/span>/)
+  })
 })
