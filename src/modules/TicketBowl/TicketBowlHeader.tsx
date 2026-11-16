@@ -7,6 +7,9 @@ interface TicketBowlHeaderProps {
   selectedProjectId: string
   onSelectProject: (id: string) => void
   opProjects: Array<{ id: number; name: string }>
+  showOpProjectSelector: boolean
+  opProjectsLoading: boolean
+  onOpenOpProjects: () => void
   selectedOpProjectId?: number | null
   onSelectOpProject: (id: number | null) => void
   syncStatus: TicketBowlSyncStatus | null
@@ -25,7 +28,8 @@ interface TicketBowlHeaderProps {
 const toolbarButton = 'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border/60 bg-surface px-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
 
 export function TicketBowlHeader({
-  projects, selectedProjectId, onSelectProject, opProjects, selectedOpProjectId,
+  projects, selectedProjectId, onSelectProject, opProjects, showOpProjectSelector,
+  opProjectsLoading, onOpenOpProjects, selectedOpProjectId,
   onSelectOpProject, syncStatus, syncing, syncProgress, onSync, onCancelSync,
   selectedCount, onExportRelease, onExportSupport, onExportCsv, canSync, canExport,
 }: TicketBowlHeaderProps) {
@@ -58,11 +62,15 @@ export function TicketBowlHeader({
               {projects.map(project => <option key={project.id} value={project.id} className="bg-surface">{project.name}</option>)}
             </select>
           </label>
-          {opProjects.length > 0 && (
+          {showOpProjectSelector && (
             <label className="flex h-8 min-w-0 items-center gap-2 rounded-lg border border-border/60 bg-surface px-2.5 text-xs text-text-muted">
               <span>OpenProject</span>
-              <select value={selectedOpProjectId ?? ''} onChange={e => onSelectOpProject(e.target.value ? Number(e.target.value) : null)} className="max-w-[165px] cursor-pointer truncate bg-transparent font-medium text-text-primary outline-none focus-visible:ring-2 focus-visible:ring-accent">
+              <select value={selectedOpProjectId ?? ''} onFocus={onOpenOpProjects} onChange={e => onSelectOpProject(e.target.value ? Number(e.target.value) : null)} className="max-w-[165px] cursor-pointer truncate bg-transparent font-medium text-text-primary outline-none focus-visible:ring-2 focus-visible:ring-accent">
                 <option value="" className="bg-surface">All projects</option>
+                {selectedOpProjectId && !opProjects.some(project => project.id === selectedOpProjectId) && (
+                  <option value={selectedOpProjectId} className="bg-surface">Project #{selectedOpProjectId}</option>
+                )}
+                {opProjectsLoading && <option disabled className="bg-surface">Loading projects...</option>}
                 {opProjects.map(project => <option key={project.id} value={project.id} className="bg-surface">{project.name}</option>)}
               </select>
             </label>

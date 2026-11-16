@@ -1,23 +1,20 @@
 // src/hooks/useTicketBowl.ts
 // React hook encapsulating state, progressive loading, queries, sync, and interactions for Ticket Bowl
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useToast } from '@/hooks/use-toast'
 import type { OpenProjectConfig } from '@/services/openproject'
 import {
   queryTicketBowlWorkPackages,
-  fetchTicketBowlSyncStatus,
   fetchTicketForwardingHistory,
   fetchTicketTestingStatusHistory,
   fetchTicketBowlDashboardStats,
-  fetchAllOpenProjectTypes,
   quickFetchByForwardedDate,
 } from '@/services/ticketbowl-service'
 import type {
   TicketBowlWorkPackage,
   TicketBowlForwardingEvent,
   TicketBowlTestingStatusEvent,
-  TicketBowlSyncStatus,
   TicketBowlFilters,
   TicketBowlDashboardStats,
   ForwardingHistoryVerification,
@@ -92,6 +89,7 @@ export function useTicketBowl({
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [listReady, setListReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Dashboard Stats State
@@ -99,12 +97,13 @@ export function useTicketBowl({
   const [statsLoading, setStatsLoading] = useState(false)
   const [statsError, setStatsError] = useState<string | null>(null)
 
-  // Sync status; active syncs are managed by useBackgroundSync.
-  const [syncStatus, setSyncStatus] = useState<TicketBowlSyncStatus | null>(null)
-
-  // Dynamic OpenProject Types
+  // Keep type options from the unfiltered cache even when a filter narrows stats.
   const [availableTypes, setAvailableTypes] = useState<Array<{ id: number; name: string }>>([])
-  const [loadingTypes, setLoadingTypes] = useState(false)
+  useEffect(() => {
+    activeStatsRequestIdRef.current++
+    setAvailableTypes([])
+    setStats(EMPTY_STATS)
+  }, [projectId])
 
   // History Modal State
   const [selectedTicketForHistory, setSelectedTicketForHistory] = useState<TicketBowlWorkPackage | null>(null)
@@ -124,25 +123,9 @@ export function useTicketBowl({
 
   // Request race-condition guard
   const activeRequestIdRef = useRef(0)
+  const activeStatsRequestIdRef = useRef(0)
 
-  // Load Sync Status
-  const loadSyncStatus = useCallback(async () => {
-    if (!projectId) return
-    const status = await fetchTicketBowlSyncStatus(projectId, opProjectId)
-    setSyncStatus(status)
-  }, [projectId, opProjectId])
-
-  // Fetch Available Types
-  const loadTypes = useCallback(async () => {
-    if (!config?.openproject_url || !config?.openproject_api_key) return
-    setLoadingTypes(true)
-    try {
-      const types = await fetchAllOpenProjectTypes(config)
-      setAvailableTypes(types)
-    } finally {
-      setLoadingTypes(false)
-    }
-  }, [config])
+  useEffect(() => setListReady(false), [projectId, opProjectId])
 
   // PROGRESSIVE STEP 2: Load cached ticket data fast (first page independent of analytics)
   const loadTickets = useCallback(async () => {
@@ -157,6 +140,7 @@ export function useTicketBowl({
         setTickets(result.items)
         setTotal(result.total)
         setTotalPages(result.totalPages)
+        setListReady(true)
       }
     } catch (err) {
       if (currentRequestId === activeRequestIdRef.current) {
@@ -165,6 +149,7 @@ export function useTicketBowl({
         setTickets([])
         setTotal(0)
         setTotalPages(1)
+        setListReady(true)
       }
     } finally {
       if (currentRequestId === activeRequestIdRef.current) {
@@ -174,35 +159,49 @@ export function useTicketBowl({
   }, [filters, projectId])
 
   // PROGRESSIVE STEP 3: Load summary analytics in parallel
+  const statsFilters = useMemo(() => ({ ...filters, page: 1, pageSize: DEFAULT_FILTERS.pageSize }), [
+    filters.projectId, filters.opProjectId, filters.forwardedFrom, filters.forwardedTo,
+    filters.typeName, filters.statusName, filters.priorityName, filters.testingStatus,
+    filters.isQAMissed, filters.authorName, filters.assigneeName,
+    filters.historyVerificationStatus, filters.search,
+  ])
+
   const loadDashboardStats = useCallback(async () => {
     if (!projectId) return
+    const currentRequestId = ++activeStatsRequestIdRef.current
     setStatsLoading(true)
     setStatsError(null)
     try {
-      const statsData = await fetchTicketBowlDashboardStats(filters)
-      setStats(statsData)
+      const statsData = await fetchTicketBowlDashboardStats(statsFilters)
+      if (currentRequestId === activeStatsRequestIdRef.current) {
+        setStats(statsData)
+        setAvailableTypes(previous => {
+          const names = new Set([...previous.map(type => type.name), ...Object.keys(statsData.typeCounts)])
+          return [...names].sort().map((name, id) => ({ id, name }))
+        })
+      }
     } catch (err) {
-      console.warn('[Ticket Bowl] Failed to load dashboard stats:', err)
-      setStatsError(err instanceof Error ? err.message : 'Failed to load dashboard statistics')
-      setStats(EMPTY_STATS)
+      if (currentRequestId === activeStatsRequestIdRef.current) {
+        console.warn('[Ticket Bowl] Failed to load dashboard stats:', err)
+        setStatsError(err instanceof Error ? err.message : 'Failed to load dashboard statistics')
+        setStats(EMPTY_STATS)
+      }
     } finally {
-      setStatsLoading(false)
+      if (currentRequestId === activeStatsRequestIdRef.current) setStatsLoading(false)
     }
-  }, [filters, projectId])
+  }, [statsFilters, projectId])
 
   useEffect(() => {
-    if (autoLoad && projectId) {
-      loadSyncStatus()
-      loadTypes()
-    }
-  }, [autoLoad, projectId, loadSyncStatus, loadTypes])
-
-  useEffect(() => {
-    if (autoLoad && projectId) {
+    if (autoLoad && projectId && filters.projectId === projectId && filters.opProjectId === (opProjectId || null)) {
       loadTickets()
+    }
+  }, [autoLoad, projectId, opProjectId, filters, loadTickets])
+
+  useEffect(() => {
+    if (autoLoad && listReady && projectId && statsFilters.projectId === projectId && statsFilters.opProjectId === (opProjectId || null)) {
       loadDashboardStats()
     }
-  }, [autoLoad, projectId, filters, loadTickets, loadDashboardStats])
+  }, [autoLoad, listReady, projectId, opProjectId, statsFilters, loadDashboardStats])
 
   // Set individual filters and reset to page 1
   const setFilters = useCallback((updates: Partial<TicketBowlFilters>) => {
@@ -501,9 +500,7 @@ export function useTicketBowl({
     stats,
     statsLoading,
     statsError,
-    syncStatus,
     availableTypes,
-    loadingTypes,
     selectedTicketForHistory,
     historyEvents,
     testingStatusHistory,

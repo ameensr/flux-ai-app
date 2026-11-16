@@ -18,7 +18,7 @@ const mockFetchWorkPackageActivities = {
   }),
 }
 
-import { findTestingStatusChange } from '../openproject'
+import { fetchWorkPackageActivities, findTestingStatusChange } from '../openproject'
 
 describe('findTestingStatusChange', () => {
   beforeEach(() => {
@@ -350,5 +350,31 @@ describe('findTestingStatusChange', () => {
 
     // Should NOT match because we only care about NEW value being "Forwarded to the Testing Team"
     expect(result).toBeNull()
+  })
+
+  it('reads a Formattable activity detail and uses createdAt rather than updatedAt', async () => {
+    mockFetchWorkPackageActivities.mockResolvedValue([{
+      id: 98,
+      createdAt: '2026-11-05T09:30:00Z',
+      updatedAt: '2026-11-06T12:00:00Z',
+      _links: { user: { title: 'Alex Developer', href: '/api/v3/users/42' } },
+      details: [{ format: 'plain', raw: 'Testing Status changed from In Progress to Forwarded to the Testing Team' }],
+    }])
+
+    const result = await findTestingStatusChange(
+      { openproject_url: 'https://test.com', openproject_api_key: 'key' },
+      123
+    )
+
+    expect(result?.changedAt).toBe('2026-11-05T09:30:00Z')
+    expect(result?.changedBy).toBe('Alex Developer')
+  })
+
+  it('reports activity API failures instead of treating them as no forwarding history', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 403 })
+
+    await expect(fetchWorkPackageActivities(
+      { openproject_url: 'https://test.com', openproject_api_key: 'key' }, 123
+    )).rejects.toThrow('failed (403)')
   })
 })

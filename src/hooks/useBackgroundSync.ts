@@ -82,6 +82,10 @@ export function useBackgroundSync({
     setSyncStatus(status)
   }, [projectId, opProjectId])
 
+  useEffect(() => {
+    loadSyncStatus()
+  }, [loadSyncStatus])
+
   // Check for existing active job on mount
   useEffect(() => {
     if (!autoRestoreJob || !projectId) return
@@ -247,22 +251,29 @@ export function useBackgroundSync({
     }
 
     // Create sync job
-    const job = await createSyncJob({
+    let job = await createSyncJob({
       projectId,
       opProjectId,
       opProjectName,
     })
 
-    if (!job) {
-      toast({
-        title: 'Failed to Start Sync',
-        description: 'Could not create synchronization job. Please try again.',
-        variant: 'destructive',
-      })
-      return
+    if (job?.status === 'running') {
+      const lastUpdate = new Date(job.updated_at || job.created_at).getTime()
+      if (Number.isFinite(lastUpdate) && Date.now() - lastUpdate < 5 * 60 * 1000) {
+        toast({
+          title: 'Sync Already Running',
+          description: 'Another sync is active for this project. Please wait for it to finish.',
+        })
+        return
+      }
+      // A stale job may belong to another user and cannot always be cleared
+      // through row-level security. Run this requested sync without job tracking.
+      job = null
     }
 
-    currentJobIdRef.current = job.id
+    // The sync job table has stricter RLS than Ticket Bowl's import permission
+    // in some deployed databases. Sync directly when job tracking is unavailable.
+    currentJobIdRef.current = job?.id ?? null
 
     // Clear any previous cancelled job marker
     sessionStorage.removeItem(`cancelled_sync_job_${projectId}`)
@@ -284,18 +295,43 @@ export function useBackgroundSync({
     emitSyncEvent('sync:start')
 
     // Start actual synchronization in background
-    performSync(job.id, config)
+    performSync(job?.id ?? null, config)
   }, [config, projectId, opProjectId, opProjectName, state.isSyncing, toast])
 
   // Perform actual synchronization
   const performSync = async (
-    jobId: string,
+    jobId: string | null,
     syncConfig: OpenProjectConfig
   ) => {
     let progressWriteQueue = Promise.resolve()
+    let syncJobId = jobId
     try {
       // Mark job as started
-      await startSyncJob(jobId)
+      if (syncJobId) {
+        try {
+          await startSyncJob(syncJobId)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          if (!message.includes('sync_jobs_unique_running')) throw error
+
+          const runningJob = await getActiveSyncJob(projectId)
+          const lastUpdate = runningJob ? new Date(runningJob.updated_at || runningJob.created_at).getTime() : NaN
+          if (runningJob?.status === 'running' && Number.isFinite(lastUpdate) && Date.now() - lastUpdate < 5 * 60 * 1000) {
+            throw new Error('Another sync is already running for this project. Wait for it to finish before retrying.')
+          }
+
+          // The conflicting running row is stale. Continue the user-requested
+          // sync without trying to mark another row as running.
+          try {
+            await failSyncJob(syncJobId, 'Job tracking unavailable: conflicting stale sync job')
+          } catch (trackingError) {
+            console.warn('[useBackgroundSync] Could not close pending sync job:', trackingError)
+          }
+          syncJobId = null
+          currentJobIdRef.current = null
+          setState(prev => ({ ...prev, currentJob: null }))
+        }
+      }
 
       // Perform sync with progress updates
       const result = await syncTicketBowlData(
@@ -318,8 +354,8 @@ export function useBackgroundSync({
           }))
 
           // Also persist to database for cross-tab sync
-          progressWriteQueue = progressWriteQueue.then(async () => {
-            await updateSyncJob(jobId, {
+          if (syncJobId) progressWriteQueue = progressWriteQueue.then(async () => {
+            await updateSyncJob(syncJobId!, {
               phase: progress.phase,
               progress_current: progress.current,
               progress_total: progress.total,
@@ -331,27 +367,45 @@ export function useBackgroundSync({
         },
         {
           useIncrementalActivities: true,
-          jobId: jobId // Pass job ID for atomic commits and cancellation
+          jobId: syncJobId || undefined // Use direct writes when job tracking is unavailable
         }
       )
 
       await progressWriteQueue
       if (result.success) {
         // Mark job as completed
-        await completeSyncJob(jobId, {
-          totalSynced: result.totalSynced,
-          eventsFound: result.eventsFound,
-        })
+        if (syncJobId) {
+          try {
+            await completeSyncJob(syncJobId, {
+              totalSynced: result.totalSynced,
+              eventsFound: result.eventsFound,
+            })
+          } catch (trackingError) {
+            console.warn('[useBackgroundSync] Data synced, but job completion could not be recorded:', trackingError)
+          }
+        }
         handleSyncSuccess(result.totalSynced, result.eventsFound)
       } else {
         // Mark job as failed
-        await failSyncJob(jobId, result.message)
+        if (syncJobId) {
+          try {
+            await failSyncJob(syncJobId, result.message)
+          } catch (trackingError) {
+            console.warn('[useBackgroundSync] Could not record failed sync job:', trackingError)
+          }
+        }
         handleSyncError(result.message)
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Synchronization failed'
       await progressWriteQueue
-      await failSyncJob(jobId, errorMsg)
+      if (syncJobId) {
+        try {
+          await failSyncJob(syncJobId, errorMsg)
+        } catch (trackingError) {
+          console.warn('[useBackgroundSync] Could not record failed sync job:', trackingError)
+        }
+      }
       handleSyncError(errorMsg)
     }
   }
@@ -451,6 +505,7 @@ export function useBackgroundSync({
     showErrorNotification: state.showErrorNotification,
     syncResult: state.syncResult,
     currentJob: state.currentJob,
+    canCancelSync: Boolean(state.currentJob),
     syncStatus,
 
     // Actions

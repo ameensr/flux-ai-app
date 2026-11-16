@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   detectExactForwardingTransitions,
+  inspectWorkPackageActivities,
   extractCustomFieldValue,
   EXACT_FORWARDED_TARGET_VALUE,
 } from '../ticketbowl-service'
@@ -246,6 +247,19 @@ describe('Ticket Bowl — Exact QA Handoff Transition Detection', () => {
     expect(extractCustomFieldValue('  Forwarded to the Testing Team  ')).toBe('Forwarded to the Testing Team')
     expect(extractCustomFieldValue(null)).toBe('')
     expect(extractCustomFieldValue(undefined)).toBe('')
+  })
+
+  it('uses the configured Testing Status field ID and the activity creation time', () => {
+    const activities: WorkPackageActivity[] = [{
+      id: 502,
+      createdAt: '2026-11-05T09:30:00Z',
+      user: { id: 42, name: 'Alex Developer' },
+      details: [{ property: 'customField27', oldValue: 'In Progress', newValue: 'Forwarded to the Testing Team' }],
+    }]
+
+    expect(inspectWorkPackageActivities(16471, activities).transitions).toHaveLength(0)
+    expect(inspectWorkPackageActivities(16471, activities, null, 27).transitions[0].changedAt)
+      .toBe('2026-11-05T09:30:00Z')
   })
 })
 

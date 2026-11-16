@@ -1,5 +1,6 @@
 // src/services/openproject.ts
 // OpenProject API integration service
+import { supabase } from '@/lib/supabase'
 
 export interface OpenProjectConfig {
   openproject_url: string
@@ -114,11 +115,13 @@ async function proxyFetch(
 ): Promise<Response> {
   const proxyUrl = `${getProxyUrl()}?path=${encodeURIComponent(apiPath)}`
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+  const { data: { session } } = await supabase.auth.getSession()
 
   return fetch(proxyUrl, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${supabaseAnonKey}`,
+      'Authorization': `Bearer ${session?.access_token || supabaseAnonKey}`,
+      'apikey': supabaseAnonKey,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -219,9 +222,6 @@ export async function fetchWorkPackages(
   const pageOffset = filters?.offset ?? filters?.page ?? 1
   params.set('offset', String(pageOffset))
   params.set('pageSize', String(filters?.pageSize || 50))
-  if (filters?.page) {
-    params.set('page', String(filters.page))
-  }
 
   // Sorting
   if (filters?.sortBy) {
@@ -233,10 +233,7 @@ export async function fetchWorkPackages(
   // Build filter array for OpenProject API
   const apiFilters: Record<string, { operator: string; values: string[] }> = {}
 
-  if (filters?.includeAllStatuses) {
-    // Wildcard operator: include ALL statuses (open + closed + rejected + done)
-    apiFilters.status = { operator: '*', values: [] }
-  } else if (filters?.status?.length) {
+  if (!filters?.includeAllStatuses && filters?.status?.length) {
     apiFilters.status = { operator: '=', values: filters.status }
   }
   if (filters?.type?.length) {
@@ -256,7 +253,9 @@ export async function fetchWorkPackages(
     apiFilters.updatedAt = { operator: '>t-', values: [filters.updatedAfter] }
   }
 
-  if (Object.keys(apiFilters).length > 0) {
+  // OpenProject defaults to open statuses when filters is omitted. An empty
+  // array explicitly requests all statuses, including closed work packages.
+  if (filters?.includeAllStatuses || Object.keys(apiFilters).length > 0) {
     params.set('filters', JSON.stringify(Object.entries(apiFilters).map(([k, v]) => ({ [k]: v }))))
   }
 
@@ -313,7 +312,7 @@ export async function fetchAllWorkPackages(
 
   const requestedPageSize = filters?.pageSize || 200
   const concurrency = filters?.concurrency || 5
-  const maxPages = filters?.maxPages || 100
+  const maxPages = filters?.maxPages ?? Number.POSITIVE_INFINITY
 
   // 1. Fetch first page to get total count and actual page size
   const firstResult = await fetchWorkPackages(config, {
@@ -327,6 +326,10 @@ export async function fetchAllWorkPackages(
   const firstItems = firstResult.items
   const actualPageSize = firstResult.pageSize || firstItems.length || requestedPageSize
 
+  if (total > 0 && firstItems.length === 0) {
+    throw new Error('OpenProject returned an empty first page for a nonempty work package collection.')
+  }
+
   filters?.onProgress?.(firstItems.length, total)
 
   // If all items fit in first page or no items exist
@@ -339,7 +342,10 @@ export async function fetchAllWorkPackages(
     }
   }
 
-  const totalPages = Math.min(Math.ceil(total / actualPageSize), maxPages)
+  const totalPages = Math.ceil(total / actualPageSize)
+  if (totalPages > maxPages) {
+    throw new Error(`OpenProject has ${totalPages} pages, exceeding the configured limit of ${maxPages}.`)
+  }
   const remainingPages: number[] = []
   for (let p = 2; p <= totalPages; p++) {
     remainingPages.push(p)
@@ -363,8 +369,7 @@ export async function fetchAllWorkPackages(
           offset: pageNum,
           page: pageNum,
         }).catch(err => {
-          console.warn(`[OpenProject] Error fetching page ${pageNum}:`, err)
-          return { items: [], total, pageSize: actualPageSize, offset: pageNum }
+          throw new Error(`OpenProject work package page ${pageNum} failed: ${err instanceof Error ? err.message : String(err)}`)
         })
       )
     )
@@ -395,6 +400,10 @@ export async function fetchAllWorkPackages(
   }
 
   filters?.onProgress?.(allItems.length, Math.max(total, allItems.length))
+
+  if (allItems.length < total) {
+    throw new Error(`OpenProject returned ${allItems.length} of ${total} work packages. Sync stopped to avoid saving incomplete data.`)
+  }
 
   return {
     items: allItems,
@@ -690,7 +699,7 @@ export async function fetchReleaseOptions(
 }
 
 // Helper to format work package for display
-export function formatWorkPackage(wp: OpenProjectWorkPackage) {
+export function formatWorkPackage(wp: OpenProjectWorkPackage, testingStatusFieldId = 14) {
   // Extract custom fields - OpenProject uses customFieldX naming
   const customFields: Record<string, string | null> = {}
 
@@ -716,10 +725,12 @@ export function formatWorkPackage(wp: OpenProjectWorkPackage) {
 
   // ── customField14 → Testing Status ──────────────────────────────────────
   // Prefer _links (list-type field); fall back to direct property.
+  const testingStatusKey = `customField${testingStatusFieldId}`
+  const testingStatusAlias = `cf_${testingStatusFieldId}`
   const testingStatus: string | null =
-    links['customField14']?.title ||
-    links['cf_14']?.title ||
-    (customFields['customField14'] ?? customFields['cf_14'] ?? null)
+    links[testingStatusKey]?.title ||
+    links[testingStatusAlias]?.title ||
+    (customFields[testingStatusKey] ?? customFields[testingStatusAlias] ?? null)
 
   // ── customField9 → Release ───────────────────────────────────────────────
   const release: string | null =
@@ -1054,8 +1065,7 @@ export async function fetchWorkPackageActivities(
       }
 
       if (!res.ok) {
-        console.warn(`[Ticket Bowl] Activities fetch for WP#${workPackageId} page ${pageCount} status: ${res.status}`)
-        break
+        throw new Error(`OpenProject activities for WP#${workPackageId} page ${pageCount} failed (${res.status})`)
       }
 
       const data = await res.json()
@@ -1067,13 +1077,16 @@ export async function fetchWorkPackageActivities(
       if (nextHref && elements.length > 0) {
         nextPath = nextHref
       } else {
+        if (typeof data.total === 'number' && allRawActivities.length < data.total) {
+          throw new Error(`OpenProject returned ${allRawActivities.length} of ${data.total} activities for WP#${workPackageId}`)
+        }
         nextPath = null
       }
     }
 
     // Log warning if we hit the page limit (indicates incomplete history)
-    if (pageCount >= 100 && nextPath) {
-      console.warn(`[Ticket Bowl] WP#${workPackageId} has MORE than 100 activity pages - history truncated`)
+    if (nextPath) {
+      throw new Error(`OpenProject activities for WP#${workPackageId} exceeded ${MAX_ACTIVITY_PAGES} pages`)
     }
 
     const activities = await Promise.all(
@@ -1097,6 +1110,8 @@ export async function fetchWorkPackageActivities(
             d._links?.new_value?.title ||
             d._links?.value?.title ||
             (typeof d.newValue === 'object' && d.newValue?.title) ||
+            (typeof d.newValue === 'object' && d.newValue?.raw) ||
+            (typeof d.newValue === 'object' && d.newValue?.value) ||
             ''
 
           // Extract oldValue
@@ -1106,6 +1121,8 @@ export async function fetchWorkPackageActivities(
             d._links?.oldValue?.title ||
             d._links?.old_value?.title ||
             (typeof d.oldValue === 'object' && d.oldValue?.title) ||
+            (typeof d.oldValue === 'object' && d.oldValue?.raw) ||
+            (typeof d.oldValue === 'object' && d.oldValue?.value) ||
             ''
 
           // Raw / HTML text clean-up
@@ -1115,13 +1132,13 @@ export async function fetchWorkPackageActivities(
 
           // If structured fields are missing or incomplete, parse from combined clean text
           if (!property || !newValue) {
-            const changedMatch = combinedCleanText.match(/(?:Testing\s+Status|customfield14|custom_field_14|cf_14)\s+changed\s+from\s+(.+?)\s+to\s+(.+)/i)
+            const changedMatch = combinedCleanText.match(/(?:Testing\s+Status|customfield\d+|custom_field_\d+|cf_\d+)\s+changed\s+from\s+(.+?)\s+to\s+(.+)/i)
             if (changedMatch) {
               if (!property) property = 'Testing Status'
               if (!oldValue) oldValue = changedMatch[1].replace(/\.+$/, '').trim()
               if (!newValue) newValue = changedMatch[2].replace(/\.+$/, '').trim()
             } else {
-              const setMatch = combinedCleanText.match(/(?:Testing\s+Status|customfield14|custom_field_14|cf_14)\s+set\s+to\s+(.+)/i)
+              const setMatch = combinedCleanText.match(/(?:Testing\s+Status|customfield\d+|custom_field_\d+|cf_\d+)\s+set\s+to\s+(.+)/i)
               if (setMatch) {
                 if (!property) property = 'Testing Status'
                 if (!newValue) newValue = setMatch[1].replace(/\.+$/, '').trim()
@@ -1159,7 +1176,7 @@ export async function fetchWorkPackageActivities(
     return activities
   } catch (e) {
     console.error('Failed to fetch activities:', e)
-    return []
+    throw e
   }
 }
 

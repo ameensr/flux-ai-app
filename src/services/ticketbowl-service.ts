@@ -17,6 +17,7 @@ import {
   getActivitySyncCursor,
   fetchActivitiesIncremental,
   shouldReinspectActivities,
+  updateActivitySyncCursor,
 } from './openproject-incremental-sync'
 import {
   isSyncJobActive,
@@ -96,7 +97,8 @@ export interface ActivityInspectionResult {
 export function inspectWorkPackageActivities(
   workPackageId: number,
   activities: WorkPackageActivity[] | null,
-  fetchError?: string | null
+  fetchError?: string | null,
+  testingStatusFieldId = 14
 ): ActivityInspectionResult {
   if (fetchError || activities === null) {
     return {
@@ -140,25 +142,22 @@ export function inspectWorkPackageActivities(
       const cleanText = rawText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
       const cleanRaw = cleanText.toLowerCase()
 
-      // Identify Testing Status field (customField14)
+      // Identify the configured Testing Status field, not a fixed field ID.
+      const fieldKey = `customfield${testingStatusFieldId}`
+      const fieldAlias = `cf_${testingStatusFieldId}`
+      const fieldPath = `custom_fields/${testingStatusFieldId}`
       const isTestingStatusField =
         prop === 'testing status' ||
-        prop === 'customfield14' ||
-        prop === 'cf_14' ||
-        prop === 'cf14' ||
-        prop === 'custom_field_14' ||
-        prop === 'custom_field14' ||
-        prop.includes('customfield14') ||
-        prop.includes('custom_field_14') ||
-        prop.includes('custom_field14') ||
-        prop.includes('cf_14') ||
-        prop.includes('cf14') ||
-        prop.includes('custom_fields/14') ||
-        prop.endsWith('/14') ||
+        prop.includes(fieldKey) ||
+        prop.includes(fieldAlias) ||
+        prop.includes(`cf${testingStatusFieldId}`) ||
+        prop.includes(`custom_field_${testingStatusFieldId}`) ||
+        prop.includes(`custom_field${testingStatusFieldId}`) ||
+        prop.includes(fieldPath) ||
+        prop.endsWith(`/${testingStatusFieldId}`) ||
         cleanRaw.includes('testing status') ||
-        cleanRaw.includes('customfield14') ||
-        cleanRaw.includes('custom_field_14') ||
-        cleanRaw.includes('cf_14')
+        cleanRaw.includes(fieldKey) ||
+        cleanRaw.includes(fieldAlias)
 
       if (!isTestingStatusField) continue
 
@@ -175,12 +174,13 @@ export function inspectWorkPackageActivities(
 
       // Fallback: parse from raw text
       if (!extractedNewValue && cleanRaw) {
-        const changedMatch = cleanText.match(/(?:testing\s+status|customfield14|custom_field_14|cf_14)\s+changed\s+from\s+(.+?)\s+to\s+(.+)/i)
+        const fieldNames = `(?:testing\\s+status|customfield${testingStatusFieldId}|custom_field_${testingStatusFieldId}|cf_${testingStatusFieldId})`
+        const changedMatch = cleanText.match(new RegExp(`${fieldNames}\\s+changed\\s+from\\s+(.+?)\\s+to\\s+(.+)`, 'i'))
         if (changedMatch) {
           extractedOldValue = changedMatch[1].replace(/<[^>]*>/g, '').replace(/\.+$/, '').trim()
           extractedNewValue = changedMatch[2].replace(/<[^>]*>/g, '').replace(/\.+$/, '').trim()
         } else {
-          const setMatch = cleanText.match(/(?:testing\s+status|customfield14|custom_field_14|cf_14)\s+set\s+to\s+(.+)/i)
+          const setMatch = cleanText.match(new RegExp(`${fieldNames}\\s+set\\s+to\\s+(.+)`, 'i'))
           if (setMatch) {
             extractedNewValue = setMatch[1].replace(/<[^>]*>/g, '').replace(/\.+$/, '').trim()
           }
@@ -403,7 +403,7 @@ export async function syncTicketBowlData(
       return { success: true, message: 'No tickets found in the selected project.', totalSynced: 0, eventsFound: 0 }
     }
 
-    const formattedWPs: FormattedWorkPackage[] = rawWorkPackages.map(wp => formatWorkPackage(wp))
+    const formattedWPs: FormattedWorkPackage[] = rawWorkPackages.map(wp => formatWorkPackage(wp, customFieldIds.testingStatus))
 
     // Cancellation check after fetching work packages
     await checkCancellation('fetching-tickets')
@@ -562,6 +562,7 @@ export async function syncTicketBowlData(
     // OpenProject reports it was updated after the last check.
     // Only skip 'no_matching_event' tickets when updatedAt confirms no change.
     const ticketsToInspect: typeof formattedWPs = []
+    const forceFullHistoryIds = new Set<number>()
 
     for (const wp of formattedWPs) {
       const existing = existingWpMap.get(wp.id)
@@ -592,12 +593,18 @@ export async function syncTicketBowlData(
         existing.forwarding_count === 0
       ) {
         ticketsToInspect.push(wp)
+        forceFullHistoryIds.add(wp.id)
         continue
       }
 
       // Use smart inspection logic with cursor awareness
       if (useIncremental) {
         const cursor = await getActivitySyncCursor(projectId, wp.id)
+        if (cursor && (!existing.history_checked_at || new Date(cursor.lastSyncAt).getTime() > new Date(existing.history_checked_at).getTime())) {
+          ticketsToInspect.push(wp)
+          forceFullHistoryIds.add(wp.id)
+          continue
+        }
         const shouldInspect = shouldReinspectActivities(
           cursor,
           wp.updatedAt,
@@ -633,6 +640,7 @@ export async function syncTicketBowlData(
     const allDiscoveredTransitions: VerifiedTransition[] = []
     const allDiscoveredStatusChanges: VerifiedTransition[] = []
     const inspectionResultsMap = new Map<number, ActivityInspectionResult>()
+    const pendingCursorUpdates: Array<{ workPackageId: number; lastActivityId: number; lastActivitySyncedAt: string; totalActivitiesFetched: number }> = []
 
     const ACTIVITY_BATCH_SIZE = 8
     let incrementalHits = 0
@@ -644,9 +652,10 @@ export async function syncTicketBowlData(
         try {
           let activities: WorkPackageActivity[]
           let newActivitiesCount = 0
+          let cursorUpdate: typeof pendingCursorUpdates[number] | undefined
 
           // Use incremental fetching if enabled
-          if (useIncremental && !forceFullResync) {
+          if (useIncremental && !forceFullResync && !forceFullHistoryIds.has(wp.id)) {
             const incrementalResult = await fetchActivitiesIncremental(
               configWithProject,
               projectId,
@@ -654,32 +663,45 @@ export async function syncTicketBowlData(
             )
             activities = incrementalResult.activities
             newActivitiesCount = incrementalResult.newActivitiesCount
+            if (incrementalResult.lastActivityId && incrementalResult.lastActivitySyncedAt) {
+              cursorUpdate = {
+                workPackageId: wp.id,
+                lastActivityId: incrementalResult.lastActivityId,
+                lastActivitySyncedAt: incrementalResult.lastActivitySyncedAt,
+                totalActivitiesFetched: incrementalResult.totalActivitiesFetched,
+              }
+            }
 
             if (newActivitiesCount === 0) {
               incrementalSkips++
               // No new activities - use cached inspection result if verified
               const existing = existingWpMap.get(wp.id)
               if (existing && existing.history_verification_status === 'verified') {
-                return { wpId: wp.id, result: { allTestingStatusChanges: [], transitions: [], historyStatus: 'verified' as const }, skipped: true }
+                return { wpId: wp.id, result: { allTestingStatusChanges: [], transitions: [], historyStatus: 'verified' as const }, skipped: true, cursorUpdate }
               }
             } else {
               incrementalHits++
             }
           } else {
             activities = await fetchWorkPackageActivities(configWithProject, wp.id)
+            const latest = [...activities].sort((a, b) => b.id - a.id)[0]
+            if (latest?.id && latest.createdAt) {
+              cursorUpdate = { workPackageId: wp.id, lastActivityId: latest.id, lastActivitySyncedAt: latest.createdAt, totalActivitiesFetched: activities.length }
+            }
           }
 
-          const result = inspectWorkPackageActivities(wp.id, activities, null)
-          return { wpId: wp.id, result, skipped: false }
+          const result = inspectWorkPackageActivities(wp.id, activities, null, customFieldIds.testingStatus)
+          return { wpId: wp.id, result, skipped: false, cursorUpdate }
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : 'Network failure fetching activities'
           const result = inspectWorkPackageActivities(wp.id, null, errMsg)
-          return { wpId: wp.id, result, skipped: false }
+          return { wpId: wp.id, result, skipped: false, cursorUpdate: undefined }
         }
       })
 
       const results = await Promise.all(batchPromises)
       for (const res of results) {
+        if (res.cursorUpdate) pendingCursorUpdates.push(res.cursorUpdate)
         if (!res.skipped) {
           inspectionResultsMap.set(res.wpId, res.result as ActivityInspectionResult)
           if (res.result.transitions.length > 0) {
@@ -966,6 +988,13 @@ export async function syncTicketBowlData(
         const commitErrMsg = commitError instanceof Error ? commitError.message : String(commitError)
         throw new Error(`Sync completed but failed to commit data: ${commitErrMsg}`)
       }
+    }
+
+    if (errors.length === 0) {
+      await Promise.all(pendingCursorUpdates.map(cursor => updateActivitySyncCursor(
+        projectId, cursor.workPackageId, cursor.lastActivityId,
+        cursor.lastActivitySyncedAt, cursor.totalActivitiesFetched
+      )))
     }
 
     onProgress?.({

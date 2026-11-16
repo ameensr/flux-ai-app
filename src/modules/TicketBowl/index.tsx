@@ -1,7 +1,7 @@
 // src/modules/TicketBowl/index.tsx
 // Main Ticket Bowl module component
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { AlertCircle, BarChart3, ListFilter, Settings } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -18,6 +18,12 @@ import { TicketForwardingHistoryModal } from './TicketForwardingHistoryModal'
 import { QuickSearchResultsTable } from './QuickSearchResultsTable'
 import { useBackgroundSync } from '@/hooks/useBackgroundSync'
 import { SyncNotification } from '@/components/LazyPanda'
+
+function configuredOpProjectId(project?: { metadata?: Record<string, unknown> }): number | null {
+  const config = project?.metadata?.openproject as OpenProjectConfig | undefined
+  const id = Number(config?.openproject_project_id)
+  return Number.isFinite(id) && id > 0 ? id : null
+}
 
 export default function TicketBowl() {
   const { can, canView: checkCanView, role } = usePermissions()
@@ -38,6 +44,9 @@ export default function TicketBowl() {
   // Sub-projects in OpenProject (for the selected project)
   const [opProjects, setOpProjects] = useState<OpenProjectProject[]>([])
   const [selectedOpProjectId, setSelectedOpProjectId] = useState<number | null>(null)
+  const [opProjectsLoading, setOpProjectsLoading] = useState(false)
+  const [opProjectsLoaded, setOpProjectsLoaded] = useState(false)
+  const opProjectsRequestRef = useRef(0)
 
   // 1. Load Projects from Project Hub
   useEffect(() => {
@@ -57,8 +66,10 @@ export default function TicketBowl() {
           })
           if (configured) {
             setSelectedProjectId(configured.id)
+            setSelectedOpProjectId(configuredOpProjectId(configured))
           } else if (data.length > 0) {
             setSelectedProjectId(data[0].id)
+            setSelectedOpProjectId(configuredOpProjectId(data[0]))
           }
         }
       } catch (err) {
@@ -81,38 +92,38 @@ export default function TicketBowl() {
 
   const isOpConfigured = Boolean(opConfig?.openproject_url && opConfig?.openproject_api_key)
 
-  // 2. Load OpenProject projects/sub-projects when configured
+  const handleSelectProject = useCallback((id: string) => {
+    const project = projects.find(item => item.id === id)
+    setSelectedProjectId(id)
+    setSelectedOpProjectId(configuredOpProjectId(project))
+  }, [projects])
+
+  // Apply the configured project immediately. Load the optional project list
+  // only when the selector is used, so page entry never waits on OpenProject.
   useEffect(() => {
-    let active = true
-    async function loadOpProjects() {
-      if (!opConfig?.openproject_url || !opConfig?.openproject_api_key) {
-        setOpProjects([])
-        setSelectedOpProjectId(null)
-        return
-      }
+    opProjectsRequestRef.current++
+    setOpProjects([])
+    setOpProjectsLoaded(false)
+    setOpProjectsLoading(false)
+    setSelectedOpProjectId(configuredOpProjectId(currentProject))
+  }, [opConfig, currentProject])
 
-      try {
-        const list = await fetchOpenProjectProjects(opConfig)
-        if (active) {
-          setOpProjects(list)
-          // Default to configured openproject_project_id if set
-          if (opConfig.openproject_project_id) {
-            setSelectedOpProjectId(Number(opConfig.openproject_project_id))
-          } else {
-            setSelectedOpProjectId(null)
-          }
-        }
-      } catch (err) {
-        // Expected when OpenProject is not configured - suppress verbose error
-        console.debug('[Ticket Bowl] Could not load OpenProject projects (not configured or unreachable):', err instanceof Error ? err.message : 'Network error')
+  const loadOpProjects = useCallback(async () => {
+    if (!opConfig?.openproject_url || !opConfig?.openproject_api_key || opProjectsLoaded || opProjectsLoading) return
+    const requestId = ++opProjectsRequestRef.current
+    setOpProjectsLoading(true)
+    try {
+      const list = await fetchOpenProjectProjects(opConfig)
+      if (requestId === opProjectsRequestRef.current) {
+        setOpProjects(list)
+        setOpProjectsLoaded(true)
       }
+    } catch (err) {
+      console.warn('[Ticket Bowl] Could not load OpenProject project options:', err)
+    } finally {
+      if (requestId === opProjectsRequestRef.current) setOpProjectsLoading(false)
     }
-
-    loadOpProjects()
-    return () => {
-      active = false
-    }
-  }, [opConfig])
+  }, [opConfig, opProjectsLoaded, opProjectsLoading])
 
   // Resolve current OpenProject project name
   const currentOpProjectName = useMemo(() => {
@@ -123,6 +134,7 @@ export default function TicketBowl() {
   // 3. Background Sync Hook (replaces old blocking sync)
   const {
     isSyncing,
+    canCancelSync,
     syncProgress,
     showSuccessNotification,
     showErrorNotification,
@@ -223,15 +235,18 @@ export default function TicketBowl() {
       <TicketBowlHeader
         projects={projects}
         selectedProjectId={selectedProjectId}
-        onSelectProject={setSelectedProjectId}
+        onSelectProject={handleSelectProject}
         opProjects={opProjects}
+        showOpProjectSelector={isOpConfigured}
+        opProjectsLoading={opProjectsLoading}
+        onOpenOpProjects={loadOpProjects}
         selectedOpProjectId={selectedOpProjectId}
         onSelectOpProject={setSelectedOpProjectId}
         syncStatus={syncStatus}
         syncing={isSyncing}
         syncProgress={syncProgress}
         onSync={startSync}
-        onCancelSync={cancelSync}
+        onCancelSync={canCancelSync ? cancelSync : undefined}
         selectedCount={selectedTicketIds.size}
         onExportRelease={() => exportToReleaseTracker()}
         onExportSupport={() => exportToSupportTracker()}

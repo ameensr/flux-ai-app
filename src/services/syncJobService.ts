@@ -56,13 +56,13 @@ export async function createSyncJob(params: CreateSyncJobParams): Promise<SyncJo
     // First, check if there's already an active job and clean it up if stuck
     const existingJob = await getActiveSyncJob(projectId)
     if (existingJob) {
-      // Check if the job is stuck (running for more than 30 minutes)
-      const jobAge = Date.now() - new Date(existingJob.created_at).getTime()
+      // Age from the last update, since a healthy long sync can run for hours.
+      const jobAge = Date.now() - new Date(existingJob.updated_at || existingJob.created_at).getTime()
       const thirtyMinutes = 30 * 60 * 1000
       
       if (jobAge > thirtyMinutes) {
         // Mark stuck job as failed
-        await supabase
+        const { error: cleanupError } = await supabase
           .from('sync_jobs')
           .update({
             status: 'failed',
@@ -71,6 +71,10 @@ export async function createSyncJob(params: CreateSyncJobParams): Promise<SyncJo
             updated_at: new Date().toISOString(),
           })
           .eq('id', existingJob.id)
+        if (cleanupError) {
+          console.warn('[SyncJobService] Could not clear stale job:', cleanupError.message)
+          return existingJob
+        }
         console.log('[SyncJobService] Cleaned up stuck job:', existingJob.id)
       } else {
         // Job is still active, return it instead of creating a new one
@@ -150,6 +154,19 @@ export async function getActiveSyncJob(projectId: string): Promise<SyncJob | nul
   }
 
   try {
+    // The RPC sorts by creation time and can return a newer pending job even
+    // when an older running job owns the unique-running constraint.
+    const { data: runningJob, error: runningError } = await supabase
+      .from('sync_jobs')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('status', 'running')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!runningError && runningJob) return runningJob as SyncJob
+
     // Try RPC first
     const { data: rpcData, error: rpcError } = await supabase.rpc('get_active_sync_job', {
       p_project_id: projectId,

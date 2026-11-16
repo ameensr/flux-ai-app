@@ -90,6 +90,7 @@ export async function fetchActivitiesIncremental(
   newActivitiesCount: number
   lastActivityId: number | null
   lastActivitySyncedAt: string | null
+  totalActivitiesFetched: number
 }> {
   // Get existing cursor
   const cursor = await getActivitySyncCursor(projectId, workPackageId)
@@ -103,6 +104,7 @@ export async function fetchActivitiesIncremental(
       newActivitiesCount: 0,
       lastActivityId: cursor?.lastActivityId || null,
       lastActivitySyncedAt: cursor?.lastActivitySyncedAt || null,
+      totalActivitiesFetched: cursor?.totalActivitiesFetched || 0,
     }
   }
 
@@ -117,23 +119,12 @@ export async function fetchActivitiesIncremental(
   const lastActivityId = highestActivity?.id || null
   const lastActivitySyncedAt = highestActivity?.createdAt || null
 
-  // Update cursor if we have new activities
-  if (newActivities.length > 0 && lastActivityId && lastActivitySyncedAt) {
-    const totalFetched = (cursor?.totalActivitiesFetched || 0) + newActivities.length
-    await updateActivitySyncCursor(
-      projectId,
-      workPackageId,
-      lastActivityId,
-      lastActivitySyncedAt,
-      totalFetched
-    )
-  }
-
   return {
     activities: newActivities,
     newActivitiesCount: newActivities.length,
     lastActivityId,
     lastActivitySyncedAt,
+    totalActivitiesFetched: (cursor?.totalActivitiesFetched || 0) + newActivities.length,
   }
 }
 
