@@ -617,44 +617,63 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   // Rotates the whole diorama assembly in unison while billboards counter-rotate
   const targetProgressRef = useRef<number>(0);
   const currentProgressRef = useRef<number>(0);
-  const ambientAngleRef = useRef<number>(0);
+  const progressVelocityRef = useRef<number>(0);
+  const idleRotationRef = useRef<number>(0);
   const currentCameraTiltRef = useRef<number>(56);
   const rafIdRef = useRef<number>(0);
   const billboardsRef = useRef<(HTMLDivElement | null)[]>([]);
   const onCompleteCalledRef = useRef<boolean>(false);
 
   useEffect(() => {
+    let lastFrame: number | undefined;
     const onScroll = () => {
       if (!trackRef.current) return;
       const rect = trackRef.current.getBoundingClientRect();
-      const trackHeight = trackRef.current.offsetHeight - window.innerHeight;
+      const trackHeight = trackRef.current.offsetHeight - (stageRef.current?.offsetHeight ?? window.innerHeight);
       if (trackHeight <= 0) return;
 
       const scrolled = -rect.top;
       const rawProgress = Math.min(1, Math.max(0, scrolled / trackHeight));
       targetProgressRef.current = rawProgress;
 
-      if (scrolled > 20 && !hasScrolled) {
+      if (scrolled > 20) {
         setHasScrolled(true);
+      }
+      if (!rafIdRef.current && !onCompleteCalledRef.current) {
+        lastFrame = undefined;
+        rafIdRef.current = requestAnimationFrame(updateChoreography);
       }
     };
 
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-
-    const updateChoreography = () => {
+    const updateChoreography = (now: number) => {
+      rafIdRef.current = 0;
       if (onCompleteCalledRef.current) return;
       const reducedMotion = prefersReducedMotionRef.current;
-      const lerpSpeed = reducedMotion ? 1 : 0.075;
-
-      currentProgressRef.current +=
-        (targetProgressRef.current - currentProgressRef.current) * lerpSpeed;
+      const elapsed = lastFrame === undefined ? 16.67 : Math.min(32, now - lastFrame);
+      lastFrame = now;
+      // Critically damped tracking preserves velocity across wheel events and reversals.
+      // The analytic update gives the same response at different display refresh rates.
+      const dt = elapsed / 1000;
+      const frequency = 16;
+      const offset = currentProgressRef.current - targetProgressRef.current;
+      const impulse = (progressVelocityRef.current + frequency * offset) * dt;
+      const decay = Math.exp(-frequency * dt);
+      currentProgressRef.current = targetProgressRef.current + (offset + impulse) * decay;
+      progressVelocityRef.current = (progressVelocityRef.current - frequency * impulse) * decay;
+      if (currentProgressRef.current < 0 || currentProgressRef.current > 1) {
+        currentProgressRef.current = Math.max(0, Math.min(1, currentProgressRef.current));
+        progressVelocityRef.current = 0;
+      }
+      if (reducedMotion || (Math.abs(targetProgressRef.current - currentProgressRef.current) < 0.00005 && Math.abs(progressVelocityRef.current) < 0.0005)) {
+        currentProgressRef.current = targetProgressRef.current;
+        progressVelocityRef.current = 0;
+      }
 
       const p = currentProgressRef.current;
 
       // 1. Progress Bar
       if (progressBarRef.current) {
-        progressBarRef.current.style.width = `${p * 100}%`;
+        progressBarRef.current.style.transform = `scaleX(${p})`;
       }
 
       // 2. Title drifts up cleanly
@@ -671,36 +690,33 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
       }
 
       // 4. Smooth Architectural Diorama Island Rotation
-      if (!reducedMotion) {
-        ambientAngleRef.current = (ambientAngleRef.current + 0.12) % 360;
+      const smoothstep = (value: number) => {
+        const t = Math.max(0, Math.min(1, value));
+        // Zero velocity and acceleration at each end of the camera segment.
+        return t * t * t * (t * (t * 6 - 15) + 10);
+      };
+      // Carry the camera orbit through the complete dissolve (progress 0.95).
+      const orbit = smoothstep(p / 0.95);
+      const push = smoothstep((p - 0.48) / 0.47);
+      // Ambient rotation continues during scrolling and fading; it never advances the reveal.
+      if (!reducedMotion && !document.hidden) {
+        idleRotationRef.current = (idleRotationRef.current + elapsed * 0.004) % 360;
       }
-      const scrollRotation = p * 420;
-      const dioramaRotation = scrollRotation + ambientAngleRef.current;
+      const dioramaRotation = -28 + orbit * 64 + idleRotationRef.current;
 
       // Rotate the unified Diorama Assembly (Table & Podium in 100% synchrony!)
       if (dioramaRef.current) {
-        dioramaRef.current.style.transform = `translate(-50%, -50%) rotateZ(${dioramaRotation.toFixed(2)}deg)`;
+        dioramaRef.current.style.transform = `translate(-50%, -50%) rotateZ(${dioramaRotation.toFixed(3)}deg)`;
       }
 
       // 5. Dynamic Camera Crane Tilt & Zoom
-      let cameraScale = 1.0;
-      let cameraTilt = 56;
-
-      if (p < 0.45) {
-        const norm1 = p / 0.45;
-        const ease1 = norm1 * norm1;
-        cameraScale = 1.0 + ease1 * 0.25;
-        cameraTilt = 56 - ease1 * 6;
-      } else {
-        const norm2 = Math.min(1, (p - 0.45) / 0.50);
-        const ease2 = norm2 * norm2 * (3 - 2 * norm2);
-        cameraScale = 1.25 + ease2 * 1.50;
-        cameraTilt = 50 - ease2 * 14;
-      }
+      const fitScale = Math.min(1, window.innerWidth / (tableLength + 220), window.innerHeight / (tableLength * 0.7 + 240));
+      const cameraScale = fitScale * (0.92 + orbit * 0.12 + push * 0.5);
+      const cameraTilt = 58 - orbit * 10 - push * 8;
       currentCameraTiltRef.current = cameraTilt;
 
       if (cameraRigRef.current) {
-        cameraRigRef.current.style.transform = `rotateX(${cameraTilt.toFixed(2)}deg) scale3d(${cameraScale.toFixed(3)}, ${cameraScale.toFixed(3)}, ${cameraScale.toFixed(3)})`;
+        cameraRigRef.current.style.transform = `rotateX(${cameraTilt.toFixed(3)}deg) scale3d(${cameraScale.toFixed(5)}, ${cameraScale.toFixed(5)}, ${cameraScale.toFixed(5)})`;
       }
 
       // 6. Zero-Drift Counter-Rotation of Avatars:
@@ -710,15 +726,14 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
       for (let i = 0; i < billboardsRef.current.length; i++) {
         const billboard = billboardsRef.current[i];
         if (billboard) {
-          billboard.style.transform = `rotateZ(${counterRotation.toFixed(2)}deg) rotateX(${counterTilt.toFixed(2)}deg)`;
+          billboard.style.transform = `rotateZ(${counterRotation.toFixed(3)}deg) rotateX(${counterTilt.toFixed(3)}deg)`;
         }
       }
 
       // 7. Dissolve into presentation dashboard
-      const dissolveNorm = Math.min(1, Math.max(0, (p - 0.60) / 0.35));
+      const dissolveNorm = Math.min(1, Math.max(0, (p - 0.78) / 0.17));
       const introOpacity = Math.max(0, 1 - dissolveNorm);
       const presOpacity = dissolveNorm;
-      const presBlur = (1 - dissolveNorm) * 12;
       const presScale = 0.9 + dissolveNorm * 0.1;
 
       if (introLayerRef.current) {
@@ -737,28 +752,34 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
           presentationSlotRef.current.style.transform = 'none';
           presentationSlotRef.current.classList.add(styles.presentationInteractive);
         } else {
-          presentationSlotRef.current.style.filter = `blur(${presBlur.toFixed(1)}px)`;
+          presentationSlotRef.current.style.filter = 'none';
           presentationSlotRef.current.style.transform = `scale(${presScale.toFixed(3)})`;
           presentationSlotRef.current.classList.remove(styles.presentationInteractive);
         }
       }
 
-      if (p >= 0.96 && !onCompleteCalledRef.current) {
+      if (p >= 0.96 && targetProgressRef.current >= 0.96 && !onCompleteCalledRef.current) {
         onCompleteCalledRef.current = true;
         setIsCompleted(true);
         if (onComplete) onComplete();
       }
 
-      rafIdRef.current = requestAnimationFrame(updateChoreography);
+      if (!onCompleteCalledRef.current && (!reducedMotion || currentProgressRef.current !== targetProgressRef.current)) {
+        rafIdRef.current = requestAnimationFrame(updateChoreography);
+      }
     };
 
-    rafIdRef.current = requestAnimationFrame(updateChoreography);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    onScroll();
 
     return () => {
       window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = 0;
     };
-  }, [hasScrolled, onComplete]);
+  }, [onComplete, tableLength, seats.length]);
 
   const handleSkip = useCallback(() => {
     if (onCompleteCalledRef.current) return;

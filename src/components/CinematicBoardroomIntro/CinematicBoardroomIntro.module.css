@@ -149,7 +149,7 @@
   z-index: 20;
   pointer-events: none;
   opacity: 0;
-  will-change: opacity, transform, filter;
+  will-change: opacity, transform;
   transition: opacity 0.3s ease-out;
 }
 
@@ -167,8 +167,9 @@
   height: 3px;
   background: linear-gradient(90deg, #38bdf8, #a855f7, #10b981);
   z-index: 100;
-  width: 0%;
-  transition: width 0.06s linear;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
 }
 
 .skipButton {
@@ -828,7 +829,7 @@
   width: 100%;
   height: 18px;
   transform-origin: top center;
-  transform: rotateX(70deg);
+  transform: rotateX(110deg);
   transform-style: preserve-3d;
   background: #030712;
   border: 0.8px solid #94a3b8;
@@ -841,6 +842,8 @@
 
 /* Front Glowing Display Face (Pointing directly at the attendee!) */
 .laptopScreenGlow {
+  transform: translateZ(0.6px);
+  backface-visibility: hidden;
   position: absolute;
   inset: 1px;
   background: linear-gradient(135deg, rgba(56, 189, 248, 0.9) 0%, rgba(168, 85, 247, 0.8) 50%, rgba(14, 165, 233, 0.95) 100%);
@@ -850,6 +853,7 @@
 
 /* Metallic Screen Lid Back */
 .laptopScreenBack {
+  backface-visibility: hidden;
   position: absolute;
   inset: 0;
   background: linear-gradient(180deg, #64748b 0%, #475569 50%, #334155 100%);
@@ -962,22 +966,16 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1.5px 7px;
-  background: var(--tag-bg);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 0.5px solid var(--tag-border);
-  border-radius: 9999px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  padding: 3px 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
   white-space: nowrap;
   max-width: 140px;
 }
 
 .seniorTagPill {
-  background: var(--senior-tag-bg);
-  border: 1px solid var(--senior-tag-border);
-  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35), 0 0 10px rgba(245, 158, 11, 0.2);
-  padding: 2px 8px;
+  padding: 3px 0;
   max-width: 220px;
 }
 
@@ -997,9 +995,9 @@
 
 .nameTagText {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
-  font-size: 8.5px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.035em;
   color: var(--tag-text);
   max-width: 95px;
   overflow: hidden;
@@ -1010,10 +1008,18 @@
 
 .seniorTagText {
   color: var(--senior-tag-text);
-  font-weight: 800;
-  font-size: 9px;
+  font-weight: 600;
+  font-size: 10px;
   max-width: 190px;
   letter-spacing: 0.03em;
+}
+
+.lightTheme .nameTagText {
+  text-shadow: 0 1px 3px #fff, 0 0 6px rgba(255, 255, 255, 0.9);
+}
+
+.darkTheme .nameTagText {
+  text-shadow: 0 1px 3px #060911, 0 0 6px rgba(6, 9, 17, 0.9);
 }
 
 /* Ultra-Premium Glowing SVG Avatars */
