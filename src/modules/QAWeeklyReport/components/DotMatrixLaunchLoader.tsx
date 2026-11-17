@@ -156,6 +156,11 @@ export const DotMatrixLaunchLoader: React.FC<DotMatrixLoaderProps> = ({
   useEffect(() => {
     if (!open) return
 
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      onCompleteRef.current?.()
+      return
+    }
+
     setPercent(0)
     setIsDone(false)
     const startTime = Date.now()

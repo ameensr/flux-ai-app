@@ -591,30 +591,6 @@
   text-transform: uppercase;
 }
 
-/* Floor Security Shield (Bottom-Center) */
-.floorShieldBadge {
-  position: absolute;
-  bottom: 85px;
-  left: 50%;
-  transform: translateX(-50%) translateZ(4px);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 8px;
-  background: var(--floor-doc-bg);
-  border: 1px solid var(--floor-doc-border);
-  border-radius: 9999px;
-  box-shadow: 0 4px 10px var(--floor-doc-shadow);
-}
-
-.floorShieldText {
-  font-size: 7.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--glass-text-primary);
-  text-transform: uppercase;
-}
-
 /* --------------------------------------------------------------------------
    Unified Diorama Island Assembly (Rotates Together as One Architectural Unit!)
    - Rule 5: Keep the central 3D team visualization unobstructed
@@ -1275,6 +1251,16 @@
 @keyframes mouseWheelSlide {
   0% { transform: translateY(0); opacity: 1; }
   100% { transform: translateY(6px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boardroomContainer *,
+  .boardroomContainer *::before,
+  .boardroomContainer *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* --------------------------------------------------------------------------

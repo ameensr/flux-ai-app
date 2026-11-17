@@ -2,7 +2,7 @@
  * teamNamesHelper.ts
  *
  * Extracts team member names from the "Team Resource Allocation" section of /qa-report,
- * with fallbacks to DOM fetching, localStorage cached data, and default demo names.
+ * with fallbacks to DOM fetching and localStorage cached data.
  * Supports multiple senior / meetingWith attendees at the head of the table.
  */
 
@@ -251,9 +251,6 @@ export async function getTeamNames(
   }
 
   let finalMembers = Array.from(cleanedSet);
-  if (finalMembers.length === 0) {
-    finalMembers = [...DEMO_MEMBERS];
-  }
 
   // Resolve Senior / Meeting With leaders
   let resolvedSeniorNames: string[] = [];
@@ -263,8 +260,6 @@ export async function getTeamNames(
     resolvedSeniorNames = seniorNamesFromData;
   } else if (fallbackSeniorName) {
     resolvedSeniorNames = [fallbackSeniorName];
-  } else {
-    resolvedSeniorNames = [DEMO_SENIOR];
   }
 
   // Filter out any senior leaders from general team members to avoid duplicates

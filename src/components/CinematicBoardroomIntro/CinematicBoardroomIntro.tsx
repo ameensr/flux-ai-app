@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import styles from './CinematicBoardroomIntro.module.css';
-import { getTeamNames, getInitials, escapeHtml, parseMeetingWithNames, DEMO_MEMBERS, DEMO_SENIOR } from './teamNamesHelper';
+import { getTeamNames, getInitials, escapeHtml, parseMeetingWithNames } from './teamNamesHelper';
 import { useTheme } from '@/context/ThemeContext';
 
 export interface CinematicBoardroomIntroProps {
@@ -30,7 +30,7 @@ export interface CinematicBoardroomIntroProps {
   isDark?: boolean;
   /** Callback invoked once intro completes or is skipped */
   onComplete?: () => void;
-  /** Auto fetch names from /qa-report or DOM on mount (default: true) */
+  /** Optionally discover names from the current page (default: false) */
   autoFetchNames?: boolean;
 }
 
@@ -379,7 +379,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   subtitle = 'Executive QA & Engineering Overview',
   isDark: propIsDark,
   onComplete,
-  autoFetchNames = true,
+  autoFetchNames = false,
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -406,14 +406,11 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   const isDark = propIsDark !== undefined ? propIsDark : contextIsDark;
 
   const initialSeniorNames = useMemo(() => {
-    return parseMeetingWithNames(meetingWith);
-  }, [meetingWith]);
+    return parseMeetingWithNames(meetingWith ?? seniorPersonName);
+  }, [meetingWith, seniorPersonName]);
 
   const [seniorNames, setSeniorNames] = useState<string[]>(initialSeniorNames);
-  const [teamMembers, setTeamMembers] = useState<string[]>(() => {
-    if (propTeamMembers && propTeamMembers.length > 0) return propTeamMembers;
-    return DEMO_MEMBERS;
-  });
+  const [teamMembers, setTeamMembers] = useState<string[]>(() => propTeamMembers ?? []);
   const [hasScrolled, setHasScrolled] = useState<boolean>(false);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [windowWidth, setWindowWidth] = useState<number>(
@@ -421,19 +418,18 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   );
 
   useEffect(() => {
-    const mw = parseMeetingWithNames(meetingWith);
+    const mw = parseMeetingWithNames(meetingWith ?? seniorPersonName);
     setSeniorNames(mw);
-  }, [meetingWith]);
+  }, [meetingWith, seniorPersonName]);
 
   useEffect(() => {
-    if (propTeamMembers && propTeamMembers.length > 0) {
+    if (propTeamMembers !== undefined) {
       setTeamMembers(propTeamMembers);
     }
   }, [propTeamMembers]);
 
   // Spacious Boardroom Table Dimensions to Guarantee Zero Crowding
   const { tableWidth, tableLength } = useMemo(() => {
-    const totalAttendees = seniorNames.length + teamMembers.length;
     let maxSideSeats = Math.max(1, Math.ceil(teamMembers.length / 2));
     if (seniorNames.length === 0 && teamMembers.length % 2 !== 0 && teamMembers.length > 2) {
       maxSideSeats = Math.floor(teamMembers.length / 2);
@@ -468,22 +464,18 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   }, []);
 
   useEffect(() => {
-    if (!autoFetchNames || (propTeamMembers && propTeamMembers.length > 0)) return;
+    if (!autoFetchNames || propTeamMembers !== undefined) return;
     let active = true;
 
     getTeamNames(undefined, 24).then(result => {
       if (!active) return;
-      const mw = parseMeetingWithNames(meetingWith);
-      setSeniorNames(mw);
-      if (result.members && result.members.length > 0 && (!propTeamMembers || propTeamMembers.length === 0)) {
-        setTeamMembers(result.members);
-      }
+      setTeamMembers(result.members);
     });
 
     return () => {
       active = false;
     };
-  }, [autoFetchNames, meetingWith, propTeamMembers]);
+  }, [autoFetchNames, propTeamMembers]);
 
   // Flawless Symmetrical Seat, Laptop & Chair Alignment (Clean Physical Clearance)
   const seats: SeatedPerson[] = useMemo(() => {
@@ -651,6 +643,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
     onScroll();
 
     const updateChoreography = () => {
+      if (onCompleteCalledRef.current) return;
       const reducedMotion = prefersReducedMotionRef.current;
       const lerpSpeed = reducedMotion ? 1 : 0.075;
 
@@ -731,10 +724,14 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
       if (introLayerRef.current) {
         introLayerRef.current.style.opacity = introOpacity.toFixed(3);
         introLayerRef.current.style.pointerEvents = dissolveNorm >= 0.98 ? 'none' : 'auto';
+        introLayerRef.current.inert = dissolveNorm >= 0.98;
+        introLayerRef.current.setAttribute('aria-hidden', String(dissolveNorm >= 0.98));
       }
 
       if (presentationSlotRef.current) {
         presentationSlotRef.current.style.opacity = presOpacity.toFixed(3);
+        presentationSlotRef.current.inert = dissolveNorm < 0.98;
+        presentationSlotRef.current.setAttribute('aria-hidden', String(dissolveNorm < 0.98));
         if (dissolveNorm >= 0.98) {
           presentationSlotRef.current.style.filter = 'none';
           presentationSlotRef.current.style.transform = 'none';
@@ -764,22 +761,37 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   }, [hasScrolled, onComplete]);
 
   const handleSkip = useCallback(() => {
+    if (onCompleteCalledRef.current) return;
+    onCompleteCalledRef.current = true;
+    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     setIsCompleted(true);
     if (introLayerRef.current) {
       introLayerRef.current.style.opacity = '0';
       introLayerRef.current.style.pointerEvents = 'none';
+      introLayerRef.current.inert = true;
+      introLayerRef.current.setAttribute('aria-hidden', 'true');
     }
     if (presentationSlotRef.current) {
       presentationSlotRef.current.style.opacity = '1';
       presentationSlotRef.current.style.filter = 'none';
       presentationSlotRef.current.style.transform = 'none';
+      presentationSlotRef.current.inert = false;
+      presentationSlotRef.current.setAttribute('aria-hidden', 'false');
       presentationSlotRef.current.classList.add(styles.presentationInteractive);
     }
-    if (onComplete && !onCompleteCalledRef.current) {
-      onCompleteCalledRef.current = true;
-      onComplete();
-    }
+    onComplete?.();
   }, [onComplete]);
+
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (mediaQuery.matches) handleSkip();
+    const onMotionChange = (event: MediaQueryListEvent) => {
+      if (event.matches) handleSkip();
+    };
+    mediaQuery.addEventListener('change', onMotionChange);
+    return () => mediaQuery.removeEventListener('change', onMotionChange);
+  }, [handleSkip]);
 
   return (
     <div
@@ -805,7 +817,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
           </button>
 
           {/* Presentation Slot */}
-          <div ref={presentationSlotRef} className={styles.presentationSlot}>
+          <div ref={presentationSlotRef} className={styles.presentationSlot} aria-hidden="true" inert>
             {children}
           </div>
 
@@ -925,13 +937,6 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
                     </div>
                   </div>
 
-                  {/* Floor Security Shield Badge (Bottom-Center) */}
-                  <div className={styles.floorShieldBadge}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                    </svg>
-                    <span className={styles.floorShieldText}>SOC-2 QA ASSURED</span>
-                  </div>
                 </div>
 
                 {/* 2. Perimeter Holographic Glass Screens (Background Layer beneath rotating 3D table!) */}
