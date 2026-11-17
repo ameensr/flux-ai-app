@@ -857,7 +857,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
               <div className={styles.dotMatrixGridBackdrop} aria-hidden="true" />
               <div className={styles.dotMatrixHeader}>
                 <div className={styles.dotMatrixBeacon} />
-                <span className={styles.dotMatrixTag}>SYS // METRICS HUD</span>
+                <span className={styles.dotMatrixTag}>REPORT AT A GLANCE</span>
               </div>
               <div className={styles.dotMatrixBody}>
                 <div className={styles.dotMatrixItem}>
@@ -867,7 +867,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
                       {[...Array(6)].map((_, i) => (
                         <span
                           key={i}
-                          className={`${styles.dotMatrixLedDot} ${i < Math.min(6, Math.max(1, newFeaturesCount)) ? styles.ledCyan : ''}`}
+                          className={`${styles.dotMatrixLedDot} ${i < Math.min(6, Math.max(0, newFeaturesCount)) ? styles.ledCyan : ''}`}
                         />
                       ))}
                     </div>
@@ -884,7 +884,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
                       {[...Array(6)].map((_, i) => (
                         <span
                           key={i}
-                          className={`${styles.dotMatrixLedDot} ${i < Math.min(6, Math.max(1, supportEmailsCount)) ? styles.ledPurple : ''}`}
+                          className={`${styles.dotMatrixLedDot} ${i < Math.min(6, Math.max(0, supportEmailsCount)) ? styles.ledPurple : ''}`}
                         />
                       ))}
                     </div>
@@ -896,7 +896,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
               </div>
               <div className={styles.dotMatrixFooter}>
                 <span className={styles.dotMatrixPulseDot} />
-                <span className={styles.dotMatrixFooterText}>TELEMETRY SYNCHRONIZED</span>
+                <span className={styles.dotMatrixFooterText}>LIVE REPORT DATA</span>
               </div>
             </div>
 
