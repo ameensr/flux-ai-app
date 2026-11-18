@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Box, Eye, MonitorPlay } from 'lucide-react';
 import { getTeamNames, parseMeetingWithNames } from './teamNamesHelper';
 import { createRoom, type Seat } from './seatModel';
@@ -7,6 +7,7 @@ import styles from './CinematicBoardroomIntro.module.css';
 
 const BoardroomScene = lazy(() => import('./BoardroomScene'));
 const NO_RECOMMENDATIONS: string[] = [];
+const sameNames = (a: string[], b: string[]) => a.length === b.length && a.every((name, index) => name === b[index]);
 
 export interface CinematicBoardroomIntroProps {
   children?: React.ReactNode;
@@ -39,13 +40,21 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   const [resetKey, setResetKey] = useState(0);
   const [failed, setFailed] = useState(false);
   const [complete, setComplete] = useState(false);
-  const seniorNames = useMemo(() => parseMeetingWithNames(meetingWith ?? seniorPersonName), [meetingWith, seniorPersonName]);
+  const parsedSeniorNames = parseMeetingWithNames(meetingWith ?? seniorPersonName);
+  const stableSeniorNames = useRef(parsedSeniorNames);
+  if (!sameNames(stableSeniorNames.current, parsedSeniorNames)) stableSeniorNames.current = parsedSeniorNames;
+  const seniorNames = stableSeniorNames.current;
 
-  useEffect(() => { setTeamMembers(propTeamMembers ?? []); }, [propTeamMembers]);
+  useEffect(() => {
+    const next = propTeamMembers ?? [];
+    setTeamMembers(current => sameNames(current, next) ? current : next);
+  }, [propTeamMembers]);
   useEffect(() => {
     if (!autoFetchNames || propTeamMembers !== undefined) return;
     let active = true;
-    getTeamNames(undefined, 24).then(result => { if (active) setTeamMembers(result.members); });
+    getTeamNames(undefined, 24).then(result => {
+      if (active) setTeamMembers(current => sameNames(current, result.members) ? current : result.members);
+    });
     return () => { active = false; };
   }, [autoFetchNames, propTeamMembers]);
 

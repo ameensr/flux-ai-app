@@ -65,11 +65,16 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
   const state = useRef({ selectedId, hoveredId, recommendedIds, firstPerson, resetKey });
   state.current = { selectedId, hoveredId, recommendedIds, firstPerson, resetKey };
   const introPlayed = useRef(false);
+  const lastCamera = useRef<{ position: THREE.Vector3; look: THREE.Vector3; fov: number } | null>(null);
   const updateView = useRef<(() => void) | null>(null);
   const updateColors = useRef<(() => void) | null>(null);
+  const updateScreen = useRef<((data: ReportHeroScreenData) => void) | null>(null);
+  const currentScreenData = useRef(screenData);
+  currentScreenData.current = screenData;
 
   useEffect(() => { updateView.current?.(); }, [selectedId, firstPerson, resetKey]);
   useEffect(() => { updateColors.current?.(); }, [selectedId, hoveredId, recommendedIds, firstPerson]);
+  useEffect(() => { updateScreen.current?.(screenData); }, [screenData]);
 
   useEffect(() => {
     const container = host.current;
@@ -118,10 +123,13 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(THEMES.dark['--bg']);
     const camera = new THREE.PerspectiveCamera(firstPerson ? 66 : 52, 1, .06, 80);
+    const restoredCamera = lastCamera.current;
+    lastCamera.current = null;
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     const roomWidth = Math.max(9, room.width + 6.8), roomLength = room.length + 4.4;
-    const initialRadius = Math.max(9, room.length * 1.5);
-    const orbit = { azimuth: 0, elevation: .72, radius: initialRadius, target: new THREE.Vector3(0, .7, 0) };
+    const initialRadius = Math.max(7.2, room.length * 1.2);
+    const initialElevation = Math.asin(3.5 / initialRadius);
+    const orbit = { azimuth: 0, elevation: initialElevation, radius: initialRadius, target: new THREE.Vector3(0, .7, 0) };
     const overviewPosition = () => new THREE.Vector3(orbit.radius * Math.sin(orbit.azimuth) * Math.cos(orbit.elevation), orbit.radius * Math.sin(orbit.elevation), orbit.radius * Math.cos(orbit.azimuth) * Math.cos(orbit.elevation));
     const initialSeat = room.seats.find(s => s.id === selectedId) ?? room.viewSeat;
     const initialLook = firstPerson && initialSeat
@@ -129,12 +137,13 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       : orbit.target.clone();
     const seatPosition = new THREE.Vector3(initialSeat.x, 1.22, initialSeat.z);
     const introPath = createIntroCameraPath(overviewPosition().add(orbit.target), seatPosition, new THREE.Vector3(...room.focal), roomWidth);
-    const playIntro = firstPerson && !reducedMotion && !introPlayed.current;
+    const playIntro = firstPerson && !reducedMotion && !introPlayed.current && !restoredCamera;
     if (playIntro) introPlayed.current = true;
     if (playIntro) { camera.fov = 52; camera.updateProjectionMatrix(); }
+    if (restoredCamera) { camera.fov = restoredCamera.fov; camera.updateProjectionMatrix(); }
     const introStart = playIntro ? introPath(0) : null;
-    camera.position.copy(introStart?.position ?? (firstPerson ? seatPosition : overviewPosition().add(orbit.target)));
-    const look = introStart?.look ?? initialLook.clone();
+    camera.position.copy(restoredCamera?.position ?? introStart?.position ?? (firstPerson ? seatPosition : overviewPosition().add(orbit.target)));
+    const look = restoredCamera?.look.clone() ?? introStart?.look ?? initialLook.clone();
     camera.lookAt(look);
     const targetPosition = new THREE.Vector3();
     const targetLook = new THREE.Vector3();
@@ -318,13 +327,13 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       tourAllowed = true;
       const approachSeatFromHall = current.firstPerson && !previousFirstPerson;
       if (!current.firstPerson && previousFirstPerson) {
-        orbit.azimuth = 0; orbit.elevation = .72; orbit.radius = initialRadius; orbit.target.set(0, .7, 0);
+        orbit.azimuth = 0; orbit.elevation = initialElevation; orbit.radius = initialRadius; orbit.target.set(0, .7, 0);
       }
       previousFirstPerson = current.firstPerson;
       updateShellVisibility();
       if (current.resetKey !== previousResetKey) {
         previousResetKey = current.resetKey;
-        orbit.azimuth = 0; orbit.elevation = .72; orbit.radius = initialRadius; orbit.target.set(0, .7, 0);
+        orbit.azimuth = 0; orbit.elevation = initialElevation; orbit.radius = initialRadius; orbit.target.set(0, .7, 0);
       }
       const seat = room.seats.find(s => s.id === current.selectedId) ?? room.viewSeat;
       if (current.firstPerson && seat) {
@@ -393,8 +402,13 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     const tvScreen = box(6.34, 2.28, .09, screen, 0, 1.84, -roomLength / 2 + .25);
     // Presentation board content remains legible from every seat.
     const boardCanvas = document.createElement('canvas');
-    drawReportHeroScreen(boardCanvas, screenData, isDark);
+    drawReportHeroScreen(boardCanvas, currentScreenData.current, isDark);
     const boardTexture = new THREE.CanvasTexture(boardCanvas);
+    updateScreen.current = data => {
+      drawReportHeroScreen(boardCanvas, data, isDark);
+      boardTexture.needsUpdate = true;
+      invalidate();
+    };
     const board = new THREE.Mesh(new THREE.PlaneGeometry(6.3, 2.24), new THREE.MeshBasicMaterial({ map: boardTexture }));
     board.position.set(0, 1.84, -roomLength / 2 + .305); scene.add(board);
     // Fluted acoustic panels, brass reveals and warm fixtures keep the room detailed at seat height.
@@ -675,7 +689,8 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       setView();
     }
     return () => {
-      updateView.current = null; updateColors.current = null; observer.disconnect();
+      lastCamera.current = { position: camera.position.clone(), look: look.clone(), fov: camera.fov };
+      updateView.current = null; updateColors.current = null; updateScreen.current = null; observer.disconnect();
       if (raf) cancelAnimationFrame(raf);
       stopIntro();
       stopTour();
@@ -683,6 +698,6 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       scene.traverse(object => { if (object instanceof THREE.Mesh) { object.geometry.dispose(); const materials = Array.isArray(object.material) ? object.material : [object.material]; materials.forEach(m => m.dispose()); if (object instanceof THREE.InstancedMesh) object.dispose(); } else if (object instanceof THREE.Sprite) object.material.dispose(); });
       boardTexture.dispose(); stoneTexture?.dispose(); carpetTexture?.dispose(); renderer.dispose(); labelLayer.remove(); renderer.domElement.remove();
     };
-  }, [room, isDark, screenData]);
+  }, [room, isDark]);
   return <div ref={host} style={{ width: '100%', height: '100%', touchAction: 'none' }} aria-label="Interactive 3D boardroom" />;
 }
