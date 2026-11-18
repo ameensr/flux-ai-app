@@ -56,10 +56,11 @@ describe('Dashboard Launch Components', () => {
     expect(html).toContain('Your view from M01')
   })
 
-  it('opens in the seat opposite the screen with the compact view switch', () => {
+  it('defaults to Seat while the camera opens from the Hall angle', () => {
     const html = renderToString(<CinematicBoardroomIntro teamMembers={['QA Member']} />)
     expect(html).toContain('Your view opposite the screen')
     expect(html).toContain('aria-label="Boardroom view"')
+    expect(html).toMatch(/aria-pressed="true"[^>]*>.*Seat<\/button>/)
     expect(html).toContain('Face the screen')
     expect(html).not.toContain('Find Best Seats')
     expect(html).not.toContain('SELECTED SEAT')

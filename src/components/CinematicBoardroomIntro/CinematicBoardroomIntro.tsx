@@ -70,7 +70,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   const seatLabel = (seat: Seat) => seat.member
     ? `${seat.id}, occupied by ${seat.member.name}${seat.member.role ? ` (${seat.member.role})` : ''}`
     : `${seat.id}, available`;
-  const selectSeat = (id: string) => { setSelectedId(id); setFirstPerson(true); setHover(undefined); };
+  const selectSeat = (id: string) => { setSelectedId(id); setFirstPerson(true); setResetKey(key => key + 1); setHover(undefined); };
   const finish = () => { if (complete) return; setComplete(true); onComplete?.(); };
 
   return <div className={`${styles.shell} ${styles.dark}`}>
@@ -88,6 +88,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
               isDark={true}
               screenData={screenData}
               onSelect={selectSeat}
+              onOpenReport={finish}
               onHover={(id, point) => setHover(id && point ? { id, ...point } : undefined)}
               onFailure={() => setFailed(true)}
             />
@@ -101,7 +102,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
       <div className={styles.topControls}>
         <div className={styles.viewSwitch} role="group" aria-label="Boardroom view">
           <button type="button" aria-pressed={firstPerson} className={firstPerson ? styles.active : ''} onClick={() => setFirstPerson(true)}><Eye size={15} /> Seat</button>
-          <button type="button" aria-pressed={!firstPerson} className={!firstPerson ? styles.active : ''} onClick={() => { setFirstPerson(false); setHover(undefined); }}><Box size={15} /> Hall</button>
+          <button type="button" aria-pressed={!firstPerson} className={!firstPerson ? styles.active : ''} onClick={() => { setFirstPerson(false); setResetKey(key => key + 1); setHover(undefined); }}><Box size={15} /> Hall</button>
         </div>
         <span className={styles.projectName}>{projectName || title}</span>
         <button className={styles.continueButton} type="button" onClick={finish}>Continue to report <ArrowRight size={15} /></button>
