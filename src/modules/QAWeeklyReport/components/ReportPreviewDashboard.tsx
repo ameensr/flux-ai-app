@@ -1944,6 +1944,19 @@ Do not return markdown wraps, only raw JSON text.
         newFeaturesCount={typeof data.newFeatures === 'number' ? data.newFeatures : (data.releaseItems?.length || 0)}
         weekStart={data.weekStart}
         weekEnd={data.weekEnd}
+        heroScreen={{
+          projectName: data.projectName,
+          reportTitle: data.reportTitle,
+          subtitle: data.subtitle,
+          weekStart: data.weekStart,
+          weekEnd: data.weekEnd,
+          reportStatus: reportMeta.status,
+          supportEmails: data.supportEmails,
+          newFeatures: data.newFeatures,
+          codeFixes: data.codeFixes,
+          qualityScore: qualityStats.score,
+          qualityLabel: qualityStats.label,
+        }}
         onComplete={handleLaunchTriageComplete}
       >
         {(!isLoaded || !data.weekStart) && showLaunchTriage && (

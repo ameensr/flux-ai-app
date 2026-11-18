@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { DotMatrixLaunchLoader } from './DotMatrixLaunchLoader'
 import { CinematicBoardroomIntro } from '@/components/CinematicBoardroomIntro'
+import type { ReportHeroScreenData } from '@/components/CinematicBoardroomIntro/reportHeroScreen'
 
 interface DashboardLaunchOverlayProps {
   open: boolean
@@ -15,13 +16,14 @@ interface DashboardLaunchOverlayProps {
   weekEnd?: string
   onComplete: () => void
   children?: React.ReactNode
+  heroScreen?: ReportHeroScreenData
 }
 
 /**
  * Full-screen loading entrance overlay:
  * Two-Stage Executive Reveal:
  * 1. Dot-Matrix Loader (Swiss 0% -> 100% telemetry counter)
- * 2. Cinematic 3D Boardroom Intro (Scroll-driven table rotation, 3D chairs & avatars)
+ * 2. Interactive 3D boardroom seat preview
  * 3. Interactive Executive Dashboard
  *
  * Sequence is strictly staged to guarantee zero flash of the 3D diorama before Stage 1:
@@ -39,6 +41,7 @@ export const DashboardLaunchOverlay: React.FC<DashboardLaunchOverlayProps> = ({
   weekEnd,
   onComplete,
   children,
+  heroScreen,
 }) => {
   // Stage 1: Dot-matrix loader plays first
   const [dotMatrixDone, setDotMatrixDone] = useState(false)
@@ -74,8 +77,7 @@ export const DashboardLaunchOverlay: React.FC<DashboardLaunchOverlayProps> = ({
         )}
       </AnimatePresence>
 
-      {/* ── STAGE 2: Cinematic 3D Boardroom Scene with Scroll Transition ── */}
-      {/* Mounts ONLY after Stage 1 (Dot-Matrix) completes — 100% eliminating any flash of the 3D diorama! */}
+      {/* Stage 2 mounts after the loader so the WebGL scene is loaded only when needed. */}
       {dotMatrixDone && (
         <CinematicBoardroomIntro
           projectName={projectName}
@@ -89,6 +91,7 @@ export const DashboardLaunchOverlay: React.FC<DashboardLaunchOverlayProps> = ({
           title={title}
           subtitle={subtitle}
           onComplete={onComplete}
+          heroScreen={heroScreen}
         >
           {children}
         </CinematicBoardroomIntro>

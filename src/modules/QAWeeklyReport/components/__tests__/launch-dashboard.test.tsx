@@ -52,7 +52,24 @@ describe('Dashboard Launch Components', () => {
     const html = renderToString(
       <CinematicBoardroomIntro meetingWith="Abhin(VP)" teamMembers={['QA Member']} />
     )
-    expect(html).toMatch(/<span class="[^"]*nameTagText[^"]*">Abhin\(VP\)<\/span>/)
+    expect(html).toContain('Abhin (VP)')
+    expect(html).toContain('Your view from M01')
+  })
+
+  it('opens in the seat opposite the screen with the compact view switch', () => {
+    const html = renderToString(<CinematicBoardroomIntro teamMembers={['QA Member']} />)
+    expect(html).toContain('Your view opposite the screen')
+    expect(html).toContain('aria-label="Boardroom view"')
+    expect(html).toContain('Face the screen')
+    expect(html).not.toContain('Find Best Seats')
+    expect(html).not.toContain('SELECTED SEAT')
+  })
+
+  it('keeps the boardroom dark even when a caller requests light mode', () => {
+    const html = renderToString(<CinematicBoardroomIntro isDark={false} teamMembers={[]} />)
+    const rootClass = html.match(/^<div class="([^"]+)"/)?.[1] ?? ''
+    expect(rootClass).toContain('dark')
+    expect(rootClass).not.toContain('light')
   })
 
   it('does not invent attendees or assurance claims when report data is empty', async () => {
