@@ -4,6 +4,9 @@ import { DotMatrixLaunchLoader } from './DotMatrixLaunchLoader'
 import { CinematicBoardroomIntro } from '@/components/CinematicBoardroomIntro'
 import type { ReportHeroScreenData } from '@/components/CinematicBoardroomIntro/reportHeroScreen'
 
+// Temporarily skip the 0–100% loader. Set this to true to restore it.
+const ENABLE_DOT_MATRIX_LAUNCH = false
+
 interface DashboardLaunchOverlayProps {
   open: boolean
   projectName?: string
@@ -21,13 +24,8 @@ interface DashboardLaunchOverlayProps {
 
 /**
  * Full-screen loading entrance overlay:
- * Two-Stage Executive Reveal:
- * 1. Dot-Matrix Loader (Swiss 0% -> 100% telemetry counter)
- * 2. Interactive 3D boardroom seat preview
- * 3. Interactive Executive Dashboard
- *
- * Sequence is strictly staged to guarantee zero flash of the 3D diorama before Stage 1:
- * Stage 1 (Dot-Matrix) -> Stage 2 (Cinematic 3D Intro) -> Dashboard Content
+ * The dot-matrix loader is retained behind ENABLE_DOT_MATRIX_LAUNCH.
+ * With it disabled, the interactive boardroom opens immediately.
  */
 export const DashboardLaunchOverlay: React.FC<DashboardLaunchOverlayProps> = ({
   open,
@@ -66,7 +64,7 @@ export const DashboardLaunchOverlay: React.FC<DashboardLaunchOverlayProps> = ({
     <>
       {/* ── STAGE 1: Dot-Matrix Telemetry Counter (0% -> 100%) ── */}
       <AnimatePresence>
-        {!dotMatrixDone && (
+        {ENABLE_DOT_MATRIX_LAUNCH && !dotMatrixDone && (
           <DotMatrixLaunchLoader
             open={!dotMatrixDone}
             onComplete={() => setDotMatrixDone(true)}
@@ -77,8 +75,8 @@ export const DashboardLaunchOverlay: React.FC<DashboardLaunchOverlayProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Stage 2 mounts after the loader so the WebGL scene is loaded only when needed. */}
-      {dotMatrixDone && (
+      {/* The boardroom mounts immediately while the dot-matrix stage is disabled. */}
+      {(!ENABLE_DOT_MATRIX_LAUNCH || dotMatrixDone) && (
         <CinematicBoardroomIntro
           projectName={projectName}
           seniorPersonName={seniorName}

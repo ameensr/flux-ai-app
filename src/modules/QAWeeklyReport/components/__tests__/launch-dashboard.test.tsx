@@ -45,7 +45,8 @@ describe('Dashboard Launch Components', () => {
         <div>Report Children</div>
       </DashboardLaunchOverlay>
     )
-    expect(html).toContain('INITIALIZING...')
+    expect(html).toContain('Continue to report')
+    expect(html).not.toContain('INITIALIZING...')
   })
 
   it('keeps the role in the boardroom attendee label', () => {
