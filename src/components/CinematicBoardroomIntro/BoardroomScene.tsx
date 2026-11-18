@@ -146,9 +146,12 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     let tourLastFrame = 0;
     let tourElapsed = 0;
     let tourLastRender = 0;
+    let resumeTourTimer = 0;
     let tourAllowed = !state.current.firstPerson;
     const stopTour = (manual = false) => {
       if (tourRaf) cancelAnimationFrame(tourRaf);
+      if (resumeTourTimer) window.clearTimeout(resumeTourTimer);
+      resumeTourTimer = 0;
       tourRaf = 0;
       tourLastFrame = 0;
       if (manual) tourAllowed = false;
@@ -199,6 +202,22 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       else { camera.position.copy(targetPosition); look.copy(targetLook); camera.lookAt(look); if (!startTour()) invalidate(); }
     };
     const startTransition = () => { if (raf) cancelAnimationFrame(raf); previousFrame = 0; raf = requestAnimationFrame(animate); };
+    const resumeTourSoon = () => {
+      if (state.current.firstPerson) return;
+      if (resumeTourTimer) window.clearTimeout(resumeTourTimer);
+      resumeTourTimer = window.setTimeout(() => {
+        resumeTourTimer = 0;
+        if (state.current.firstPerson) return;
+        tourAllowed = true;
+        tourElapsed = 0;
+        orbit.azimuth = 0;
+        orbit.elevation = .72;
+        orbit.radius = initialRadius;
+        targetPosition.copy(overviewPosition().add(orbit.target));
+        targetLook.copy(orbit.target);
+        startTransition();
+      }, 2500);
+    };
     let previousResetKey = state.current.resetKey;
     let previousFirstPerson = state.current.firstPerson;
     const setView = () => {
@@ -486,7 +505,12 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
         }
       }
     };
-    const up = (event: PointerEvent) => { if (drag && !drag.moved) { const seat = pick(event); if (seat) { lastHoverId = undefined; callbacks.current.onSelect(seat.id); } } drag = null; };
+    const up = (event: PointerEvent) => {
+      if (drag && !drag.moved) { const seat = pick(event); if (seat) { lastHoverId = undefined; callbacks.current.onSelect(seat.id); } }
+      if (drag && !state.current.firstPerson) resumeTourSoon();
+      drag = null;
+    };
+    const cancel = () => { if (drag && !state.current.firstPerson) resumeTourSoon(); drag = null; };
     const leave = () => { lastHoverId = undefined; callbacks.current.onHover(); };
     const wheel = (event: WheelEvent) => {
       event.preventDefault();
@@ -499,6 +523,7 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
         targetPosition.copy(overviewPosition().add(orbit.target));
         camera.position.copy(targetPosition);
         camera.lookAt(orbit.target);
+        resumeTourSoon();
       }
       invalidate();
     };
@@ -506,6 +531,7 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     renderer.domElement.addEventListener('pointerdown', down);
     renderer.domElement.addEventListener('pointermove', move);
     renderer.domElement.addEventListener('pointerup', up);
+    renderer.domElement.addEventListener('pointercancel', cancel);
     renderer.domElement.addEventListener('pointerleave', leave);
     renderer.domElement.addEventListener('wheel', wheel, { passive: false });
     renderer.domElement.addEventListener('contextmenu', context);
@@ -515,7 +541,7 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       updateView.current = null; updateColors.current = null; observer.disconnect();
       if (raf) cancelAnimationFrame(raf);
       stopTour();
-      renderer.domElement.removeEventListener('pointerdown', down); renderer.domElement.removeEventListener('pointermove', move); renderer.domElement.removeEventListener('pointerup', up); renderer.domElement.removeEventListener('pointerleave', leave); renderer.domElement.removeEventListener('wheel', wheel); renderer.domElement.removeEventListener('contextmenu', context);
+      renderer.domElement.removeEventListener('pointerdown', down); renderer.domElement.removeEventListener('pointermove', move); renderer.domElement.removeEventListener('pointerup', up); renderer.domElement.removeEventListener('pointercancel', cancel); renderer.domElement.removeEventListener('pointerleave', leave); renderer.domElement.removeEventListener('wheel', wheel); renderer.domElement.removeEventListener('contextmenu', context);
       scene.traverse(object => { if (object instanceof THREE.Mesh) { object.geometry.dispose(); const materials = Array.isArray(object.material) ? object.material : [object.material]; materials.forEach(m => m.dispose()); if (object instanceof THREE.InstancedMesh) object.dispose(); } else if (object instanceof THREE.Sprite) object.material.dispose(); });
       boardTexture.dispose(); woodTexture?.dispose(); carpetTexture?.dispose(); renderer.dispose(); labelLayer.remove(); renderer.domElement.remove();
     };
