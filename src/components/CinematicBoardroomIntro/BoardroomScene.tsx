@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { THEMES } from '@/lib/themes';
 import type { Room } from './seatModel';
 import { drawReportHeroScreen, type ReportHeroScreenData } from './reportHeroScreen';
 import { createIntroCameraPath, hallTourPose, INTRO_DURATION_MS, seatFovAfterWheel, seatLookAfterDrag, seatTourLook, smoothCameraStep, smoothDampVector3 } from './cameraControls';
@@ -24,9 +23,9 @@ function surfaceTexture(kind: 'stone' | 'carpet') {
       const vein = Math.pow(Math.max(0, Math.sin(warp)), 20) * 25
         + Math.pow(Math.max(0, Math.sin(warp * 2.18 + 1.4)), 28) * 10;
       const cloud = Math.sin(x * .017 + y * .012) * 4 + Math.sin(x * .041 - y * .025) * 2 + noise * 4;
-      image.data[i] = 172 + cloud - vein * .86;
-      image.data[i + 1] = 170 + cloud - vein;
-      image.data[i + 2] = 173 + cloud - vein * 1.05;
+      image.data[i] = 220 + cloud - vein * .86;
+      image.data[i + 1] = 218 + cloud - vein;
+      image.data[i + 2] = 222 + cloud - vein * 1.05;
     } else {
       const fleck = noise * 18 + Math.sin(x * .7 + y * .42) * 2;
       image.data[i] = 17 + fleck * .65;
@@ -82,7 +81,7 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     let renderer: THREE.WebGLRenderer;
     try { renderer = new THREE.WebGLRenderer({ antialias: (window.devicePixelRatio || 1) < 1.4, alpha: false, powerPreference: 'high-performance' }); }
     catch { callbacks.current.onFailure(); return; }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, window.innerWidth < 800 ? 1.25 : 1.5));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, window.innerWidth < 800 ? 1 : 1.25));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.22;
@@ -123,7 +122,7 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     });
     container.appendChild(labelLayer);
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(THEMES.dark['--bg']);
+    scene.background = new THREE.Color('#080b16');
     const camera = new THREE.PerspectiveCamera(firstPerson ? 66 : 52, 1, .06, 80);
     const restoredCamera = lastCamera.current;
     lastCamera.current = null;
@@ -181,7 +180,6 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     let tourRaf = 0;
     let tourLastFrame = 0;
     let tourElapsed = 0;
-    let resumeTourTimer = 0;
     let tourAllowed = true;
     let tourDirection = 1;
     const tourAnchor = { azimuth: orbit.azimuth, elevation: orbit.elevation, radius: orbit.radius };
@@ -190,8 +188,6 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     const stopTour = (manual = false) => {
       if (manual && tourRaf && Math.cos(tourElapsed * .16) < 0) tourDirection *= -1;
       if (tourRaf) cancelAnimationFrame(tourRaf);
-      if (resumeTourTimer) window.clearTimeout(resumeTourTimer);
-      resumeTourTimer = 0;
       tourRaf = 0;
       tourLastFrame = 0;
       if (manual) tourAllowed = false;
@@ -235,7 +231,9 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       return true;
     };
     const render = () => { raf = 0; renderer.render(scene, camera); publishLabels(); };
-    const invalidate = () => { if (!raf) raf = requestAnimationFrame(render); };
+    const invalidate = () => {
+      if (!raf && !panRaf && !tourRaf && !introRaf) raf = requestAnimationFrame(render);
+    };
     let panRaf = 0;
     let panLastFrame = 0;
     const panPositionVelocity = new THREE.Vector3();
@@ -346,15 +344,6 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
         if (!startTour()) invalidate();
       }
     };
-    const resumeTourSoon = () => {
-      if (resumeTourTimer) window.clearTimeout(resumeTourTimer);
-      resumeTourTimer = window.setTimeout(() => {
-        resumeTourTimer = 0;
-        if (raf) { resumeTourSoon(); return; }
-        tourAllowed = true;
-        startTour();
-      }, 900);
-    };
     let previousResetKey = state.current.resetKey;
     let previousFirstPerson = state.current.firstPerson;
     const setView = () => {
@@ -394,8 +383,8 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     const mat = (color: string, roughness = .8, metalness = .05) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
     const stoneTexture = surfaceTexture('stone');
     const carpetTexture = surfaceTexture('carpet');
-    const wallMat = mat(THEMES.dark['--surface'], .95);
-    const stone = new THREE.MeshPhysicalMaterial({ color: stoneTexture ? '#ffffff' : '#aaa9ad', map: stoneTexture ?? undefined, roughness: .32, metalness: .02, clearcoat: .28, clearcoatRoughness: .18 });
+    const wallMat = mat('#111522', .96);
+    const stone = new THREE.MeshPhysicalMaterial({ color: stoneTexture ? '#ffffff' : '#dedce0', map: stoneTexture ?? undefined, roughness: .24, metalness: .02, clearcoat: .46, clearcoatRoughness: .14 });
     const edge = mat('#283044', .44, .34);
     const dark = mat('#0c1325', .74);
     const screen = new THREE.MeshBasicMaterial({ color: '#101a31' });
@@ -427,7 +416,7 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     box(.025, .008, room.length - .28, brass, room.width / 2 - .13, .837, 0);
     box(room.width - .3, .008, .025, brass, 0, .837, -room.length / 2 + .13);
     box(room.width - .3, .008, .025, brass, 0, .837, room.length / 2 - .13);
-    roundBox(.55, .012, room.length - .58, .008, mat('#1e2639', .89), 0, .838, 0);
+    roundBox(Math.min(1.08, room.width * .43), .014, room.length - .58, .01, mat('#152443', .79), 0, .84, 0);
     const brushedMetal = mat('#7888a8', .31, .82);
     const insetDark = mat('#0b1429', .45, .35);
     for (const z of [-room.length * .31, room.length * .31]) {
@@ -452,10 +441,12 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     const board = new THREE.Mesh(new THREE.PlaneGeometry(6.3, 2.24), new THREE.MeshBasicMaterial({ map: boardTexture }));
     board.position.set(0, 1.84, -roomLength / 2 + .305); scene.add(board);
     // Fluted acoustic panels, brass reveals and warm fixtures keep the room detailed at seat height.
-    const panel = mat(THEMES.dark['--surface-secondary'], .91);
-    const slat = mat('#202c4d', .78);
-    const trim = mat('#766f65', .48, .42);
-    const sconce = new THREE.MeshBasicMaterial({ color: '#b4b8f4' });
+    const panel = mat('#181d2e', .91);
+    const slat = mat('#22283b', .78);
+    const trim = mat('#9b7845', .38, .65);
+    const sconce = new THREE.MeshBasicMaterial({ color: '#ffe3ac' });
+    const warmStrip = new THREE.MeshBasicMaterial({ color: '#ffc77f' });
+    const blueAccent = new THREE.MeshBasicMaterial({ color: '#4268d0' });
     for (const z of [-roomLength / 2, roomLength / 2]) {
       shellSurfaces.push(box(roomWidth, .12, .045, trim, 0, .18, z + (z < 0 ? .09 : -.09)));
       shellSurfaces.push(box(roomWidth, .025, .045, trim, 0, 2.97, z + (z < 0 ? .09 : -.09)));
@@ -464,6 +455,8 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       const sideX = sign * (roomWidth / 2 - .12);
       shellSurfaces.push(box(.045, .12, roomLength, trim, sideX, .18, 0));
       shellSurfaces.push(box(.045, .025, roomLength, trim, sideX, 2.97, 0));
+      shellSurfaces.push(box(.018, .014, roomLength - .3, warmStrip, sideX - sign * .025, 3.27, 0));
+      shellSurfaces.push(box(.012, .018, roomLength - .46, trim, sideX - sign * .04, .12, 0));
       for (let i = 0; i < 8; i++) {
         const x = sign * (3.55 + i * .13);
         if (Math.abs(x) < roomWidth / 2 - .15) shellSurfaces.push(box(.055, 2.72, .07, slat, x, 1.66, -roomLength / 2 + .13));
@@ -478,7 +471,7 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
         shellSurfaces.push(box(.135, .29, .055, sconce, x + (x < 0 ? .14 : -.14), 1.9, z));
       }
     }
-    const ceilingLight = new THREE.MeshBasicMaterial({ color: '#c7d4f4' });
+    const ceilingLight = new THREE.MeshBasicMaterial({ color: '#ffe7bc' });
     const ceilingDark = mat('#0b1123', .7);
     for (const z of [-room.length / 3, room.length / 3]) {
       shellSurfaces.push(roundBox(roomWidth * .64, .045, .19, .02, ceilingDark, 0, 3.37, z));
@@ -490,14 +483,19 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
         shellSurfaces.push(roundBox(.11, .024, .11, .016, ceilingLight, x, 3.36, z));
       }
     }
-    scene.add(new THREE.HemisphereLight('#cbd8f6', '#17203a', 1.15));
-    const key = new THREE.DirectionalLight('#dce7ff', 2.1); key.position.set(-3, 6, 3); scene.add(key);
-    const fill = new THREE.DirectionalLight('#8d91f7', .66); fill.position.set(3, 4, -4); scene.add(fill);
+    shellSurfaces.push(box(roomWidth * .54, .018, .04, warmStrip, 0, 3.34, -roomLength * .25));
+    box(5.9, .025, .025, blueAccent, 0, 3.12, -roomLength / 2 + .31);
+    scene.add(new THREE.HemisphereLight('#d7ddf4', '#121827', 1.25));
+    const key = new THREE.DirectionalLight('#fff0d8', 2.35); key.position.set(-3, 6, 3); scene.add(key);
+    const fill = new THREE.DirectionalLight('#8399e4', .8); fill.position.set(3, 4, -4); scene.add(fill);
     for (const z of [-room.length / 3, room.length / 3]) {
-      const pool = new THREE.PointLight('#a5afff', 4, 5.5, 2);
+      const pool = new THREE.PointLight('#ffd5a1', 3.4, 5.5, 2);
       pool.position.set(0, 2.9, z);
       scene.add(pool);
     }
+    const screenGlow = new THREE.PointLight('#4f79ff', 3.1, 5.8, 2);
+    screenGlow.position.set(0, 2.75, -roomLength / 2 + .75);
+    scene.add(screenGlow);
 
     const chairGeometry = new RoundedBoxGeometry(.68, .14, .64, 3, .06);
     const backGeometry = new RoundedBoxGeometry(.7, .8, .13, 3, .06);
@@ -704,11 +702,10 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
         if (target?.kind === 'report') callbacks.current.onOpenReport();
         else if (target?.kind === 'seat') { lastHoverId = undefined; callbacks.current.onSelect(target.seat.id); }
       }
-      if (drag) resumeTourSoon();
       drag = null;
       renderer.domElement.style.cursor = 'grab';
     };
-    const cancel = () => { tvPress = null; if (drag) resumeTourSoon(); drag = null; renderer.domElement.style.cursor = 'grab'; };
+    const cancel = () => { tvPress = null; drag = null; renderer.domElement.style.cursor = 'grab'; };
     const leave = () => { lastHoverId = undefined; callbacks.current.onHover(); if (!drag) renderer.domElement.style.cursor = 'grab'; };
     const wheel = (event: WheelEvent) => {
       event.preventDefault();
@@ -729,7 +726,6 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
         camera.position.copy(targetPosition);
         camera.lookAt(orbit.target);
       }
-      resumeTourSoon();
       invalidate();
     };
     const context = (e: Event) => e.preventDefault();
