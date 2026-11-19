@@ -1,6 +1,8 @@
 .shell{font-family:system-ui,-apple-system,"Segoe UI",Inter,Geist,sans-serif}
 .dark{--boardroom-bg:#090d1a;--boardroom-surface:#0f1629;--boardroom-text:#f3f6fc;--boardroom-secondary:#a4b3cd;--boardroom-accent:#6366f1;--boardroom-gold:#d4af37;--pill:var(--boardroom-accent);--pill-text:#fff;--glass:rgba(15,22,41,.84);--muted:var(--boardroom-secondary)}
 .experience{position:relative;width:100%;height:100vh;height:100dvh;min-height:420px;overflow:hidden;background:var(--boardroom-bg);color:var(--boardroom-text)}
+.experience:fullscreen{width:100vw;height:100vh;min-height:0}
+.experience::backdrop{background:var(--boardroom-bg)}
 .scene{position:absolute;inset:0}
 .scene canvas{cursor:grab}
 .scene:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(3,6,15,.48),transparent 20%,transparent 68%,rgba(3,6,15,.48))}
@@ -21,8 +23,11 @@
 .viewSwitch{display:flex;align-items:center;gap:3px;background:var(--glass);border:1px solid rgba(164,179,205,.18);border-radius:999px;padding:4px;box-shadow:0 14px 36px rgba(0,0,0,.3),0 0 22px rgba(99,102,241,.08),inset 0 1px rgba(255,255,255,.1);backdrop-filter:blur(18px)}
 .viewSwitch button{display:inline-flex;align-items:center;gap:7px;min-height:32px;border:0;border-radius:999px;padding:0 12px;background:none;color:var(--boardroom-secondary);font-size:12px;font-weight:650;cursor:pointer}
 .viewSwitch button.active{background:var(--pill);color:var(--pill-text)}
-.viewSwitch button:focus-visible,.continueButton:focus-visible,.faceScreen:focus-visible,.fallbackSeats button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.viewSwitch button:focus-visible,.continueButton:focus-visible,.fullscreenButton:focus-visible,.faceScreen:focus-visible,.fallbackSeats button:focus-visible{outline:2px solid #fff;outline-offset:3px}
 .projectName{max-width:min(42vw,440px);margin-top:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:12px;font-weight:700;letter-spacing:.08em;text-shadow:0 2px 8px #000;color:var(--boardroom-gold)}
+.fullscreenButton{position:absolute;z-index:3;right:16px;bottom:16px;display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border:1px solid rgba(255,255,255,.2);border-radius:50%;background:rgba(10,10,13,.83);color:#fff;box-shadow:0 7px 20px rgba(0,0,0,.35),inset 0 1px rgba(255,255,255,.08);backdrop-filter:blur(16px);cursor:pointer;transition:background .2s ease,border-color .2s ease,transform .2s ease}
+.fullscreenButton:hover{background:rgba(32,32,39,.95);border-color:rgba(255,255,255,.48);transform:scale(1.05)}
+.fullscreenError{position:absolute;z-index:3;bottom:64px;right:16px;white-space:nowrap;border:1px solid rgba(212,175,55,.4);border-radius:8px;padding:6px 9px;background:var(--boardroom-surface);color:#f5de97;font-size:11px;box-shadow:0 10px 25px rgba(0,0,0,.3)}
 .continueButton{display:inline-flex;align-items:center;gap:8px;min-height:40px;border:1px solid rgba(212,175,55,.46);border-radius:999px;padding:0 15px;background:var(--glass);color:#f5de97;font-size:12px;font-weight:650;white-space:nowrap;box-shadow:0 14px 36px rgba(0,0,0,.3),0 0 18px rgba(212,175,55,.06),inset 0 1px rgba(255,255,255,.1);backdrop-filter:blur(18px);cursor:pointer}
 .continueButton:hover{background:rgba(24,34,64,.94);border-color:var(--boardroom-gold)}
 .bottomControls{position:absolute;z-index:2;left:50%;bottom:17px;display:flex;flex-direction:column;align-items:center;gap:8px;min-width:260px;transform:translateX(-50%);pointer-events:none}
@@ -38,5 +43,5 @@
 .accessibleSeats button{display:block;width:100%;padding:7px;text-align:left;background:transparent;border:0;color:#fff;font-size:11px}.accessibleSeats button:focus-visible{outline:2px solid #fff}
 .reportHidden{position:absolute;width:1px;height:1px;overflow:hidden;pointer-events:none;opacity:0}
 .reportVisible{display:block}
-@media(max-width:640px){.topControls{top:10px;left:10px;right:10px}.viewSwitch button{padding:0 10px}.projectName{display:none}.continueButton{min-height:39px;padding:0 11px;font-size:11px}.continueButton svg{width:13px}.bottomControls{bottom:12px;min-width:240px}.bottomControls span{font-size:10px}.memberLabel{max-width:145px;min-height:27px;padding:3px 6px}.memberLabelName{font-size:10px}.memberLabelName small{font-size:9px}}
-@media(prefers-reduced-motion:reduce){.viewSwitch button,.faceScreen,.continueButton{scroll-behavior:auto;transition:none}.launchTransition{animation:none}}
+@media(max-width:640px){.topControls{top:10px;left:10px;right:10px;gap:6px}.viewSwitch button{padding:0 8px}.projectName{display:none}.fullscreenButton{right:10px;bottom:12px;width:39px;height:39px}.fullscreenError{right:10px;bottom:59px}.continueButton{min-height:39px;padding:0 9px;font-size:11px}.continueButton svg{width:13px}.bottomControls{bottom:12px;min-width:0;width:calc(100% - 112px)}.bottomControls span{font-size:10px}.memberLabel{max-width:145px;min-height:27px;padding:3px 6px}.memberLabelName{font-size:10px}.memberLabelName small{font-size:9px}}
+@media(prefers-reduced-motion:reduce){.viewSwitch button,.faceScreen,.continueButton,.fullscreenButton{scroll-behavior:auto;transition:none}.launchTransition{animation:none}}

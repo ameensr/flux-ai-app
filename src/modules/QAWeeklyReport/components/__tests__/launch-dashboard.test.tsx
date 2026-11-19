@@ -46,6 +46,7 @@ describe('Dashboard Launch Components', () => {
       </DashboardLaunchOverlay>
     )
     expect(html).toContain('Continue to report')
+    expect(html).toContain('Enter full screen')
     expect(html).not.toContain('INITIALIZING...')
   })
 

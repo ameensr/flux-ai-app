@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Box, Eye, MonitorPlay } from 'lucide-react';
+import { ArrowRight, Box, Eye, Maximize, Minimize, MonitorPlay } from 'lucide-react';
 import { getTeamNames, parseMeetingWithNames } from './teamNamesHelper';
 import { createRoom, type Seat } from './seatModel';
 import type { ReportHeroScreenData } from './reportHeroScreen';
@@ -41,6 +41,9 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   const [failed, setFailed] = useState(false);
   const [complete, setComplete] = useState(false);
   const [launching, setLaunching] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenError, setFullscreenError] = useState(false);
+  const experienceRef = useRef<HTMLDivElement>(null);
   const parsedSeniorNames = parseMeetingWithNames(meetingWith ?? seniorPersonName);
   const stableSeniorNames = useRef(parsedSeniorNames);
   if (!sameNames(stableSeniorNames.current, parsedSeniorNames)) stableSeniorNames.current = parsedSeniorNames;
@@ -58,6 +61,11 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
     });
     return () => { active = false; };
   }, [autoFetchNames, propTeamMembers]);
+  useEffect(() => {
+    const syncFullscreen = () => setIsFullscreen(document.fullscreenElement === experienceRef.current);
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
 
   const room = useMemo(() => createRoom(teamMembers, seniorNames), [teamMembers, seniorNames]);
   const screenData = useMemo<ReportHeroScreenData>(() => ({
@@ -81,10 +89,26 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
     ? `${seat.id}, occupied by ${seat.member.name}${seat.member.role ? ` (${seat.member.role})` : ''}`
     : `${seat.id}, available`;
   const selectSeat = (id: string) => { setSelectedId(id); setFirstPerson(true); setResetKey(key => key + 1); setHover(undefined); };
-  const finish = () => { if (complete) return; setComplete(true); onComplete?.(); };
+  const toggleFullscreen = async () => {
+    const experience = experienceRef.current;
+    if (!experience) return;
+    setFullscreenError(false);
+    try {
+      if (document.fullscreenElement === experience) await document.exitFullscreen();
+      else await experience.requestFullscreen();
+    } catch {
+      setFullscreenError(true);
+    }
+  };
+  const finish = () => {
+    if (complete) return;
+    if (document.fullscreenElement === experienceRef.current) void document.exitFullscreen().catch(() => {});
+    setComplete(true);
+    onComplete?.();
+  };
 
   return <div className={`${styles.shell} ${styles.dark}`}>
-    {!complete && <div className={styles.experience} data-launching={launching} aria-label="Interactive boardroom preview">
+    {!complete && <div ref={experienceRef} className={styles.experience} data-launching={launching} aria-label="Interactive boardroom preview">
       <div className={styles.scene}>
         {!failed
           ? <Suspense fallback={<div className={styles.loading}>Preparing the boardroom…</div>}>
@@ -129,6 +153,10 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
         {firstPerson && !failed && <button className={styles.faceScreen} type="button" onClick={() => setResetKey(key => key + 1)}><MonitorPlay size={15} /> {selectedSeat.side === 'head' ? 'Face the room' : 'Face the screen'}</button>}
         <span>{firstPerson ? `${selectedSeat.id === 'VIEW' ? 'Your view opposite the screen' : `Your view from ${selectedSeat.id}`} · click a chair or name to switch views` : 'Click a chair or name to sit there · drag to explore the room'}</span>
       </div>
+      <button className={styles.fullscreenButton} type="button" onClick={toggleFullscreen} aria-label={isFullscreen ? 'Exit full screen' : 'Enter full screen'} title={isFullscreen ? 'Exit full screen' : 'Enter full screen'} aria-pressed={isFullscreen}>
+        {isFullscreen ? <Minimize size={17} /> : <Maximize size={17} />}
+      </button>
+      {fullscreenError && <span className={styles.fullscreenError} role="status">Full screen is unavailable here.</span>}
 
       <nav className={styles.accessibleSeats} aria-label="Preview a boardroom seat">
         {room.seats.map(seat => <button key={seat.id} type="button" onClick={() => selectSeat(seat.id)} aria-label={`Preview ${seatLabel(seat)}`}>{seatLabel(seat)}</button>)}
