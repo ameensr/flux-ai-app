@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { DotMatrixLaunchLoader } from './DotMatrixLaunchLoader'
 import { CinematicBoardroomIntro } from '@/components/CinematicBoardroomIntro'
 import type { ReportHeroScreenData } from '@/components/CinematicBoardroomIntro/reportHeroScreen'
 
-// Temporarily skip the 0–100% loader. Set this to true to restore it.
 const ENABLE_DOT_MATRIX_LAUNCH = false
 
 interface DashboardLaunchOverlayProps {
@@ -22,11 +21,6 @@ interface DashboardLaunchOverlayProps {
   heroScreen?: ReportHeroScreenData
 }
 
-/**
- * Full-screen loading entrance overlay:
- * The dot-matrix loader is retained behind ENABLE_DOT_MATRIX_LAUNCH.
- * With it disabled, the interactive boardroom opens immediately.
- */
 export const DashboardLaunchOverlay: React.FC<DashboardLaunchOverlayProps> = ({
   open,
   projectName,
@@ -41,58 +35,63 @@ export const DashboardLaunchOverlay: React.FC<DashboardLaunchOverlayProps> = ({
   children,
   heroScreen,
 }) => {
-  // Stage 1: Dot-matrix loader plays first
   const [dotMatrixDone, setDotMatrixDone] = useState(false)
+  const [finishing, setFinishing] = useState(false)
 
-  // Reset when open changes to true
   useEffect(() => {
-    if (open) {
-      setDotMatrixDone(false)
-    }
+    if (open) setDotMatrixDone(false)
   }, [open])
 
-  if (!open) {
-    return <>{children}</>
-  }
+  useEffect(() => {
+    if (open || !finishing) return
+    const timer = window.setTimeout(() => setFinishing(false), 680)
+    return () => window.clearTimeout(timer)
+  }, [open, finishing])
 
+  const overlayVisible = open || finishing
   const title = projectName || 'Executive Briefing'
   const subtitle = weekStart && weekEnd
     ? `QA Report Sprint: ${weekStart} – ${weekEnd}`
     : 'Executive QA & Engineering Overview'
+  const finishLaunch = () => {
+    setFinishing(true)
+    onComplete()
+  }
 
   return (
     <>
-      {/* ── STAGE 1: Dot-Matrix Telemetry Counter (0% -> 100%) ── */}
-      <AnimatePresence>
-        {ENABLE_DOT_MATRIX_LAUNCH && !dotMatrixDone && (
-          <DotMatrixLaunchLoader
-            open={!dotMatrixDone}
-            onComplete={() => setDotMatrixDone(true)}
-            durationMs={1100}
-            label="INITIALIZING..."
-            sublabel={projectName ? `SP • DEV  //  ${projectName.toUpperCase()}` : 'SP • DEV'}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* The boardroom mounts immediately while the dot-matrix stage is disabled. */}
-      {(!ENABLE_DOT_MATRIX_LAUNCH || dotMatrixDone) && (
-        <CinematicBoardroomIntro
-          projectName={projectName}
-          seniorPersonName={seniorName}
-          meetingWith={meetingWith}
-          teamMembers={teamMembers}
-          supportEmailsCount={supportEmailsCount}
-          newFeaturesCount={newFeaturesCount}
-          weekStart={weekStart}
-          weekEnd={weekEnd}
-          title={title}
-          subtitle={subtitle}
-          onComplete={onComplete}
-          heroScreen={heroScreen}
-        >
-          {children}
-        </CinematicBoardroomIntro>
+      {/* Keep the dashboard mounted while the boardroom covers it. */}
+      <div aria-hidden={overlayVisible} inert={overlayVisible}>{children}</div>
+      {overlayVisible && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000000, overflow: 'hidden', isolation: 'isolate', background: '#080b16', opacity: open ? 1 : 0, pointerEvents: open ? 'auto' : 'none', transition: 'opacity 580ms cubic-bezier(0.22, 1, 0.36, 1)' }}>
+          <AnimatePresence>
+            {open && ENABLE_DOT_MATRIX_LAUNCH && !dotMatrixDone && (
+              <DotMatrixLaunchLoader
+                open={!dotMatrixDone}
+                onComplete={() => setDotMatrixDone(true)}
+                durationMs={1100}
+                label="INITIALIZING..."
+                sublabel={projectName ? `SP • DEV  //  ${projectName.toUpperCase()}` : 'SP • DEV'}
+              />
+            )}
+          </AnimatePresence>
+          {open && (!ENABLE_DOT_MATRIX_LAUNCH || dotMatrixDone) && (
+            <CinematicBoardroomIntro
+              projectName={projectName}
+              seniorPersonName={seniorName}
+              meetingWith={meetingWith}
+              teamMembers={teamMembers}
+              supportEmailsCount={supportEmailsCount}
+              newFeaturesCount={newFeaturesCount}
+              weekStart={weekStart}
+              weekEnd={weekEnd}
+              title={title}
+              subtitle={subtitle}
+              onComplete={finishLaunch}
+              heroScreen={heroScreen}
+            />
+          )}
+        </div>
       )}
     </>
   )

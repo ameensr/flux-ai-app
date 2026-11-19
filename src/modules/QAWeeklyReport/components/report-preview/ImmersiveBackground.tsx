@@ -175,7 +175,7 @@ export function ImmersiveBackground({ theme, enabled, paused = false }: Immersiv
     let dpr = 1
 
     const handleResize = () => {
-      dpr = Math.min(window.devicePixelRatio || 1, 2)
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5)
       width = window.innerWidth
       height = window.innerHeight
       canvas.width = Math.floor(width * dpr)
@@ -188,25 +188,25 @@ export function ImmersiveBackground({ theme, enabled, paused = false }: Immersiv
 
     // Setup 7 curated floating dot-matrix typographic clusters scattered across background
     const clusters: FloatingGlyphCluster[] = [
-      { xRatio: 0.08, yRatio: 0.16, glyphs: ['arrow'], dotSpacing: 5.5, driftAngle: 0.3, driftSpeed: 0.04, phase: 0.2, pulseSpeed: 0.02, baseAlpha: 0.35 },
-      { xRatio: 0.88, yRatio: 0.14, glyphs: ['cross'], dotSpacing: 5.5, driftAngle: 2.1, driftSpeed: 0.03, phase: 1.5, pulseSpeed: 0.018, baseAlpha: 0.32 },
-      { xRatio: 0.92, yRatio: 0.48, glyphs: ['1', '0', '0', 'percent'], dotSpacing: 5.0, driftAngle: 3.4, driftSpeed: 0.035, phase: 2.8, pulseSpeed: 0.022, baseAlpha: 0.38 },
-      { xRatio: 0.06, yRatio: 0.62, glyphs: ['Q', 'A'], dotSpacing: 5.2, driftAngle: 1.2, driftSpeed: 0.03, phase: 4.1, pulseSpeed: 0.016, baseAlpha: 0.34 },
-      { xRatio: 0.84, yRatio: 0.82, glyphs: ['arrow'], dotSpacing: 5.5, driftAngle: 4.8, driftSpeed: 0.04, phase: 5.3, pulseSpeed: 0.02, baseAlpha: 0.36 },
-      { xRatio: 0.14, yRatio: 0.88, glyphs: ['diamond'], dotSpacing: 5.5, driftAngle: 0.8, driftSpeed: 0.03, phase: 3.2, pulseSpeed: 0.019, baseAlpha: 0.3 },
-      { xRatio: 0.52, yRatio: 0.06, glyphs: ['cross'], dotSpacing: 5.0, driftAngle: 2.7, driftSpeed: 0.025, phase: 0.8, pulseSpeed: 0.015, baseAlpha: 0.25 },
+      { xRatio: 0.08, yRatio: 0.16, glyphs: ['arrow'], dotSpacing: 5.5, driftAngle: 0.3, driftSpeed: 0.04, phase: 0.2, pulseSpeed: 0.02, baseAlpha: 0.2 },
+      { xRatio: 0.88, yRatio: 0.14, glyphs: ['cross'], dotSpacing: 5.5, driftAngle: 2.1, driftSpeed: 0.03, phase: 1.5, pulseSpeed: 0.018, baseAlpha: 0.18 },
+      { xRatio: 0.92, yRatio: 0.48, glyphs: ['1', '0', '0', 'percent'], dotSpacing: 5.0, driftAngle: 3.4, driftSpeed: 0.035, phase: 2.8, pulseSpeed: 0.022, baseAlpha: 0.22 },
+      { xRatio: 0.06, yRatio: 0.62, glyphs: ['Q', 'A'], dotSpacing: 5.2, driftAngle: 1.2, driftSpeed: 0.03, phase: 4.1, pulseSpeed: 0.016, baseAlpha: 0.2 },
+      { xRatio: 0.84, yRatio: 0.82, glyphs: ['arrow'], dotSpacing: 5.5, driftAngle: 4.8, driftSpeed: 0.04, phase: 5.3, pulseSpeed: 0.02, baseAlpha: 0.2 },
+      { xRatio: 0.14, yRatio: 0.88, glyphs: ['diamond'], dotSpacing: 5.5, driftAngle: 0.8, driftSpeed: 0.03, phase: 3.2, pulseSpeed: 0.019, baseAlpha: 0.18 },
+      { xRatio: 0.52, yRatio: 0.06, glyphs: ['cross'], dotSpacing: 5.0, driftAngle: 2.7, driftSpeed: 0.025, phase: 0.8, pulseSpeed: 0.015, baseAlpha: 0.15 },
     ]
 
     let time = 0
-    const GRID_STEP = 36 // Regular pitch for the dot-matrix canvas field
+    const GRID_STEP = 48 // A quiet texture behind the report content
 
     const isDark = theme === 'dark'
     // Color Palette matching Application UI
-    const unlitColor = isDark ? 'rgba(99, 102, 241, 0.065)' : 'rgba(99, 102, 241, 0.05)'
+    const unlitColor = isDark ? 'rgba(129, 140, 248, 0.034)' : 'rgba(79, 70, 229, 0.028)'
     const waveLitColor = isDark ? 'rgba(129, 140, 248, ALPHA)' : 'rgba(79, 70, 229, ALPHA)'
     const cursorLitColor = isDark ? 'rgba(129, 140, 248, ALPHA)' : 'rgba(79, 70, 229, ALPHA)'
     const glyphLitColor = isDark ? 'rgba(129, 140, 248, ALPHA)' : 'rgba(79, 70, 229, ALPHA)'
-    const glyphUnlitColor = isDark ? 'rgba(99, 102, 241, 0.055)' : 'rgba(99, 102, 241, 0.04)'
+    const glyphUnlitColor = isDark ? 'rgba(129, 140, 248, 0.03)' : 'rgba(79, 70, 229, 0.025)'
 
     const drawFrame = () => {
       time += 1
@@ -262,13 +262,13 @@ export function ImmersiveBackground({ theme, enabled, paused = false }: Immersiv
           if (cursorFactor > 0.01) {
             // Illuminated by cursor
             dotRadius = (isDark ? 1.3 : 1.2) + cursorFactor * 1.6
-            const alpha = (isDark ? 0.25 : 0.2) + cursorFactor * (isDark ? 0.65 : 0.55)
+            const alpha = (isDark ? 0.16 : 0.12) + cursorFactor * (isDark ? 0.38 : 0.3)
             fillStyle = cursorLitColor.replace('ALPHA', alpha.toFixed(3))
           } else if (isWaveCrest) {
             // Ambient wave crest
             const crestIntensity = (waveVal - 0.45) / 0.55
             dotRadius = (isDark ? 1.25 : 1.15) + crestIntensity * 0.5
-            const alpha = crestIntensity * (isDark ? 0.22 : 0.16)
+            const alpha = crestIntensity * (isDark ? 0.12 : 0.08)
             fillStyle = waveLitColor.replace('ALPHA', alpha.toFixed(3))
           }
 
@@ -342,15 +342,17 @@ export function ImmersiveBackground({ theme, enabled, paused = false }: Immersiv
       ctx.restore()
     }
 
-    const animate = () => {
+    let lastDrawAt = 0
+    const animate = (now: number) => {
       const shouldRun =
         !pausedRef.current &&
         !prefersReduced &&
         typeof document !== 'undefined' &&
         !document.hidden
 
-      if (shouldRun) {
+      if (shouldRun && (!lastDrawAt || now - lastDrawAt >= 32)) {
         drawFrame()
+        lastDrawAt = now
       }
       animationFrameId = requestAnimationFrame(animate)
     }
@@ -358,7 +360,7 @@ export function ImmersiveBackground({ theme, enabled, paused = false }: Immersiv
     if (prefersReduced) {
       drawFrame()
     } else {
-      animate()
+      animationFrameId = requestAnimationFrame(animate)
     }
 
     const onVisibility = () => {
@@ -377,24 +379,35 @@ export function ImmersiveBackground({ theme, enabled, paused = false }: Immersiv
 
   return (
     <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden print:hidden select-none">
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: theme === 'dark'
+            ? 'linear-gradient(rgba(171,188,232,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(171,188,232,.025) 1px, transparent 1px)'
+            : 'linear-gradient(rgba(64,87,137,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(64,87,137,.04) 1px, transparent 1px)',
+          backgroundSize: '80px 80px',
+          maskImage: 'radial-gradient(ellipse 85% 80% at 50% 30%, #000 10%, transparent 100%)',
+          WebkitMaskImage: 'radial-gradient(ellipse 85% 80% at 50% 30%, #000 10%, transparent 100%)',
+        }}
+      />
       {/* ── Atmospheric Ambient UI Color Blooms ── */}
       <motion.div
         animate={
           paused
             ? undefined
             : {
-                scale: [1, 1.12, 1],
-                opacity: theme === 'dark' ? [0.22, 0.32, 0.22] : [0.12, 0.18, 0.12],
+                scale: [1, 1.07, 1],
+                opacity: theme === 'dark' ? [0.3, 0.4, 0.3] : [0.18, 0.26, 0.18],
               }
         }
-        transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute left-1/2 top-1/2 w-[1100px] h-[1100px] rounded-full blur-[140px]"
+        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute left-1/2 top-[12%] w-[1200px] h-[760px] rounded-full blur-[110px]"
         style={{
           transform: 'translate(-50%, -50%)',
           background:
             theme === 'dark'
-              ? 'radial-gradient(circle at 40% 40%, rgba(99,102,241,0.28), rgba(79,70,229,0.14) 42%, rgba(15,23,42,0.06) 70%, transparent 100%)'
-              : 'radial-gradient(circle at 40% 40%, rgba(99,102,241,0.14), rgba(79,70,229,0.07) 42%, rgba(226,232,240,0.1) 70%, transparent 100%)',
+              ? 'radial-gradient(ellipse at 50% 65%, rgba(109,132,232,.38), rgba(46,77,150,.18) 48%, transparent 76%)'
+              : 'radial-gradient(ellipse at 50% 65%, rgba(128,151,239,.25), rgba(147,181,236,.1) 48%, transparent 76%)',
         }}
       />
 
@@ -404,15 +417,15 @@ export function ImmersiveBackground({ theme, enabled, paused = false }: Immersiv
           paused
             ? undefined
             : {
-                scale: [1, 1.1, 1],
-                opacity: theme === 'dark' ? [0.16, 0.24, 0.16] : [0.08, 0.14, 0.08],
+                scale: [1, 1.06, 1],
+                opacity: theme === 'dark' ? [0.2, 0.27, 0.2] : [0.12, 0.17, 0.12],
               }
         }
-        transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
-        className={`absolute top-[-10%] left-[18%] w-[620px] h-[620px] rounded-full blur-[130px] ${
+        transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+        className={`absolute top-[-12%] left-[-7%] w-[680px] h-[680px] rounded-full blur-[105px] ${
           theme === 'dark'
-            ? 'bg-gradient-to-br from-indigo-600/30 to-blue-600/5'
-            : 'bg-gradient-to-br from-indigo-400/20 to-sky-300/5'
+            ? 'bg-gradient-to-br from-indigo-500/35 to-blue-500/5'
+            : 'bg-gradient-to-br from-indigo-400/25 to-sky-300/5'
         }`}
       />
 
@@ -422,15 +435,15 @@ export function ImmersiveBackground({ theme, enabled, paused = false }: Immersiv
           paused
             ? undefined
             : {
-                scale: [1, 1.08, 1],
-                opacity: theme === 'dark' ? [0.14, 0.22, 0.14] : [0.07, 0.12, 0.07],
+                scale: [1, 1.06, 1],
+                opacity: theme === 'dark' ? [0.16, 0.23, 0.16] : [0.11, 0.16, 0.11],
               }
         }
-        transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut', delay: 1.2 }}
-        className={`absolute bottom-[-10%] right-[-6%] w-[580px] h-[580px] rounded-full blur-[140px] ${
+        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut', delay: 1.2 }}
+        className={`absolute bottom-[-14%] right-[-9%] w-[650px] h-[650px] rounded-full blur-[120px] ${
           theme === 'dark'
-            ? 'bg-gradient-to-tr from-indigo-700/25 to-violet-600/5'
-            : 'bg-gradient-to-tr from-indigo-400/18 to-purple-300/5'
+            ? 'bg-gradient-to-tr from-amber-500/20 to-indigo-500/5'
+            : 'bg-gradient-to-tr from-amber-300/22 to-indigo-300/5'
         }`}
       />
 
@@ -440,15 +453,15 @@ export function ImmersiveBackground({ theme, enabled, paused = false }: Immersiv
           paused
             ? undefined
             : {
-                scale: [1, 1.08, 1],
-                opacity: theme === 'dark' ? [0.12, 0.18, 0.12] : [0.06, 0.1, 0.06],
+                scale: [1, 1.05, 1],
+                opacity: theme === 'dark' ? [0.16, 0.22, 0.16] : [0.1, 0.14, 0.1],
               }
         }
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut', delay: 2.4 }}
-        className={`absolute top-[28%] left-[-12%] w-[480px] h-[480px] rounded-full blur-[120px] ${
+        transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut', delay: 2.4 }}
+        className={`absolute top-[32%] right-[-13%] w-[540px] h-[540px] rounded-full blur-[110px] ${
           theme === 'dark'
-            ? 'bg-gradient-to-tr from-blue-700/20 to-indigo-500/5'
-            : 'bg-gradient-to-tr from-sky-400/15 to-indigo-300/5'
+            ? 'bg-gradient-to-tr from-cyan-600/22 to-blue-500/5'
+            : 'bg-gradient-to-tr from-cyan-300/24 to-blue-300/5'
         }`}
       />
 

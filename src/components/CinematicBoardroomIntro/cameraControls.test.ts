@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { createIntroCameraPath, hallTourPose, INTRO_DURATION_MS, seatFovAfterWheel, seatLookAfterDrag, seatTourLook, smoothCameraStep, smoothDampVector3 } from './cameraControls';
+import { createIntroCameraPath, createReportLaunchPath, hallTourPose, INTRO_DURATION_MS, REPORT_LAUNCH_DURATION_MS, seatFovAfterWheel, seatLookAfterDrag, seatTourLook, smoothCameraStep, smoothDampVector3 } from './cameraControls';
 
 describe('boardroom seat camera controls', () => {
+  it('flies toward the TV and finishes in front of the screen', () => {
+    const start = new Vector3(1.3, 1.22, 3);
+    const screen = new Vector3(0, 1.84, -4);
+    const path = createReportLaunchPath(start, new Vector3(0, 1.5, -2), 66, screen);
+    expect(REPORT_LAUNCH_DURATION_MS).toBeGreaterThanOrEqual(800);
+    expect(path(0).position.distanceTo(start)).toBeLessThan(1e-10);
+    expect(path(.5).position.y).toBeGreaterThan(1.5);
+    expect(path(1).position.z).toBeCloseTo(screen.z + .88);
+    expect(path(1).look.distanceTo(screen)).toBeLessThan(1e-10);
+    expect(path(1).fov).toBeLessThan(path(0).fov);
+  });
   it('settles a changing pan target smoothly at different frame rates', () => {
     const run = (fps: number) => {
       const current = new Vector3();

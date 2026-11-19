@@ -330,8 +330,8 @@ const getCustomStyles = (theme: 'light' | 'dark') => `
       z-index: 0;
       pointer-events: none;
       background: ${theme === 'dark'
-        ? 'radial-gradient(circle at 30% 22%, rgba(212,175,55,0.16), transparent 42%), radial-gradient(circle at 88% 78%, rgba(59,130,246,0.13), transparent 48%), radial-gradient(circle at 8% 78%, rgba(168,85,247,0.10), transparent 42%), #070a13'
-        : 'radial-gradient(circle at 30% 22%, rgba(250,204,21,0.12), transparent 42%), radial-gradient(circle at 88% 78%, rgba(96,165,250,0.10), transparent 48%), radial-gradient(circle at 8% 78%, rgba(196,181,253,0.08), transparent 42%), #f8fafc'
+        ? 'radial-gradient(ellipse 90% 65% at 12% -5%, rgba(83,100,185,0.17), transparent 70%), radial-gradient(ellipse 60% 55% at 95% 30%, rgba(27,91,126,0.12), transparent 75%), linear-gradient(155deg, #080c18, #0c1425 52%, #080e1b)'
+        : 'radial-gradient(ellipse 85% 60% at 12% -5%, rgba(117,141,237,0.13), transparent 70%), radial-gradient(ellipse 55% 50% at 100% 35%, rgba(212,175,55,0.08), transparent 72%), linear-gradient(155deg, #f9fbff, #edf2f9 52%, #f6f9fd)'
       } !important;
     }
 
@@ -986,7 +986,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
   const getThemeStyles = () => {
     if (theme === 'light') {
       return {
-        bg: 'bg-[#f8fafc] text-slate-900',
+        bg: 'bg-[#f6f9fd] text-slate-900',
         card: 'glass-card glass-glow rounded-2xl transition-all duration-300',
         accent: 'text-[#b5942b]',
         accentBg: 'bg-accent-gold text-black hover:bg-[#b5942b] font-bold rounded-xl transition-all',
@@ -1000,7 +1000,7 @@ const ReportPreviewDashboardContent: React.FC = () => {
       }
     } else {
       return {
-        bg: 'bg-[#070a13] text-[#f8fafc]',
+        bg: 'bg-[#080e1b] text-[#f8fafc]',
         card: 'glass-card glass-glow rounded-2xl transition-all duration-300',
         accent: 'text-accent-gold',
         accentBg: 'bg-accent-gold text-black hover:bg-[#b5942b] font-bold rounded-xl transition-all',
@@ -1971,6 +1971,9 @@ Do not return markdown wraps, only raw JSON text.
             */}
             <motion.div
               className={`qaly-report-root min-h-screen ${tS.font} ${tS.bg} transition-colors duration-300 relative overflow-hidden pb-20 print:overflow-visible`}
+              style={{ background: theme === 'dark'
+                ? 'radial-gradient(ellipse 90% 65% at 12% -5%, rgba(83,100,185,.17), transparent 70%), radial-gradient(ellipse 60% 55% at 95% 30%, rgba(27,91,126,.12), transparent 75%), linear-gradient(155deg, #080c18 0%, #0c1425 52%, #080e1b 100%)'
+                : 'radial-gradient(ellipse 85% 60% at 12% -5%, rgba(117,141,237,.13), transparent 70%), radial-gradient(ellipse 55% 50% at 100% 35%, rgba(212,175,55,.08), transparent 72%), linear-gradient(155deg, #f9fbff 0%, #edf2f9 52%, #f6f9fd 100%)' }}
               initial={{ opacity: 0, y: 12 }}
               animate={
                 (dashboardRevealed || showLaunchTriage)
@@ -2013,7 +2016,7 @@ Do not return markdown wraps, only raw JSON text.
       <div className="fixed inset-0 pointer-events-none z-30 shadow-[inset_0_0_80px_rgba(0,0,0,0.2)] dark:shadow-[inset_0_0_150px_rgba(0,0,0,0.65)] transition-opacity duration-500" />
 
       {/* ── Cinematic atmospheric top lens glow ── */}
-      <div className="fixed -top-44 left-1/2 -translate-x-1/2 w-[880px] h-[360px] bg-gradient-to-b from-indigo-500/15 via-blue-500/5 to-transparent blur-[130px] pointer-events-none z-0" />
+      <div className="fixed -top-44 left-1/2 -translate-x-1/2 w-[880px] h-[360px] bg-gradient-to-b from-indigo-500/10 via-blue-500/3 to-transparent blur-[130px] pointer-events-none z-0" />
 
       {/* ── Floating Nav Bar — Stays anchored on scroll, application color theme ── */}
       <AnimatePresence>
@@ -2026,12 +2029,25 @@ Do not return markdown wraps, only raw JSON text.
             transition={{ duration: 0.22, ease: 'easeOut' }}
             className="fixed top-3 sm:top-4 inset-x-0 z-40 print:hidden pointer-events-none transition-all duration-300"
           >
-            <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-6">
+            <div
+              aria-hidden="true"
+              className="absolute -top-4 inset-x-0 h-40 pointer-events-none"
+              style={{
+                background: theme === 'dark'
+                  ? 'linear-gradient(to bottom, rgba(9,13,26,.9) 0%, rgba(9,13,26,.74) 48%, transparent 100%)'
+                  : 'linear-gradient(to bottom, rgba(248,250,252,.92) 0%, rgba(248,250,252,.78) 48%, transparent 100%)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                maskImage: 'linear-gradient(to bottom, #000 0%, #000 42%, transparent 100%)',
+                WebkitMaskImage: 'linear-gradient(to bottom, #000 0%, #000 42%, transparent 100%)',
+              }}
+            />
+            <div className="relative w-full max-w-[1600px] mx-auto px-3 sm:px-6">
               <div
-                className={`pointer-events-auto relative rounded-full p-1.5 sm:p-2 transition-all duration-300 backdrop-blur-xl ${
+                className={`pointer-events-auto relative isolate rounded-full p-1.5 sm:p-2 transition-all duration-300 backdrop-blur-2xl ${
                   theme === 'dark'
-                    ? 'bg-[#090D1A]/85 border border-white/[0.08] shadow-[0_12px_32px_-4px_rgba(0,0,0,0.5),0_0_20px_rgba(99,102,241,0.06),inset_0_1px_1px_rgba(255,255,255,0.1)]'
-                    : 'bg-white/85 border border-slate-200/90 shadow-[0_8px_24px_-4px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.8)]'
+                    ? 'bg-[#090D1A]/95 border border-white/[0.10] shadow-[0_12px_32px_-4px_rgba(0,0,0,0.5),0_0_20px_rgba(99,102,241,0.06),inset_0_1px_1px_rgba(255,255,255,0.1)]'
+                    : 'bg-white/95 border border-slate-200/90 shadow-[0_8px_24px_-4px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.8)]'
                 }`}
               >
                 {/* Subtle top specular hairline matching app theme */}

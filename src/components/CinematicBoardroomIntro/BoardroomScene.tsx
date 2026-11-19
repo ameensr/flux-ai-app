@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { Room } from './seatModel';
 import { drawReportHeroScreen, type ReportHeroScreenData } from './reportHeroScreen';
-import { createIntroCameraPath, hallTourPose, INTRO_DURATION_MS, seatFovAfterWheel, seatLookAfterDrag, seatTourLook, smoothCameraStep, smoothDampVector3 } from './cameraControls';
+import { createIntroCameraPath, createReportLaunchPath, hallTourPose, INTRO_DURATION_MS, REPORT_LAUNCH_DURATION_MS, seatFovAfterWheel, seatLookAfterDrag, seatTourLook, smoothCameraStep, smoothDampVector3 } from './cameraControls';
 import styles from './CinematicBoardroomIntro.module.css';
 
 function surfaceTexture(kind: 'stone' | 'carpet') {
@@ -52,15 +52,16 @@ interface Props {
   isDark: boolean;
   screenData: ReportHeroScreenData;
   onSelect: (id: string) => void;
+  onLaunchStart: () => void;
   onOpenReport: () => void;
   onHover: (id?: string, point?: { x: number; y: number }) => void;
   onFailure: () => void;
 }
 
-export default function BoardroomScene({ room, selectedId, hoveredId, recommendedIds, firstPerson, resetKey, isDark, screenData, onSelect, onOpenReport, onHover, onFailure }: Props) {
+export default function BoardroomScene({ room, selectedId, hoveredId, recommendedIds, firstPerson, resetKey, isDark, screenData, onSelect, onLaunchStart, onOpenReport, onHover, onFailure }: Props) {
   const host = useRef<HTMLDivElement>(null);
-  const callbacks = useRef({ onSelect, onOpenReport, onHover, onFailure });
-  callbacks.current = { onSelect, onOpenReport, onHover, onFailure };
+  const callbacks = useRef({ onSelect, onLaunchStart, onOpenReport, onHover, onFailure });
+  callbacks.current = { onSelect, onLaunchStart, onOpenReport, onHover, onFailure };
   const state = useRef({ selectedId, hoveredId, recommendedIds, firstPerson, resetKey });
   state.current = { selectedId, hoveredId, recommendedIds, firstPerson, resetKey };
   const introPlayed = useRef(false);
@@ -232,9 +233,10 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     };
     const render = () => { raf = 0; renderer.render(scene, camera); publishLabels(); };
     const invalidate = () => {
-      if (!raf && !panRaf && !tourRaf && !introRaf) raf = requestAnimationFrame(render);
+      if (!raf && !panRaf && !tourRaf && !introRaf && !launchRaf) raf = requestAnimationFrame(render);
     };
     let panRaf = 0;
+    let launchRaf = 0;
     let panLastFrame = 0;
     const panPositionVelocity = new THREE.Vector3();
     const panLookVelocity = new THREE.Vector3();
@@ -634,7 +636,47 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     };
     let tvPress: { x: number; y: number } | null = null;
     let drag: { x: number; y: number; startX: number; startY: number; button: number; moved: boolean } | null = null;
+    let launchingReport = false;
+    let launchStartedAt = 0;
+    let launchCompleteTimer = 0;
+    let launchPath: ReturnType<typeof createReportLaunchPath>;
+    const launchFrame = (now: number) => {
+      launchRaf = 0;
+      if (!launchStartedAt) launchStartedAt = now;
+      const progress = Math.min(1, (now - launchStartedAt) / REPORT_LAUNCH_DURATION_MS);
+      const pose = launchPath(progress);
+      camera.position.copy(pose.position);
+      look.copy(pose.look);
+      camera.fov = pose.fov;
+      camera.updateProjectionMatrix();
+      updateShellVisibility();
+      camera.lookAt(look);
+      renderer.render(scene, camera);
+      if (progress < 1) launchRaf = requestAnimationFrame(launchFrame);
+      else launchCompleteTimer = window.setTimeout(() => {
+        launchCompleteTimer = 0;
+        callbacks.current.onOpenReport();
+      }, 120);
+    };
+    const launchReportFromScreen = () => {
+      if (launchingReport) return;
+      launchingReport = true;
+      callbacks.current.onLaunchStart();
+      if (reducedMotion) { callbacks.current.onOpenReport(); return; }
+      stopIntro();
+      stopTour(true);
+      stopPan();
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      drag = null;
+      tvPress = null;
+      callbacks.current.onHover();
+      renderer.domElement.style.cursor = 'default';
+      launchPath = createReportLaunchPath(camera.position, look, camera.fov, new THREE.Vector3(0, 1.84, -roomLength / 2 + .305));
+      launchStartedAt = 0;
+      launchRaf = requestAnimationFrame(launchFrame);
+    };
     const down = (event: PointerEvent) => {
+      if (launchingReport) return;
       if (introActive) {
         const target = pick(event);
         if (target?.kind === 'report') {
@@ -658,6 +700,7 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       renderer.domElement.setPointerCapture(event.pointerId);
     };
     const move = (event: PointerEvent) => {
+      if (launchingReport) return;
       if (tvPress) return;
       if (drag) {
         const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
@@ -691,24 +734,26 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       }
     };
     const up = (event: PointerEvent) => {
+      if (launchingReport) return;
       if (tvPress) {
         const clicked = Math.hypot(event.clientX - tvPress.x, event.clientY - tvPress.y) < 6;
         tvPress = null;
-        if (clicked) callbacks.current.onOpenReport();
+        if (clicked) launchReportFromScreen();
         return;
       }
       if (drag && !drag.moved) {
         const target = pick(event);
-        if (target?.kind === 'report') callbacks.current.onOpenReport();
+        if (target?.kind === 'report') launchReportFromScreen();
         else if (target?.kind === 'seat') { lastHoverId = undefined; callbacks.current.onSelect(target.seat.id); }
       }
       drag = null;
-      renderer.domElement.style.cursor = 'grab';
+      if (!launchingReport) renderer.domElement.style.cursor = 'grab';
     };
     const cancel = () => { tvPress = null; drag = null; renderer.domElement.style.cursor = 'grab'; };
     const leave = () => { lastHoverId = undefined; callbacks.current.onHover(); if (!drag) renderer.domElement.style.cursor = 'grab'; };
     const wheel = (event: WheelEvent) => {
       event.preventDefault();
+      if (launchingReport) return;
       if (introActive) {
         setView();
         camera.fov = seatFovAfterWheel(camera.fov, event.deltaY);
@@ -748,6 +793,8 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       lastCamera.current = { position: camera.position.clone(), look: look.clone(), fov: camera.fov };
       updateView.current = null; updateColors.current = null; updateScreen.current = null; observer.disconnect();
       if (raf) cancelAnimationFrame(raf);
+      if (launchRaf) cancelAnimationFrame(launchRaf);
+      if (launchCompleteTimer) window.clearTimeout(launchCompleteTimer);
       stopPan();
       stopIntro();
       stopTour();

@@ -4,6 +4,10 @@
 .scene{position:absolute;inset:0}
 .scene canvas{cursor:grab}
 .scene:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(3,6,15,.48),transparent 20%,transparent 68%,rgba(3,6,15,.48))}
+.experience[data-launching=true] .topControls,.experience[data-launching=true] .bottomControls,.experience[data-launching=true] .memberLabels,.experience[data-launching=true] .tooltip{opacity:0;pointer-events:none;transition:opacity .3s ease}
+.experience[data-launching=true] .accessibleSeats{pointer-events:none}
+.launchTransition{position:absolute;z-index:4;inset:0;pointer-events:none;background:radial-gradient(ellipse 52% 55% at 50% 44%,rgba(53,83,157,.18) 0%,rgba(8,11,22,.8) 65%,#080b16 100%);animation:launchToScreen 1050ms ease-in both}
+@keyframes launchToScreen{0%,55%{opacity:0}82%{opacity:.4}100%{opacity:1}}
 .memberLabels{position:absolute;z-index:1;inset:0;pointer-events:none;overflow:hidden}
 .memberLabel{position:absolute;left:0;top:0;display:flex;align-items:center;max-width:220px;min-height:32px;padding:4px 11px;border:1px solid rgba(164,179,205,.28);border-radius:10px;background:rgba(15,22,41,.95);color:var(--boardroom-text);box-shadow:0 5px 20px rgba(0,0,0,.36),0 0 18px rgba(99,102,241,.06),inset 0 1px rgba(255,255,255,.1);transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer}
 .memberLabel:hover,.memberLabel:focus-visible{border-color:var(--boardroom-accent);background:rgba(24,34,64,.98);outline:none}
@@ -35,4 +39,4 @@
 .reportHidden{position:absolute;width:1px;height:1px;overflow:hidden;pointer-events:none;opacity:0}
 .reportVisible{display:block}
 @media(max-width:640px){.topControls{top:10px;left:10px;right:10px}.viewSwitch button{padding:0 10px}.projectName{display:none}.continueButton{min-height:39px;padding:0 11px;font-size:11px}.continueButton svg{width:13px}.bottomControls{bottom:12px;min-width:240px}.bottomControls span{font-size:10px}.memberLabel{max-width:145px;min-height:27px;padding:3px 6px}.memberLabelName{font-size:10px}.memberLabelName small{font-size:9px}}
-@media(prefers-reduced-motion:reduce){.viewSwitch button,.faceScreen,.continueButton{scroll-behavior:auto;transition:none}}
+@media(prefers-reduced-motion:reduce){.viewSwitch button,.faceScreen,.continueButton{scroll-behavior:auto;transition:none}.launchTransition{animation:none}}

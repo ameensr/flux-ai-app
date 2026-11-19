@@ -1,6 +1,7 @@
 import { CatmullRomCurve3, MathUtils, Vector3 } from 'three';
 
 export const INTRO_DURATION_MS = 4600;
+export const REPORT_LAUNCH_DURATION_MS = 1050;
 
 export function smoothCameraStep(progress: number): number {
   const t = MathUtils.clamp(progress, 0, 1);
@@ -34,6 +35,21 @@ export function createIntroCameraPath(hallPosition: Vector3, seatPosition: Vecto
     const t = smoothCameraStep(progress);
     const look = hallLook.clone().lerp(focal, smoothCameraStep(t * 1.75));
     return { position: curve.getPoint(t), look };
+  };
+}
+
+export function createReportLaunchPath(startPosition: Vector3, startLook: Vector3, startFov: number, screenCenter: Vector3) {
+  const end = screenCenter.clone().add(new Vector3(0, 0, .88));
+  const middle = startPosition.clone().lerp(end, .55);
+  middle.y = Math.max(1.9, middle.y + .18);
+  const curve = new CatmullRomCurve3([startPosition.clone(), middle, end], false, 'centripetal');
+  return (progress: number) => {
+    const t = smoothCameraStep(progress);
+    return {
+      position: curve.getPoint(t),
+      look: startLook.clone().lerp(screenCenter, smoothCameraStep(Math.min(1, t * 1.5))),
+      fov: MathUtils.lerp(startFov, 38, t),
+    };
   };
 }
 

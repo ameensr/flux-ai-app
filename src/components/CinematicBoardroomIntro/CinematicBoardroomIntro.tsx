@@ -40,6 +40,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   const [resetKey, setResetKey] = useState(0);
   const [failed, setFailed] = useState(false);
   const [complete, setComplete] = useState(false);
+  const [launching, setLaunching] = useState(false);
   const parsedSeniorNames = parseMeetingWithNames(meetingWith ?? seniorPersonName);
   const stableSeniorNames = useRef(parsedSeniorNames);
   if (!sameNames(stableSeniorNames.current, parsedSeniorNames)) stableSeniorNames.current = parsedSeniorNames;
@@ -83,7 +84,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
   const finish = () => { if (complete) return; setComplete(true); onComplete?.(); };
 
   return <div className={`${styles.shell} ${styles.dark}`}>
-    {!complete && <div className={styles.experience} aria-label="Interactive boardroom preview">
+    {!complete && <div className={styles.experience} data-launching={launching} aria-label="Interactive boardroom preview">
       <div className={styles.scene}>
         {!failed
           ? <Suspense fallback={<div className={styles.loading}>Preparing the boardroom…</div>}>
@@ -97,6 +98,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
               isDark={true}
               screenData={screenData}
               onSelect={selectSeat}
+              onLaunchStart={() => { setLaunching(true); setHover(undefined); }}
               onOpenReport={finish}
               onHover={(id, point) => setHover(id && point ? { id, ...point } : undefined)}
               onFailure={() => setFailed(true)}
@@ -108,6 +110,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
             <div className={styles.fallbackSeats}>{room.seats.map(seat => <button key={seat.id} type="button" onClick={() => selectSeat(seat.id)}>{seatLabel(seat)}</button>)}</div>
           </div>}
       </div>
+      {launching && <div className={styles.launchTransition} aria-hidden="true" />}
       <div className={styles.topControls}>
         <div className={styles.viewSwitch} role="group" aria-label="Boardroom view">
           <button type="button" aria-pressed={firstPerson} className={firstPerson ? styles.active : ''} onClick={() => setFirstPerson(true)}><Eye size={15} /> Seat</button>
