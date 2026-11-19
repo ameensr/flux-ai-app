@@ -1933,8 +1933,8 @@ Do not return markdown wraps, only raw JSON text.
   }
 
   return (
-    <div className={`qaly-report-preview-scope relative min-h-screen ${smoothCursorEnabled ? 'custom-cursor-active' : ''}`}>
-      <SmoothDotCursor enabled={smoothCursorEnabled} theme={theme} />
+    <div className={`qaly-report-preview-scope relative min-h-screen ${smoothCursorEnabled && !showLaunchTriage ? 'custom-cursor-active' : ''}`}>
+      <SmoothDotCursor enabled={smoothCursorEnabled && !showLaunchTriage} theme={theme} />
       <DashboardLaunchOverlay
         open={showLaunchTriage}
         projectName={data.projectName}

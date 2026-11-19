@@ -117,7 +117,7 @@ export const CinematicBoardroomIntro: React.FC<CinematicBoardroomIntroProps> = (
         <button className={styles.continueButton} type="button" onClick={finish}>Continue to report <ArrowRight size={15} /></button>
       </div>
 
-      {!firstPerson && hoveredSeat && hover && <div className={styles.tooltip} style={{ left: Math.min(hover.x + 14, window.innerWidth - 220), top: Math.min(hover.y + 14, window.innerHeight - 100) }}>
+      {hoveredSeat && hover && <div className={styles.tooltip} style={{ left: Math.min(hover.x + 14, window.innerWidth - 220), top: Math.min(hover.y + 14, window.innerHeight - 100) }}>
         <strong>{seatLabel(hoveredSeat)}</strong>
         <span>Click to preview this view</span>
       </div>}

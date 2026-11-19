@@ -4,7 +4,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { THEMES } from '@/lib/themes';
 import type { Room } from './seatModel';
 import { drawReportHeroScreen, type ReportHeroScreenData } from './reportHeroScreen';
-import { createIntroCameraPath, hallTourPose, INTRO_DURATION_MS, seatFovAfterWheel, seatLookAfterDrag, seatTourLook, smoothCameraStep } from './cameraControls';
+import { createIntroCameraPath, hallTourPose, INTRO_DURATION_MS, seatFovAfterWheel, seatLookAfterDrag, seatTourLook, smoothCameraStep, smoothDampVector3 } from './cameraControls';
 import styles from './CinematicBoardroomIntro.module.css';
 
 function surfaceTexture(kind: 'stone' | 'carpet') {
@@ -101,6 +101,8 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       badge.setAttribute('aria-label', `View from ${seat.member.name}'s seat`);
       badge.tabIndex = 0;
       badge.onclick = () => callbacks.current.onSelect(seat.id);
+      badge.onpointerenter = event => callbacks.current.onHover(seat.id, { x: event.clientX, y: event.clientY });
+      badge.onpointerleave = () => callbacks.current.onHover();
       badge.onkeydown = event => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
@@ -234,6 +236,43 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     };
     const render = () => { raf = 0; renderer.render(scene, camera); publishLabels(); };
     const invalidate = () => { if (!raf) raf = requestAnimationFrame(render); };
+    let panRaf = 0;
+    let panLastFrame = 0;
+    const panPositionVelocity = new THREE.Vector3();
+    const panLookVelocity = new THREE.Vector3();
+    const stopPan = () => {
+      if (panRaf) cancelAnimationFrame(panRaf);
+      panRaf = 0;
+      panLastFrame = 0;
+      panPositionVelocity.set(0, 0, 0);
+      panLookVelocity.set(0, 0, 0);
+    };
+    const panFrame = (now: number) => {
+      panRaf = 0;
+      const dt = panLastFrame ? Math.min(.05, (now - panLastFrame) / 1000) : .016;
+      panLastFrame = now;
+      smoothDampVector3(camera.position, targetPosition, panPositionVelocity, dt);
+      smoothDampVector3(look, targetLook, panLookVelocity, dt);
+      camera.lookAt(look);
+      renderer.render(scene, camera);
+      publishLabels();
+      if (camera.position.distanceToSquared(targetPosition) > .000004 || look.distanceToSquared(targetLook) > .000004
+        || panPositionVelocity.lengthSq() > .0004 || panLookVelocity.lengthSq() > .0004) {
+        panRaf = requestAnimationFrame(panFrame);
+      } else {
+        camera.position.copy(targetPosition);
+        look.copy(targetLook);
+        camera.lookAt(look);
+        panLastFrame = 0;
+        panPositionVelocity.set(0, 0, 0);
+        panLookVelocity.set(0, 0, 0);
+        invalidate();
+      }
+    };
+    const startPan = () => {
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      if (!panRaf) panRaf = requestAnimationFrame(panFrame);
+    };
     const animate = (now: number) => {
       raf = 0;
       if (!transitionStartedAt) transitionStartedAt = now;
@@ -321,6 +360,7 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     const setView = () => {
       const current = state.current;
       const interruptedIntro = introActive;
+      stopPan();
       stopIntro();
       if (interruptedIntro) updateColors.current?.();
       stopTour();
@@ -463,12 +503,13 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
     const backGeometry = new RoundedBoxGeometry(.7, .8, .13, 3, .06);
     const armGeometry = new RoundedBoxGeometry(.12, .14, .53, 2, .045);
     const seatMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .82 });
-    const backMaterial = mat('#202a43', .83);
-    const backInsetMaterial = mat('#303d60', .91);
+    const backMaterial = mat('#ffffff', .83);
+    const armMaterial = mat('#202a43', .83);
+    const backInsetMaterial = mat('#ffffff', .91);
     const bases = new THREE.InstancedMesh(chairGeometry, seatMaterial, room.seats.length);
     const backs = new THREE.InstancedMesh(backGeometry, backMaterial, room.seats.length);
     const backInsets = new THREE.InstancedMesh(new RoundedBoxGeometry(.58, .66, .015, 2, .014), backInsetMaterial, room.seats.length);
-    const arms = new THREE.InstancedMesh(armGeometry, backMaterial, room.seats.length * 2);
+    const arms = new THREE.InstancedMesh(armGeometry, armMaterial, room.seats.length * 2);
     const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(.055, .1, .48, 8), mat('#63708b', .38, .7), room.seats.length);
     const chairShadows = new THREE.InstancedMesh(new THREE.CircleGeometry(.48, 12), new THREE.MeshBasicMaterial({ color: '#040715', transparent: true, opacity: .34, depthWrite: false }), room.seats.length);
     const matrix = new THREE.Matrix4();
@@ -553,10 +594,27 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       }
       room.seats.forEach((seat, i) => {
         const s = state.current;
-        const color = seat.id === s.selectedId ? '#a9915d' : s.recommendedIds.includes(seat.id) ? '#6bbaa9' : seat.id === s.hoveredId ? '#777ee5' : seat.reserved ? '#675d87' : '#35415f';
+        const hovered = seat.id === s.hoveredId;
+        const badge = labelElements.get(seat.id);
+        if (badge) badge.dataset.hovered = String(hovered);
+        const color = hovered ? '#8b9fc6' : seat.id === s.selectedId ? '#a9915d' : s.recommendedIds.includes(seat.id) ? '#6bbaa9' : seat.reserved ? '#675d87' : '#35415f';
         bases.setColorAt(i, new THREE.Color(color));
+        backs.setColorAt(i, new THREE.Color(hovered ? '#516a91' : '#202a43'));
+        backInsets.setColorAt(i, new THREE.Color(hovered ? '#748ab4' : '#303d60'));
+        const personIndex = participantIndex.get(seat.id);
+        if (personIndex !== undefined) {
+          const coat = new THREE.Color(seat.side === 'foot' ? '#676892' : shirtColors[i % shirtColors.length]);
+          if (hovered) coat.lerp(new THREE.Color('#a6b8dc'), .42);
+          torsos.setColorAt(personIndex, coat);
+          sleeves.setColorAt(personIndex * 2, coat);
+          sleeves.setColorAt(personIndex * 2 + 1, coat);
+        }
       });
       if (bases.instanceColor) bases.instanceColor.needsUpdate = true;
+      if (backs.instanceColor) backs.instanceColor.needsUpdate = true;
+      if (backInsets.instanceColor) backInsets.instanceColor.needsUpdate = true;
+      if (torsos.instanceColor) torsos.instanceColor.needsUpdate = true;
+      if (sleeves.instanceColor) sleeves.instanceColor.needsUpdate = true;
       invalidate();
     };
     updateColors.current = colors; colors();
@@ -567,14 +625,17 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1);
       raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObjects([bases, backs, ...tvTargets])[0];
+      const hit = raycaster.intersectObjects([bases, backs, backInsets, ...personMeshes, ...tvTargets])[0];
       if (!hit) return undefined;
       if (tvTargets.includes(hit.object)) return { kind: 'report' as const };
-      const seat = hit.instanceId === undefined ? undefined : room.seats[hit.instanceId];
+      const personMeshIndex = personMeshes.findIndex(mesh => mesh === hit.object);
+      const seat = hit.instanceId === undefined ? undefined : personMeshIndex >= 0
+        ? participantSeats[personMeshIndex === 1 ? Math.floor(hit.instanceId / 2) : hit.instanceId]
+        : room.seats[hit.instanceId];
       return seat ? { kind: 'seat' as const, seat } : undefined;
     };
     let tvPress: { x: number; y: number } | null = null;
-    let drag: { x: number; y: number; button: number; moved: boolean } | null = null;
+    let drag: { x: number; y: number; startX: number; startY: number; button: number; moved: boolean } | null = null;
     const down = (event: PointerEvent) => {
       if (introActive) {
         const target = pick(event);
@@ -588,44 +649,41 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
         return;
       }
       stopTour(true);
+      stopPan();
+      lastHoverId = undefined;
+      callbacks.current.onHover();
       if (raf) { cancelAnimationFrame(raf); raf = 0; }
       targetPosition.copy(camera.position);
       targetLook.copy(look);
-      drag = { x: event.clientX, y: event.clientY, button: event.button, moved: false };
+      drag = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, button: event.button, moved: false };
+      renderer.domElement.style.cursor = 'grabbing';
       renderer.domElement.setPointerCapture(event.pointerId);
     };
     const move = (event: PointerEvent) => {
       if (tvPress) return;
       if (drag) {
         const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
-        if (Math.hypot(dx, dy) > 2) drag.moved = true;
+        if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) drag.moved = true;
         drag.x = event.clientX; drag.y = event.clientY;
         if (!state.current.firstPerson) {
           if (drag.button === 2 || event.shiftKey) {
-            const scale = orbit.radius * .0012;
+            const scale = orbit.radius * .00065;
             orbit.target.x -= dx * scale;
             orbit.target.y = THREE.MathUtils.clamp(orbit.target.y + dy * scale, -.2, 2.8);
           } else {
-            orbit.azimuth -= dx * .006;
-            orbit.elevation = THREE.MathUtils.clamp(orbit.elevation + dy * .005, .18, 1.45);
+            orbit.azimuth -= dx * .0025;
+            orbit.elevation = THREE.MathUtils.clamp(orbit.elevation + dy * .0025, .18, 1.45);
             if (Math.abs(dx) > .1) tourDirection = dx < 0 ? 1 : -1;
           }
           targetPosition.copy(overviewPosition().add(orbit.target)); targetLook.copy(orbit.target);
-          camera.position.copy(targetPosition); look.copy(targetLook); camera.lookAt(look); invalidate();
+          startPan();
         } else {
-          targetLook.copy(seatLookAfterDrag(camera.position, look, dx, dy));
-          look.copy(targetLook);
-          camera.lookAt(look);
+          targetLook.copy(seatLookAfterDrag(camera.position, targetLook, dx, dy));
           if (Math.abs(dx) > .1) tourDirection = dx < 0 ? 1 : -1;
-          invalidate();
+          startPan();
         }
       } else {
         const target = pick(event);
-        if (state.current.firstPerson) {
-          if (lastHoverId) { lastHoverId = undefined; callbacks.current.onHover(); }
-          renderer.domElement.style.cursor = target ? 'pointer' : 'grab';
-          return;
-        }
         const seat = target?.kind === 'seat' ? target.seat : undefined;
         renderer.domElement.style.cursor = target ? 'pointer' : 'grab';
         if (seat?.id !== lastHoverId) {
@@ -648,9 +706,10 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       }
       if (drag) resumeTourSoon();
       drag = null;
+      renderer.domElement.style.cursor = 'grab';
     };
-    const cancel = () => { tvPress = null; if (drag) resumeTourSoon(); drag = null; };
-    const leave = () => { lastHoverId = undefined; callbacks.current.onHover(); };
+    const cancel = () => { tvPress = null; if (drag) resumeTourSoon(); drag = null; renderer.domElement.style.cursor = 'grab'; };
+    const leave = () => { lastHoverId = undefined; callbacks.current.onHover(); if (!drag) renderer.domElement.style.cursor = 'grab'; };
     const wheel = (event: WheelEvent) => {
       event.preventDefault();
       if (introActive) {
@@ -660,6 +719,7 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
         return;
       }
       stopTour(true);
+      stopPan();
       if (state.current.firstPerson) {
         camera.fov = seatFovAfterWheel(camera.fov, event.deltaY);
         camera.updateProjectionMatrix();
@@ -692,6 +752,7 @@ export default function BoardroomScene({ room, selectedId, hoveredId, recommende
       lastCamera.current = { position: camera.position.clone(), look: look.clone(), fov: camera.fov };
       updateView.current = null; updateColors.current = null; updateScreen.current = null; observer.disconnect();
       if (raf) cancelAnimationFrame(raf);
+      stopPan();
       stopIntro();
       stopTour();
       renderer.domElement.removeEventListener('pointerdown', down); renderer.domElement.removeEventListener('pointermove', move); renderer.domElement.removeEventListener('pointerup', up); renderer.domElement.removeEventListener('pointercancel', cancel); renderer.domElement.removeEventListener('pointerleave', leave); renderer.domElement.removeEventListener('wheel', wheel); renderer.domElement.removeEventListener('contextmenu', context);

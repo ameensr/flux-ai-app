@@ -1,8 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { createIntroCameraPath, hallTourPose, INTRO_DURATION_MS, seatFovAfterWheel, seatLookAfterDrag, seatTourLook, smoothCameraStep } from './cameraControls';
+import { createIntroCameraPath, hallTourPose, INTRO_DURATION_MS, seatFovAfterWheel, seatLookAfterDrag, seatTourLook, smoothCameraStep, smoothDampVector3 } from './cameraControls';
 
 describe('boardroom seat camera controls', () => {
+  it('settles a changing pan target smoothly at different frame rates', () => {
+    const run = (fps: number) => {
+      const current = new Vector3();
+      const velocity = new Vector3();
+      const target = new Vector3(1, 0, 0);
+      for (let frame = 0; frame < fps; frame++) {
+        if (frame === fps / 2) target.set(2, 0, 0);
+        smoothDampVector3(current, target, velocity, 1 / fps);
+      }
+      return current;
+    };
+    const at60 = run(60);
+    const at120 = run(120);
+    expect(at60.x).toBeGreaterThan(1.9);
+    expect(at60.x).toBeLessThan(2);
+    expect(at60.distanceTo(at120)).toBeLessThan(.02);
+  });
   it('zooms in on upward scrolling and clamps the zoom range', () => {
     expect(seatFovAfterWheel(66, -120)).toBeLessThan(66);
     expect(seatFovAfterWheel(66, 120)).toBeGreaterThan(66);
@@ -10,13 +27,23 @@ describe('boardroom seat camera controls', () => {
     expect(seatFovAfterWheel(80, 120)).toBe(80);
   });
 
-  it('looks upward and downward when the pointer is dragged vertically', () => {
+  it('looks downward on an upward drag and upward on a downward drag', () => {
     const eye = new Vector3(0, 1.22, 4);
     const screen = new Vector3(0, 1.65, -4);
     const up = seatLookAfterDrag(eye, screen, 0, -100);
     const down = seatLookAfterDrag(eye, screen, 0, 100);
-    expect(up.y).toBeGreaterThan(screen.y);
-    expect(down.y).toBeLessThan(eye.y);
+    expect(up.y).toBeLessThan(eye.y);
+    expect(down.y).toBeGreaterThan(screen.y);
+  });
+
+  it('limits a normal drag to a controlled seat rotation', () => {
+    const eye = new Vector3(0, 1.22, 4);
+    const screen = new Vector3(0, 1.65, -4);
+    const dragged = seatLookAfterDrag(eye, screen, 100, 0);
+    const before = screen.clone().sub(eye).normalize();
+    const after = dragged.clone().sub(eye).normalize();
+    expect(before.angleTo(after)).toBeGreaterThan(.2);
+    expect(before.angleTo(after)).toBeLessThan(.3);
   });
 
   it('keeps the Hall tour on the presentation side of the room', () => {
